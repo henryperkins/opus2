@@ -1,5 +1,6 @@
 # User model for authentication and ownership
-from sqlalchemy import Column, Integer, String, Boolean, Index
+from sqlalchemy import Column, Integer, String, Boolean, Index, DateTime
+from datetime import datetime
 from sqlalchemy.orm import validates
 from .base import Base, TimestampMixin
 import re
@@ -24,6 +25,12 @@ class User(Base, TimestampMixin):
     password_hash = Column(String(255), nullable=False, comment="Bcrypt password hash")
     is_active = Column(
         Boolean, default=True, nullable=False, comment="Whether user account is active"
+    )
+    # Track most recent successful login (used by auth.utils.create_session)
+    last_login = Column(
+        DateTime,
+        nullable=True,
+        comment="Most recent successful login (UTC)",
     )
 
     @validates("username")

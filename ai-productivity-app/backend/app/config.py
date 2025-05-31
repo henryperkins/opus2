@@ -21,12 +21,31 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440  # 24 hours
 
+    # Authentication
+    jwt_secret_key: Optional[str] = None
+    jwt_algorithm: str = "HS256"
+    jwt_expiration_hours: int = 24
+
+    # Registration
+    registration_enabled: bool = True
+    invite_codes: str = "code1,code2,code3"
+
     # CORS
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
     # API Keys (for future phases)
     openai_api_key: Optional[str] = None
     azure_openai_endpoint: Optional[str] = None
+
+    @property
+    def effective_secret_key(self) -> str:
+        """Return JWT secret key if set, otherwise fall back to main secret"""
+        return self.jwt_secret_key or self.secret_key
+
+    @property
+    def invite_codes_list(self) -> list[str]:
+        """Return list of valid invite codes"""
+        return [code.strip() for code in self.invite_codes.split(",") if code.strip()]
 
     class Config:
         env_file = ".env"

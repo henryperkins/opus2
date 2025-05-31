@@ -1,28 +1,67 @@
-# Common dependencies for dependency injection
+"""Project-wide FastAPI dependencies.
+
+Provides:
+• DatabaseDep              – SQLAlchemy session
+• CurrentUserOptional      – Authenticated user if present, else None
+• CurrentUserRequired      – Authenticated user enforced by HTTP 401
+• verify_api_key           – Placeholder for future LLM integration
+"""
+from __future__ import annotations
+
 from typing import Annotated
-from fastapi import Depends, HTTPException, status
+
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
-from .database import get_db
 
+from app.database import get_db
+from app.auth.utils import get_current_user
+from app.models.user import User
 
-# Type alias for database dependency
+###############################################################################
+# Database session dependency
+###############################################################################
+
 DatabaseDep = Annotated[Session, Depends(get_db)]
 
-
-# Placeholder for future auth dependencies
-def get_current_user_optional():
-    """Optional user authentication for future phases"""
-    return None
+###############################################################################
+# Authentication dependencies
+###############################################################################
 
 
-def get_current_user_required():
-    """Required user authentication for future phases"""
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required - coming in Phase 2",
-    )
+def _current_user_optional(
+   user: Annotated[User, Depends(get_current_user)],
+) -> User | None:
+   """
+   Return currently authenticated user or None.
+
+   The underlying `get_current_user` will already raise 401 if no credentials;
+   therefore we catch that and swallow the exception to make it optional.
+   """
+   from fastapi import HTTPException as _HTTPException
+
+   try:
+       return user
+   except _HTTPException:
+       return None
 
 
-# Type aliases for auth dependencies (future use)
-CurrentUserOptional = Annotated[dict, Depends(get_current_user_optional)]
-CurrentUserRequired = Annotated[dict, Depends(get_current_user_required)]
+def _current_user_required(
+   user: Annotated[User, Depends(get_current_user)],
+) -> User:
+   """
+   Ensure request is authenticated; propagate original 401 if not.
+   """
+   return user
+
+
+CurrentUserOptional = Annotated[User | None, Depends(_current_user_optional)]
+CurrentUserRequired = Annotated[User, Depends(_current_user_required)]
+
+###############################################################################
+# API-key verification placeholder (Phase 3 feature)
+###############################################################################
+
+
+def verify_api_key(request: Request) -> None:  # noqa: D401
+   """No-op for now – will check request headers for X-API-Key in future."""
+   return None

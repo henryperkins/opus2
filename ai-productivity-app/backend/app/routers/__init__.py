@@ -1,4 +1,5 @@
 # Router package exports
-from .health import router as health_router
+from .monitoring import router as monitoring_router
+from .auth import router as auth_router
 
-__all__ = ["health_router"]
+__all__ = ["monitoring_router", "auth_router"]

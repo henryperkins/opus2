@@ -7,7 +7,8 @@ import time
 import logging
 from .config import settings
 from .database import init_db, check_db_connection
-from .routers import health
+from .routers import monitoring, auth
+from .middleware.security import register_security_middleware
 
 # Configure logging
 logging.basicConfig(
@@ -77,8 +78,12 @@ async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
+# Register middleware (rate-limiting, CSRF, security headers)
+register_security_middleware(app)
+
 # Include routers
-app.include_router(health.router)
+app.include_router(monitoring.router)
+app.include_router(auth.router)
 
 
 # Root endpoint
