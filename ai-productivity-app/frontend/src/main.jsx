@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import { AuthProvider } from './contexts/AuthContext';
 import AppRouter from './router';
 // Replaced existing import to add ErrorBoundary
+import './styles/tailwind.css';
 import './index.css';
 import ErrorBoundary from './components/common/ErrorBoundary';
 

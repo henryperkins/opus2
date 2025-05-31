@@ -8,7 +8,7 @@
         "build": "vite build",
         "preview": "vite preview",
         "test": "echo 'Tests coming in Phase 2' && exit 0",
-        "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0"
+        "lint": "eslint src --max-warnings 0"
     },
     "dependencies": {
         "react": "^18.2.0",

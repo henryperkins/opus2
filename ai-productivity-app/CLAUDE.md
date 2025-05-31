@@ -14,6 +14,16 @@ This is an AI productivity application built for small teams (2-3 users) with a 
 - Protected routes and user management
 - Comprehensive frontend auth integration
 
+**Phase 3 Status: ✅ COMPLETE**
+- Full project management system implemented
+- Project CRUD operations with status tracking (Active/Archived/Completed)
+- Visual customization (color coding and emoji identification)
+- Flexible tag system for project categorization
+- Timeline event system tracking all project changes
+- Search and filtering by status, tags, title, and description
+- Responsive UI with optimistic updates and error handling
+- Comprehensive project dashboard with pagination
+
 ## Development Commands
 
 ### Quick Start
@@ -77,9 +87,10 @@ make check            # Run pre-commit checks (lint + test)
 
 ### Backend Structure (FastAPI + SQLAlchemy)
 - `app/main.py` - FastAPI application entry point with middleware and lifespan management
-- `app/routers/` - API route handlers (auth, monitoring, etc.)
-- `app/models/` - SQLAlchemy ORM models (User, Project, etc.)
+- `app/routers/` - API route handlers (auth, monitoring, projects)
+- `app/models/` - SQLAlchemy ORM models (User, Project, TimelineEvent)
 - `app/schemas/` - Pydantic schemas for request/response validation
+- `app/services/` - Business logic layer (project operations, timeline tracking)
 - `app/database.py` - Database configuration and initialization
 - `app/config.py` - Application settings and configuration
 - `app/auth/` - Authentication and security utilities
@@ -90,10 +101,13 @@ make check            # Run pre-commit checks (lint + test)
 - `src/router.jsx` - React Router configuration
 - `src/contexts/AuthContext.jsx` - Authentication context provider
 - `src/components/` - Reusable React components organized by feature
-- `src/pages/` - Top-level page components
+  - `auth/` - Authentication components (Login, Register, UserMenu)
+  - `projects/` - Project management components (ProjectCard, Timeline, Filters)
+  - `common/` - Shared components (Header, Modal, ErrorBoundary)
+- `src/pages/` - Top-level page components (Dashboard, ProjectsPage, LoginPage)
 - `src/api/` - API client modules for backend communication
-- `src/stores/` - Zustand state management stores
-- `src/hooks/` - Custom React hooks
+- `src/stores/` - Zustand state management stores (auth, projects)
+- `src/hooks/` - Custom React hooks (useAuth, useProjects, useProjectSearch)
 
 ### Key Patterns
 - **Modular Architecture**: Features are organized into self-contained modules
@@ -110,8 +124,17 @@ make check            # Run pre-commit checks (lint + test)
 
 ### Testing Strategy
 - **Backend**: pytest with coverage reporting and async support
+  - Project CRUD operation tests in `tests/test_projects.py`
+  - Timeline event functionality testing
+  - Authentication and authorization tests
 - **Frontend**: Test framework TBD (placeholder currently)
 - **Integration**: Health check endpoints for service verification
+
+### Database Schema
+- **Users**: Authentication and user management
+- **Projects**: Core project data with status, visual customization, and tags
+- **Timeline Events**: Activity tracking for all project changes
+- **Proper Relations**: Foreign keys and cascading deletes for data integrity
 
 ## Port Configuration
 - Frontend: http://localhost:5173 (Vite dev server)

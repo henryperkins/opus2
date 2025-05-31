@@ -1,6 +1,6 @@
 # User model for authentication and ownership
 from sqlalchemy import Column, Integer, String, Boolean, Index, DateTime
-from sqlalchemy.orm import validates
+from sqlalchemy.orm import validates, relationship
 from .base import Base, TimestampMixin
 import re
 
@@ -31,6 +31,9 @@ class User(Base, TimestampMixin):
         nullable=True,
         comment="Most recent successful login (UTC)",
     )
+
+    # Relationships
+    projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
 
     @validates("username")
     def validate_username(self, key, username):

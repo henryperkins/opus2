@@ -17,5 +17,15 @@
   "bugs": {
     "url": "https://github.com/henryperkins/opus2/issues"
   },
-  "homepage": "https://github.com/henryperkins/opus2#readme"
+  "homepage": "https://github.com/henryperkins/opus2#readme",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "axios": "^1.6.5",
+    "react-router-dom": "^6.21.1",
+    "zustand": "^4.4.7",
+    "react-hook-form": "^7.48.2",
+    "date-fns": "^3.0.6",
+    "clsx": "^2.1.0"
+  }
 }
