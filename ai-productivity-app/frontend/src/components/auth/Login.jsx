@@ -41,6 +41,7 @@ function Login() {
           name="username_or_email"
           value={formData.username_or_email}
           onChange={handleChange}
+          autoComplete="username"
           required
           disabled={loading}
           placeholder="Enter your username or email"
@@ -55,6 +56,7 @@ function Login() {
           name="password"
           value={formData.password}
           onChange={handleChange}
+          autoComplete="current-password"
           required
           disabled={loading}
           minLength={8}

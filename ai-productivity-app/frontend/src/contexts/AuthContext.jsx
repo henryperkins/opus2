@@ -49,29 +49,44 @@ const AuthContext = createContext({
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
   const { startSession, endSession, shouldRememberUser, getLastLoginInfo } = useAuthStore();
 
   // --- helper to fetch /me
   const fetchMe = useCallback(async () => {
+    // Prevent duplicate requests in development strict mode
+    if (initialCheckDone && loading === false) {
+      return;
+    }
+    
     try {
       const { data } = await client.get('/api/auth/me');
       setUser(data);
-    } catch {
+    } catch (error) {
+      // Only log unexpected errors (not 401/403 which are normal when not logged in)
+      if (error.response?.status !== 401 && error.response?.status !== 403) {
+        console.warn('Auth check failed:', error);
+      }
       setUser(null);
     } finally {
       setLoading(false);
+      setInitialCheckDone(true);
     }
-  }, []);
+  }, [initialCheckDone, loading]);
 
-  // Initial load
+  // Initial load - only run once
   useEffect(() => {
-    fetchMe();
-  }, [fetchMe]);
+    if (!initialCheckDone) {
+      fetchMe();
+    }
+  }, [fetchMe, initialCheckDone]);
 
   // Listen for global logout events (401 interception)
   useEffect(() => {
     const handler = () => {
       setUser(null);
+      setLoading(false);
+      // Don't reset initialCheckDone to prevent re-fetching
     };
     window.addEventListener('auth:logout', handler);
     return () => window.removeEventListener('auth:logout', handler);
@@ -102,6 +117,7 @@ export function AuthProvider({ children }) {
       setUser(null);
       endSession();
       setLoading(false);
+      // Keep initialCheckDone true to prevent unnecessary re-fetch
     }
   }, [endSession]);
 

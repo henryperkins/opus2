@@ -17,10 +17,11 @@ import { Link } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore';
 
 function UserMenu() {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const { getLastLoginInfo } = useAuthStore();
+
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -43,10 +44,44 @@ function UserMenu() {
     }
   };
 
+  // Guard: show skeleton/avatar placeholder if loading
+  if (loading) {
+    // Replace this with a nice SkeletonAvatar if you have one:
+    return (
+      <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse" data-testid="skeleton-avatar"></div>
+    );
+  }
+
+  // Not logged in: render nothing
+  if (!user) return null;
+
   const lastLoginInfo = getLastLoginInfo();
 
-  if (!user) {
-    return null;
+  // Simplified, type-safe display name and initial
+  // Defensive fallback: ensure displayName/string access is always safe
+  let displayName = '';
+  if (user && user.username && typeof user.username === 'string' && user.username.trim()) {
+    displayName = user.username.trim();
+  } else if (user && user.email && typeof user.email === 'string' && user.email.trim()) {
+    displayName = user.email.trim();
+  } else {
+    displayName = 'User';
+  }
+  // Avoid use of charAt, [0], or any direct string index unless proven safe
+  let firstInitial = 'U';
+  if (typeof displayName === 'string' && displayName && displayName.trim().length > 0) {
+    try {
+      const trimmed = displayName.trim();
+      if (trimmed.length > 0) {
+        firstInitial = trimmed.slice(0, 1).toUpperCase();
+        if (!firstInitial || !firstInitial.match(/[A-Z0-9]/i)) {
+          firstInitial = 'U';
+        }
+      }
+    } catch (error) {
+      console.warn('Error processing user initial:', error);
+      firstInitial = 'U';
+    }
   }
 
   return (
@@ -59,10 +94,10 @@ function UserMenu() {
         aria-haspopup="true"
       >
         <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
-          {user.username.charAt(0).toUpperCase()}
+          {firstInitial}
         </div>
         <span className="hidden md:block text-sm font-medium">
-          {user.username}
+          {displayName}
         </span>
         <svg
           className={`w-4 h-4 transition-transform duration-200 ${
@@ -87,9 +122,9 @@ function UserMenu() {
           <div className="py-1" role="menu" aria-orientation="vertical">
             {/* User Info Header */}
             <div className="px-4 py-3 border-b border-gray-100">
-              <p className="text-sm font-medium text-gray-900">{user.username}</p>
-              <p className="text-sm text-gray-500">{user.email}</p>
-              {lastLoginInfo.timestamp && (
+              <p className="text-sm font-medium text-gray-900">{user?.username || 'Username not available'}</p>
+              <p className="text-sm text-gray-500">{user?.email || 'Email not available'}</p>
+              {lastLoginInfo?.timestamp && (
                 <p className="text-xs text-gray-400 mt-1">
                   Last login: {new Date(lastLoginInfo.timestamp).toLocaleString()}
                 </p>

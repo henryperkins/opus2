@@ -71,6 +71,7 @@ function Register({ onLoginSwitch }) {
           name="username"
           value={formData.username}
           onChange={handleChange}
+          autoComplete="username"
           required
           disabled={loading}
         />
@@ -84,6 +85,7 @@ function Register({ onLoginSwitch }) {
           name="email"
           value={formData.email}
           onChange={handleChange}
+          autoComplete="email"
           required
           disabled={loading}
         />
@@ -97,6 +99,7 @@ function Register({ onLoginSwitch }) {
           name="password"
           value={formData.password}
           onChange={handleChange}
+          autoComplete="new-password"
           required
           disabled={loading}
           minLength={8}
@@ -111,6 +114,7 @@ function Register({ onLoginSwitch }) {
           name="confirmPassword"
           value={formData.confirmPassword}
           onChange={handleChange}
+          autoComplete="new-password"
           required
           disabled={loading}
           minLength={8}

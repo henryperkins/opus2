@@ -37,26 +37,41 @@ function ProtectedRoute({ element }) {
 // Router
 // -----------------------------------------------------------------------------
 
-export const router = createBrowserRouter([
+export const router = createBrowserRouter(
+  [
+    {
+      path: '/login',
+      element: <LoginPage />,
+    },
+    {
+      path: '/',
+      element: <ProtectedRoute element={<Dashboard />} />,
+    },
+    {
+      path: '/profile',
+      element: <ProtectedRoute element={<UserProfile />} />,
+    },
+    {
+      path: '/settings',
+      element: <ProtectedRoute element={<SettingsPage />} />,
+    },
+  ],
   {
-    path: '/login',
-    element: <LoginPage />,
-  },
-  {
-    path: '/',
-    element: <ProtectedRoute element={<Dashboard />} />,
-  },
-  {
-    path: '/profile',
-    element: <ProtectedRoute element={<UserProfile />} />,
-  },
-  {
-    path: '/settings',
-    element: <ProtectedRoute element={<SettingsPage />} />,
-  },
-]);
+    future: {
+      v7_startTransition: true,
+      v7_normalizeFormMethod: true,
+    },
+  }
+);
 
 // Root provider component
 export default function AppRouter() {
-  return <RouterProvider router={router} />;
+  return (
+    <RouterProvider 
+      router={router} 
+      future={{
+        v7_startTransition: true,
+      }}
+    />
+  );
 }

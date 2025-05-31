@@ -57,6 +57,7 @@ export default function LoginPage() {
           <span className="text-gray-700">Username or Email</span>
           <input
             className="mt-1 block w-full border rounded p-2"
+            autoComplete="username"
             {...register('username', { required: 'Username or email required' })}
             disabled={isSubmitting || loading}
           />
@@ -72,6 +73,7 @@ export default function LoginPage() {
           <input
             type="password"
             className="mt-1 block w-full border rounded p-2"
+            autoComplete="current-password"
             {...register('password', { required: 'Password required' })}
             disabled={isSubmitting || loading}
           />
