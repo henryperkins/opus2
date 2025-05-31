@@ -74,11 +74,8 @@ def create_session(db: Session, user: User) -> None:
 def get_current_user(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
-    authorization: Annotated[str | None, Header(None)] = None,
-    access_cookie: Annotated[
-        str | None,
-        Cookie(alias="access_token", default=None),
-    ] = None,
+    authorization: Annotated[str | None, Header()] = None,
+    access_cookie: Annotated[str | None, Cookie(alias="access_token")] = None,
 ) -> User:
     """
     Attempt to locate & validate JWT from Authorization header or access_token

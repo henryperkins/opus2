@@ -20,6 +20,7 @@ import React, {
 } from 'react';
 import PropTypes from 'prop-types';
 import client from '../api/client';
+import useAuthStore from '../stores/authStore';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -48,6 +49,7 @@ const AuthContext = createContext({
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { startSession, endSession, shouldRememberUser, getLastLoginInfo } = useAuthStore();
 
   // --- helper to fetch /me
   const fetchMe = useCallback(async () => {
@@ -84,10 +86,12 @@ export function AuthProvider({ children }) {
         password,
       });
       await fetchMe();
+      // Update auth store with session info
+      startSession(username);
     } finally {
       setLoading(false);
     }
-  }, [fetchMe]);
+  }, [fetchMe, startSession]);
 
   // --- logout
   const logout = useCallback(async () => {
@@ -96,9 +100,10 @@ export function AuthProvider({ children }) {
       await client.post('/api/auth/logout');
     } finally {
       setUser(null);
+      endSession();
       setLoading(false);
     }
-  }, []);
+  }, [endSession]);
 
   // --- refresh (re-fetch user)
   const refresh = fetchMe;

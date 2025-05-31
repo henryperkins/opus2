@@ -26,7 +26,6 @@ from fastapi import (
     Body,
     Depends,
     HTTPException,
-    Request,
     Response,
     status,
 )
@@ -148,7 +147,7 @@ def login(
 ###############################################################################
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/logout")
 def logout(response: Response) -> None:
     """Clear auth cookie."""
     name, value, opts = security.clear_auth_cookie()
@@ -198,10 +197,11 @@ def request_password_reset(
     return {"detail": "Password-reset instructions sent if the address exists."}
 
 
-@router.post("/reset-password/submit", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/reset-password/submit")
 def submit_password_reset(
     payload: Annotated[PasswordResetSubmit, Body()],
     db: DatabaseDep,
+    response: Response,
 ) -> None:
     """
     Step 2: User submits new password along with the token they received.
@@ -218,3 +218,4 @@ def submit_password_reset(
     user.password_hash = security.hash_password(payload.new_password)
     db.add(user)
     db.commit()
+    response.status_code = status.HTTP_204_NO_CONTENT

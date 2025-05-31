@@ -6,16 +6,18 @@
  * to authenticate the user. Redirects to dashboard (/) on success.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import Register from '../components/auth/Register';
 
 export default function LoginPage() {
   const { register, handleSubmit, formState } = useForm();
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
   const { errors, isSubmitting } = formState;
+  const [showRegister, setShowRegister] = useState(false);
 
   if (user) {
     return <Navigate to="/" replace />;
@@ -30,6 +32,17 @@ export default function LoginPage() {
       console.error(err);
       // TODO: display toast
     }
+  }
+
+  if (showRegister) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="w-full max-w-sm bg-white shadow p-6 rounded">
+          <h1 className="text-2xl mb-4 text-center">Register</h1>
+          <Register onLoginSwitch={() => setShowRegister(false)} />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -76,6 +89,17 @@ export default function LoginPage() {
         >
           {isSubmitting || loading ? 'Logging in...' : 'Login'}
         </button>
+
+        <p className="text-center mt-4 text-sm text-gray-600">
+          Don't have an account?{' '}
+          <button
+            type="button"
+            onClick={() => setShowRegister(true)}
+            className="text-blue-600 hover:underline"
+          >
+            Register here
+          </button>
+        </p>
       </form>
     </div>
   );

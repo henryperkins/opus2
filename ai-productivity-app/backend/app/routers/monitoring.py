@@ -28,7 +28,7 @@ async def readiness_check(db: DatabaseDep, response: Response):
 
     # Check database
     try:
-        result = db.execute(text("SELECT 1"))
+        db.execute(text("SELECT 1"))
         db.commit()
         checks["database"] = "ready"
     except Exception as e:

@@ -5,8 +5,7 @@ as specified in Phase 2 plan.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, validator
 
@@ -109,7 +108,7 @@ class UserResponse(BaseModel):
     updated_at: datetime | None = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # --------------------------------------------------------------------------- #

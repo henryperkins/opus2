@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response, status
-from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware

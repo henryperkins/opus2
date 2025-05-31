@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -29,29 +29,29 @@ DatabaseDep = Annotated[Session, Depends(get_db)]
 
 
 def _current_user_optional(
-   user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> User | None:
-   """
-   Return currently authenticated user or None.
+    """
+    Return currently authenticated user or None.
 
-   The underlying `get_current_user` will already raise 401 if no credentials;
-   therefore we catch that and swallow the exception to make it optional.
-   """
-   from fastapi import HTTPException as _HTTPException
+    The underlying `get_current_user` will already raise 401 if no credentials;
+    therefore we catch that and swallow the exception to make it optional.
+    """
+    from fastapi import HTTPException as _HTTPException
 
-   try:
-       return user
-   except _HTTPException:
-       return None
+    try:
+        return user
+    except _HTTPException:
+        return None
 
 
 def _current_user_required(
-   user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-   """
-   Ensure request is authenticated; propagate original 401 if not.
-   """
-   return user
+    """
+    Ensure request is authenticated; propagate original 401 if not.
+    """
+    return user
 
 
 CurrentUserOptional = Annotated[User | None, Depends(_current_user_optional)]
@@ -62,6 +62,6 @@ CurrentUserRequired = Annotated[User, Depends(_current_user_required)]
 ###############################################################################
 
 
-def verify_api_key(request: Request) -> None:  # noqa: D401
-   """No-op for now – will check request headers for X-API-Key in future."""
-   return None
+def verify_api_key() -> None:  # noqa: D401
+    """No-op for now – will check request headers for X-API-Key in future."""
+    return None

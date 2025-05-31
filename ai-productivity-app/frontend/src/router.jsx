@@ -17,8 +17,10 @@ import {
   Route,
   Navigate,
 } from 'react-router-dom';
-import App from './App';
+import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
+import UserProfile from './components/auth/UserProfile';
+import SettingsPage from './pages/SettingsPage';
 import { useRequireAuth } from './hooks/useAuth';
 
 // -----------------------------------------------------------------------------
@@ -42,7 +44,15 @@ export const router = createBrowserRouter([
   },
   {
     path: '/',
-    element: <ProtectedRoute element={<App />} />,
+    element: <ProtectedRoute element={<Dashboard />} />,
+  },
+  {
+    path: '/profile',
+    element: <ProtectedRoute element={<UserProfile />} />,
+  },
+  {
+    path: '/settings',
+    element: <ProtectedRoute element={<SettingsPage />} />,
   },
 ]);
 

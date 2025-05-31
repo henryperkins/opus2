@@ -14,16 +14,16 @@
 
 import { useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../contexts/AuthContext'; // named export
+import { useAuthContext } from '../contexts/AuthContext'; // named export
 
 // -----------------------------------------------------------------------------
 
 export function useAuth() {
-  return useContext(AuthContext);
+  return useAuthContext();
 }
 
 export function useUser() {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuthContext();
   return user;
 }
 

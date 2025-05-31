@@ -1,6 +1,5 @@
 # User model for authentication and ownership
 from sqlalchemy import Column, Integer, String, Boolean, Index, DateTime
-from datetime import datetime
 from sqlalchemy.orm import validates
 from .base import Base, TimestampMixin
 import re
