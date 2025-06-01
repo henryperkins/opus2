@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Header from '../components/common/Header';
+import { Link } from 'react-router-dom';
 
 function Dashboard() {
   const { user } = useAuth();
@@ -30,7 +31,7 @@ function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      
+
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
@@ -41,7 +42,7 @@ function Dashboard() {
           {/* System Status Card */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">System Status</h2>
-            
+
             {loading && (
               <div className="flex items-center text-gray-500">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
@@ -103,9 +104,12 @@ function Dashboard() {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
             <div className="space-y-2">
-              <button className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md">
-                Create New Project
-              </button>
+              <Link
+                to="/projects"
+                className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md block"
+              >
+                Manage Projects
+              </Link>
               <button className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md">
                 Search Code
               </button>

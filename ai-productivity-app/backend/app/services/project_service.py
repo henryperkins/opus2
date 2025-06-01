@@ -80,11 +80,16 @@ class ProjectService:
             changes.append(f"status changed from '{old_status}' to '{update_data.status}'")
 
             # Create status change event
+            if isinstance(update_data.status, ProjectStatus):
+                new_status_val = update_data.status.value
+            else:
+                # Convert Enum string representation ("ProjectStatus.COMPLETED")
+                new_status_val = str(update_data.status).split(".")[-1].lower()
             self.db.add(TimelineEvent(
                 project_id=project.id,
                 event_type=TimelineEvent.EVENT_STATUS_CHANGED,
-                title=f"Status changed to {update_data.status}",
-                event_metadata={"old_status": old_status, "new_status": update_data.status},
+                title=f"Status changed to {new_status_val}",
+                event_metadata={"old_status": old_status, "new_status": new_status_val},
                 user_id=user_id
             ))
 
@@ -127,9 +132,11 @@ class ProjectService:
 
         if filters.tags:
             # Match any of the provided tags
+            # Simple containment check that works across SQLite/JSON – match
+            # serialized tag string to avoid DB-specific JSON operators.
             tag_filters = []
             for tag in filters.tags:
-                tag_filters.append(Project.tags.contains([tag]))
+                tag_filters.append(Project.tags.like(f"%\"{tag}\"%"))
             query = query.filter(or_(*tag_filters))
 
         if filters.search:

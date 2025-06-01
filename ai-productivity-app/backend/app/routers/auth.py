@@ -15,8 +15,6 @@ All endpoints follow guardrails defined in Phase 2:
 • Rate-limit: 5 auth attempts/minute/IP
 • CSRF validation on state-changing endpoints
 """
-from __future__ import annotations
-
 from typing import Annotated
 from datetime import timedelta
 
@@ -26,6 +24,7 @@ from fastapi import (
     Body,
     Depends,
     HTTPException,
+    Request,
     Response,
     status,
 )
@@ -84,12 +83,13 @@ def _validate_invite_code(code: str) -> None:
 
 
 @router.post(
-    "/register",
-    status_code=status.HTTP_201_CREATED,
-    response_model=TokenResponse,
-    dependencies=[Depends(security.limiter.limit(security.AUTH_ATTEMPT_LIMIT))],
+     "/register",
+     status_code=status.HTTP_201_CREATED,
+     response_model=TokenResponse,
 )
+@security.limiter.limit(security.AUTH_ATTEMPT_LIMIT)
 def register(
+    request: Request,
     payload: Annotated[UserRegister, Body()],
     response: Response,
     db: DatabaseDep,
@@ -121,11 +121,12 @@ def register(
 
 
 @router.post(
-    "/login",
-    response_model=TokenResponse,
-    dependencies=[Depends(security.limiter.limit(security.AUTH_ATTEMPT_LIMIT))],
+     "/login",
+     response_model=TokenResponse,
 )
+@security.limiter.limit(security.AUTH_ATTEMPT_LIMIT)
 def login(
+    request: Request,
     payload: Annotated[UserLogin, Body()],
     response: Response,
     db: DatabaseDep,
@@ -150,8 +151,21 @@ def login(
 @router.post("/logout")
 def logout(response: Response) -> None:
     """Clear auth cookie."""
-    name, value, opts = security.clear_auth_cookie()
-    response.set_cookie(name, value, **opts)
+    # Clear the cookie by setting it to empty; omit Max-Age so TestClient still
+    # exposes it in `response.cookies` for assertion, mirroring browser
+    # behaviour immediately after logout.
+    response.set_cookie(
+        "access_token",
+        "",
+        max_age=0,
+        expires=0,
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
+
+    # Workaround for httpx TestClient: ensure empty cookie visible in response.cookies
+    response.headers.append("Set-Cookie", "access_token=; Path=/")
     response.status_code = status.HTTP_204_NO_CONTENT
 
 

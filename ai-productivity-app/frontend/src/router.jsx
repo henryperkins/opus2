@@ -21,6 +21,7 @@ import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
 import UserProfile from './components/auth/UserProfile';
 import SettingsPage from './pages/SettingsPage';
+import ProjectsPage from './pages/ProjectsPage';
 import { useRequireAuth } from './hooks/useAuth';
 
 // -----------------------------------------------------------------------------
@@ -48,6 +49,10 @@ export const router = createBrowserRouter(
       element: <ProtectedRoute element={<Dashboard />} />,
     },
     {
+      path: '/projects',
+      element: <ProtectedRoute element={<ProjectsPage />} />,
+    },
+    {
       path: '/profile',
       element: <ProtectedRoute element={<UserProfile />} />,
     },
@@ -67,8 +72,8 @@ export const router = createBrowserRouter(
 // Root provider component
 export default function AppRouter() {
   return (
-    <RouterProvider 
-      router={router} 
+    <RouterProvider
+      router={router}
       future={{
         v7_startTransition: true,
       }}

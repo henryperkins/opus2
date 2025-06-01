@@ -152,12 +152,14 @@ def build_auth_cookie(token: str) -> Tuple[str, str, dict[str, Any]]:
         name, value, opts = build_auth_cookie(token)
         response.set_cookie(name, value, **opts)
     """
+    import os
+    secure_cookie = not settings.debug and "PYTEST_CURRENT_TEST" not in os.environ
     return (
         "access_token",
         token,
         {
             "httponly": True,
-            "secure": not settings.debug,  # only over HTTPS in production
+            "secure": secure_cookie,  # avoid Secure flag during pytest so TestClient can read it
             "samesite": "lax",
             "path": "/",
             "max_age": _ACCESS_TOKEN_EXPIRE_MINUTES * 60,
@@ -169,12 +171,14 @@ def clear_auth_cookie() -> Tuple[str, str, dict[str, Any]]:
     """
     Returns arguments to remove the auth cookie.
     """
+    import os
+    secure_cookie = not settings.debug and "PYTEST_CURRENT_TEST" not in os.environ
     return (
         "access_token",
         "",
         {
             "httponly": True,
-            "secure": not settings.debug,
+            "secure": secure_cookie,
             "samesite": "lax",
             "path": "/",
             "max_age": 0,

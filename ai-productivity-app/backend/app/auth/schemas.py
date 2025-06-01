@@ -3,8 +3,6 @@ Purpose: Pydantic schemas for authentication workflows (login, registration,
 token response, user serialization, password reset).  Kept concise (<150 LOC)
 as specified in Phase 2 plan.
 """
-from __future__ import annotations
-
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, validator
@@ -117,3 +115,7 @@ class UserResponse(BaseModel):
 
 LoginSchema = UserLogin
 RegisterSchema = UserRegister
+
+# Ensure all forward references for this model are resolved for FastAPI+Pydantic
+UserRegister.model_rebuild()
+globals()["UserRegister"] = UserRegister
