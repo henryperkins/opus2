@@ -1,6 +1,6 @@
 /**
  * ProjectForm.jsx: Reusable form for creating and editing projects
- * 
+ *
  * Handles validation, emoji/color picker, and tag management
  */
 import React, { useState } from 'react';
@@ -11,14 +11,14 @@ const DEFAULT_COLORS = [
 ];
 
 const DEFAULT_EMOJIS = [
-  '=Á', '=€', '=¡', '<¯', '=%', 'P', '<¨', '='', '=Ê', '<Æ',
+  '=Á', '=€', '=¡', '<¯', '=%', 'P', '<¨', '=Ê', '<Æ',
   '=»', '=ñ', '<', '<ª', '<­', '<¨', '<¯', '=,', '¡', '<'
 ];
 
-export default function ProjectForm({ 
-  initialData = {}, 
-  onSubmit, 
-  onCancel, 
+export default function ProjectForm({
+  initialData = {},
+  onSubmit,
+  onCancel,
   loading = false,
   submitText = 'Create Project'
 }) {
@@ -31,27 +31,27 @@ export default function ProjectForm({
     tags: [],
     ...initialData
   });
-  
+
   const [errors, setErrors] = useState({});
   const [tagInput, setTagInput] = useState('');
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.title.trim()) {
       newErrors.title = 'Title is required';
     } else if (formData.title.length > 200) {
       newErrors.title = 'Title must be 200 characters or less';
     }
-    
+
     if (formData.description && formData.description.length > 2000) {
       newErrors.description = 'Description must be 2000 characters or less';
     }
-    
+
     if (!/^#[0-9A-Fa-f]{6}$/.test(formData.color)) {
       newErrors.color = 'Invalid color format';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };

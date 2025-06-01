@@ -1,7 +1,23 @@
 # backend/app/code_processing/chunker.py
-"""Intelligent code chunking for embeddings with semantic awareness."""
-from typing import List, Dict, Any, Optional
-import tiktoken
+"""Semantic-aware chunking utilities used by the code-processing pipeline.
+
+This module optionally relies on the *tiktoken* package for accurate token
+counting that matches the OpenAI models.  Because *tiktoken* ships binary
+extensions it is not always available in the execution environment (for
+instance during CI or in minimal containers).  Import errors should therefore
+not crash the whole application – we can still operate with a heuristic token
+estimator.
+"""
+
+# Note: *Any* is intentionally not imported to avoid an unused import warning.
+from typing import List, Dict, Optional
+
+# The import is optional – fall back to *None* when the package is absent so
+# that the rest of the application can continue to work.
+try:
+    import tiktoken  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover – environment-specific
+    tiktoken = None  # type: ignore
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,12 +34,24 @@ class SemanticChunker:
 
     def _init_encoder(self):
         """Initialize tiktoken encoder."""
+        if tiktoken is None:
+            # The optional dependency is missing – use heuristic counting.
+            logger.warning("tiktoken is not installed; falling back to rough character-based token estimation.")
+            self.encoder = None
+            return
+
         try:
             self.encoder = tiktoken.encoding_for_model("text-embedding-3-small")
-        except Exception as e:
-            logger.warning(f"Failed to load embedding tokenizer: {e}")
-            # Fallback to cl100k_base
-            self.encoder = tiktoken.get_encoding("cl100k_base")
+        except Exception as exc:  # pragma: no cover – network / install issues
+            # If the specific model encoding isn't available (very old tiktoken
+            # version or other runtime error) we still attempt to get a
+            # generic encoding.  As an ultimate fallback we disable accurate
+            # token counting altogether.
+            logger.warning("Unable to load tiktoken encoder – falling back to heuristic (%s)", exc)
+            try:
+                self.encoder = tiktoken.get_encoding("cl100k_base")
+            except Exception:
+                self.encoder = None
 
     def create_chunks(
         self,
@@ -257,5 +285,4 @@ class SemanticChunker:
                     })
 
         return chunks
-)
 

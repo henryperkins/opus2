@@ -1,0 +1,41 @@
+// Code file management API client for upload, parsing, and retrieval
+import client from './client';
+
+export const codeAPI = {
+    async uploadFiles(projectId, files) {
+        const formData = new FormData();
+        files.forEach(file => formData.append('files', file));
+
+        const response = await client.post(`/api/code/projects/${projectId}/upload`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+        return response.data;
+    },
+
+    async getProjectFiles(projectId, params = {}) {
+        const response = await client.get(`/api/code/projects/${projectId}/files`, { params });
+        return response.data;
+    },
+
+    async getFileContent(fileId) {
+        const response = await client.get(`/api/code/files/${fileId}/content`);
+        return response.data;
+    },
+
+    async getFileSymbols(fileId) {
+        const response = await client.get(`/api/code/files/${fileId}/symbols`);
+        return response.data;
+    },
+
+    async reindexProject(projectId) {
+        const response = await client.post(`/api/code/projects/${projectId}/reindex`);
+        return response.data;
+    },
+
+    async getIndexingStatus(projectId) {
+        const response = await client.get(`/api/code/projects/${projectId}/indexing-status`);
+        return response.data;
+    }
+};

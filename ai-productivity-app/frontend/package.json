@@ -16,7 +16,10 @@
         "axios": "^1.6.5",
         "react-router-dom": "^6.21.1",
         "zustand": "^4.4.7",
-        "react-hook-form": "^7.48.2"
+        "react-hook-form": "^7.48.2",
+        "d3": "^7.8.5",
+        "react-syntax-highlighter": "^15.5.0",
+        "lodash.debounce": "^4.0.8"
     },
     "devDependencies": {
         "@types/react": "^18.2.47",

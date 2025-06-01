@@ -22,6 +22,7 @@ import LoginPage from './pages/LoginPage';
 import UserProfile from './components/auth/UserProfile';
 import SettingsPage from './pages/SettingsPage';
 import ProjectsPage from './pages/ProjectsPage';
+import SearchPage from './pages/SearchPage';
 import { useRequireAuth } from './hooks/useAuth';
 
 // -----------------------------------------------------------------------------
@@ -59,6 +60,10 @@ export const router = createBrowserRouter(
     {
       path: '/settings',
       element: <ProtectedRoute element={<SettingsPage />} />,
+    },
+    {
+      path: '/search',
+      element: <ProtectedRoute element={<SearchPage />} />,
     },
   ],
   {

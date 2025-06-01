@@ -90,7 +90,7 @@ class CodeDocument(Base, TimestampMixin):
     embeddings = relationship(
         "CodeEmbedding",
         back_populates="document",
-        cascade="all, delete-orphan"
+    cascade="all, delete-orphan",
     )
 
     @validates("file_path")
@@ -205,3 +205,4 @@ Project.code_documents = relationship(
     "CodeDocument",
     back_populates="project",
     cascade="all, delete-orphan"
+)

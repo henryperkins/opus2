@@ -54,7 +54,7 @@ def init_db() -> None:
     from .models import base
 
     # Import all models to ensure they're registered
-    from .models import user, project  # noqa
+    from .models import user, project, code  # noqa: F401
 
     base.Base.metadata.create_all(bind=engine)
     print("Database tables created successfully")
