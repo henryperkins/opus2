@@ -124,3 +124,22 @@ def get_current_user(
 
     # In future we can verify jti against sessions table here
     return user
+
+    
+async def get_current_user_ws(
+    websocket: WebSocket,
+    token: str,
+    db: Session
+) -> Optional[User]:
+    """Authenticate WebSocket connection."""
+    try:
+        payload = security.decode_access_token(token)
+        user_id = security.token_sub_identity(payload)
+        user = db.get(User, user_id)
+
+        if not user or not user.is_active:
+            return None
+
+        return user
+    except Exception:
+        return None

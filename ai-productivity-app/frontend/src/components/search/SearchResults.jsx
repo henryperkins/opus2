@@ -43,62 +43,71 @@ export default function SearchResults({ results, query, loading }) {
         Found {results.length} result{results.length !== 1 ? 's' : ''}
       </div>
 
-      {results.map((result, index) => (
-        <div
-          key={result.id || index}
-          className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow"
-        >
-          <div className="p-4">
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex-1">
-                <h4 className="text-sm font-medium text-gray-900">
-                  {highlightQuery(result.file_path)}
-                </h4>
-                <div className="flex items-center mt-1 space-x-4 text-xs text-gray-500">
-                  <span className="flex items-center">
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
-                    {result.language}
-                  </span>
-                  {result.symbol && (
+      {results.map((result, index) => {
+        // Use a unique, string-safe key: prefer valid id, else file_path+lines, else fallback to index
+        let resultKey = `result-${index}`;
+        if (result && typeof result.id === 'string' && result.id.trim() && !/[\uFFFD<>]/.test(result.id)) {
+          resultKey = result.id;
+        } else if (result && typeof result.file_path === 'string' && result.start_line && result.end_line) {
+          resultKey = `${result.file_path}:${result.start_line}-${result.end_line}`;
+        }
+        return (
+          <div
+            key={resultKey}
+            className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div className="p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-gray-900">
+                    {highlightQuery(result.file_path)}
+                  </h4>
+                  <div className="flex items-center mt-1 space-x-4 text-xs text-gray-500">
                     <span className="flex items-center">
                       <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                       </svg>
-                      {result.symbol}
+                      {result.language}
                     </span>
-                  )}
-                  <span className="flex items-center">
-                    Lines {result.start_line}-{result.end_line}
+                    {result.symbol && (
+                      <span className="flex items-center">
+                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        {result.symbol}
+                      </span>
+                    )}
+                    <span className="flex items-center">
+                      Lines {result.start_line}-{result.end_line}
+                    </span>
+                  </div>
+                </div>
+                <div className="ml-4 flex items-center space-x-2">
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    result.search_type === 'semantic'
+                      ? 'bg-purple-100 text-purple-800'
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {result.search_type}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {(result.score * 100).toFixed(0)}% match
                   </span>
                 </div>
               </div>
-              <div className="ml-4 flex items-center space-x-2">
-                <span className={`px-2 py-1 text-xs rounded-full ${
-                  result.search_type === 'semantic'
-                    ? 'bg-purple-100 text-purple-800'
-                    : 'bg-green-100 text-green-800'
-                }`}>
-                  {result.search_type}
-                </span>
-                <span className="text-xs text-gray-500">
-                  {(result.score * 100).toFixed(0)}% match
-                </span>
+
+              <div className="mt-3">
+                <CodeSnippet
+                  content={result.content}
+                  language={result.language}
+                  startLine={result.start_line}
+                  highlightLines={[]}
+                />
               </div>
             </div>
-
-            <div className="mt-3">
-              <CodeSnippet
-                content={result.content}
-                language={result.language}
-                startLine={result.start_line}
-                highlightLines={[]}
-              />
-            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -1,0 +1,109 @@
+from fastapi import WebSocket, WebSocketDisconnect, Depends
+from sqlalchemy.orm import Session
+import json
+import logging
+from typing import Optional
+
+from app.database import get_db
+from app.models.user import User
+from app.auth.utils import get_current_user_ws
+from app.services.chat_service import ChatService
+from app.chat.processor import ChatProcessor
+from .manager import connection_manager
+
+logger = logging.getLogger(__name__)
+
+
+async def handle_chat_connection(
+    websocket: WebSocket,
+    session_id: int,
+    current_user: User,
+    db: Session
+):
+    """Handle WebSocket connection for chat session."""
+    await connection_manager.connect(websocket, session_id, current_user.id)
+    chat_service = ChatService(db)
+    chat_processor = ChatProcessor(db)
+
+    try:
+        # Send connection confirmation
+        await websocket.send_json({
+            'type': 'connected',
+            'user_id': current_user.id,
+            'session_id': session_id
+        })
+
+        # Send recent messages
+        recent_messages = chat_service.get_session_messages(session_id, limit=20)
+        await websocket.send_json({
+            'type': 'message_history',
+            'messages': [serialize_message(m) for m in reversed(recent_messages)]
+        })
+
+        # Message handling loop
+        while True:
+            data = await websocket.receive_json()
+
+            if data['type'] == 'message':
+                # Process user message
+                user_message = await chat_service.create_message(
+                    session_id=session_id,
+                    content=data['content'],
+                    role='user',
+                    user_id=current_user.id,
+                    metadata=data.get('metadata')
+                )
+
+                # Process with AI
+                await chat_processor.process_message(
+                    session_id=session_id,
+                    message=user_message,
+                    websocket=websocket
+                )
+
+            elif data['type'] == 'edit_message':
+                await chat_service.update_message(
+                    message_id=data['message_id'],
+                    content=data['content'],
+                    user_id=current_user.id
+                )
+
+            elif data['type'] == 'delete_message':
+                await chat_service.delete_message(
+                    message_id=data['message_id'],
+                    user_id=current_user.id
+                )
+
+            elif data['type'] == 'typing':
+                # Broadcast typing indicator
+                await connection_manager.send_message({
+                    'type': 'user_typing',
+                    'user_id': current_user.id,
+                    'is_typing': data['is_typing']
+                }, session_id)
+
+    except WebSocketDisconnect:
+        logger.info(f"User {current_user.id} disconnected from session {session_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        await websocket.send_json({
+            'type': 'error',
+            'message': 'Internal server error'
+        })
+    finally:
+        await connection_manager.disconnect(websocket, session_id, current_user.id)
+
+
+def serialize_message(message: ChatMessage) -> dict:
+    """Convert message to JSON-serializable format."""
+    return {
+        'id': message.id,
+        'content': message.content,
+        'role': message.role,
+        'user_id': message.user_id,
+        'created_at': message.created_at.isoformat(),
+        'is_edited': message.is_edited,
+        'edited_at': message.edited_at.isoformat() if message.edited_at else None,
+        'code_snippets': message.code_snippets,
+        'referenced_files': message.referenced_files
+    }

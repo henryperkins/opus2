@@ -187,9 +187,9 @@ export default function ProjectForm({
             Project Emoji
           </label>
           <div className="flex flex-wrap gap-1">
-            {DEFAULT_EMOJIS.map(emoji => (
+            {DEFAULT_EMOJIS.map((emoji, idx) => (
               <button
-                key={emoji}
+                key={`${emoji}-${idx}`}
                 type="button"
                 onClick={() => handleInputChange('emoji', emoji)}
                 className={`w-8 h-8 text-lg border rounded ${

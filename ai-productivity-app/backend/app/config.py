@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None
     azure_openai_endpoint: Optional[str] = None
 
+    # LLM settings
+    llm_provider: str = "openai"
+    llm_model: str = "gpt-4"
+    max_context_tokens: int = 8000
+
+    # WebSocket settings
+    websocket_ping_interval: int = 30
+    websocket_ping_timeout: int = 10
+
+
     @property
     def effective_secret_key(self) -> str:
         """Return JWT secret key if set, otherwise fall back to main secret"""
