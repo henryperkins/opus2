@@ -143,6 +143,40 @@ def cleanup_expired_sessions(db: DBSession, user_id: Optional[int] = None) -> in
     
     return count
 
+# ---------------------------------------------------------------------------
+# Registration / invite helpers
+# ---------------------------------------------------------------------------
+
+
+def validate_invite_code(code: str) -> None:  # noqa: D401 – simple helper
+    """Validate *code* against the configured invite list.
+
+    The comma-separated list of valid codes is read from
+    ``settings.invite_codes`` (see *app.config*).  Whitespace surrounding the
+    individual entries is ignored so environment variables such as
+
+        INVITE_CODES="code1, code2 , code3"
+
+    work as expected.
+
+    Raises
+    ------
+    fastapi.HTTPException
+        With *403 Forbidden* status if the code is not present in the list.
+    """
+
+    from fastapi import HTTPException, status
+
+    from app.config import settings
+
+    allowed = [c.strip() for c in settings.invite_codes.split(",") if c.strip()]
+
+    if code not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid invite code",
+        )
+
 
 ###############################################################################
 # Dependency: retrieve current user from JWT (cookie or Bearer header)

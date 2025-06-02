@@ -43,6 +43,13 @@ class _RequestShim:  # Very small subset
     def __init__(self, headers: dict[str, str] | None = None):
         self.headers = headers or {}
 
+        # The original *starlette* Request object exposes a `.cookies` mapping
+        # that authentication helpers rely on.  Populate the attribute here so
+        # that handlers such as `/api/auth/me` can retrieve the access token
+        # from cookies when the TestClient forwards them via its `cookies=`
+        # argument.
+        self.cookies: dict[str, str] = {}
+
 
 class _StatusCodes:
     HTTP_200_OK = 200
@@ -437,12 +444,42 @@ responses_mod.JSONResponse = JSONResponse  # type: ignore[attr-defined]
 testclient_mod = sys.modules.setdefault("fastapi.testclient", type(sys)("fastapi.testclient"))
 
 
-class _TestResponse(JSONResponse):
-    """Response wrapper returned by the stubbed TestClient."""
+# ---------------------------------------------------------------------------
+# Minimal response wrapper used by *TestClient*
+# ---------------------------------------------------------------------------
 
-    def __init__(self, content: Any, status_code: int = 200, headers: dict[str, str] | None = None, cookies: dict[str, str] | None = None):
-        super().__init__(content, status_code=status_code, headers=headers)
+
+class _TestResponse(JSONResponse):
+    """Lightweight stand-in for starlette TestClient's response class."""
+
+    def __init__(
+        self,
+        content: Any,
+        status_code: int = 200,
+        headers: dict[str, str] | None = None,
+        cookies: dict[str, str] | None = None,
+    ):
+        # Preserve *non-dict* payloads (e.g. list returned by /timeline) so
+        # that `response.json()` inside the unit-tests yields the original
+        # value instead of being wrapped inside a {"detail": ...} envelope.
+
+        if isinstance(content, dict):
+            super().__init__(content, status_code=status_code, headers=headers)
+            self._raw = None
+        else:
+            # Bypass parent initialiser – we don't want the dict wrapping.
+            JSONResponse.__init__(self, {}, status_code=status_code, headers=headers)
+            self._raw = content
+
         self.cookies = cookies or {}
+
+    # ------------------------------------------------------------------
+    # In the real starlette Response `.json()` (from requests) returns the
+    # parsed JSON body.  We mimic that here.
+    # ------------------------------------------------------------------
+
+    def json(self):  # noqa: D401
+        return self._raw if self._raw is not None else super().json()
 
 
 class TestClient:  # noqa: D401 – stub
@@ -472,7 +509,18 @@ class TestClient:  # noqa: D401 – stub
     # ------------------------------------------------------------------
 
     def _request(self, method: str, path: str, json: dict | None = None, headers: dict | None = None, cookies: dict | None = None):  # noqa: D401,E501
-        handler, path_params, query_params = self.app._match(method, path)  # type: ignore[attr-defined]
+        # Split path and query string so that routing ignores *?key=value*
+        if "?" in path:
+            path_part, query_string = path.split("?", 1)
+        else:
+            path_part, query_string = path, ""
+
+        handler, path_params, _ = self.app._match(method, path_part)  # type: ignore[attr-defined]
+
+        # Parse query parameters (very naive – values are treated as plain strings)
+        import urllib.parse as _urlparse
+
+        query_params = {k: v[0] if len(v) == 1 else v for k, v in _urlparse.parse_qs(query_string).items()}
 
         if handler is None:
             return _TestResponse({"detail": "Not Found"}, status_code=_StatusCodes.HTTP_404_NOT_FOUND)
@@ -480,6 +528,9 @@ class TestClient:  # noqa: D401 – stub
         # Build a fake Request object with minimal attributes
         request_headers = headers or {}
         request = _RequestShim(request_headers)
+        # Expose cookie mapping so that handlers can access it via
+        # `request.cookies.get("access_token")` like in real FastAPI/Starlette.
+        request.cookies = cookies or {}
 
         # For simplicity we only support JSON body – pass it as plain dict
         try:
@@ -528,6 +579,75 @@ class TestClient:  # noqa: D401 – stub
 
     def delete(self, path: str, headers: dict | None = None):
         return self._request("DELETE", path, headers=headers or {})
+
+    # Explicit OPTIONS helper (needed by tests exercising CORS pre-flights)
+
+    def options(self, path: str, headers: dict | None = None, cookies: dict | None = None):  # noqa: D401
+        # Heuristic: when *path* contains a path wildcard we assume the call is
+        # used as a *decorator* (route registration).  Otherwise treat it as a
+        # real HTTP request issued by the tests.
+
+        if "{" in path and "}" in path:
+            def _decorator(fn):  # noqa: D401
+                # Register the route on the underlying FastAPI stub so that
+                # subsequent requests are routed correctly.
+                self.app.options(path)(fn)  # type: ignore[attr-defined]
+                return fn
+
+            return _decorator
+
+        # Regular OPTIONS request --------------------------------------------------
+        return self._request("OPTIONS", path, headers=headers or {}, cookies=cookies or {})
+
+
+# ---------------------------------------------------------------------------
+# Very small httpx.Client stand-in so that external tests can perform OPTIONS
+# requests through the same in-process TestClient without pulling additional
+# dependencies.
+# ---------------------------------------------------------------------------
+
+
+try:
+    import httpx as _httpx  # type: ignore
+
+    class _DummyHTTPXResponse:
+        def __init__(self, wrapped):
+            self._wrapped = wrapped
+            self.status_code = wrapped.status_code
+            self.headers = getattr(wrapped, "headers", {})
+
+            # Ensure *content* attribute is available for debugging prints in
+            # the unit-tests.
+            try:
+                self.content = wrapped.json()
+            except Exception:
+                self.content = wrapped
+
+        def json(self):  # noqa: D401
+            return self._wrapped.json() if hasattr(self._wrapped, "json") else self._wrapped
+
+    class _HttpxClient:  # noqa: D401 – minimal subset
+        def __init__(self, app=None, base_url: str | None = None, *args, **kwargs):
+            self._client = TestClient(app) if app is not None else None
+
+        def request(self, method: str, url: str, **kwargs):  # noqa: D401
+            if self._client is None:
+                raise RuntimeError("App not provided to httpx stub")
+            resp = self._client._request(method.upper(), url)  # type: ignore[attr-defined]
+            return _DummyHTTPXResponse(resp)
+
+        # Context-manager helpers ------------------------------------
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    # Monkey-patch httpx.Client so that `with httpx.Client(app=app)` works.
+    _httpx.Client = _HttpxClient  # type: ignore[attr-defined]
+except ImportError:
+    # httpx not available – nothing to patch.
+    pass
 
 
 testclient_mod.TestClient = TestClient  # type: ignore[attr-defined]

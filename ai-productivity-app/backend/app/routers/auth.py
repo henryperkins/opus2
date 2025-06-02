@@ -15,6 +15,10 @@ All endpoints follow guardrails defined in Phase 2:
 • Rate-limit: 5 auth attempts/minute/IP
 • CSRF validation on state-changing endpoints
 """
+# ---------------------------------------------------------------------------
+# Router for authentication related endpoints (Phase 2).
+# ---------------------------------------------------------------------------
+
 from typing import Annotated
 from datetime import timedelta
 
@@ -44,6 +48,9 @@ from app.config import settings
 from app.dependencies import CurrentUserRequired, DatabaseDep
 from app.models.user import User
 
+# Re-use shared helpers to avoid duplication
+from app.auth.utils import validate_invite_code
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 ###############################################################################
@@ -66,17 +73,6 @@ def _issue_token_and_cookie(
     return TokenResponse.from_ttl(token, settings.access_token_expire_minutes)
 
 
-def _validate_invite_code(code: str) -> None:
-    allowed = [c.strip() for c in settings.invite_codes.split(",")] if getattr(
-        settings, "invite_codes", ""
-    ) else []
-    if code not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid invite code",
-        )
-
-
 ###############################################################################
 # Registration
 ###############################################################################
@@ -95,7 +91,7 @@ def register(
     db: DatabaseDep,
 ) -> TokenResponse:
     """Invite-only registration. Returns token and sets cookie."""
-    _validate_invite_code(payload.invite_code)
+    validate_invite_code(payload.invite_code)
 
     user = User(
         username=payload.username.lower(),
