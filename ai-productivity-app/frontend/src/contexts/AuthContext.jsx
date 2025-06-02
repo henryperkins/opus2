@@ -144,3 +144,6 @@ AuthProvider.propTypes = {
 export function useAuthContext() {
   return useContext(AuthContext);
 }
+
+// Export the context for testing
+export { AuthContext };

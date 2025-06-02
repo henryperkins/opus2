@@ -25,10 +25,13 @@ that swapping in a “real” vector store in the future will be trivial.
 from __future__ import annotations
 
 import logging
+import re
+from collections import Counter
 from typing import List, Dict, Optional, Sequence
+import math
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 
 # NumPy is an optional dependency – guard the import gracefully so the module
 # can still be imported in minimal environments without it.
@@ -54,6 +57,67 @@ def _normalise(v: "np.ndarray") -> "np.ndarray":
     if norm == 0:
         return v
     return v / norm
+
+
+def _tokenize_query(query: str) -> List[str]:
+    """Tokenize query into words for keyword scoring."""
+    # Remove special characters and convert to lowercase
+    clean_query = re.sub(r'[^\w\s]', ' ', query.lower())
+    return [token for token in clean_query.split() if len(token) > 1]
+
+
+def _calculate_tf_idf_score(content: str, query_tokens: List[str], total_docs: int, term_doc_freq: Dict[str, int]) -> float:
+    """Calculate TF-IDF score for content against query tokens."""
+    if not query_tokens:
+        return 0.0
+    
+    content_lower = content.lower()
+    content_tokens = _tokenize_query(content_lower)
+    
+    if not content_tokens:
+        return 0.0
+    
+    # Calculate term frequency in document
+    content_counter = Counter(content_tokens)
+    doc_length = len(content_tokens)
+    
+    score = 0.0
+    for token in query_tokens:
+        tf = content_counter.get(token, 0) / doc_length if doc_length > 0 else 0
+        
+        if tf > 0:
+            # Calculate IDF
+            doc_freq = term_doc_freq.get(token, 1)
+            idf = math.log(total_docs / doc_freq) if doc_freq > 0 else 0
+            score += tf * idf
+    
+    return score
+
+
+def _expand_query(query: str) -> List[str]:
+    """Expand query with related terms (simple implementation)."""
+    query_tokens = _tokenize_query(query)
+    expanded = set(query_tokens)
+    
+    # Add programming-specific expansions
+    programming_expansions = {
+        'function': ['func', 'method', 'def'],
+        'class': ['cls', 'object', 'type'],
+        'variable': ['var', 'param', 'arg'],
+        'import': ['include', 'require', 'from'],
+        'return': ['ret', 'yield'],
+        'error': ['exception', 'fail', 'bug'],
+        'test': ['spec', 'unit', 'assert'],
+        'config': ['configuration', 'settings', 'options'],
+        'data': ['info', 'content', 'value'],
+        'api': ['endpoint', 'service', 'interface'],
+    }
+    
+    for token in query_tokens:
+        if token in programming_expansions:
+            expanded.update(programming_expansions[token])
+    
+    return list(expanded)
 
 
 # ---------------------------------------------------------------------------
@@ -110,17 +174,36 @@ class HybridSearch:
             # Default to *all* projects
             project_ids = [p for (p,) in self.db.query(CodeDocument.project_id).distinct().all()] or [0]
 
+        # Expand query for better matches
+        expanded_terms = _expand_query(query)
+        query_tokens = _tokenize_query(query)
+        
+        # Get total document count for IDF calculation
+        total_docs = self.db.query(CodeEmbedding).join(CodeDocument).filter(
+            CodeDocument.project_id.in_(project_ids)
+        ).count()
+        
+        # Calculate term document frequencies for IDF
+        term_doc_freq = self._calculate_term_frequencies(expanded_terms, project_ids)
+
         # -----------------------------------------------------------------
-        # Step 1 – always run a very inexpensive SQL keyword search.  This is
-        #          especially important when no vectors are available.
+        # Step 1 – optimized keyword search with better scoring
         # -----------------------------------------------------------------
+
+        # Build more sophisticated query using expanded terms
+        search_conditions = []
+        for term in expanded_terms:
+            search_conditions.extend([
+                CodeEmbedding.chunk_content.ilike(f"%{term}%"),
+                CodeEmbedding.symbol_name.ilike(f"%{term}%")
+            ])
 
         keyword_stmt = (
             select(CodeEmbedding)
             .join(CodeDocument, CodeDocument.id == CodeEmbedding.document_id)
             .where(
                 CodeDocument.project_id.in_(project_ids),
-                or_(CodeEmbedding.chunk_content.ilike(f"%{query}%"), CodeEmbedding.symbol_name.ilike(f"%{query}%")),
+                or_(*search_conditions) if search_conditions else CodeEmbedding.chunk_content.ilike(f"%{query}%")
             )
             .limit(limit * 3)  # wider net, will be re-ranked later
         )
@@ -129,6 +212,17 @@ class HybridSearch:
 
         results: list[dict] = []
         for r in keyword_rows:
+            # Calculate TF-IDF score instead of constant 1.0
+            tf_idf_score = _calculate_tf_idf_score(
+                r.chunk_content + " " + (r.symbol_name or ""), 
+                query_tokens, 
+                total_docs, 
+                term_doc_freq
+            )
+            
+            # Boost score for symbol name matches
+            symbol_boost = 1.5 if r.symbol_name and any(token in r.symbol_name.lower() for token in query_tokens) else 1.0
+            
             results.append(
                 {
                     "chunk_id": r.id,
@@ -136,7 +230,7 @@ class HybridSearch:
                     "file_path": r.document.file_path if r.document else None,
                     "language": r.document.language if r.document else None,
                     "symbol": r.symbol_name,
-                    "_keyword_score": 1.0,  # constant placeholder – could be tf-idf in future
+                    "_keyword_score": tf_idf_score * symbol_boost,
                     "search_type": "keyword",
                 }
             )
@@ -195,6 +289,26 @@ class HybridSearch:
     # ---------------------------------------------------------------------
     # Internal helpers
     # ---------------------------------------------------------------------
+    
+    def _calculate_term_frequencies(self, terms: List[str], project_ids: Sequence[int]) -> Dict[str, int]:
+        """Calculate document frequency for each term for IDF calculation."""
+        from app.models.code import CodeEmbedding, CodeDocument
+        
+        term_doc_freq = {}
+        
+        for term in terms:
+            # Count documents containing this term
+            count = self.db.query(CodeEmbedding).join(CodeDocument).filter(
+                CodeDocument.project_id.in_(project_ids),
+                or_(
+                    CodeEmbedding.chunk_content.ilike(f"%{term}%"),
+                    CodeEmbedding.symbol_name.ilike(f"%{term}%")
+                )
+            ).count()
+            
+            term_doc_freq[term] = max(count, 1)  # Avoid division by zero
+            
+        return term_doc_freq
 
     async def _generate_query_embedding(self, query: str) -> Optional["np.ndarray"]:  # type: ignore[name-defined]
         """Return *unit* vector for the supplied query or *None* on failure."""
@@ -243,18 +357,14 @@ class HybridSearch:
         project_ids: Sequence[int],
         limit: int,
     ) -> List[Dict]:
-        """Very small cosine-similarity search directly against SQLite JSON.
+        """Optimized cosine-similarity search with vectorized operations.
 
-        … **not** something you would ever do in production 😉  but more than
-        good enough for test-drives and demos without external services.
+        Uses batch processing when NumPy is available for better performance.
         """
 
         from app.models.code import CodeEmbedding, CodeDocument  # late import
 
-        # Load *all* candidate embeddings into memory.  For a typical demo-
-        # sized database this is perfectly fine; for anything real this would
-        # obviously need a proper vector index.
-
+        # Load candidate embeddings into memory with metadata
         stmt = (
             select(CodeEmbedding)
             .join(CodeDocument, CodeDocument.id == CodeEmbedding.document_id)
@@ -263,43 +373,90 @@ class HybridSearch:
 
         rows = self.db.execute(stmt).scalars().all()
 
-        semantic_results: list[dict] = []
-
         if not rows:
-            return semantic_results
+            return []
 
-        # Pre-compute norm of query vector once.
-        qvec = query_vec
+        # Try vectorized approach first (faster)
+        if _HAS_NUMPY:
+            return self._vectorized_semantic_search(query_vec, rows, limit)
+        else:
+            return self._fallback_semantic_search(query_vec, rows, limit)
 
+    def _vectorized_semantic_search(self, query_vec: "np.ndarray", rows: List, limit: int) -> List[Dict]:
+        """Optimized vectorized semantic search using NumPy operations."""
+        embeddings = []
+        metadata = []
+        
         for r in rows:
             try:
-                vec_list = r.embedding  # stored as JSON array
+                vec_list = r.embedding
+                if not vec_list:
+                    continue
+                    
+                vec = np.asarray(vec_list, dtype=float)
+                if vec.shape != query_vec.shape:
+                    continue
+                    
+                embeddings.append(_normalise(vec))
+                metadata.append(r)
+            except Exception:
+                continue
+        
+        if not embeddings:
+            return []
+            
+        # Vectorized cosine similarity computation
+        embeddings_matrix = np.stack(embeddings)
+        similarities = np.dot(embeddings_matrix, query_vec)
+        
+        # Get top results
+        top_indices = np.argsort(similarities)[::-1][:limit]
+        
+        semantic_results = []
+        for idx in top_indices:
+            r = metadata[idx]
+            similarity = float(similarities[idx])
+            
+            semantic_results.append({
+                "chunk_id": r.id,
+                "content": r.chunk_content[:500],
+                "file_path": r.document.file_path if r.document else None,
+                "language": r.document.language if r.document else None,
+                "symbol": r.symbol_name,
+                "_semantic_score": similarity,
+                "search_type": "semantic",
+            })
+            
+        return semantic_results
+
+    def _fallback_semantic_search(self, query_vec: "np.ndarray", rows: List, limit: int) -> List[Dict]:
+        """Fallback semantic search for when NumPy operations fail."""
+        semantic_results = []
+        
+        for r in rows:
+            try:
+                vec_list = r.embedding
                 if not vec_list:
                     continue
 
                 vec = np.asarray(vec_list, dtype=float)
-                if vec.shape != qvec.shape:
-                    # Skip vectors with wrong dimensionality – could happen
-                    # when different embedding models were used.
+                if vec.shape != query_vec.shape:
                     continue
 
-                sim = float(np.dot(qvec, _normalise(vec)))  # cosine similarity (vectors already unit-normed)
+                sim = float(np.dot(query_vec, _normalise(vec)))
 
-                semantic_results.append(
-                    {
-                        "chunk_id": r.id,
-                        "content": r.chunk_content[:500],
-                        "file_path": r.document.file_path if r.document else None,
-                        "language": r.document.language if r.document else None,
-                        "symbol": r.symbol_name,
-                        "_semantic_score": sim,
-                        "search_type": "semantic",
-                    }
-                )
-            except Exception:  # pragma: no cover – ignore broken rows
+                semantic_results.append({
+                    "chunk_id": r.id,
+                    "content": r.chunk_content[:500],
+                    "file_path": r.document.file_path if r.document else None,
+                    "language": r.document.language if r.document else None,
+                    "symbol": r.symbol_name,
+                    "_semantic_score": sim,
+                    "search_type": "semantic",
+                })
+            except Exception:
                 continue
 
         # Return top-N most similar
         semantic_results.sort(key=lambda x: x["_semantic_score"], reverse=True)
-
         return semantic_results[:limit]

@@ -34,6 +34,7 @@ class User(Base, TimestampMixin):
 
     # Relationships
     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
+    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
 
     @validates("username")
     def validate_username(self, key, username):

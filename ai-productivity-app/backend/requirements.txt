@@ -34,6 +34,9 @@ flake8==7.0.0
 mypy==1.8.0
 tiktoken
 
+# Scientific computing library required for vector store math operations
+numpy==1.26.4
+
 # WebSocket support
 # FastAPI uses starlette which supports WebSocket communication, but the
 # optional **websockets** dependency is required at runtime for proper

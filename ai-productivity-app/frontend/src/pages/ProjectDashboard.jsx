@@ -1,0 +1,279 @@
+// frontend/src/pages/ProjectDashboard.jsx
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import Header from '../components/common/Header';
+import ProjectCard from '../components/projects/ProjectCard';
+import CreateProjectModal from '../components/projects/CreateProjectModal';
+import Timeline from '../components/projects/Timeline';
+import useProjectStore from '../stores/projectStore';
+
+export default function ProjectDashboard() {
+    const navigate = useNavigate();
+    const {
+        projects,
+        totalProjects,
+        fetchProjects,
+        loading,
+        error,
+        filters,
+        setFilters,
+        archiveProject,
+        deleteProject
+    } = useProjectStore();
+
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [selectedProject, setSelectedProject] = useState(null);
+    const [view, setView] = useState('grid'); // grid or timeline
+
+    useEffect(() => {
+        fetchProjects();
+    }, [fetchProjects, filters]);
+
+    const handleProjectClick = (project) => {
+        setSelectedProject(project);
+    };
+
+    const handleArchive = async (projectId) => {
+        try {
+            await archiveProject(projectId);
+            fetchProjects();
+        } catch (err) {
+            console.error('Failed to archive project:', err);
+        }
+    };
+
+    const handleDelete = async (projectId) => {
+        if (window.confirm('Are you sure you want to delete this project?')) {
+            try {
+                await deleteProject(projectId);
+                fetchProjects();
+            } catch (err) {
+                console.error('Failed to delete project:', err);
+            }
+        }
+    };
+
+    const handleProjectCreated = () => {
+        setShowCreateModal(false);
+        fetchProjects();
+    };
+
+    const activeProjects = projects.filter(p => p.status === 'active');
+    const archivedProjects = projects.filter(p => p.status === 'archived');
+
+    return (
+        <div className="min-h-screen bg-gray-50">
+            <Header />
+
+            <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+                {/* Header */}
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-900">Project Dashboard</h1>
+                        <p className="text-gray-600 mt-1">
+                            {totalProjects} project{totalProjects !== 1 ? 's' : ''} •
+                            {activeProjects.length} active •
+                            {archivedProjects.length} archived
+                        </p>
+                    </div>
+
+                    <div className="flex items-center space-x-4">
+                        {/* View Toggle */}
+                        <div className="flex bg-gray-200 rounded-lg p-1">
+                            <button
+                                onClick={() => setView('grid')}
+                                className={`px-3 py-1 rounded ${view === 'grid'
+                                        ? 'bg-white text-gray-900 shadow-sm'
+                                        : 'text-gray-600'
+                                    }`}
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => setView('timeline')}
+                                className={`px-3 py-1 rounded ${view === 'timeline'
+                                        ? 'bg-white text-gray-900 shadow-sm'
+                                        : 'text-gray-600'
+                                    }`}
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={() => setShowCreateModal(true)}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            New Project
+                        </button>
+                    </div>
+                </div>
+
+                {/* Quick Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                    <div className="bg-white rounded-lg shadow p-4">
+                        <p className="text-sm text-gray-600">Total Projects</p>
+                        <p className="text-2xl font-bold text-gray-900">{totalProjects}</p>
+                    </div>
+                    <div className="bg-white rounded-lg shadow p-4">
+                        <p className="text-sm text-gray-600">Active</p>
+                        <p className="text-2xl font-bold text-green-600">{activeProjects.length}</p>
+                    </div>
+                    <div className="bg-white rounded-lg shadow p-4">
+                        <p className="text-sm text-gray-600">Archived</p>
+                        <p className="text-2xl font-bold text-gray-500">{archivedProjects.length}</p>
+                    </div>
+                    <div className="bg-white rounded-lg shadow p-4">
+                        <p className="text-sm text-gray-600">This Week</p>
+                        <p className="text-2xl font-bold text-blue-600">
+                            {projects.filter(p => {
+                                const createdAt = new Date(p.created_at);
+                                const weekAgo = new Date();
+                                weekAgo.setDate(weekAgo.getDate() - 7);
+                                return createdAt > weekAgo;
+                            }).length}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Main Content */}
+                <div className="flex gap-8">
+                    <div className="flex-1">
+                        {loading ? (
+                            <div className="flex justify-center items-center py-12">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                <span className="ml-3 text-gray-600">Loading projects...</span>
+                            </div>
+                        ) : error ? (
+                            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                                <p className="text-red-800">{error}</p>
+                            </div>
+                        ) : view === 'grid' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {projects.map(project => (
+                                    <div key={project.id} className="relative">
+                                        <ProjectCard
+                                            project={project}
+                                            onClick={() => handleProjectClick(project)}
+                                        />
+                                        <div className="absolute top-2 right-2 flex space-x-1">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/projects/${project.id}/chat`);
+                                                }}
+                                                className="p-1 bg-white rounded shadow hover:bg-gray-100"
+                                                title="Open Chat"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                </svg>
+                                            </button>
+                                            {project.status === 'active' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleArchive(project.id);
+                                                    }}
+                                                    className="p-1 bg-white rounded shadow hover:bg-gray-100"
+                                                    title="Archive"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <Timeline projectId={selectedProject?.id} />
+                        )}
+                    </div>
+
+                    {/* Project Details Sidebar */}
+                    {selectedProject && view === 'grid' && (
+                        <div className="w-80 bg-white rounded-lg shadow p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900">Project Details</h3>
+                                <button
+                                    onClick={() => setSelectedProject(null)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="flex items-center">
+                                    <span className="text-2xl mr-2">{selectedProject.emoji}</span>
+                                    <h4 className="text-xl font-medium">{selectedProject.title}</h4>
+                                </div>
+
+                                <p className="text-gray-600">{selectedProject.description}</p>
+
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedProject.tags?.map(tag => (
+                                        <span key={tag} className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded text-sm">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+
+                                <div className="border-t pt-4 space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600">Status</span>
+                                        <span className={`font-medium ${selectedProject.status === 'active' ? 'text-green-600' : 'text-gray-500'
+                                            }`}>
+                                            {selectedProject.status}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600">Created</span>
+                                        <span>{new Date(selectedProject.created_at).toLocaleDateString()}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600">Last Updated</span>
+                                        <span>{new Date(selectedProject.updated_at).toLocaleDateString()}</span>
+                                    </div>
+                                </div>
+
+                                <div className="flex space-x-2 pt-4">
+                                    <button
+                                        onClick={() => navigate(`/projects/${selectedProject.id}/chat`)}
+                                        className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                    >
+                                        Open Chat
+                                    </button>
+                                    <button
+                                        onClick={() => navigate(`/projects/${selectedProject.id}/files`)}
+                                        className="flex-1 px-3 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                                    >
+                                        View Files
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Create Project Modal */}
+                <CreateProjectModal
+                    isOpen={showCreateModal}
+                    onClose={() => setShowCreateModal(false)}
+                    onSuccess={handleProjectCreated}
+                />
+            </div>
+        </div>
+    );
+}

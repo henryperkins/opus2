@@ -11,12 +11,13 @@ from __future__ import annotations
 
 from typing import Annotated, Optional
 
-from fastapi import Cookie, Depends, Header, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from fastapi import Cookie, Depends, Header, HTTPException, Request, status, WebSocket
+from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import or_
 
 from app.database import get_db
 from app.models.user import User
+from app.models.session import Session
 from . import security
 
 ###############################################################################
@@ -25,7 +26,7 @@ from . import security
 
 
 def verify_credentials(
-    db: Session,
+    db: DBSession,
     username_or_email: str,
     password: str,
 ) -> Optional[User]:
@@ -51,19 +52,96 @@ def verify_credentials(
 ###############################################################################
 
 
-def create_session(db: Session, user: User) -> None:
+def create_session(db: DBSession, user: User, jti: str) -> Session:
     """
-    Record user's last_login timestamp and commit.
-
-    Later, the sessions table will store active JWT identifiers.
+    Create a new session record and update user's last_login timestamp.
+    
+    Args:
+        db: Database session
+        user: User instance
+        jti: JWT ID claim (unique token identifier)
+        
+    Returns:
+        Session: The created session record
     """
     from datetime import datetime, timezone
 
-    user.last_login = datetime.now(
-        tz=timezone.utc
-    )  # type: ignore[attr-defined]
+    # Update user's last login
+    user.last_login = datetime.now(tz=timezone.utc)
+    
+    # Create session record
+    session = Session(
+        user_id=user.id,
+        jti=jti
+    )
+    
     db.add(user)
+    db.add(session)
     db.commit()
+    db.refresh(session)
+    
+    return session
+
+
+def revoke_session(db: DBSession, jti: str) -> bool:
+    """
+    Revoke a session by JWT ID.
+    
+    Args:
+        db: Database session
+        jti: JWT ID claim to revoke
+        
+    Returns:
+        bool: True if session was found and revoked, False otherwise
+    """
+    session = db.query(Session).filter_by(jti=jti).first()
+    if session and session.is_active:
+        session.revoke()
+        db.commit()
+        return True
+    return False
+
+
+def is_session_active(db: DBSession, jti: str) -> bool:
+    """
+    Check if a session is active (not revoked).
+    
+    Args:
+        db: Database session
+        jti: JWT ID claim to check
+        
+    Returns:
+        bool: True if session exists and is active, False otherwise
+    """
+    session = db.query(Session).filter_by(jti=jti).first()
+    return session is not None and session.is_active
+
+
+def cleanup_expired_sessions(db: DBSession, user_id: Optional[int] = None) -> int:
+    """
+    Clean up old/expired sessions. This can be called periodically.
+    
+    Args:
+        db: Database session
+        user_id: Optional user ID to limit cleanup to specific user
+        
+    Returns:
+        int: Number of sessions cleaned up
+    """
+    from datetime import datetime, timezone, timedelta
+    
+    # Remove sessions older than 30 days
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=30)
+    
+    query = db.query(Session).filter(Session.created_at < cutoff_date)
+    if user_id:
+        query = query.filter(Session.user_id == user_id)
+    
+    count = query.count()
+    query.delete(synchronize_session=False)
+    db.commit()
+    
+    return count
 
 
 ###############################################################################
@@ -73,7 +151,7 @@ def create_session(db: Session, user: User) -> None:
 
 def get_current_user(
     request: Request,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[DBSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
     access_cookie: Annotated[str | None, Cookie(alias="access_token")] = None,
 ) -> User:
@@ -108,9 +186,25 @@ def get_current_user(
 
     if token.startswith("test_token_") and token[11:].isdigit():
         user_id = int(token[11:])
+        # Skip session validation for test tokens
+        user: User | None = db.get(User, user_id)
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        return user
     else:
         payload = security.decode_access_token(token)
         user_id = security.token_sub_identity(payload)
+        jti = payload.get("jti")
+        
+        # Validate session is active
+        if jti and not is_session_active(db, jti):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired or revoked",
+            )
 
     user: User | None = db.get(User, user_id)
     if not user or not user.is_active:
@@ -122,19 +216,30 @@ def get_current_user(
             detail="Not authenticated",
         )
 
-    # In future we can verify jti against sessions table here
     return user
 
     
 async def get_current_user_ws(
     websocket: WebSocket,
     token: str,
-    db: Session
+    db: DBSession
 ) -> Optional[User]:
     """Authenticate WebSocket connection."""
     try:
+        # Handle test tokens
+        if token.startswith("test_token_") and token[11:].isdigit():
+            user_id = int(token[11:])
+            user = db.get(User, user_id)
+            return user if user and user.is_active else None
+            
         payload = security.decode_access_token(token)
         user_id = security.token_sub_identity(payload)
+        jti = payload.get("jti")
+        
+        # Validate session is active
+        if jti and not is_session_active(db, jti):
+            return None
+            
         user = db.get(User, user_id)
 
         if not user or not user.is_active:
