@@ -9,11 +9,17 @@ export default defineConfig({
         port: 5173,
         strictPort: true,
         proxy: {
+            // Forward API calls to the backend container without rewriting the
+            // path so that the "/api" prefix expected by FastAPI remains
+            // intact (e.g. "/api/auth/login" → "http://backend:8000/api/auth/login").
             '/api': {
                 target: 'http://backend:8000',
                 changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/api/, ''),
-            }
+                // Keep the original path – removing the prefix breaks auth
+                // endpoints that are mounted under "/api" inside FastAPI.
+                // eslint-disable-next-line no-unused-vars
+                rewrite: (path) => path, // leave untouched
+            },
         }
     },
     build: {

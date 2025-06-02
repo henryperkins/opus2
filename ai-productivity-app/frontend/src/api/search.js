@@ -1,4 +1,4 @@
-// Unified search API client for semantic and keyword search
+// frontend/src/api/search.js
 import client from './client';
 
 export const searchAPI = {
@@ -11,6 +11,19 @@ export const searchAPI = {
     const response = await client.get('/api/search/suggestions', {
       params: { q: query }
     });
+    return response.data;
+  },
+
+  async indexDocument(documentId, options = {}) {
+    const response = await client.post('/api/search/index', {
+      document_id: documentId,
+      ...options
+    });
+    return response.data;
+  },
+
+  async deleteIndex(documentId) {
+    const response = await client.delete(`/api/search/index/${documentId}`);
     return response.data;
   },
 

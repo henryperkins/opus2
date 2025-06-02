@@ -33,3 +33,10 @@ black==23.12.1
 flake8==7.0.0
 mypy==1.8.0
 tiktoken
+
+# WebSocket support
+# FastAPI uses starlette which supports WebSocket communication, but the
+# optional **websockets** dependency is required at runtime for proper
+# operation.  Adding it explicitly avoids relying on transitive dependencies
+# and ensures the library is available inside the container.
+websockets>=11,<13

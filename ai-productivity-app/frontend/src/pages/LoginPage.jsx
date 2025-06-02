@@ -17,6 +17,7 @@ export default function LoginPage() {
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
   const { errors, isSubmitting } = formState;
+  const [submitError, setSubmitError] = useState('');
   const [showRegister, setShowRegister] = useState(false);
 
   if (user) {
@@ -24,13 +25,15 @@ export default function LoginPage() {
   }
 
   async function onSubmit(values) {
+    setSubmitError('');
     try {
       await login(values.username, values.password);
       navigate('/');
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error(err);
-      // TODO: display toast
+      const msg = err?.response?.data?.detail || 'Login failed';
+      setSubmitError(msg);
     }
   }
 
@@ -83,6 +86,12 @@ export default function LoginPage() {
             </span>
           )}
         </label>
+
+        {submitError && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-3">
+            <p className="text-red-700 text-sm">{submitError}</p>
+          </div>
+        )}
 
         <button
           type="submit"

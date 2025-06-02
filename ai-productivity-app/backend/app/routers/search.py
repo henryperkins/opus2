@@ -1,179 +1,177 @@
-# Unified code/document search router (Phase-4)
-# -------------------------------------------
-
-from __future__ import annotations
-
+# backend/app/routers/search.py
+"""Enhanced search API with hybrid capabilities."""
+from fastapi import APIRouter, Query, HTTPException, BackgroundTasks
 import logging
-from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, select
-
-# NOTE: The original router only supported a very small *keyword* search.  We
-# now transparently upgrade it to *hybrid* search by delegating to the shared
-# :pyclass:`app.search.hybrid.HybridSearch` helper whenever embeddings and a
-# compatible generator are available.  This keeps the public API fully
-# backwards-compatible while providing significantly better relevance for
-# indexed projects.
-
-from app.database import get_db
-from sqlalchemy.orm import Session
-from app.models.code import CodeEmbedding, CodeDocument
-
-# Optional – avoid hard dependency in minimal test environments
-try:
-    from app.embeddings.generator import EmbeddingGenerator  # noqa: F401
-    from app.search.hybrid import HybridSearch  # noqa: F401
-
-    _HAS_HYBRID = True
-except Exception:  # pragma: no cover
-    HybridSearch = None  # type: ignore
-    EmbeddingGenerator = None  # type: ignore
-    _HAS_HYBRID = False
+from app.dependencies import DatabaseDep, CurrentUserRequired
+from app.services.vector_store import VectorStore
+from app.services.hybrid_search import HybridSearch
+from app.services.embedding_service import EmbeddingService
+from app.embeddings.generator import EmbeddingGenerator
+from app.schemas.search import (
+    SearchRequest, SearchResponse, SearchResult,
+    IndexRequest, IndexResponse
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
+# Initialize services
+vector_store = VectorStore()
+embedding_generator = EmbeddingGenerator()
 
-# ---------------------------------------------------------------------------
-# Autocomplete suggestions                                                    
-# ---------------------------------------------------------------------------
+
+@router.post("", response_model=SearchResponse)
+async def search(
+    request: SearchRequest,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep
+):
+    """Execute hybrid search across code and documents."""
+    # Initialize hybrid search
+    hybrid_search = HybridSearch(db, vector_store, embedding_generator)
+
+    # Get user's accessible projects
+    if not request.project_ids:
+        # Default to user's projects
+        from app.models.project import Project
+        projects = db.query(Project).filter_by(owner_id=current_user.id).all()
+        request.project_ids = [p.id for p in projects]
+
+    # Execute search
+    try:
+        results = await hybrid_search.search(
+            query=request.query,
+            project_ids=request.project_ids,
+            filters=request.filters,
+            limit=request.limit,
+            search_types=request.search_types
+        )
+
+        # Format results
+        formatted_results = []
+        for result in results:
+            formatted_results.append(SearchResult(
+                type=result['type'],
+                score=result['score'],
+                document_id=result.get('document_id'),
+                chunk_id=result.get('chunk_id'),
+                content=result['content'],
+                metadata=result.get('metadata', {})
+            ))
+
+        return SearchResponse(
+            query=request.query,
+            results=formatted_results,
+            total=len(formatted_results),
+            search_types=request.search_types or ['hybrid']
+        )
+
+    except Exception as e:
+        logger.error(f"Search failed: {e}")
+        raise HTTPException(status_code=500, detail="Search failed")
 
 
 @router.get("/suggestions")
-async def search_suggestions(
+async def get_suggestions(
     q: str = Query("", min_length=1, max_length=100),
-    limit: int = Query(10, ge=1, le=50),
-    db: Session = Depends(get_db),
+    current_user: CurrentUserRequired = None,
+    db: DatabaseDep = None
 ):
-    """Return basic autocomplete suggestions for the *global search* bar.
+    """Get search suggestions."""
+    if len(q) < 2:
+        return {"suggestions": []}
 
-    For now the implementation is intentionally *very* naive – matching file
-    paths and symbol names that **contain** the typed substring.  The handler
-    still proves useful when a proper vector based solution is not available
-    and keeps the front-end UX consistent across environments.
-    """
+    # Get suggestions from structural search patterns
+    suggestions = []
 
-    if not q:
-        return {"query": q, "suggestions": []}
+    # Command suggestions
+    if q.startswith('/'):
+        commands = [
+            '/explain', '/generate-tests', '/summarize-pr', '/grep'
+        ]
+        suggestions.extend([c for c in commands if c.startswith(q)])
 
-    from app.models.code import CodeDocument, CodeEmbedding  # local import
+    # Structural search suggestions
+    elif ':' in q:
+        prefix, _ = q.split(':', 1)
+        if prefix in ['func', 'function', 'class', 'method', 'type', 'file']:
+            suggestions.append(f"{prefix}:")
 
-    suggestions: list[str] = []
+    # Symbol suggestions from recent searches
+    # TODO: Implement search history tracking
 
-    # 1) Match file paths --------------------------------------------------
-    doc_stmt = (
-        select(CodeDocument.file_path)
-        .where(CodeDocument.file_path.ilike(f"%{q}%"))
-        .limit(limit)
-    )
-    suggestions.extend([row[0] for row in db.execute(doc_stmt).all()])
-
-    # 2) Match symbol names -----------------------------------------------
-    emb_stmt = (
-        select(CodeEmbedding.symbol_name)
-        .where(CodeEmbedding.symbol_name.is_not(None), CodeEmbedding.symbol_name.ilike(f"%{q}%"))
-        .limit(limit)
-    )
-    suggestions.extend([row[0] for row in db.execute(emb_stmt).all()])
-
-    # Unique + order by length (shorter first) for nicer UX
-    uniq: list[str] = []
-    for s in suggestions:
-        if s and s not in uniq:
-            uniq.append(s)
-
-    uniq.sort(key=len)
-
-    return {"query": q, "suggestions": uniq[:limit]}
+    return {"suggestions": suggestions[:10]}
 
 
-###############################################################################
-# Simple hybrid search (keyword only when no embeddings yet)                     
-###############################################################################
+@router.post("/index", response_model=IndexResponse)
+async def index_document(
+    request: IndexRequest,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep
+):
+    """Index or re-index document embeddings."""
+    # Verify document access
+    from app.models.code import CodeDocument
+    document = db.query(CodeDocument).filter_by(id=request.document_id).first()
 
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
 
-def _keyword_search(db: Session, query: str, project_ids: list[int], limit: int) -> list[dict]:
-    """Fallback keyword search directly against the SQL database."""
-    stmt = (
-        select(CodeEmbedding)
-        .join(CodeDocument, CodeDocument.id == CodeEmbedding.document_id)
-        .where(
-            CodeDocument.project_id.in_(project_ids),
-            or_(CodeEmbedding.chunk_content.ilike(f"%{query}%"), CodeEmbedding.symbol_name.ilike(f"%{query}%")),
-        )
-        .limit(limit)
-    )
+    # Verify project access
+    from app.models.project import Project
+    project = db.query(Project).filter_by(id=document.project_id).first()
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
-    rows = db.execute(stmt).scalars().all()
-    results: list[dict] = []
-    for r in rows:
-        results.append(
-            {
-                "chunk_id": r.id,
-                "content": r.chunk_content[:500],  # truncate for response
-                "file_path": r.document.file_path if r.document else None,
-                "language": r.document.language if r.document else None,
-                "symbol": r.symbol_name,
-                "search_type": "keyword",
-            }
+    # Initialize embedding service
+    embedding_service = EmbeddingService(db, vector_store, embedding_generator)
+
+    if request.async_mode:
+        # Queue for background processing
+        background_tasks.add_task(
+            embedding_service.index_document,
+            request.document_id
         )
 
-    return results
+        return IndexResponse(
+            status="queued",
+            message="Document queued for indexing",
+            document_id=request.document_id
+        )
+    else:
+        # Process synchronously
+        result = await embedding_service.index_document(request.document_id)
+
+        return IndexResponse(
+            status=result['status'],
+            message=result.get('message', 'Indexing complete'),
+            document_id=request.document_id,
+            indexed_count=result.get('indexed', 0),
+            error_count=result.get('errors', 0)
+        )
 
 
-###############################################################################
-# Public endpoint                                                                
-###############################################################################
-
-
-@router.get("/")
-async def search_code(  # noqa: D401
-    query: str = Query(..., min_length=2, max_length=200),
-    project_ids: Optional[List[int]] = Query(None),
-    limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+@router.delete("/index/{document_id}")
+async def delete_index(
+    document_id: int,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep
 ):
-    """Return search results across code embeddings.
+    """Delete document from index."""
+    # Verify access
+    from app.models.code import CodeDocument
+    document = db.query(CodeDocument).filter_by(id=document_id).first()
 
-    At the moment only *keyword* search is implemented unless the vector-store
-    backend has already indexed embeddings.  This provides a useful baseline
-    while keeping the code entirely self-contained (no network calls).
-    """
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
 
-    # Default to *all* projects for now – in a real setup filter by ACLs
-    if not project_ids:
-        project_ids = [p.id for p in db.query(CodeDocument.project_id).distinct()] or [0]
+    # Initialize embedding service
+    embedding_service = EmbeddingService(db, vector_store, embedding_generator)
 
-    # ------------------------------------------------------------------
-    # Prefer the new *HybridSearch* implementation if all dependencies are
-    # available *and* at least one of the projects has already been indexed.
-    # ------------------------------------------------------------------
+    # Delete embeddings
+    await embedding_service.delete_document_embeddings(document_id)
 
-    if _HAS_HYBRID:
-        try:
-            # Check quickly whether we have any vectors – if none exist we can
-            # skip the heavy path straight away.
-            has_vectors = (
-                db.query(CodeEmbedding)
-                .join(CodeDocument, CodeDocument.id == CodeEmbedding.document_id)
-                .filter(CodeDocument.project_id.in_(project_ids), CodeEmbedding.embedding.is_not(None))
-                .limit(1)
-                .first()
-                is not None
-            )
-
-            if has_vectors:
-                generator = EmbeddingGenerator() if EmbeddingGenerator else None
-                hybrid = HybridSearch(db, embedding_generator=generator)
-                results = await hybrid.search(query, project_ids=project_ids, limit=limit)
-                return {"query": query, "results": results, "total": len(results)}
-        except Exception as exc:  # pragma: no cover – fallback silently
-            logger.warning("Hybrid search failed, falling back to keyword-only: %s", exc)
-
-    # Fallback: pure keyword search
-    results = _keyword_search(db, query, project_ids, limit)
-
-    return {"query": query, "results": results, "total": len(results)}
+    return {"status": "success", "message": "Document removed from index"}

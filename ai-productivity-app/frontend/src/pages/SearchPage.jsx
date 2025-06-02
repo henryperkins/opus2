@@ -1,17 +1,19 @@
-// Main search page with unified search interface and results
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useCodeSearch } from '../hooks/useCodeSearch';
+import { useSearch } from '../hooks/useSearch';
 import SearchBar from '../components/search/SearchBar';
 import SearchResults from '../components/search/SearchResults';
 import SearchFilters from '../components/search/SearchFilters';
+import DependencyGraph from '../components/knowledge/DependencyGraph';
 import useProjectStore from '../stores/projectStore';
 import Header from '../components/common/Header';
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { projects } = useProjectStore();
+  const { projects, fetchProjects } = useProjectStore();
   const [selectedProjects, setSelectedProjects] = useState([]);
+  const [showGraph, setShowGraph] = useState(false);
+  const [graphProjectId, setGraphProjectId] = useState(null);
 
   const {
     query,
@@ -20,10 +22,12 @@ export default function SearchPage() {
     loading,
     error,
     totalResults,
+    searchTypes,
     updateQuery,
     updateFilters,
+    updateSearchTypes,
     clearSearch
-  } = useCodeSearch(searchParams.get('q') || '');
+  } = useSearch(searchParams.get('q') || '');
 
   // Update URL when query changes
   useEffect(() => {
@@ -36,8 +40,8 @@ export default function SearchPage() {
 
   // Load projects on mount
   useEffect(() => {
-    useProjectStore.getState().fetchProjects();
-  }, []);
+    fetchProjects();
+  }, [fetchProjects]);
 
   const handleProjectToggle = (projectId) => {
     setSelectedProjects(prev => {
@@ -50,6 +54,18 @@ export default function SearchPage() {
     });
   };
 
+  const handleSearchTypeChange = (type) => {
+    const newTypes = searchTypes.includes(type)
+      ? searchTypes.filter(t => t !== type)
+      : [...searchTypes, type];
+    updateSearchTypes(newTypes.length > 0 ? newTypes : ['hybrid']);
+  };
+
+  const handleShowGraph = (projectId) => {
+    setGraphProjectId(projectId);
+    setShowGraph(true);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -58,17 +74,51 @@ export default function SearchPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Code Search</h1>
           <p className="text-gray-600 mt-2">
-            Search across all your code with semantic understanding
+            Search across all your code with AI-powered understanding
           </p>
         </div>
 
+        {/* Search Bar */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <SearchBar
             value={query}
             onChange={updateQuery}
-            placeholder="Search code, functions, classes, or use @project tags..."
+            placeholder="Search code, functions, classes, or natural language queries..."
             loading={loading}
+            suggestions={true}
           />
+
+          {/* Search Type Toggles */}
+          <div className="mt-4 flex items-center space-x-4">
+            <span className="text-sm text-gray-600">Search modes:</span>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={searchTypes.includes('semantic')}
+                onChange={() => handleSearchTypeChange('semantic')}
+                className="mr-2"
+              />
+              <span className="text-sm">Semantic</span>
+            </label>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={searchTypes.includes('keyword')}
+                onChange={() => handleSearchTypeChange('keyword')}
+                className="mr-2"
+              />
+              <span className="text-sm">Keyword</span>
+            </label>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={searchTypes.includes('structural')}
+                onChange={() => handleSearchTypeChange('structural')}
+                className="mr-2"
+              />
+              <span className="text-sm">Structural</span>
+            </label>
+          </div>
         </div>
 
         <div className="flex gap-6">
@@ -98,6 +148,18 @@ export default function SearchPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Dependency Graph Link */}
+              {selectedProjects.length === 1 && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => handleShowGraph(selectedProjects[0])}
+                    className="w-full text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    View Dependency Graph →
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -129,12 +191,42 @@ export default function SearchPage() {
                   results={results}
                   query={query}
                   loading={loading}
+                  onFileClick={(file) => console.log('Open file:', file)}
                 />
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Dependency Graph Modal */}
+      {showGraph && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={() => setShowGraph(false)} />
+
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Dependency Graph
+                  </h3>
+                  <button
+                    onClick={() => setShowGraph(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <DependencyGraph projectId={graphProjectId} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
