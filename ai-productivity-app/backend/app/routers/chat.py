@@ -12,6 +12,7 @@ from app.schemas.chat import (
 from app.services.chat_service import ChatService
 from app.websocket.handlers import handle_chat_connection
 from app.auth.utils import get_current_user_ws
+from app.chat.commands import command_registry
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -158,3 +159,24 @@ async def websocket_endpoint(
         pass
     except Exception as e:
         await websocket.close(code=1011, reason=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Autocomplete – slash-command suggestions
+# ---------------------------------------------------------------------------
+
+
+@router.get("/suggestions")
+async def get_command_suggestions(q: str = Query("", min_length=0, max_length=100)) -> List[dict]:  # noqa: D401
+    """Return slash-command autocompletion suggestions.
+
+    The *frontend* sends the user’s **partial input** via the ``q`` query
+    parameter as soon as the first ``/`` is typed.  This handler simply
+    delegates to :pyfunc:`app.chat.commands.CommandRegistry.get_suggestions`.
+    """
+
+    # Quick early-out to avoid unnecessary work for empty queries.
+    if not q:
+        return []
+
+    return command_registry.get_suggestions(q)

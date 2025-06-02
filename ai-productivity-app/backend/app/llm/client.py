@@ -2,7 +2,33 @@ from typing import Optional, AsyncIterator, Dict, List
 import openai
 from openai import AsyncOpenAI, AsyncAzureOpenAI
 import logging
-from tenacity import retry, stop_after_attempt, wait_exponential
+try:
+    from tenacity import retry, stop_after_attempt, wait_exponential  # type: ignore
+except ModuleNotFoundError:  # Fallback for environments without tenacity
+    import functools
+
+    def retry(*dargs, **dkwargs):  # noqa: D401 – simple wrapper
+        """No-op retry decorator used when tenacity is unavailable."""
+
+        def decorator(func):
+            @functools.wraps(func)
+            async def wrapper(*args, **kwargs):  # pylint: disable=missing-docstring
+                return await func(*args, **kwargs)
+
+            return wrapper
+
+        # If used as @retry without (), dargs[0] is function
+        if dargs and callable(dargs[0]):
+            return decorator(dargs[0])
+
+        return decorator
+
+    # Dummy stop/ wait for signature compatibility
+    def stop_after_attempt(n):  # noqa: D401
+        return None
+
+    def wait_exponential(**_):  # noqa: D401
+        return None
 from app.config import settings
 
 logger = logging.getLogger(__name__)

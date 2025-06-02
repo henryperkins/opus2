@@ -1,13 +1,21 @@
 import re
 import asyncio
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional, Callable, Any, Tuple
 from sqlalchemy.orm import Session
 import logging
 
 from app.models.code import CodeDocument, CodeEmbedding
 from app.models.project import Project
-from app.search.hybrid import HybridSearch
-from app.llm.client import LLMClient
+# Optional integrations (import guarded to avoid hard dependency during testing)
+try:
+    from app.search.hybrid import HybridSearch  # noqa: F401
+except ImportError:  # pragma: no cover
+    HybridSearch = None  # type: ignore
+
+try:
+    from app.llm.client import LLMClient  # noqa: F401
+except ImportError:  # pragma: no cover
+    LLMClient = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -355,3 +363,24 @@ class CommandRegistry:
 
         for name, command in self.commands.items():
             if name.startswith(partial_cmd):
+                suggestions.append({
+                    'command': name,
+                    'description': command.description,
+                    'usage': command.usage
+                })
+
+        # Sort suggestions alphabetically
+        suggestions.sort(key=lambda x: x['command'])
+
+        return suggestions
+
+# ---------------------------------------------------------------------------
+# Global command registry instance
+# ---------------------------------------------------------------------------
+
+# A single shared registry is used across the application so that command
+# discovery/execution is consistent everywhere (ChatProcessor, autocompletion
+# endpoints, etc.). Importing `command_registry` from this module is therefore
+# the canonical way to access registered commands.
+
+command_registry = CommandRegistry()

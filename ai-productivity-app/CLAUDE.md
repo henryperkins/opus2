@@ -24,6 +24,25 @@ This is an AI productivity application built for small teams (2-3 users) with a 
 - Responsive UI with optimistic updates and error handling
 - Comprehensive project dashboard with pagination
 
+**Phase 4 Status: ✅ COMPLETE — Code Intelligence Layer**
+- Code file upload with language auto-detection
+- Git repository integration (clone/pull & incremental diff processing)
+- Tree-sitter powered parsing for Python / JavaScript / TypeScript
+- Semantic chunking by symbol with token aware splitting
+- OpenAI embeddings generation (text-embedding-3-small) with async batch processing
+- SQLite VSS vector store with hybrid (semantic + keyword) search
+- Dependency graph extraction & interactive D3.js visualization
+- Vector, search, and parsing modules kept under the 900-line guideline
+
+**Phase 5 Status: 🚧 IN PROGRESS — Real-time Chat & AI Assistance**
+- WebSocket infrastructure with connection manager
+- Persistent ChatSession & ChatMessage models (edit / soft-delete supported)
+- Slash command framework (`/explain`, `/generate-tests`, …)
+- Streaming LLM integration (OpenAI chat completions via server-sent events)
+- Secret scanner & redaction for outbound messages
+- Split-pane chat / code UI with syntax highlighted snippets
+- Remaining work: advanced citation view & conversation summarisation
+
 ## Development Commands
 
 ### Quick Start (Simplified)
@@ -73,6 +92,7 @@ cd frontend && npx prettier --write "src/**/*.{js,jsx,css}"
 ```bash
 make db-reset         # Reset SQLite database
 make db-shell         # Open SQLite shell
+# Vector store lives in data/vectors.db (auto created on first run)
 ```
 
 ### Quality Assurance
@@ -96,6 +116,25 @@ make check            # Run pre-commit checks (lint + test)
 - `app/auth/` - Authentication and security utilities
 - `app/middleware/` - Custom middleware (security, rate limiting)
 
+### Code Intelligence Layer (Phase-4)
+- `app/code_processing/` – Parsing, chunking & git helpers
+  - `parser.py` – Tree-sitter wrapper & symbol extraction
+  - `chunker.py` – Token aware semantic chunking
+  - `git_integration.py` – Repository clone/update & diffing
+- `app/embeddings/` – OpenAI embedding generator & batch processor
+  - `generator.py`, `batch_processor.py`, `cache.py`
+- `app/search/` – Hybrid semantic/keyword search
+  - `vector_store.py` – SQLite VSS wrapper
+  - `hybrid.py`, `filters.py`, `ranker.py`
+- `app/models/code.py` – `CodeDocument` & `CodeEmbedding` ORM models
+
+### Chat System (Phase-5)
+- `app/websocket/` – Realtime WebSocket manager & handlers
+- `app/chat/` – Context builder, slash-command implementations, secret scanner
+- `app/services/chat_service.py` – Business logic for chat sessions / messages
+- `app/llm/` – Provider abstraction + streaming client for OpenAI / Azure
+- `app/routers/chat.py` – HTTP + WS endpoints for chat operations
+
 ### Frontend Structure (React + Vite)
 - `src/main.jsx` - React application entry point
 - `src/router.jsx` - React Router configuration
@@ -108,6 +147,13 @@ make check            # Run pre-commit checks (lint + test)
 - `src/api/` - API client modules for backend communication
 - `src/stores/` - Zustand state management stores (auth, projects)
 - `src/hooks/` - Custom React hooks (useAuth, useProjects, useProjectSearch)
+
+### New Frontend Modules
+- `src/components/search/` – Search bar, result list & code snippet components
+- `src/components/knowledge/` – Dependency graph visualisation (D3)
+- `src/components/chat/` – Realtime chat UI & slash-command palette
+- `src/pages/SearchPage.jsx` – Unified code/document search experience
+- `src/pages/ChatPage.jsx` – Split-pane chat / code interface (WS powered)
 
 ### Key Patterns
 - **Modular Architecture**: Features are organized into self-contained modules
@@ -127,6 +173,9 @@ make check            # Run pre-commit checks (lint + test)
   - Project CRUD operation tests in `tests/test_projects.py`
   - Timeline event functionality testing
   - Authentication and authorization tests
+  - Code parsing & chunking tests in `tests/test_code_processing.py`
+  - Hybrid search ranking tests in `tests/test_search.py`
+  - Chat session lifecycle tests in `tests/test_chat.py`
 - **Frontend**: Test framework TBD (placeholder currently)
 - **Integration**: Health check endpoints for service verification
 
@@ -135,6 +184,10 @@ make check            # Run pre-commit checks (lint + test)
 - **Projects**: Core project data with status, visual customization, and tags
 - **Timeline Events**: Activity tracking for all project changes
 - **Proper Relations**: Foreign keys and cascading deletes for data integrity
+
+- **CodeDocuments**: Parsed code files & metadata (symbols, imports, hash)
+- **CodeEmbeddings**: Semantic chunks with vector embeddings
+- **ChatSessions & ChatMessages**: Real-time chat persistence
 
 ## Port Configuration
 - Frontend: http://localhost:5173 (Vite dev server)

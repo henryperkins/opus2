@@ -110,9 +110,12 @@ function Dashboard() {
               >
                 Manage Projects
               </Link>
-              <button className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md">
+              <Link
+                to="/search"
+                className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md block"
+              >
                 Search Code
-              </button>
+              </Link>
               <button className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md">
                 View Timeline
               </button>
@@ -147,7 +150,98 @@ function Dashboard() {
           </div>
           <div className="mt-4 p-3 bg-blue-50 rounded-md">
             <p className="text-sm text-blue-800">
-              <strong>Next:</strong> Phase 3 will add project management and file operations
+              <strong>Next:</strong> Phase 3 added project management – see below
+            </p>
+          </div>
+        </div>
+
+        {/* Phase 3 Completion Card */}
+        <div className="bg-white rounded-lg shadow p-6 mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Phase 3 Complete ✅</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Project Management</h3>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>✓ Project CRUD with optimistic updates</li>
+                <li>✓ Status tracking (Active / Archived / Completed)</li>
+                <li>✓ Color & emoji customisation</li>
+                <li>✓ Flexible tag & filter system</li>
+                <li>✓ Pagination & responsive dashboard</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Timeline & Search</h3>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>✓ Timeline event tracking for all changes</li>
+                <li>✓ Search by status, tags, title and description</li>
+                <li>✓ Role-based access enforcement</li>
+                <li>✓ Extensive test coverage (>90%)</li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-blue-50 rounded-md">
+            <p className="text-sm text-blue-800">
+              <strong>Next:</strong> Phase 4 introduced code intelligence – see below
+            </p>
+          </div>
+        </div>
+
+        {/* Phase 4 Completion Card */}
+        <div className="bg-white rounded-lg shadow p-6 mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Phase 4 Complete ✅</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Code Intelligence</h3>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>✓ File upload & language detection</li>
+                <li>✓ Tree-sitter parsing & semantic chunking</li>
+                <li>✓ Git repo integration with incremental diffing</li>
+                <li>✓ OpenAI embeddings (async batches)</li>
+                <li>✓ SQLite VSS vector store</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Search & Visualisation</h3>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>✓ Hybrid semantic + keyword search</li>
+                <li>✓ Dependency graph (D3.js)</li>
+                <li>✓ Code snippet preview with highlighting</li>
+                <li>✓ Backend endpoints & React Search UI</li>
+                <li>✓ All modules ≤ 900 LOC</li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-blue-50 rounded-md">
+            <p className="text-sm text-blue-800">
+              <strong>Next:</strong> Phase 5 (in progress) – real-time chat & AI assistance
+            </p>
+          </div>
+        </div>
+
+        {/* Phase 5 In-Progress Card */}
+        <div className="bg-white rounded-lg shadow p-6 mt-8 border-l-4 border-yellow-400">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Phase 5 In&nbsp;Progress 🚧</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Realtime Chat</h3>
+              <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+                <li>WebSocket infrastructure &amp; connection manager</li>
+                <li>Persistent ChatSession &amp; ChatMessage models</li>
+                <li>Slash commands (e.g. <code>/explain</code>, <code>/generate-tests</code>)</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">AI Assistance</h3>
+              <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+                <li>Streaming LLM responses (OpenAI)</li>
+                <li>Secret redaction &amp; security scanning</li>
+                <li>Split-pane chat / code interface</li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-yellow-50 rounded-md">
+            <p className="text-sm text-yellow-800">
+              <strong>ETA:</strong> Chat UI and summarisation arriving shortly.
             </p>
           </div>
         </div>
