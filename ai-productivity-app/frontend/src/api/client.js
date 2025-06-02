@@ -18,8 +18,9 @@ import axios from 'axios';
 // -----------------------------------------------------------------------------
 
 const BASE_URL =
-  // Prefer explicit vite variable, fall back to same-origin
-  import.meta.env.VITE_API_URL || window.location.origin;
+  // Prefer explicit vite variable; otherwise use relative path (no base prefix)
+  // to avoid double `/api` when endpoints already include it.
+  import.meta.env.VITE_API_URL || '';
 
 const client = axios.create({
   baseURL: BASE_URL,

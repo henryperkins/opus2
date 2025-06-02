@@ -153,7 +153,13 @@ def build_auth_cookie(token: str) -> Tuple[str, str, dict[str, Any]]:
         response.set_cookie(name, value, **opts)
     """
     import os
-    secure_cookie = not settings.debug and "PYTEST_CURRENT_TEST" not in os.environ
+    # Allow plain-HTTP cookies during local development when
+    # `settings.insecure_cookies` is enabled or debug mode is active.
+    # The Secure attribute should only be set in production under HTTPS.
+    secure_cookie = (
+        not (settings.debug or settings.insecure_cookies)
+        and "PYTEST_CURRENT_TEST" not in os.environ
+    )
     return (
         "access_token",
         token,
@@ -172,7 +178,10 @@ def clear_auth_cookie() -> Tuple[str, str, dict[str, Any]]:
     Returns arguments to remove the auth cookie.
     """
     import os
-    secure_cookie = not settings.debug and "PYTEST_CURRENT_TEST" not in os.environ
+    secure_cookie = (
+        not (settings.debug or settings.insecure_cookies)
+        and "PYTEST_CURRENT_TEST" not in os.environ
+    )
     return (
         "access_token",
         "",

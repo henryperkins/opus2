@@ -29,9 +29,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:  # type: ignore[override]
-        # CSRF protection: validate token on state-changing verbs
+        # CSRF protection: validate token on state-changing verbs (except auth endpoints)
         if request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
-            security.validate_csrf(request)
+            # Exempt auth endpoints from CSRF (they use rate limiting instead)
+            exempt_paths = ["/api/auth/register", "/api/auth/login", "/api/auth/logout"]
+            if not any(request.url.path.startswith(path) for path in exempt_paths):
+                security.validate_csrf(request)
 
         response = await call_next(request)
 

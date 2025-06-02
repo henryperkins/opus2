@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440  # 24 hours
 
+    # Cookie behaviour
+    # When developing over plain HTTP, browsers ignore cookies marked Secure.
+    # Toggle this flag (or set env INSECURE_COOKIES=true) to disable the
+    # Secure attribute so the auth cookie is sent on http://localhost:8000.
+    insecure_cookies: bool = False
+
     # Authentication
     jwt_secret_key: Optional[str] = None
     jwt_algorithm: str = "HS256"

@@ -39,6 +39,9 @@ function Register({ onLoginSwitch }) {
         onLoginSwitch?.();
       }, 2000);
     } catch (err) {
+      console.error('Registration error:', err);
+      console.error('Response data:', err.response?.data);
+      console.error('Response status:', err.response?.status);
       setError(err.response?.data?.detail || 'Registration failed');
     } finally {
       setLoading(false);
@@ -54,17 +57,17 @@ function Register({ onLoginSwitch }) {
 
   if (success) {
     return (
-      <div className="success-message">
-        <h3>Registration Successful!</h3>
-        <p>You can now log in with your credentials.</p>
+      <div className="bg-green-50 border border-green-200 rounded-md p-4">
+        <h3 className="text-lg font-medium text-green-800">Registration Successful!</h3>
+        <p className="text-green-700 mt-1">You can now log in with your credentials.</p>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="register-form">
-      <div className="form-group">
-        <label htmlFor="username">Username</label>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
         <input
           type="text"
           id="username"
@@ -74,11 +77,12 @@ function Register({ onLoginSwitch }) {
           autoComplete="username"
           required
           disabled={loading}
+          className="mt-1 block w-full border rounded-md p-2 disabled:opacity-50"
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor="email">Email</label>
+      <div>
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
         <input
           type="email"
           id="email"
@@ -88,11 +92,12 @@ function Register({ onLoginSwitch }) {
           autoComplete="email"
           required
           disabled={loading}
+          className="mt-1 block w-full border rounded-md p-2 disabled:opacity-50"
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor="password">Password</label>
+      <div>
+        <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
         <input
           type="password"
           id="password"
@@ -103,11 +108,12 @@ function Register({ onLoginSwitch }) {
           required
           disabled={loading}
           minLength={8}
+          className="mt-1 block w-full border rounded-md p-2 disabled:opacity-50"
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor="confirmPassword">Confirm Password</label>
+      <div>
+        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Confirm Password</label>
         <input
           type="password"
           id="confirmPassword"
@@ -118,11 +124,12 @@ function Register({ onLoginSwitch }) {
           required
           disabled={loading}
           minLength={8}
+          className="mt-1 block w-full border rounded-md p-2 disabled:opacity-50"
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor="inviteCode">Invite Code</label>
+      <div>
+        <label htmlFor="inviteCode" className="block text-sm font-medium text-gray-700">Invite Code</label>
         <input
           type="text"
           id="inviteCode"
@@ -132,18 +139,23 @@ function Register({ onLoginSwitch }) {
           required
           disabled={loading}
           placeholder="Required for registration"
+          className="mt-1 block w-full border rounded-md p-2 disabled:opacity-50"
         />
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <p className="text-red-700 text-sm">{error}</p>
+        </div>
+      )}
 
-      <button type="submit" disabled={loading} className="register-button">
+      <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded-md disabled:opacity-50">
         {loading ? 'Creating Account...' : 'Register'}
       </button>
 
-      <p className="switch-auth">
+      <p className="text-center text-sm text-gray-600">
         Already have an account?{' '}
-        <button type="button" onClick={onLoginSwitch} className="link-button">
+        <button type="button" onClick={onLoginSwitch} className="text-blue-600 hover:underline">
           Login here
         </button>
       </p>

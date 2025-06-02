@@ -26,16 +26,16 @@ This is an AI productivity application built for small teams (2-3 users) with a 
 
 ## Development Commands
 
-### Quick Start
+### Quick Start (Simplified)
 ```bash
-# Full development environment (Docker)
-make dev              # Start development environment with Docker
-make up               # Start containers in background
-make down             # Stop all containers
+# One-command startup (handles everything)
+./start.sh            # First run: installs deps + starts app
+                      # Subsequent runs: just starts app
 
-# Status and monitoring
+# Alternative commands
+make dev              # Start development environment with Docker
+make down             # Stop all containers
 make status           # Check health of all services
-make logs             # View container logs
 ```
 
 ### Backend Development
