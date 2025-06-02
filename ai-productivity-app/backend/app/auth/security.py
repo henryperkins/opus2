@@ -161,17 +161,34 @@ class FastAPI:
 
             route_parts = [part for part in route_path.strip("/").split("/") if part]
 
-            if len(path_parts) != len(route_parts):
+            # Check for path wildcard (e.g., {rest_of_path:path})
+            has_path_wildcard = any(
+                part.startswith("{") and part.endswith("}") and ":path" in part
+                for part in route_parts
+            )
+
+            # Skip length check if route has a path wildcard
+            if not has_path_wildcard and len(path_parts) != len(route_parts):
                 continue
 
             path_params: dict[str, str] = {}
 
             match = True
-            for rp, pp in zip(route_parts, path_parts):
+            for i, rp in enumerate(route_parts):
                 if rp.startswith("{") and rp.endswith("}"):
                     param_name = rp[1:-1]
-                    path_params[param_name] = pp
-                elif rp != pp:
+                    if ":path" in param_name:
+                        # Handle path wildcard - capture remaining path segments
+                        param_name = param_name.split(":")[0]
+                        remaining_path = "/".join(path_parts[i:])
+                        path_params[param_name] = remaining_path
+                        break  # Path wildcard consumes rest of path
+                    elif i < len(path_parts):
+                        path_params[param_name] = path_parts[i]
+                    else:
+                        match = False
+                        break
+                elif i >= len(path_parts) or rp != path_parts[i]:
                     match = False
                     break
 
@@ -473,9 +490,14 @@ class TestClient:  # noqa: D401 – stub
 
             payload_kwargs = {"data": json} if json is not None else {}
 
-            call_kwargs = {**payload_kwargs, **path_params, **query_params}
-
             sig = inspect.signature(handler)
+            
+            # Only pass parameters that the handler actually accepts
+            call_kwargs = {}
+            for param_name, param_value in {**payload_kwargs, **path_params, **query_params}.items():
+                if param_name in sig.parameters:
+                    call_kwargs[param_name] = param_value
+            
             if "request" in sig.parameters:
                 call_kwargs["request"] = request
 

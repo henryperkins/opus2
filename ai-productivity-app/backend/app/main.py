@@ -31,7 +31,7 @@ from app.auth import security
 # FastAPI shim provided by *security.py*
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+from app.middleware.cors import register_cors
 
 
 # ---------------------------------------------------------------------------
@@ -67,59 +67,15 @@ def _next_project_id() -> int:
 
 app = FastAPI()
 
-# ---------------------------------------------------------------------------
-# CORS configuration
-# ---------------------------------------------------------------------------
-# NOTE:
-# Starlette's `CORSMiddleware` raises **ValueError** when
-#     allow_credentials=True && "*" in allow_origins
-# Therefore we must provide the **explicit** list of development origins the
-# front-end is expected to use instead of the previous permissive "*" entry.
-# This change fixes the browser error:
-#     "No 'Access-Control-Allow-Origin' header is present on the requested resource"
-# that occurred because the middleware silently refused to add the header when
-# an invalid configuration was supplied.
-
-_DEV_ORIGINS = [
-    "http://localhost:5173",      # Vite dev server (npm run dev)
-    "http://127.0.0.1:5173",     # Alternate loopback representation
-    "http://localhost:4173",      # `vite preview`
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_DEV_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],  # GET, POST, PUT, PATCH, DELETE, OPTIONS
-    allow_headers=["*"],
+# Register CORS middleware as early as possible
+register_cors(
+    app,
+    allowed_origins=[
+        "http://localhost:5173",      # Vite dev server (npm run dev)
+        "http://127.0.0.1:5173",     # Alternate loopback representation
+        "http://localhost:4173",      # vite preview
+    ],
 )
-
-@app.options("/api/{rest_of_path:path}")  # type: ignore[decorator-position]
-def _cors_preflight(rest_of_path: str, request: Any = None):  # noqa: D401
-    """Minimal CORS pre-flight handler (catch-all).
-
-    The endpoint does **not** perform any origin validation – it simply
-    mirrors the incoming request headers and advertises that credentials,
-    all common headers and HTTP methods are allowed.  This mirrors the very
-    permissive configuration typically used during early-stage development
-    where the API is consumed by a companion front-end served from a
-    different port on the same machine (e.g. *Vite*, *Next.js*, …).
-    """
-
-    allow_origin = request.headers.get("Origin", "*") if request else "*"
-
-    headers = {
-        "Access-Control-Allow-Origin": allow_origin,
-        # Echo requested headers (or allow any when unspecified)
-        "Access-Control-Allow-Headers": request.headers.get("Access-Control-Request-Headers", "*") if request else "*",
-        # Advertise permitted HTTP methods – we allow all the verbs used by
-        # the API plus the mandatory OPTIONS itself.
-        "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-        # Required so that the browser sends/receives cookies (session token)
-        "Access-Control-Allow-Credentials": "true",
-    }
-
-    return JSONResponse({}, status_code=status.HTTP_204_NO_CONTENT, headers=headers)
 
 # ---------------------------------------------------------------------------
 # CORS / pre-flight support
