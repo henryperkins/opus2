@@ -30,13 +30,25 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:  # type: ignore[override]
         # CSRF protection: validate token on state-changing verbs (except auth endpoints)
-        if request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+        method = request.method.upper()
+
+        if method in {"POST", "PUT", "PATCH", "DELETE"}:
             # Exempt auth endpoints from CSRF (they use rate limiting instead)
             exempt_paths = ["/api/auth/register", "/api/auth/login", "/api/auth/logout"]
             if not any(request.url.path.startswith(path) for path in exempt_paths):
                 security.validate_csrf(request)
 
         response = await call_next(request)
+
+        # ------------------------------------------------------------------
+        # Issue CSRF cookie on safe HTTP methods when it is missing so that the
+        # browser can send it back on subsequent mutating requests.
+        # ------------------------------------------------------------------
+
+        if method in {"GET", "HEAD", "OPTIONS"} and "csrftoken" not in request.cookies:
+            token = security.generate_csrf_token()
+            name, value, opts = security.build_csrf_cookie(token)
+            response.set_cookie(name, value, **opts)
 
         # Add security headers
         response.headers[

@@ -6,7 +6,9 @@
  * Displays project grid with filtering, search, pagination, and creation modal
  */
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import useProjectStore from "../stores/projectStore";
+import Header from "../components/common/Header";
 import ProjectCard from "../components/projects/ProjectCard";
 import CreateProjectModal from "../components/projects/CreateProjectModal";
 import ProjectFilters from "../components/projects/ProjectFilters";
@@ -51,7 +53,34 @@ export default function ProjectsPage() {
   const totalPages = Math.ceil(totalProjects / filters.per_page);
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+
+      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {/* Breadcrumb */}
+        <nav className="flex mb-4 text-sm" aria-label="Breadcrumb">
+          <ol className="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse">
+            <li className="inline-flex items-center">
+              <Link to="/" className="inline-flex items-center text-gray-500 hover:text-gray-700">
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 2a1 1 0 01.707.293l7 7-1.414 1.414L10 4.414 3.707 10.707 2.293 9.293l7-7A1 1 0 0110 2z" />
+                  <path d="M3 10l7 7 7-7" />
+                </svg>
+                Dashboard
+              </Link>
+            </li>
+            <li>
+              <div className="flex items-center">
+                <svg className="w-4 h-4 text-gray-400 mx-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M7.05 4.05a7 7 0 019.9 9.9l-6.364 6.364a.75.75 0 01-1.06 0L2.343 14.05a7 7 0 014.707-9.999Z" />
+                </svg>
+                <span className="ml-1 text-gray-700 font-medium">Projects</span>
+              </div>
+            </li>
+          </ol>
+        </nav>
+
+        <div className="container mx-auto p-0">
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
@@ -179,6 +208,8 @@ export default function ProjectsPage() {
         onClose={() => setShowCreate(false)}
         onSuccess={handleProjectCreated}
       />
+      </div> {/* container end*/}
+      </main>
     </div>
   );
 }

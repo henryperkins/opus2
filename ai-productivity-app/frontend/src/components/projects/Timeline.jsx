@@ -1,7 +1,7 @@
 // Timeline.jsx: chronological timeline for project events.
 
 import React, { useEffect, useState } from "react";
-import { useProjectStore } from "../../stores/projectStore";
+import useProjectStore from "../../stores/projectStore";
 import TimelineEvent from "./TimelineEvent";
 
 export default function Timeline({ projectId }) {

@@ -9,6 +9,7 @@ from .config import settings
 from .database import init_db, check_db_connection
 # Phase-4 routers
 from .routers import monitoring, auth, projects, code as code_router, search as search_router
+from .routers import timeline as timeline_router
 from .middleware.security import register_security_middleware
 
 # Configure logging
@@ -91,6 +92,8 @@ app.include_router(projects.router)
 # Phase-4 routers
 app.include_router(code_router.router)
 app.include_router(search_router.router)
+# Timeline router
+app.include_router(timeline_router.router)
 
 
 # Root endpoint

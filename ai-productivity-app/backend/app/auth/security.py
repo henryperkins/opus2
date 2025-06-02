@@ -136,6 +136,39 @@ def validate_csrf(
             detail="CSRF verification failed",
         )
 
+# --------------------------------------------------------------------------- #
+#                         CSRF COOKIE BUILD HELPER                             #
+# --------------------------------------------------------------------------- #
+
+
+def build_csrf_cookie(token: str) -> tuple[str, str, dict[str, Any]]:
+    """Return arguments suitable for `Response.set_cookie` for the CSRF token.
+
+    The cookie is **not** HttpOnly because the frontend must read it in
+    JavaScript to attach the `X-CSRFToken` header.  We still mark it `SameSite`
+    Lax to mitigate CSRF and set `Secure` only when not developing locally.
+    """
+
+    import os
+
+    # Allow plain‐HTTP during local development.
+    secure_cookie = (
+        not (settings.debug or settings.insecure_cookies)
+        and "PYTEST_CURRENT_TEST" not in os.environ
+    )
+
+    return (
+        "csrftoken",
+        token,
+        {
+            "httponly": False,  # must be readable by JS
+            "secure": secure_cookie,
+            "samesite": "lax",
+            "path": "/",
+            "max_age": _ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # reuse same TTL
+        },
+    )
+
 
 # --------------------------------------------------------------------------- #
 #                                 COOKIES                                     #

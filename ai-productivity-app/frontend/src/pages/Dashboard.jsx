@@ -1,3 +1,4 @@
+/* global fetch, setInterval, clearInterval */
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Header from '../components/common/Header';
@@ -116,9 +117,12 @@ function Dashboard() {
               >
                 Search Code
               </Link>
-              <button className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md">
+              <Link
+                to="/timeline"
+                className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md block"
+              >
                 View Timeline
-              </button>
+              </Link>
             </div>
           </div>
         </div>
@@ -175,7 +179,7 @@ function Dashboard() {
                 <li>✓ Timeline event tracking for all changes</li>
                 <li>✓ Search by status, tags, title and description</li>
                 <li>✓ Role-based access enforcement</li>
-                <li>✓ Extensive test coverage (>90%)</li>
+                <li>✓ Extensive test coverage ({">"}90%)</li>
               </ul>
             </div>
           </div>
