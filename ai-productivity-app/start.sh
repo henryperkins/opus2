@@ -11,13 +11,57 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
-# Start the application with Docker (no local dependency installation needed)
-echo "🔧 Building and starting containers..."
-docker compose up --build
+# Check if this is first run by looking for built images
+BACKEND_IMAGE=$(docker images -q ai-productivity-app-backend 2>/dev/null)
+FRONTEND_IMAGE=$(docker images -q ai-productivity-app-frontend 2>/dev/null)
 
-echo "🎉 Application started!"
+if [[ -z "$BACKEND_IMAGE" || -z "$FRONTEND_IMAGE" ]]; then
+    echo "🔧 First run detected - installing dependencies and building containers..."
+    echo "⏳ This may take a few minutes..."
+    docker compose build
+    echo "✅ Build complete!"
+else
+    echo "🔧 Starting containers..."
+fi
+
+# Start the application
+docker compose up -d
+
+# Wait for services to be healthy
+echo "⏳ Waiting for services to start..."
+sleep 5
+
+# Check backend health
+echo "🔍 Checking backend health..."
+for i in {1..30}; do
+    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+        echo "✅ Backend is healthy"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "⚠️  Backend health check timeout - check logs with: docker compose logs backend"
+    fi
+    sleep 2
+done
+
+# Check frontend
+echo "🔍 Checking frontend..."
+for i in {1..15}; do
+    if curl -s http://localhost:5173 > /dev/null 2>&1; then
+        echo "✅ Frontend is ready"
+        break
+    fi
+    if [ $i -eq 15 ]; then
+        echo "⚠️  Frontend startup timeout - check logs with: docker compose logs frontend"
+    fi
+    sleep 2
+done
+
+echo ""
+echo "🎉 Application started successfully!"
 echo "📱 Frontend: http://localhost:5173"
 echo "🔧 Backend API: http://localhost:8000"
 echo "📚 API Docs: http://localhost:8000/docs"
 echo ""
-echo "Press Ctrl+C to stop the application"
+echo "🛑 To stop: docker compose down"
+echo "📊 To view logs: docker compose logs -f"

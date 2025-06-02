@@ -1,0 +1,13 @@
+failed to load config from /home/azureuser/opus2/opus2/ai-productivity-app/frontend/vite.config.js
+error when starting dev server:
+Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:420:11)
+    at Object.spawn (node:child_process:753:9)
+    at ensureServiceIsRunning (/home/azureuser/opus2/opus2/ai-productivity-app/frontend/node_modules/esbuild/lib/main.js:1975:29)
+    at build (/home/azureuser/opus2/opus2/ai-productivity-app/frontend/node_modules/esbuild/lib/main.js:1873:26)
+    at bundleConfigFile (file:///home/azureuser/opus2/opus2/ai-productivity-app/frontend/node_modules/vite/dist/node/chunks/dep-C6uTJdX2.js:66828:24)
+    at loadConfigFromFile (file:///home/azureuser/opus2/opus2/ai-productivity-app/frontend/node_modules/vite/dist/node/chunks/dep-C6uTJdX2.js:66798:27)
+    at resolveConfig (file:///home/azureuser/opus2/opus2/ai-productivity-app/frontend/node_modules/vite/dist/node/chunks/dep-C6uTJdX2.js:66399:30)
+    at _createServer (file:///home/azureuser/opus2/opus2/ai-productivity-app/frontend/node_modules/vite/dist/node/chunks/dep-C6uTJdX2.js:62999:24)
+    at createServer (file:///home/azureuser/opus2/opus2/ai-productivity-app/frontend/node_modules/vite/dist/node/chunks/dep-C6uTJdX2.js:62996:10)
+    at CAC.<anonymous> (file:///home/azureuser/opus2/opus2/ai-productivity-app/frontend/node_modules/vite/dist/node/cli.js:736:26)

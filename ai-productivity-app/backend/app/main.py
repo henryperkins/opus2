@@ -43,7 +43,7 @@ from app.middleware.cors import register_cors
 
 # Lightweight in-process database session ------------------------------------------------
 
-from backend.sqlalchemy_stub import Session  # type: ignore
+from sqlalchemy_stub import Session  # type: ignore
 from app.models.user import User
 from app.models.project import Project
 from app.models.timeline import TimelineEvent
@@ -358,6 +358,17 @@ def _require_auth(token: Optional[str]) -> Dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Inactive account")
 
     return user
+
+
+# ---------------------------------------------------------------------------
+# Health check endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.get("/health")
+def health_check(request: Any = None):
+    """Health check endpoint for Docker health checks and monitoring."""
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ---------------------------------------------------------------------------
