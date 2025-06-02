@@ -99,3 +99,42 @@ export default function CommandInput({ onSend, onTyping, projectId }) {
             <div
               key={cmd.name}
               className={
+                `px-4 py-2 hover:bg-gray-100 cursor-pointer ${
+                  index === selectedIndex ? 'bg-blue-50' : ''
+                }`
+              }
+              onClick={() => {
+                setMessage(cmd.name + ' ');
+                setShowSuggestions(false);
+                inputRef.current?.focus();
+              }}
+            >
+              <div className="font-medium text-sm">{cmd.name}</div>
+              <div className="text-xs text-gray-500">{cmd.description}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Input form */}
+      <form onSubmit={handleSubmit} className="flex gap-2 p-4">
+        <input
+          ref={inputRef}
+          type="text"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type a message or use /command..."
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          type="submit"
+          disabled={!message.trim()}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}

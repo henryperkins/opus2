@@ -45,7 +45,16 @@ class Column:
 
     _counter = itertools.count(0)
 
-    def __init__(self, _type=None, primary_key: bool = False, default: Any = None, unique: bool = False, nullable: bool = True, comment: str | None = None):  # noqa: E501
+    def __init__(
+        self,
+        _type=None,
+        primary_key: bool = False,
+        default: Any = None,
+        unique: bool = False,
+        nullable: bool = True,
+        comment: str | None = None,
+        **_extras,
+    ):  # noqa: E501
         self.default = default
         self.primary_key = primary_key
         self.name = f"col_{next(self._counter)}"
@@ -100,6 +109,10 @@ class JSON:  # noqa: D401 – placeholder
     pass
 
 
+class Float:  # noqa: D401 – placeholder
+    pass
+
+
 class Enum:
     def __init__(self, enum_cls):
         self.enum_cls = enum_cls
@@ -115,6 +128,13 @@ class Index:  # noqa: D401 – placeholder
     def __init__(self, *args, **kwargs):
         pass
 
+# UniqueConstraint stub -------------------------------------------------------
+
+
+class UniqueConstraint:  # noqa: D401 – placeholder
+    def __init__(self, *columns, **kwargs):
+        self.columns = columns
+
 
 # MutableList stub -----------------------------------------------------------
 
@@ -123,6 +143,17 @@ class MutableList(list):  # noqa: D401 – simple pass-through
     @classmethod
     def as_mutable(cls, type_):
         return list
+
+# ---------------------------------------------------------------------------
+# Re-export under *sqlalchemy.ext.mutable* so that ``from sqlalchemy.ext.mutable
+# import MutableList`` works just like with the real library.
+# ---------------------------------------------------------------------------
+
+import sys as _sys
+
+_ext_module = _sys.modules.setdefault("sqlalchemy.ext", type(_sys)("sqlalchemy.ext"))
+_mutable_mod = _sys.modules.setdefault("sqlalchemy.ext.mutable", type(_sys)("sqlalchemy.ext.mutable"))
+_mutable_mod.MutableList = MutableList  # type: ignore[attr-defined]
 
 
 class DateTime:  # noqa: D401
@@ -234,6 +265,22 @@ class Session:
 
     def delete(self, obj):  # noqa: D401
         _InMemoryStorage.delete(obj)
+
+    # ----------------------------------------------------------
+    # Context manager / housekeeping helpers (no real resources)
+    # ----------------------------------------------------------
+
+    def close(self):  # noqa: D401 – mimic real Session API
+        return None
+
+    # Allow use in *with* statements – a common pattern in the code-base.
+
+    def __enter__(self):  # noqa: D401
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: D401
+        # Nothing special – no real transaction to roll back.
+        return False
 
     # ---------------------------------------------
     # Query helper

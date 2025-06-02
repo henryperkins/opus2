@@ -212,6 +212,17 @@ class FastAPI:
 
         return decorator
 
+    # Added to support CORS pre-flight handler ------------------------
+
+    def options(self, path: str):  # noqa: D401
+        """Register an HTTP OPTIONS route (used for CORS pre-flights)."""
+
+        def decorator(fn):
+            self.routes.append(("OPTIONS", path, fn))
+            return fn
+
+        return decorator
+
     # ------------------------------------------------------------------
     # Minimal ASGI compatibility layer
     # ------------------------------------------------------------------
@@ -275,6 +286,9 @@ class FastAPI:
 
         handler, path_params, query_params = self._match(method, path)
 
+        # Clear any headers set by the handler so we can accumulate them.
+        extra_headers: list[tuple[bytes, bytes]] = []
+
         if handler is None:
             status_code = _StatusCodes.HTTP_404_NOT_FOUND
             body = {"detail": "Not Found"}
@@ -292,6 +306,17 @@ class FastAPI:
                 if isinstance(result, JSONResponse):
                     status_code = getattr(result, "status_code", _StatusCodes.HTTP_200_OK)
                     body = dict(result)
+                    # Merge custom headers set by the handler (e.g. CORS pre-
+                    # flight).  They are attached to the JSONResponse object
+                    # via the *headers* attribute so we need to forward them
+                    # to the ASGI `http.response.start` message.
+                    headers_map = getattr(result, "headers", {})
+                    # The *Starlette* behaviour is to keep *multi-dict* style
+                    # headers.  For the purposes of the stub the simple
+                    # mapping is sufficient – header values are encoded as
+                    # UTF-8 bytes.
+                    if headers_map:
+                        extra_headers += [(k.lower().encode(), str(v).encode()) for k, v in headers_map.items()]
                 elif isinstance(result, (dict, list)):
                     status_code = _StatusCodes.HTTP_200_OK
                     body = result
@@ -301,14 +326,40 @@ class FastAPI:
                     body = {"detail": str(result)}
                     status_code = _StatusCodes.HTTP_200_OK
 
+        # --------------------------------------------------------------
+        # Always attach permissive CORS headers so that the browser can
+        # access the JSON payload when the front-end is served from a
+        # different origin (e.g. Vite on localhost:5173).
+        #
+        # Doing this here – inside the ASGI stub – ensures that *every*
+        # response automatically includes the headers regardless of whether
+        # the individual handler added them.  This is necessary because the
+        # regular `CORSMiddleware` from Starlette is not available inside
+        # the trimmed-down FastAPI replacement that ships with the repo.
+        # --------------------------------------------------------------
+
+        origin_hdr = None
+        for k, v in scope.get("headers", []):
+            if k.lower() == b"origin":
+                origin_hdr = v
+                break
+
+        if origin_hdr:
+            # Echo the Origin value so that credentials (cookies) are allowed.
+            extra_headers.append((b"access-control-allow-origin", origin_hdr))
+            extra_headers.append((b"access-control-allow-credentials", b"true"))
+
         # Serialise and send response -----------------------------------
         import json as _json
 
         raw = _json.dumps(body).encode()
+        base_headers = [(b"content-type", b"application/json"), (b"content-length", str(len(raw)).encode())]
+        out_headers = base_headers + extra_headers
+
         await send({
             "type": "http.response.start",
             "status": int(status_code),
-            "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(raw)).encode())],
+            "headers": out_headers,
         })
         await send({"type": "http.response.body", "body": raw})
         return
@@ -387,6 +438,18 @@ class TestClient:  # noqa: D401 – stub
     def __init__(self, app):
         self.app = app
 
+    # --------------------------------------------------------------
+    # Context-manager protocol so that the stub can be used with
+    # ``with TestClient(app) as c: ...`` just like the real implementation.
+    # --------------------------------------------------------------
+
+    def __enter__(self):  # noqa: D401 – match starlette.TestClient API
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: D401
+        # Nothing to clean up – we are entirely in-memory.
+        return False  # propagate exceptions
+
     # ------------------------------------------------------------------
     # HTTP helpers
     # ------------------------------------------------------------------
@@ -403,7 +466,20 @@ class TestClient:  # noqa: D401 – stub
 
         # For simplicity we only support JSON body – pass it as plain dict
         try:
-            resp = handler(**({} if json is None else json), request=request, **path_params, **query_params)  # type: ignore[arg-type,call-arg]
+            # Our simplified application endpoints expect the payload via a
+            # single *data* argument.  Forward the JSON body accordingly so
+            # that ``register(data: dict)`` etc. receive the expected value.
+            import inspect
+
+            payload_kwargs = {"data": json} if json is not None else {}
+
+            call_kwargs = {**payload_kwargs, **path_params, **query_params}
+
+            sig = inspect.signature(handler)
+            if "request" in sig.parameters:
+                call_kwargs["request"] = request
+
+            resp = handler(**call_kwargs)  # type: ignore[arg-type,call-arg]
         except HTTPException as exc:
             return _TestResponse({"detail": exc.detail}, status_code=exc.status_code)
 

@@ -17,10 +17,17 @@ import axios from 'axios';
 // Configuration
 // -----------------------------------------------------------------------------
 
-const BASE_URL =
-  // Prefer explicit vite variable; otherwise use relative path (no base prefix)
-  // to avoid double `/api` when endpoints already include it.
-  import.meta.env.VITE_API_URL || '';
+// ---------------------------------------------------------------------------
+// Backend base URL
+// ---------------------------------------------------------------------------
+// 1. Use the explicit Vite env variable when provided (works with Docker-compose
+//    where `VITE_API_URL` is injected).
+// 2. Fallback to the conventional local development port `8000` so that a
+//    plain `npm run dev` without env-vars still points towards the FastAPI
+//    server.  The previous empty string made the requests *relative* to the
+//    Vite origin (5173) which breaks unless a dev-proxy is configured.
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const client = axios.create({
   baseURL: BASE_URL,
