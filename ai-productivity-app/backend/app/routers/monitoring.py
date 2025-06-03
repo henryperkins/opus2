@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Response, status
 from sqlalchemy import text
 from datetime import datetime
+from typing import Any  # Added for request typing
 from ..dependencies import DatabaseDep
 from ..config import settings
 
@@ -9,7 +10,7 @@ router = APIRouter(prefix="/health", tags=["health"])
 
 
 @router.get("")
-async def health_check():
+async def health_check(request: Any = None):  # Accept optional request injected by ASGI shim
     """Basic health check endpoint"""
     return {
         "status": "healthy",
