@@ -21,7 +21,6 @@ import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
 import UserProfile from './components/auth/UserProfile';
 import SettingsPage from './pages/SettingsPage';
-import ProjectsPage from './pages/ProjectsPage';
 import TimelinePage from './pages/TimelinePage';
 import SearchPage from './pages/SearchPage';
 import ProjectDashboard from './pages/ProjectDashboard';
@@ -54,7 +53,7 @@ export const router = createBrowserRouter(
     },
     {
       path: '/projects',
-      element: <ProtectedRoute element={<ProjectsPage />} />,
+      element: <ProtectedRoute element={<ProjectDashboard />} />,
     },
     {
       path: '/profile',
@@ -72,6 +71,8 @@ export const router = createBrowserRouter(
       path: '/timeline',
       element: <ProtectedRoute element={<TimelinePage />} />,
     },
+    // Deprecated alias – kept temporarily so existing bookmarks to "/dashboard"
+    // still work.  Can be removed once users migrate.
     {
       path: '/dashboard',
       element: <ProtectedRoute element={<ProjectDashboard />} />,

@@ -198,6 +198,11 @@ const useProjectStore = create((set, get) => ({
     return updateProject(id, { status: 'archived' });
   },
 
+  unarchiveProject: async (id) => {
+    const { updateProject } = get();
+    return updateProject(id, { status: 'active' });
+  },
+
   fetchTimeline: async (projectId) => {
     set({ loading: true, error: null });
 

@@ -1,10 +1,11 @@
 // frontend/src/pages/ProjectDashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/common/Header';
 import ProjectCard from '../components/projects/ProjectCard';
 import CreateProjectModal from '../components/projects/CreateProjectModal';
 import Timeline from '../components/projects/Timeline';
+import ProjectFilters from '../components/projects/ProjectFilters';
 import useProjectStore from '../stores/projectStore';
 
 export default function ProjectDashboard() {
@@ -17,7 +18,9 @@ export default function ProjectDashboard() {
         error,
         filters,
         setFilters,
+        setPage,
         archiveProject,
+        unarchiveProject,
         deleteProject
     } = useProjectStore();
 
@@ -25,9 +28,10 @@ export default function ProjectDashboard() {
     const [selectedProject, setSelectedProject] = useState(null);
     const [view, setView] = useState('grid'); // grid or timeline
 
+    // Initial load and whenever filters change
     useEffect(() => {
         fetchProjects();
-    }, [fetchProjects, filters]);
+    }, [filters, fetchProjects]);
 
     const handleProjectClick = (project) => {
         setSelectedProject(project);
@@ -42,6 +46,15 @@ export default function ProjectDashboard() {
         }
     };
 
+    const handleUnarchive = async (projectId) => {
+        try {
+            await unarchiveProject(projectId);
+            fetchProjects();
+        } catch (err) {
+            console.error('Failed to unarchive project:', err);
+        }
+    };
+
     const handleDelete = async (projectId) => {
         if (window.confirm('Are you sure you want to delete this project?')) {
             try {
@@ -53,6 +66,14 @@ export default function ProjectDashboard() {
         }
     };
 
+    const handleFilterChange = (newFilters) => {
+        setFilters(newFilters);
+    };
+
+    const handlePageChange = (newPage) => {
+        setPage(newPage);
+    };
+
     const handleProjectCreated = () => {
         setShowCreateModal(false);
         fetchProjects();
@@ -60,6 +81,8 @@ export default function ProjectDashboard() {
 
     const activeProjects = projects.filter(p => p.status === 'active');
     const archivedProjects = projects.filter(p => p.status === 'archived');
+
+    const totalPages = Math.ceil(totalProjects / filters.per_page);
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -116,6 +139,9 @@ export default function ProjectDashboard() {
                     </div>
                 </div>
 
+                {/* Filters */}
+                <ProjectFilters filters={filters} onChange={handleFilterChange} />
+
                 {/* Quick Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white rounded-lg shadow p-4">
@@ -156,6 +182,7 @@ export default function ProjectDashboard() {
                                 <p className="text-red-800">{error}</p>
                             </div>
                         ) : view === 'grid' ? (
+                            <>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {projects.map(project => (
                                     <div key={project.id} className="relative">
@@ -167,7 +194,7 @@ export default function ProjectDashboard() {
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    navigate(`/projects/${project.id}/chat`);
+                                                    navigate(`/projects/${project.id}/chat`, { state: { project } });
                                                 }}
                                                 className="p-1 bg-white rounded shadow hover:bg-gray-100"
                                                 title="Open Chat"
@@ -190,10 +217,48 @@ export default function ProjectDashboard() {
                                                     </svg>
                                                 </button>
                                             )}
+                                            {project.status === 'archived' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleUnarchive(project.id);
+                                                    }}
+                                                    className="p-1 bg-white rounded shadow hover:bg-gray-100"
+                                                    title="Unarchive"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v16h16V4H4zm4 4h8v2H8V8zm0 4h8v6H8v-6z" />
+                                                    </svg>
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
                             </div>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <div className="flex justify-center items-center space-x-2 mt-6">
+                                    <button
+                                        onClick={() => handlePageChange(filters.page - 1)}
+                                        disabled={filters.page <= 1}
+                                        className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Previous
+                                    </button>
+                                    <span className="px-3 py-2 text-sm text-gray-700">
+                                        Page {filters.page} of {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={() => handlePageChange(filters.page + 1)}
+                                        disabled={filters.page >= totalPages}
+                                        className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            )}
+                            </>
                         ) : (
                             <Timeline projectId={selectedProject?.id} />
                         )}
@@ -261,6 +326,21 @@ export default function ProjectDashboard() {
                                     >
                                         View Files
                                     </button>
+                                    {selectedProject.status === 'archived' ? (
+                                        <button
+                                            onClick={() => handleUnarchive(selectedProject.id)}
+                                            className="flex-1 px-3 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                                        >
+                                            Unarchive
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleArchive(selectedProject.id)}
+                                            className="flex-1 px-3 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                                        >
+                                            Archive
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>

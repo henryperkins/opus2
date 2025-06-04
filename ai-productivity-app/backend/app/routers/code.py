@@ -154,3 +154,72 @@ async def upload_code_files(  # noqa: D401, WPS211
         results.append({"file": upload.filename, "status": "queued"})
 
     return {"results": results}
+
+
+# ---------------------------------------------------------------------------
+# New: list documents for a project
+# ---------------------------------------------------------------------------
+
+
+@router.get("/projects/{project_id}/files")
+def list_project_files(
+    project_id: int,
+    db: Session = Depends(get_db),
+    search: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    """Return code files belonging to *project_id*.
+
+    Supports basic pagination and simple filename "search" query.
+    """
+
+    project = db.query(Project).filter_by(id=project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    q = db.query(CodeDocument).filter_by(project_id=project_id)
+    if search:
+        like = f"%{search}%"
+        q = q.filter(CodeDocument.file_path.ilike(like))
+
+    total = q.count()
+    docs = (
+        q.order_by(CodeDocument.file_path)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "total": total,
+        "files": [
+            {
+                "id": d.id,
+                "path": d.file_path,
+                "language": d.language,
+                "size": d.file_size,
+                "indexed": d.is_indexed,
+            }
+            for d in docs
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# New: delete a single file
+# ---------------------------------------------------------------------------
+
+
+@router.delete("/files/{file_id}")
+def delete_file(file_id: int, db: Session = Depends(get_db)):
+    """Delete a single CodeDocument (and cascade embeddings)."""
+
+    doc: CodeDocument | None = db.query(CodeDocument).filter_by(id=file_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    db.delete(doc)
+    db.commit()
+
+    return {"status": "deleted"}

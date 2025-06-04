@@ -1,6 +1,6 @@
 // frontend/src/pages/ProjectChatPage.jsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useProject } from '../hooks/useProjects';
 import Header from '../components/common/Header';
@@ -9,11 +9,19 @@ import CommandInput from '../components/chat/CommandInput';
 import CodePreview from '../components/chat/CodePreview';
 import MonacoEditor from '@monaco-editor/react';
 import { codeAPI } from '../api/code';
+import FileUpload from '../components/knowledge/FileUpload';
 
 export default function ProjectChatPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const { project, loading: projectLoading } = useProject(projectId);
+  const location = useLocation();
+
+  // Prefer project passed via navigation state to avoid an extra API call.
+  const stateProject = location.state?.project;
+
+  const { project: fetchedProject, loading: projectLoading, fetch: fetchProject } = useProject(projectId);
+
+  const project = stateProject || fetchedProject;
   const [sessionId, setSessionId] = useState(null);
   const [editorContent, setEditorContent] = useState('');
   const [editorLanguage, setEditorLanguage] = useState('python');
@@ -22,13 +30,26 @@ export default function ProjectChatPage() {
   const [projectFiles, setProjectFiles] = useState([]);
   const [splitView, setSplitView] = useState(true);
 
+  const refreshFiles = () => {
+    fetchProjectFiles();
+  };
+
   // Create or get chat session
   useEffect(() => {
+    if (!project && projectId && !stateProject) {
+      // Fetch project details only if not provided via state
+      fetchProject();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, stateProject]);
+
+  useEffect(() => {
     if (projectId) {
-      // In a real app, fetch or create session
+      // Create/assign chat session and load files
       setSessionId(`session_${projectId}_${Date.now()}`);
       fetchProjectFiles();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const fetchProjectFiles = async () => {
@@ -36,7 +57,21 @@ export default function ProjectChatPage() {
       const response = await codeAPI.getProjectFiles(projectId);
       setProjectFiles(response.files || []);
     } catch (err) {
-      console.error('Failed to fetch project files:', err);
+      if (err.response?.status === 404) {
+        setProjectFiles([]);
+      } else {
+        console.error('Failed to fetch project files:', err);
+      }
+    }
+  };
+
+  const handleDeleteFile = async (id) => {
+    if (!window.confirm('Delete this file?')) return;
+    try {
+      await codeAPI.deleteFile(id);
+      refreshFiles();
+    } catch (err) {
+      console.error('Failed to delete file:', err);
     }
   };
 
@@ -122,14 +157,23 @@ export default function ProjectChatPage() {
             {projectFiles.length > 0 ? (
               <ul className="space-y-1">
                 {projectFiles.map(file => (
-                  <li key={file.id}>
+                  <li key={file.id} className="flex items-center justify-between group">
                     <button
                       onClick={() => handleFileSelect(file)}
-                      className={`w-full text-left px-2 py-1 rounded text-sm hover:bg-gray-100 ${
+                      className={`flex-1 text-left px-2 py-1 rounded text-sm truncate hover:bg-gray-100 ${
                         selectedFile?.id === file.id ? 'bg-blue-50 text-blue-700' : ''
                       }`}
                     >
                       {file.path.split('/').pop()}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFile(file.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:text-red-700"
+                      title="Delete file"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </li>
                 ))}
@@ -137,6 +181,10 @@ export default function ProjectChatPage() {
             ) : (
               <p className="text-sm text-gray-500">No files uploaded yet</p>
             )}
+          </div>
+          {/* Upload section */}
+          <div className="p-4 border-t">
+            <FileUpload projectId={projectId} onSuccess={refreshFiles} />
           </div>
         </div>
 

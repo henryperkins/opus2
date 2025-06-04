@@ -44,6 +44,10 @@ fi
 echo "🔧 Activating virtual environment..."
 source venv/bin/activate
 
+# Ensure cookies are not marked Secure when running over plain HTTP so that the
+# browser will include the auth cookie on subsequent requests.
+export INSECURE_COOKIES=true
+
 # Install/update Python dependencies
 echo "📦 Installing Python dependencies..."
 pip install --upgrade pip

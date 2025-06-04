@@ -29,10 +29,22 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 1440  # 24 hours
 
     # Cookie behaviour
-    # When developing over plain HTTP, browsers ignore cookies marked Secure.
-    # Toggle this flag (or set env INSECURE_COOKIES=true) to disable the
-    # Secure attribute so the auth cookie is sent on http://localhost:8000.
-    insecure_cookies: bool = False
+    # -------------------------------------------------------------------
+    # Browsers refuse to set/send cookies that carry the *Secure* attribute
+    # when the current connection is **not** served over HTTPS.  During local
+    # development the FastAPI server (and Vite dev-server) typically run on
+    # plain *http://localhost* which means Secure cookies would be silently
+    # dropped → the backend can no longer read the *access_token* and every
+    # request appears unauthenticated.
+    #
+    # For production deployments you *do* want Secure cookies, therefore we
+    # expose a flag that can be flipped via the environment variable
+    # `INSECURE_COOKIES`.  We default the flag **on** (True) because the
+    # overwhelming majority of first-time users spin up the stack locally
+    # before moving it behind an HTTPS reverse-proxy.  When the application is
+    # later deployed behind TLS one simply sets `INSECURE_COOKIES=false` (or
+    # omits it entirely) to restore the Secure attribute.
+    insecure_cookies: bool = True
 
     # Authentication
     jwt_secret_key: Optional[str] = None

@@ -13,7 +13,13 @@ function Dashboard() {
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const response = await fetch('/api/health/ready');
+        // Use absolute backend URL so that local development (without Vite
+        // proxy) and Docker both work.  We fall back to localhost when the
+        // VITE env variable is absent.
+        const base = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${base}/health/ready`, {
+          credentials: 'include',
+        });
         if (!response.ok) throw new Error('API not responding');
         const data = await response.json();
         setHealth(data);

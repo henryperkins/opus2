@@ -2,13 +2,19 @@
 import client from './client';
 
 export const codeAPI = {
-    async uploadFiles(projectId, files) {
+    async uploadFiles(projectId, files, onProgress) {
         const formData = new FormData();
         files.forEach(file => formData.append('files', file));
 
         const response = await client.post(`/api/code/projects/${projectId}/upload`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data'
+            },
+            onUploadProgress: (evt) => {
+                if (onProgress && evt.total) {
+                    const percent = (evt.loaded / evt.total) * 100;
+                    onProgress(percent);
+                }
             }
         });
         return response.data;
@@ -16,6 +22,11 @@ export const codeAPI = {
 
     async getProjectFiles(projectId, params = {}) {
         const response = await client.get(`/api/code/projects/${projectId}/files`, { params });
+        return response.data;
+    },
+
+    async deleteFile(fileId) {
+        const response = await client.delete(`/api/code/files/${fileId}`);
         return response.data;
     },
 

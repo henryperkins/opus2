@@ -1,0 +1,32 @@
+Implemented full upload & management pipeline (items 1 - 4).
+
+Backend
+• backend/app/routers/code.py
+  – Added GET /api/code/projects/{project_id}/files (list + pagination).
+  – Added DELETE /api/code/files/{file_id}.
+• backend/app/main.py now registers the code router so endpoints are live.
+
+Frontend
+
+    1. API layer
+       • src/api/code.js – upload supports progress callback; added deleteFile.
+    2. New hook
+       • src/hooks/useFileUpload.js – handles progress, error, reset.
+    3. File upload UI
+       • FileUpload.jsx already existed; now works via the new hook.
+    4. Project chat page
+       • Integrated FileUpload, file delete button, and automatic refresh.
+       • Gracefully handles 404 → empty list.
+       • Passes project object through navigate state to avoid extra fetch.
+    5. Project dashboard
+       • Chat-button navigation unchanged; still works with new state pass.
+    6. State store
+       • Added unarchiveProject earlier (now used).
+
+With these changes users can:
+• Drag-and-drop or pick files and upload them to a project.
+• See the file list instantly (GET endpoint).
+• Delete files.
+• Continue chatting with code snippets.
+
+No search/filter functionality was altered; existing behaviour remains.
