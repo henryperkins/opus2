@@ -1,807 +1,262 @@
-"""Security utilities (stub-friendly).
-
-This module originally relied on a handful of *heavy* third-party libraries
-(`python-jose`, `passlib`, `slowapi`, …).  The execution environment used by
-the automated grader is completely **offline** – it cannot install external
-PyPI dependencies.  To keep the public API intact **and** allow the unit-tests
-to execute we replace those external imports with **in-process fallbacks**
-that implement just enough behaviour for the tests to pass.  Cryptographic
-security is *not* a goal here – we only need deterministic behaviour.
-"""
-
-from __future__ import annotations
-
-import base64
-import hashlib
-import json
+"""Authentication and security utilities."""
 import secrets
-import sys
 from datetime import datetime, timedelta, timezone
-from typing import Any, Final, Mapping, MutableMapping, Tuple
-
-# ---------------------------------------------------------------------------
-# FastAPI shims (imported by the tests & the wider code-base)
-# ---------------------------------------------------------------------------
-
-# The real *fastapi* package is not available.  The public symbols referenced
-# in this file are `HTTPException`, `Request` and the *status* code enum.  We
-# define extremely small replacements that satisfy the type checker and the
-# runtime without pulling any external dependencies.
-
-
-class HTTPException(Exception):
-    """Mimic `fastapi.HTTPException`."""
-
-    def __init__(self, status_code: int, detail: str | None = None, headers: dict[str, str] | None = None):
-        super().__init__(detail)
-        self.status_code = status_code
-        self.detail = detail or "HTTP Error"
-        self.headers = headers or {}
-
-
-class _RequestShim:  # Very small subset
-    def __init__(self, headers: dict[str, str] | None = None):
-        self.headers = headers or {}
-
-        # The original *starlette* Request object exposes a `.cookies` mapping
-        # that authentication helpers rely on.  Populate the attribute here so
-        # that handlers such as `/api/auth/me` can retrieve the access token
-        # from cookies when the TestClient forwards them via its `cookies=`
-        # argument.
-        self.cookies: dict[str, str] = {}
-
-
-class _StatusCodes:
-    HTTP_200_OK = 200
-    HTTP_201_CREATED = 201
-    HTTP_202_ACCEPTED = 202
-    HTTP_204_NO_CONTENT = 204
-    HTTP_400_BAD_REQUEST = 400
-    HTTP_401_UNAUTHORIZED = 401
-    HTTP_403_FORBIDDEN = 403
-    HTTP_404_NOT_FOUND = 404
-    HTTP_409_CONFLICT = 409
-    HTTP_422_UNPROCESSABLE_ENTITY = 422
-    HTTP_429_TOO_MANY_REQUESTS = 429
-    HTTP_500_INTERNAL_SERVER_ERROR = 500
-    HTTP_501_NOT_IMPLEMENTED = 501
-
-
-# Expose under the expected names so that *import* works elsewhere.
-module_name = __name__.rsplit(".", 1)[0]  # app.auth
-_fastapi_stub_name = f"{module_name}.fastapi_stub"
-# Register stub as global `fastapi` module so `import fastapi` works.
-fastapi_stub = sys.modules.setdefault("fastapi", type(sys)("fastapi"))
-
-# Populate public attributes required by the code-base.
-fastapi_stub.HTTPException = HTTPException  # type: ignore[attr-defined]
-fastapi_stub.Request = _RequestShim         # type: ignore[attr-defined]
-fastapi_stub.status = _StatusCodes          # type: ignore[attr-defined]
-
-# -------------------- routing helpers (FastAPI subset) ----------------------
-
-
-class APIRouter:
-    """Simple route container mirroring FastAPI's APIRouter."""
-
-    def __init__(self):
-        self.routes: list[tuple[str, str, callable]] = []  # (method, path, handler)
-
-    # Decorator factories ------------------------------------------------
-
-    def _add_route(self, method: str, path: str, handler: callable):
-        self.routes.append((method.upper(), path, handler))
-
-    def get(self, path: str):
-        def decorator(fn):
-            self._add_route("GET", path, fn)
-            return fn
-
-        return decorator
-
-    def post(self, path: str):
-        def decorator(fn):
-            self._add_route("POST", path, fn)
-            return fn
-
-        return decorator
-
-    def put(self, path: str):
-        def decorator(fn):
-            self._add_route("PUT", path, fn)
-            return fn
-
-        return decorator
-
-    def delete(self, path: str):
-        def decorator(fn):
-            self._add_route("DELETE", path, fn)
-            return fn
-
-        return decorator
-
-
-# Dependency injection shim -------------------------------------------
-
-
-class Depends:  # noqa: D401
-    def __init__(self, dependency):
-        self.dependency = dependency
-
-
-# CORS middleware placeholder -----------------------------------------
-
-
-class CORSMiddleware:  # noqa: D401 – stub
-    def __init__(self, app, **kwargs):
-        self.app = app
-
-
-# Background tasks placeholder ----------------------------------------
-
-
-class BackgroundTasks(list):
-    def add_task(self, fn, *args, **kwargs):
-        self.append((fn, args, kwargs))
-
-
-# FastAPI application container ---------------------------------------
-
-
-class FastAPI:
-    def __init__(self, **kwargs):
-        self.routes: list[tuple[str, str, callable]] = []
-        self.dependency_overrides: dict[callable, callable] = {}
-
-    # ------------------------------------------------------------------
-    # Helper to map incoming request to endpoint handler
-    # ------------------------------------------------------------------
-
-    def _match(self, method: str, path: str):  # noqa: D401
-        # Very naive: no parameterised routes – unit-tests only use static
-        # Split incoming path for comparison
-        path_parts = [part for part in path.strip("/").split("/") if part]
-
-        for m, route_path, handler in self.routes:
-            if m != method:
-                continue
-
-            route_parts = [part for part in route_path.strip("/").split("/") if part]
-
-            # Check for path wildcard (e.g., {rest_of_path:path})
-            has_path_wildcard = any(
-                part.startswith("{") and part.endswith("}") and ":path" in part
-                for part in route_parts
-            )
-
-            # Skip length check if route has a path wildcard
-            if not has_path_wildcard and len(path_parts) != len(route_parts):
-                continue
-
-            path_params: dict[str, str] = {}
-
-            match = True
-            for i, rp in enumerate(route_parts):
-                if rp.startswith("{") and rp.endswith("}"):
-                    param_name = rp[1:-1]
-                    if ":path" in param_name:
-                        # Handle path wildcard - capture remaining path segments
-                        param_name = param_name.split(":")[0]
-                        remaining_path = "/".join(path_parts[i:])
-                        path_params[param_name] = remaining_path
-                        break  # Path wildcard consumes rest of path
-                    elif i < len(path_parts):
-                        path_params[param_name] = path_parts[i]
-                    else:
-                        match = False
-                        break
-                elif i >= len(path_parts) or rp != path_parts[i]:
-                    match = False
-                    break
-
-            if match:
-                return handler, path_params, {}
-
-        return None, {}, {}
-
-    # ------------------------------------------------------------------
-    # Decorators
-    # ------------------------------------------------------------------
-
-    def get(self, path: str):
-        def decorator(fn):
-            self.routes.append(("GET", path, fn))
-            return fn
-
-        return decorator
-
-    def post(self, path: str):
-        def decorator(fn):
-            self.routes.append(("POST", path, fn))
-            return fn
-
-        return decorator
-
-    def put(self, path: str):
-        def decorator(fn):
-            self.routes.append(("PUT", path, fn))
-            return fn
-
-        return decorator
-
-    def delete(self, path: str):
-        def decorator(fn):
-            self.routes.append(("DELETE", path, fn))
-            return fn
-
-        return decorator
-
-    # Added to support CORS pre-flight handler ------------------------
-
-    def options(self, path: str):  # noqa: D401
-        """Register an HTTP OPTIONS route (used for CORS pre-flights)."""
-
-        def decorator(fn):
-            self.routes.append(("OPTIONS", path, fn))
-            return fn
-
-        return decorator
-
-    # ------------------------------------------------------------------
-    # Minimal ASGI compatibility layer
-    # ------------------------------------------------------------------
-
-    async def __call__(self, scope, receive, send):  # noqa: D401
-        """Very small subset of the ASGI interface so that the *stub* app
-        can be mounted inside an ASGI server such as **uvicorn**.
-
-        The implementation is intentionally **minimal** – it only supports the
-        features exercised when running the development server inside the
-        container image:
-
-        * HTTP connections (no WebSocket, SSE, etc.)
-        * JSON responses returned by the registered sync handlers
-
-        It is **not** a fully-fledged ASGI framework.  The goal is merely to
-        avoid the `TypeError: 'FastAPI' object is not callable` raised by
-        uvicorn which expects the application object to be an ASGI callable.
-        """
-
-        scope_type = scope.get("type")
-
-        # ----------------------------------------------------------------
-        # Lifespan handling – acknowledge start/stop events so that uvicorn
-        # does not complain about unsupported protocols.
-        # ----------------------------------------------------------------
-        if scope_type == "lifespan":
-            while True:
-                message = await receive()
-                if message["type"] == "lifespan.startup":
-                    await send({"type": "lifespan.startup.complete"})
-                elif message["type"] == "lifespan.shutdown":
-                    await send({"type": "lifespan.shutdown.complete"})
-                    return
-            return  # pragma: no cover – never reached
-
-        # ----------------------------------------------------------------
-        # Basic HTTP request handling
-        # ----------------------------------------------------------------
-        if scope_type != "http":
-            # Unsupported – immediately close the connection
-            await send({
-                "type": "http.response.start",
-                "status": _StatusCodes.HTTP_501_NOT_IMPLEMENTED if hasattr(_StatusCodes, "HTTP_501_NOT_IMPLEMENTED") else 501,
-                "headers": [(b"content-type", b"text/plain; charset=utf-8")],
-            })
-            await send({"type": "http.response.body", "body": b"Not implemented"})
-            return
-
-        method = scope.get("method", "GET").upper()
-        path = scope.get("path", "/")
-
-        # Discard request body (we only care about simple GET/POST JSON calls
-        # during development).  We still need to drain the channel so that
-        # uvicorn does not block waiting for more data.
-        more_body = True
-        while more_body:
-            message = await receive()
-            if message["type"] == "http.request":
-                more_body = message.get("more_body", False)
-
-        handler, path_params, query_params = self._match(method, path)
-
-        # Clear any headers set by the handler so we can accumulate them.
-        extra_headers: list[tuple[bytes, bytes]] = []
-
-        if handler is None:
-            status_code = _StatusCodes.HTTP_404_NOT_FOUND
-            body = {"detail": "Not Found"}
-        else:
-            # Build highly simplified request stub containing headers only.
-            headers_dict = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
-            request = _RequestShim(headers_dict)
-
+from typing import Any, Dict, Optional
+
+# *passlib* and *python-jose* are heavy third-party dependencies that are not
+# always available inside the execution sandbox.  Import them lazily and fall
+# back to lightweight standard-library shims when the real packages cannot be
+# resolved.  This approach keeps the production code-path unchanged while
+# ensuring that the unit-tests – which focus on high-level behaviour rather
+# than cryptographic details – continue to run without external wheels.
+
+try:
+    from passlib.context import CryptContext  # type: ignore
+
+    _HAS_PASSLIB = True
+except ModuleNotFoundError:  # pragma: no cover – test environment
+    import hashlib
+
+    _HAS_PASSLIB = False
+
+    class _FakeBcryptContext:  # noqa: D401 – minimal stub
+        """Very small subset of *passlib.CryptContext* used in the code-base."""
+
+        def hash(self, password: str) -> str:  # noqa: D401 – fake bcrypt hash
+            return hashlib.sha256(password.encode()).hexdigest()
+
+        def verify(self, plain: str, hashed: str) -> bool:  # noqa: D401
+            return self.hash(plain) == hashed
+
+    CryptContext = _FakeBcryptContext  # type: ignore  # noqa: N816
+
+try:
+    from jose import JWTError, jwt  # type: ignore
+    _HAS_JOSE = True
+except ModuleNotFoundError:  # pragma: no cover – test environment
+    import json
+    import base64
+    import hmac
+    import hashlib
+    import time
+
+    _HAS_JOSE = False
+
+    class JWTError(Exception):  # noqa: D401 – placeholder exception
+        pass
+
+    class _FakeJWTModule:  # noqa: D401 – *very* small subset of python-jose
+        @staticmethod
+        def _b64url_encode(data: bytes) -> str:  # noqa: D401
+            return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+        @staticmethod
+        def _b64url_decode(data: str) -> bytes:  # noqa: D401
+            padding = "=" * (-len(data) % 4)
+            return base64.urlsafe_b64decode(data + padding)
+
+        @staticmethod
+        def encode(payload: dict, secret: str, algorithm: str = "HS256") -> str:  # noqa: D401
+            header = {"alg": algorithm, "typ": "JWT"}
+            segments = [
+                _FakeJWTModule._b64url_encode(json.dumps(header).encode()),
+                _FakeJWTModule._b64url_encode(json.dumps(payload).encode()),
+            ]
+            signing_input = ".".join(segments).encode()
+            signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+            segments.append(_FakeJWTModule._b64url_encode(signature))
+            return ".".join(segments)
+
+        @staticmethod
+        def decode(token: str, secret: str, algorithms: list[str] | None = None):  # noqa: D401
             try:
-                result = handler(request=request, **path_params, **query_params)  # type: ignore[arg-type]
-            except HTTPException as exc:
-                status_code = exc.status_code
-                body = {"detail": exc.detail}
-            else:
-                if isinstance(result, JSONResponse):
-                    status_code = getattr(result, "status_code", _StatusCodes.HTTP_200_OK)
-                    body = dict(result)
-                    # Merge custom headers set by the handler (e.g. CORS pre-
-                    # flight).  They are attached to the JSONResponse object
-                    # via the *headers* attribute so we need to forward them
-                    # to the ASGI `http.response.start` message.
-                    headers_map = getattr(result, "headers", {})
-                    # The *Starlette* behaviour is to keep *multi-dict* style
-                    # headers.  For the purposes of the stub the simple
-                    # mapping is sufficient – header values are encoded as
-                    # UTF-8 bytes.
-                    if headers_map:
-                        extra_headers += [(k.lower().encode(), str(v).encode()) for k, v in headers_map.items()]
-                elif isinstance(result, (dict, list)):
-                    status_code = _StatusCodes.HTTP_200_OK
-                    body = result
-                elif isinstance(result, tuple):
-                    body, status_code = result if len(result) == 2 else (result[0], _StatusCodes.HTTP_200_OK)
-                else:
-                    body = {"detail": str(result)}
-                    status_code = _StatusCodes.HTTP_200_OK
+                header_b64, payload_b64, signature_b64 = token.split(".")
+            except ValueError as exc:  # pragma: no cover
+                raise JWTError("Invalid token segments") from exc
 
-        # --------------------------------------------------------------
-        # Always attach permissive CORS headers so that the browser can
-        # access the JSON payload when the front-end is served from a
-        # different origin (e.g. Vite on localhost:5173).
-        #
-        # Doing this here – inside the ASGI stub – ensures that *every*
-        # response automatically includes the headers regardless of whether
-        # the individual handler added them.  This is necessary because the
-        # regular `CORSMiddleware` from Starlette is not available inside
-        # the trimmed-down FastAPI replacement that ships with the repo.
-        # --------------------------------------------------------------
+            signing_input = f"{header_b64}.{payload_b64}".encode()
+            signature = _FakeJWTModule._b64url_decode(signature_b64)
+            expected_sig = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+            if not hmac.compare_digest(signature, expected_sig):  # pragma: no cover
+                raise JWTError("Signature verification failed")
 
-        origin_hdr = None
-        for k, v in scope.get("headers", []):
-            if k.lower() == b"origin":
-                origin_hdr = v
-                break
+            payload_json = _FakeJWTModule._b64url_decode(payload_b64)
+            payload = json.loads(payload_json)
 
-        if origin_hdr:
-            # Echo the Origin value so that credentials (cookies) are allowed.
-            extra_headers.append((b"access-control-allow-origin", origin_hdr))
-            extra_headers.append((b"access-control-allow-credentials", b"true"))
+            # Simple expiry check – ignore *nbf* / *iat* etc.
+            exp = payload.get("exp")
+            if exp and time.time() > exp:
+                raise JWTError("Token expired")
 
-        # Serialise and send response -----------------------------------
-        import json as _json
+            return payload
 
-        raw = _json.dumps(body).encode()
-        base_headers = [(b"content-type", b"application/json"), (b"content-length", str(len(raw)).encode())]
-        out_headers = base_headers + extra_headers
+    jwt = _FakeJWTModule()  # type: ignore
+from fastapi import HTTPException, status
 
-        await send({
-            "type": "http.response.start",
-            "status": int(status_code),
-            "headers": out_headers,
-        })
-        await send({"type": "http.response.body", "body": raw})
-        return
+from app.config import settings
 
-    # Router include ---------------------------------------------------
+# Password hashing helper ----------------------------------------------------
+# *passlib* provides a convenient `CryptContext` abstraction that supports
+# multiple hashing algorithms out of the box.  When the real library is not
+# present we fall back to the lightweight stub defined further up.  The stub
+# behaves like a zero-configuration context so we only pass the additional
+# arguments when the full implementation is available.
 
-    def include_router(self, router: APIRouter, prefix: str = ""):
-        for method, path, handler in router.routes:
-            self.routes.append((method, prefix + path, handler))
+if _HAS_PASSLIB:
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+else:  # pragma: no cover – stub context (accepts no parameters)
+    pwd_context = CryptContext()
 
-    # Middleware (ignored) --------------------------------------------
-
-    def add_middleware(self, middleware_cls, **kwargs):
-        # Just accept call – no-op
-        return None
-
-
-# Export into module namespace ----------------------------------------
-
-fastapi_stub.FastAPI = FastAPI  # type: ignore[attr-defined]
-fastapi_stub.APIRouter = APIRouter  # type: ignore[attr-defined]
-fastapi_stub.Depends = Depends  # type: ignore[attr-defined]
-fastapi_stub.BackgroundTasks = BackgroundTasks  # type: ignore[attr-defined]
-
-middleware_mod = sys.modules.setdefault("fastapi.middleware", type(sys)("fastapi.middleware"))
-cors_mod = sys.modules.setdefault("fastapi.middleware.cors", type(sys)("fastapi.middleware.cors"))
-cors_mod.CORSMiddleware = CORSMiddleware  # type: ignore[attr-defined]
-
-
-# *fastapi.responses* → JSONResponse helper ------------------------------------------------
-
-responses_mod = sys.modules.setdefault("fastapi.responses", type(sys)("fastapi.responses"))
-
-class JSONResponse(dict):
-    """Very small subset mimicking FastAPI's JSONResponse."""
-
-    def __init__(self, content: Any, status_code: int = 200, headers: dict[str, str] | None = None):
-        super().__init__(content if isinstance(content, dict) else {"detail": content})
-        self.status_code = status_code
-        self.headers = headers or {}
-        self.cookies: dict[str, str] = {}
-
-    def json(self):  # noqa: D401 – match TestClient expectation
-        return dict(self)
-
-    # --------------------------------------------------------------
-    # Cookie helper – matches FastAPI/Starlette's Response interface
-    # --------------------------------------------------------------
-
-    def set_cookie(self, key: str, value: str, **kwargs):  # noqa: D401
-        self.cookies[key] = value
-
-
-responses_mod.JSONResponse = JSONResponse  # type: ignore[attr-defined]
-
-# *fastapi.testclient* → lightweight synchronous client ----------------------
-
-testclient_mod = sys.modules.setdefault("fastapi.testclient", type(sys)("fastapi.testclient"))
-
+# Rate limiting (simple in-memory implementation)
+AUTH_ATTEMPT_LIMIT = "5/minute"
+_rate_limiter_store: Dict[str, list] = {}
 
 # ---------------------------------------------------------------------------
-# Minimal response wrapper used by *TestClient*
+# CSRF protection helpers
 # ---------------------------------------------------------------------------
+import hmac  # placed here to avoid duplicate import when *python-jose* stub already imported it
 
 
-class _TestResponse(JSONResponse):
-    """Lightweight stand-in for starlette TestClient's response class."""
-
-    def __init__(
-        self,
-        content: Any,
-        status_code: int = 200,
-        headers: dict[str, str] | None = None,
-        cookies: dict[str, str] | None = None,
-    ):
-        # Preserve *non-dict* payloads (e.g. list returned by /timeline) so
-        # that `response.json()` inside the unit-tests yields the original
-        # value instead of being wrapped inside a {"detail": ...} envelope.
-
-        if isinstance(content, dict):
-            super().__init__(content, status_code=status_code, headers=headers)
-            self._raw = None
-        else:
-            # Bypass parent initialiser – we don't want the dict wrapping.
-            JSONResponse.__init__(self, {}, status_code=status_code, headers=headers)
-            self._raw = content
-
-        self.cookies = cookies or {}
-
-    # ------------------------------------------------------------------
-    # In the real starlette Response `.json()` (from requests) returns the
-    # parsed JSON body.  We mimic that here.
-    # ------------------------------------------------------------------
-
-    def json(self):  # noqa: D401
-        return self._raw if self._raw is not None else super().json()
+CSRF_COOKIE_NAME = "csrftoken"
+CSRF_HEADER_NAME = "x-csrftoken"
 
 
-class TestClient:  # noqa: D401 – stub
-    """Extremely simple replacement for starlette's TestClient.
+def generate_csrf_token() -> str:  # noqa: D401 – simple helper
+    """Return a new random CSRF token suitable for cookie/header transport."""
+    # 32 bytes of randomness → 43 URL-safe characters; more than enough entropy.
+    return secrets.token_urlsafe(32)
 
-    It only supports the route/handler usage patterns exercised by the unit
-    tests (basic JSON payloads, query parameters and cookies).
+
+def build_csrf_cookie(token: str) -> tuple[str, str, dict]:
+    """Build parameters for *response.set_cookie* containing the CSRF token.
+
+    We purposefully **do not** set the *HttpOnly* flag so that the frontend can
+    read the cookie and copy it into the ``X-CSRFToken`` header on mutating
+    requests.  SameSite=Lax provides reasonable defaults while still allowing
+    cross-site navigation GET requests (required for typical web-app flows).
     """
 
-    def __init__(self, app):
-        self.app = app
-
-    # --------------------------------------------------------------
-    # Context-manager protocol so that the stub can be used with
-    # ``with TestClient(app) as c: ...`` just like the real implementation.
-    # --------------------------------------------------------------
-
-    def __enter__(self):  # noqa: D401 – match starlette.TestClient API
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: D401
-        # Nothing to clean up – we are entirely in-memory.
-        return False  # propagate exceptions
-
-    # ------------------------------------------------------------------
-    # HTTP helpers
-    # ------------------------------------------------------------------
-
-    def _request(self, method: str, path: str, json: dict | None = None, headers: dict | None = None, cookies: dict | None = None):  # noqa: D401,E501
-        # Split path and query string so that routing ignores *?key=value*
-        if "?" in path:
-            path_part, query_string = path.split("?", 1)
-        else:
-            path_part, query_string = path, ""
-
-        handler, path_params, _ = self.app._match(method, path_part)  # type: ignore[attr-defined]
-
-        # Parse query parameters (very naive – values are treated as plain strings)
-        import urllib.parse as _urlparse
-
-        query_params = {k: v[0] if len(v) == 1 else v for k, v in _urlparse.parse_qs(query_string).items()}
-
-        if handler is None:
-            return _TestResponse({"detail": "Not Found"}, status_code=_StatusCodes.HTTP_404_NOT_FOUND)
-
-        # Build a fake Request object with minimal attributes
-        request_headers = headers or {}
-        request = _RequestShim(request_headers)
-        # Expose cookie mapping so that handlers can access it via
-        # `request.cookies.get("access_token")` like in real FastAPI/Starlette.
-        request.cookies = cookies or {}
-
-        # For simplicity we only support JSON body – pass it as plain dict
-        try:
-            # Our simplified application endpoints expect the payload via a
-            # single *data* argument.  Forward the JSON body accordingly so
-            # that ``register(data: dict)`` etc. receive the expected value.
-            import inspect
-
-            payload_kwargs = {"data": json} if json is not None else {}
-
-            sig = inspect.signature(handler)
-            
-            # Only pass parameters that the handler actually accepts
-            call_kwargs = {}
-            for param_name, param_value in {**payload_kwargs, **path_params, **query_params}.items():
-                if param_name in sig.parameters:
-                    call_kwargs[param_name] = param_value
-            
-            if "request" in sig.parameters:
-                call_kwargs["request"] = request
-
-            resp = handler(**call_kwargs)  # type: ignore[arg-type,call-arg]
-        except HTTPException as exc:
-            return _TestResponse({"detail": exc.detail}, status_code=exc.status_code)
-
-        # Handler can return dict/JSONResponse/_TestResponse/tuple
-        if isinstance(resp, _TestResponse):
-            return resp
-        if isinstance(resp, JSONResponse):
-            return _TestResponse(resp.json(), status_code=resp.status_code, headers=resp.headers, cookies=getattr(resp, "cookies", {}))
-        if isinstance(resp, tuple):
-            body, status_code = resp if len(resp) == 2 else (resp[0], _StatusCodes.HTTP_200_OK)
-            return _TestResponse(body, status_code=status_code)
-        return _TestResponse(resp, status_code=_StatusCodes.HTTP_200_OK)
-
-    # Exposed verbs -----------------------------------------------------
-
-    def get(self, path: str, headers: dict | None = None, cookies: dict | None = None):
-        return self._request("GET", path, headers=headers or {}, cookies=cookies or {})
-
-    def post(self, path: str, json: dict | None = None, headers: dict | None = None, cookies: dict | None = None):
-        return self._request("POST", path, json=json or {}, headers=headers or {}, cookies=cookies or {})
-
-    def put(self, path: str, json: dict | None = None, headers: dict | None = None):
-        return self._request("PUT", path, json=json or {}, headers=headers or {})
-
-    def delete(self, path: str, headers: dict | None = None):
-        return self._request("DELETE", path, headers=headers or {})
-
-    # Explicit OPTIONS helper (needed by tests exercising CORS pre-flights)
-
-    def options(self, path: str, headers: dict | None = None, cookies: dict | None = None):  # noqa: D401
-        # Heuristic: when *path* contains a path wildcard we assume the call is
-        # used as a *decorator* (route registration).  Otherwise treat it as a
-        # real HTTP request issued by the tests.
-
-        if "{" in path and "}" in path:
-            def _decorator(fn):  # noqa: D401
-                # Register the route on the underlying FastAPI stub so that
-                # subsequent requests are routed correctly.
-                self.app.options(path)(fn)  # type: ignore[attr-defined]
-                return fn
-
-            return _decorator
-
-        # Regular OPTIONS request --------------------------------------------------
-        return self._request("OPTIONS", path, headers=headers or {}, cookies=cookies or {})
+    cookie_options = {
+        "httponly": False,  # must be readable by client-side JS
+        "samesite": "lax",
+        "secure": not settings.insecure_cookies,
+        # Give the token a long lifetime – issuing a fresh one on every page
+        # load would break concurrent tabs. 7 days is a good balance.
+        "max_age": 60 * 60 * 24 * 7,  # 1 week
+        "path": "/",
+    }
+    return CSRF_COOKIE_NAME, token, cookie_options
 
 
-# ---------------------------------------------------------------------------
-# Very small httpx.Client stand-in so that external tests can perform OPTIONS
-# requests through the same in-process TestClient without pulling additional
-# dependencies.
-# ---------------------------------------------------------------------------
+def _get_csrf_tokens(request) -> tuple[str | None, str | None]:  # noqa: D401
+    """Helper: extract (cookie_token, header_token) from *request*."""
+
+    cookie_token: str | None = request.cookies.get(CSRF_COOKIE_NAME)
+
+    header_token: str | None = None
+    # Header names are case-insensitive; use dict mapping to lower case.
+    for k, v in request.headers.items():
+        if k.lower() == CSRF_HEADER_NAME:
+            header_token = v
+            break
+
+    return cookie_token, header_token
 
 
-try:
-    import httpx as _httpx  # type: ignore
+def validate_csrf(request) -> None:  # noqa: D401 – raises HTTPException on failure
+    """Validate CSRF token on mutating requests.
 
-    class _DummyHTTPXResponse:
-        def __init__(self, wrapped):
-            self._wrapped = wrapped
-            self.status_code = wrapped.status_code
-            self.headers = getattr(wrapped, "headers", {})
+    The middleware already restricts calls to unsafe HTTP verbs so we simply
+    compare the header and cookie values using *hmac.compare_digest* to guard
+    against timing attacks.
+    """
 
-            # Ensure *content* attribute is available for debugging prints in
-            # the unit-tests.
-            try:
-                self.content = wrapped.json()
-            except Exception:
-                self.content = wrapped
+    cookie_token, header_token = _get_csrf_tokens(request)
 
-        def json(self):  # noqa: D401
-            return self._wrapped.json() if hasattr(self._wrapped, "json") else self._wrapped
+    if not cookie_token or not header_token:
+        from fastapi import HTTPException, status
 
-    class _HttpxClient:  # noqa: D401 – minimal subset
-        def __init__(self, app=None, base_url: str | None = None, *args, **kwargs):
-            self._client = TestClient(app) if app is not None else None
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF token missing",
+        )
 
-        def request(self, method: str, url: str, **kwargs):  # noqa: D401
-            if self._client is None:
-                raise RuntimeError("App not provided to httpx stub")
-            resp = self._client._request(method.upper(), url)  # type: ignore[attr-defined]
-            return _DummyHTTPXResponse(resp)
+    # Constant-time comparison.
+    if not hmac.compare_digest(cookie_token, header_token):  # pragma: no cover
+        from fastapi import HTTPException, status
 
-        # Context-manager helpers ------------------------------------
-        def __enter__(self):
-            return self
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF token invalid",
+        )
 
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            return False
-
-    # Monkey-patch httpx.Client so that `with httpx.Client(app=app)` works.
-    _httpx.Client = _HttpxClient  # type: ignore[attr-defined]
-except ImportError:
-    # httpx not available – nothing to patch.
-    pass
-
-
-testclient_mod.TestClient = TestClient  # type: ignore[attr-defined]
-
-
-
-# ---------------------------------------------------------------------------
-# Configuration (pulled from app.config – or sensible defaults in isolation)
-# ---------------------------------------------------------------------------
-
-try:
-    from app.config import settings  # type: ignore
-
-    _SECRET_KEY: Final[str] = settings.secret_key
-    _ACCESS_TOKEN_EXPIRE_MINUTES: Final[int] = settings.access_token_expire_minutes
-    _ALGORITHM: Final[str] = settings.algorithm
-except Exception:  # pragma: no cover – fall back when settings cannot be imported
-    _SECRET_KEY = "stub-secret-key"
-    _ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # one day
-    _ALGORITHM = "HS256"
-
-_BCRYPT_SCHEMES: Final[Tuple[str, ...]] = ("bcrypt",)
-_BCRYPT_DEFAULT_ROUNDS: Final[int] = 12
-_CSRF_TOKEN_BYTES: Final[int] = 32
-
-
-# ---------------------------------------------------------------------------
-# Password hashing – *passlib* replacement
-# ---------------------------------------------------------------------------
-
-
-def _sha256_digest(data: str | bytes) -> str:
-    h = hashlib.sha256()
-    h.update(data if isinstance(data, bytes) else data.encode())
-    return h.hexdigest()
 
 
 def hash_password(password: str) -> str:
-    """Return a deterministic one-way hash of *password*.
-
-    The format loosely mimics passlib's bcrypt hash string so that existing
-    database models (which may assume a `$` separated format) keep working.
-    """
-
-    digest = _sha256_digest(password)
-    return f"stub_bcrypt${_BCRYPT_DEFAULT_ROUNDS}${digest}"
+    """Hash a password using bcrypt."""
+    return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Check that *plain_password* matches *hashed_password*."""
-
-    try:
-        _prefix, _rounds, digest = hashed_password.split("$", 2)
-    except ValueError:
-        return False
-    return _sha256_digest(plain_password) == digest
+    """Verify a password against its hash."""
+    return pwd_context.verify(plain_password, hashed_password)
 
 
-# ---------------------------------------------------------------------------
-# Minimal JWT helper (unsigned, base64 encoded JSON)
-# ---------------------------------------------------------------------------
-
-
-class _JWTError(Exception):
-    """Lightweight stand-in for `jose.JWTError`."""
-
-
-def _b64encode(obj: dict[str, Any]) -> str:
-    return base64.urlsafe_b64encode(json.dumps(obj, separators=(",", ":")).encode()).decode()
-
-
-def _b64decode(token: str) -> dict[str, Any]:
-    try:
-        return json.loads(base64.urlsafe_b64decode(token.encode()))
-    except Exception as exc:  # pragma: no cover – intentionally wide
-        raise _JWTError("Invalid token") from exc
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def create_access_token(data: Mapping[str, Any], expires_delta: timedelta | None = None) -> str:
-    """Generate a (non-signed) JWT-like token for the tests."""
-
-    to_encode: MutableMapping[str, Any] = dict(data)
-    expire = _utcnow() + (expires_delta or timedelta(minutes=_ACCESS_TOKEN_EXPIRE_MINUTES))
+def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT access token."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     
-    # Add JWT ID if not provided
+    to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
     if "jti" not in to_encode:
         to_encode["jti"] = secrets.token_urlsafe(32)
     
-    to_encode.update({"exp": int(expire.timestamp()), "iat": int(_utcnow().timestamp())})
-    return _b64encode(to_encode)
+    encoded_jwt = jwt.encode(to_encode, settings.effective_secret_key, algorithm=settings.algorithm)
+    return encoded_jwt
 
 
-def decode_access_token(token: str) -> Mapping[str, Any]:
-    """Decode token and validate *exp* claim.
-
-    Mirrors the behaviour of the original `security.decode_access_token` which
-    raises an *HTTP 401* when the token is invalid/expired.
-    """
-
-    payload = _b64decode(token)
-
-    exp_ts = payload.get("exp")
-    if exp_ts is None or int(exp_ts) < int(_utcnow().timestamp()):
-        raise HTTPException(status_code=_StatusCodes.HTTP_401_UNAUTHORIZED, detail="Token expired")
-
-    return payload
+def decode_access_token(token: str) -> Dict[str, Any]:
+    """Decode and verify a JWT token."""
+    try:
+        payload = jwt.decode(token, settings.effective_secret_key, algorithms=[settings.algorithm])
+        return payload
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
-def token_sub_identity(payload: Mapping[str, Any]) -> int:
-    """Extract user ID from JWT payload."""
-    return int(payload.get("sub", 0))
+def token_sub_identity(payload: Dict[str, Any]) -> int:
+    """Extract user ID from token payload."""
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        return int(user_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
-# ---------------------------------------------------------------------------
-# CSRF helpers (simplified)
-# ---------------------------------------------------------------------------
-
-
-def generate_csrf_token() -> str:
-    return secrets.token_urlsafe(_CSRF_TOKEN_BYTES)
-
-
-def validate_csrf(request: _RequestShim, csrf_cookie_name: str = "csrftoken", csrf_header_name: str = "x-csrftoken") -> None:
-    # Tests run through a stub client → skip validation.
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Cookie helper (minimal – only shapes required by the tests)
-# ---------------------------------------------------------------------------
-
-
-def build_auth_cookie(token: str) -> Tuple[str, str, dict[str, Any]]:
-    opts = {"httponly": True, "samesite": "lax", "path": "/"}
-    return ("access_token", token, opts)
-
-
-# ---------------------------------------------------------------------------
-# Rate limiting stub (very naive in-memory counter)
-# ---------------------------------------------------------------------------
-
-
-class _InMemoryLimiter:
-    def __init__(self, limit: int = 5):
-        self.limit = limit
-        self.hits: dict[str, int] = {}
-
-    def hit(self, key: str) -> bool:
-        self.hits[key] = self.hits.get(key, 0) + 1
-        return self.hits[key] > self.limit
-
-
-limiter = _InMemoryLimiter()
+def build_auth_cookie(token: str) -> tuple[str, str, dict]:
+    """Build cookie parameters for auth token."""
+    cookie_name = "access_token"
+    cookie_options = {
+        "httponly": True,
+        "samesite": "lax",
+        "secure": not settings.insecure_cookies,
+        "max_age": settings.access_token_expire_minutes * 60,
+    }
+    return cookie_name, token, cookie_options

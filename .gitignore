@@ -275,3 +275,4 @@ coverage/
 # Temporary files
 tmp/
 temp/
+.aider*

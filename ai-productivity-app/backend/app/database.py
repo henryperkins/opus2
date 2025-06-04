@@ -1,37 +1,65 @@
-"""Minimal database stub for tests.
+"""Database configuration and session management."""
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from typing import Generator
 
-Provides a `get_db` dependency that yields an in-memory session from the
-SQLAlchemy stub as well as `init_db` / `check_db_connection` helpers used by
-the (now simplified) application.  All calls are essentially no-ops because
-state is fully managed by the in-memory ORM inside `backend/sqlalchemy_stub.py`.
-"""
+from app.config import settings
 
-from __future__ import annotations
+# Create engine
+engine = create_engine(
+    settings.database_url,
+    echo=settings.database_echo,
+    connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+)
 
-from backend.sqlalchemy_stub import Session  # noqa: E402 – local import ok
+# Create session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Create base class for models
+Base = declarative_base()
 
 
-# ---------------------------------------------------------------------------
-# Session factory – always returns a new in-memory Session
-# ---------------------------------------------------------------------------
-
-
-def get_db():  # noqa: D401
-    db = Session()
+def get_db() -> Generator[Session, None, None]:
+    """Get database session."""
+    db = SessionLocal()
     try:
         yield db
     finally:
+        db.close()
+
+
+def init_db() -> None:
+    """Initialize database tables."""
+    # Import all models to ensure they are registered
+    # Import models so SQLAlchemy registers them with the metadata.  Some
+    # optional components (e.g. *embedding*) require heavy third-party
+    # dependencies such as *numpy* that are unavailable inside the execution
+    # sandbox.  Import those lazily within try/except so that the essential
+    # core tables are always created even when optional modules cannot be
+    # loaded.
+
+    from app.models import user, project, timeline, session, chat, code  # noqa: F401
+
+    # *Embedding* models are only needed in later phases of the application.
+    # Attempt to import them but silently continue when the required stack is
+    # not present (for example during the lightweight unit-test run).
+
+    try:
+        from app.models import embedding  # noqa: F401
+    except ModuleNotFoundError:
+        # Dependency such as *numpy* missing – safe to ignore for core usage.
         pass
+    
+    # Create all tables
+    Base.metadata.create_all(bind=engine)
 
 
-# ---------------------------------------------------------------------------
-# Compatibility helpers (no-ops)
-# ---------------------------------------------------------------------------
-
-
-def init_db():  # noqa: D401
-    return None
-
-
-def check_db_connection() -> bool:  # noqa: D401
-    return True
+def check_db_connection() -> bool:
+    """Check if database connection is working."""
+    try:
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        return True
+    except Exception:
+        return False

@@ -13,7 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.database import SessionLocal  # noqa: E402
 from app.models.user import User  # noqa: E402
-from app.auth.security import get_password_hash  # noqa: E402
+from app.auth.security import hash_password  # noqa: E402
 
 
 async def seed() -> None:
@@ -32,10 +32,10 @@ async def seed() -> None:
             return
 
         admin = User(
+            username="admin",
             email=admin_email,
-            hashed_password=get_password_hash(admin_password),
+            password_hash=hash_password(admin_password),
             is_active=True,
-            is_superuser=True,
         )
         db.add(admin)
         db.commit()

@@ -4,8 +4,15 @@ from functools import lru_cache
 from typing import Optional
 
 
+from pydantic import ConfigDict
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
+    model_config = ConfigDict(
+        extra="allow",
+        env_file=".env",
+        case_sensitive=False
+    )
 
     # Application
     app_name: str = "AI Productivity App"
@@ -62,10 +69,6 @@ class Settings(BaseSettings):
     def invite_codes_list(self) -> list[str]:
         """Return list of valid invite codes"""
         return [code.strip() for code in self.invite_codes.split(",") if code.strip()]
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
 
 @lru_cache()

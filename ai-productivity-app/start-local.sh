@@ -56,28 +56,22 @@ if [ ! -f "data/app.db" ]; then
     python scripts/init_db.py
 fi
 
-# Start backend server in background
+# Start backend server in foreground (prints logs and errors to terminal)
 echo "🚀 Starting backend server..."
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-nohup uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
-BACKEND_PID=$!
-echo "Backend started with PID: $BACKEND_PID"
-
-# Frontend setup
-echo "🔧 Setting up frontend..."
-cd ../frontend
-
-# Install/update Node dependencies
-if [ ! -d "node_modules" ]; then
-    echo "📦 Installing Node.js dependencies..."
-    npm install
-fi
-
-# Start frontend server in background
-echo "🚀 Starting frontend server..."
-nohup npm run dev > frontend.log 2>&1 &
-FRONTEND_PID=$!
-echo "Frontend started with PID: $FRONTEND_PID"
+echo ""
+echo "*************************************"
+echo "* The backend server will now start. *"
+echo "* Open a NEW TERMINAL and run:       *"
+echo "*    cd frontend && npm run dev      *"
+echo "* to start the frontend server.      *"
+echo "*************************************"
+echo ""
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# If you want to run the backend in background and log to file, use:
+# nohup uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
+# BACKEND_PID=$!
+# echo "Backend started with PID: $BACKEND_PID"
 
 # Wait for services to start
 echo "⏳ Waiting for services to start..."

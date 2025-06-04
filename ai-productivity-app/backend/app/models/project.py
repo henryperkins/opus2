@@ -7,6 +7,8 @@ from sqlalchemy import Column, Integer, String, Text, Enum, JSON, ForeignKey, In
 from sqlalchemy.orm import relationship, validates
 from sqlalchemy.ext.mutable import MutableList
 from .base import Base, TimestampMixin
+from .timeline import TimelineEvent
+from .chat import ChatSession
 import enum
 import re
 
@@ -76,7 +78,12 @@ class Project(Base, TimestampMixin):
         "TimelineEvent",
         back_populates="project",
         cascade="all, delete-orphan",
-        order_by="desc(TimelineEvent.created_at)"
+        order_by="TimelineEvent.created_at.desc()"
+    )
+    chat_sessions = relationship(
+        "ChatSession",
+        back_populates="project",
+        cascade="all, delete-orphan"
     )
 
     @validates("title")

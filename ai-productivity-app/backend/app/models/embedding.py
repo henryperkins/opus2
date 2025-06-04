@@ -1,6 +1,6 @@
 # backend/app/models/embedding.py
 """Embedding models for vector search."""
-from sqlalchemy import Column, Integer, Float, ForeignKey, Index, JSON
+from sqlalchemy import Column, Integer, Float, ForeignKey, Index, JSON, Text, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.mutable import MutableDict
 from app.models.base import Base, TimestampMixin
@@ -21,9 +21,9 @@ class EmbeddingMetadata(Base, TimestampMixin):
     document_id = Column(Integer, ForeignKey("code_documents.id"), nullable=False)
     chunk_id = Column(Integer, ForeignKey("code_embeddings.id"), nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
-    content = Column(sa.Text, nullable=False)
-    content_hash = Column(sa.String(64), nullable=False)
-    metadata = Column(MutableDict.as_mutable(JSON), nullable=False, default=dict)
+    content = Column(Text, nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    embedding_metadata = Column(MutableDict.as_mutable(JSON), nullable=False, default=dict)
 
     # Relationships
     document = relationship("CodeDocument")

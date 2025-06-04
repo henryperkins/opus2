@@ -142,7 +142,24 @@ async def websocket_endpoint(
     """WebSocket endpoint for real-time chat."""
     # Authenticate WebSocket connection
     try:
-        token = websocket.query_params.get("token")
+        # ------------------------------------------------------------------
+        # Authentication for WebSocket connection
+        # ------------------------------------------------------------------
+        # Prefer cookie-based auth (the browser automatically includes the
+        # HttpOnly *access_token* cookie during the WebSocket handshake).
+        # Fallback to the explicit "token" query-parameter for backwards
+        # compatibility and automated tests which conveniently inject it.
+        # ------------------------------------------------------------------
+
+        token: str | None = None
+
+        # 1. Attempt to read Bearer token from cookies (preferred)
+        token = websocket.cookies.get("access_token")  # type: ignore[attr-defined]
+
+        # 2. Fallback to ?token= query parameter
+        if not token:
+            token = websocket.query_params.get("token")
+
         if not token:
             await websocket.close(code=1008, reason="Missing token")
             return

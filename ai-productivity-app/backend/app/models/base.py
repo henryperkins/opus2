@@ -1,10 +1,11 @@
 # Base model classes and mixins
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, DateTime, Integer
 from datetime import datetime
 
-# Base model for all database models
-Base = declarative_base()
+# Re-use the global Base from app.database so every model registers
+# on the same SQLAlchemy metadata.  This avoids split metadata issues
+# that prevented essential tables (e.g. *users*) from being created.
+from app.database import Base
 
 
 class TimestampMixin:

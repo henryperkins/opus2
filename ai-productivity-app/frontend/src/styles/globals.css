@@ -28,7 +28,8 @@
   }
 
   * {
-    @apply border-border;
+    /* Use theme-based neutral borders instead of a non-existent “border-border” utility */
+    @apply border-gray-200 dark:border-gray-700;
   }
 
   body {
@@ -155,7 +156,7 @@
 
   .btn-danger {
     @apply bg-error-600 text-white;
-    @apply hover:bg-error-700 active:bg-error-800;
+    @apply hover:bg-error-700 active:bg-error-700;
     @apply focus-visible:ring-error-500;
   }
 
