@@ -91,6 +91,19 @@ client.interceptors.response.use(
       window.dispatchEvent(new CustomEvent('auth:logout'));
     }
 
+    // Provide clearer messages for backend availability issues
+    if (response && response.status === 503) {
+      // Service unavailable – often database down or migrations pending
+      error.message =
+        'Service temporarily unavailable. Please ensure the backend and database are running.';
+    }
+
+    // Handle generic network / CORS errors (no response object present)
+    if (!response && error.code === 'ERR_NETWORK') {
+      error.message =
+        'Network error. Unable to reach backend server. Check that it is running and not blocked by CORS.';
+    }
+
     // Retry transient 5xx
     return retryRequest(error);
   }

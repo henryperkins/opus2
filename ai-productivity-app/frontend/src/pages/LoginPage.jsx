@@ -26,14 +26,21 @@ export default function LoginPage() {
 
   async function onSubmit(values) {
     setSubmitError('');
+
+    // Temporarily disable browser password-manager autofill that may interfere
+    const formEl = document.querySelector('form');
+    formEl?.setAttribute('autocomplete', 'off');
     try {
-      await login(values.username, values.password);
-      navigate('/');
+      await login(values.username_or_email, values.password);
+      navigate('/', { replace: true });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error(err);
       const msg = err?.response?.data?.detail || 'Login failed';
       setSubmitError(msg);
+    } finally {
+      // Re-enable autocomplete
+      formEl?.setAttribute('autocomplete', 'on');
     }
   }
 
@@ -61,12 +68,12 @@ export default function LoginPage() {
           <input
             className="mt-1 block w-full border rounded p-2"
             autoComplete="username"
-            {...register('username', { required: 'Username or email required' })}
+            {...register('username_or_email', { required: 'Username or email required' })}
             disabled={isSubmitting || loading}
           />
-          {errors.username && (
+          {errors.username_or_email && (
             <span className="text-red-600 text-sm">
-              {errors.username.message}
+              {errors.username_or_email.message}
             </span>
           )}
         </label>

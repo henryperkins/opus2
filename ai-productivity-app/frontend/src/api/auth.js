@@ -2,8 +2,21 @@ import client from './client';
 
 export const authAPI = {
   async login(credentials) {
-    const response = await client.post('/api/auth/login', credentials);
-    return response.data;
+    try {
+      const response = await client.post('/api/auth/login', credentials);
+
+      // Validate expected payload (backend returns access_token)
+      if (!response.data || !response.data.access_token) {
+        throw new Error('Invalid response from authentication server');
+      }
+
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        throw new Error('Invalid username / email or password');
+      }
+      throw error;
+    }
   },
 
   async register(userData) {

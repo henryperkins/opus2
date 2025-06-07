@@ -22,6 +22,14 @@ function Dashboard() {
         });
         if (!response.ok) throw new Error('API not responding');
         const data = await response.json();
+
+        // Surface DB connection issues separately so users know next steps
+        if (data.database && data.database !== 'ready') {
+          setError('Database connection failed. Please ensure the database service is running.');
+        } else {
+          setError(null);
+        }
+
         setHealth(data);
       } catch (err) {
         setError(err.message);
