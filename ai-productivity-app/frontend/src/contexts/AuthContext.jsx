@@ -19,6 +19,9 @@ import PropTypes from 'prop-types';
 import client from '../api/client';
 import useAuthStore from '../stores/authStore';
 
+// Suppress duplicate /api/auth/me during StrictMode double-mount
+let didFetchMeOnce = false;
+
 // -----------------------------------------------------------------------------
 // Types
 // -----------------------------------------------------------------------------
@@ -59,8 +62,12 @@ export function AuthProvider({ children }) {
   // ---------------------------------------------------------------------------
 
   const fetchMe = useCallback(async () => {
-    // Prevent duplicate requests (e.g. React.StrictMode double-invocation)
-    if (initialCheckDone && loading === false) {
+    // Prevent duplicate requests across Strict-Mode double mounting by relying
+    // on a module-level flag that survives unmounts.
+    if (didFetchMeOnce) {
+      // Skip network, restore settled state
+      setLoading(false);
+      setInitialCheckDone(true);
       return;
     }
 
@@ -77,8 +84,9 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
       setInitialCheckDone(true);
+      didFetchMeOnce = true;
     }
-  }, [initialCheckDone, loading]);
+  }, []);
 
   // Run exactly once on mount
   useEffect(() => {

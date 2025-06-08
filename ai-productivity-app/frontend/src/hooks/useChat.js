@@ -13,8 +13,9 @@ export function useChat(sessionId) {
     const connect = useCallback(() => {
         if (!sessionId || !user) return;
 
+        // Correct backend path
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/sessions/${sessionId}`;
+        const wsUrl = `${protocol}//${window.location.host}/api/chat/ws/${sessionId}`;
 
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
@@ -129,7 +130,7 @@ export function useChat(sessionId) {
     }, []);
 
     const editMessage = useCallback((messageId, content) => {
-        if (!wsRef.current) return;
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
         wsRef.current.send(JSON.stringify({
             type: 'edit_message',
@@ -139,7 +140,7 @@ export function useChat(sessionId) {
     }, []);
 
     const deleteMessage = useCallback((messageId) => {
-        if (!wsRef.current) return;
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
         wsRef.current.send(JSON.stringify({
             type: 'delete_message',
@@ -148,17 +149,24 @@ export function useChat(sessionId) {
     }, []);
 
     const sendTypingIndicator = useCallback((isTyping) => {
-        if (!wsRef.current) return;
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            // Socket not ready yet – ignore the signal to avoid InvalidStateError.
+            // The frontend will send a fresh typing indicator once the next
+            // key-stroke arrives after the connection is established.
+            return;
+        }
 
-        // Clear previous timeout
+        // Clear previous timeout so we don't stack multiple timers.
         if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
         }
 
-        wsRef.current.send(JSON.stringify({
-            type: 'typing',
-            is_typing: isTyping
-        }));
+        wsRef.current.send(
+            JSON.stringify({
+                type: 'typing',
+                is_typing: isTyping
+            })
+        );
 
         // Auto-stop typing after 5 seconds
         if (isTyping) {

@@ -1,9 +1,11 @@
 # Configuration management using Pydantic settings
-from pydantic_settings import BaseSettings
+# Standard library
+from pathlib import Path
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, ClassVar
 
-
+# Third-party
+from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 
 class Settings(BaseSettings):
@@ -19,8 +21,44 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
 
+    # -------------------------------------------------------------------
     # Database
-    database_url: str = "sqlite:///./data/app.db"
+    # -------------------------------------------------------------------
+    #
+    # The original implementation used a *relative* SQLite URL pointing to
+    # ``./data/app.db``.  Because the *current working directory* differs
+    # between local development (`uvicorn app.main`) and Alembic migrations
+    # (executed from ``ai-productivity-app/backend``), two **different**
+    # database files were created:
+    #
+    #   • ./data/app.db                            – when the backend is
+    #     started from the project root ("login" API reads/writes here)
+    #   • ai-productivity-app/data/app.db          – when `alembic upgrade`
+    #     or `run_migration.py` is executed from the *backend* directory.
+    #
+    # The mismatch meant that migrations (including the `sessions` table)
+    # were applied to *one* database while the running application queried a
+    # *different* one.  As soon as an authenticated request tried to create
+    # or validate a session the backend crashed with "no such table:
+    # sessions" which the frontend surfaced as *non-persistent logins*.
+    #
+    # To make the path deterministic regardless of the CWD we resolve it
+    # relative to this *config.py* file (which lives at
+    # ``ai-productivity-app/backend/app/config.py``).  The resulting SQLite
+    # URL always points at **ai-productivity-app/data/app.db**.
+    #
+    # Environment variable ``DATABASE_URL`` still overrides the default so
+    # external databases continue to work unchanged.
+    # -------------------------------------------------------------------
+
+    # Build absolute path <repo_root>/ai-productivity-app/data/app.db
+    _DEFAULT_DB_PATH: ClassVar[Path] = (
+        Path(__file__).resolve().parents[2]  # …/ai-productivity-app
+        / "data"
+        / "app.db"
+    )
+
+    database_url: str = f"sqlite:///{_DEFAULT_DB_PATH.as_posix()}"
     database_echo: bool = False
 
     # Security

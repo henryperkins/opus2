@@ -11,6 +11,9 @@ import MonacoEditor from '@monaco-editor/react';
 import { codeAPI } from '../api/code';
 import FileUpload from '../components/knowledge/FileUpload';
 
+// Tracks projects with files already fetched
+const filesFetchedForProject = new Set();
+
 export default function ProjectChatPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -47,7 +50,10 @@ export default function ProjectChatPage() {
     if (projectId) {
       // Create/assign chat session and load files
       setSessionId(`session_${projectId}_${Date.now()}`);
-      fetchProjectFiles();
+
+      if (!filesFetchedForProject.has(projectId)) {
+        fetchProjectFiles().finally(() => filesFetchedForProject.add(projectId));
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
