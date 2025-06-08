@@ -1,4 +1,5 @@
 # backend/app/code_processing/parser.py
+# flake8: noqa
 """Tree-sitter based code parser
 
 The *real* implementation relies on the ``tree_sitter`` Python bindings which
@@ -57,10 +58,45 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
         # ------------------------------------------------------------------
 
         def _load_languages(self) -> None:
-            """Load compiled tree-sitter languages, if present on disk."""
+            """Ensure compiled tree-sitter language bundle is present and load it.
+
+            If the shared object does not yet exist we try to compile it
+            (best-effort) when the installed *tree_sitter* version still provides
+            ``Language.build_library``.  This makes local development and CI
+            environments resilient even when the Docker build stage has not run.
+            """
 
             lib_path = os.path.join(os.path.dirname(__file__), "..", "..", "build", "languages.so")
+            os.makedirs(os.path.dirname(lib_path), exist_ok=True)
 
+            # ------------------------------------------------------------------
+            # Build the grammar bundle on-the-fly when missing
+            # ------------------------------------------------------------------
+            grammar_paths = [
+                "build/tree-sitter/python",
+                "build/tree-sitter/javascript",
+                "build/tree-sitter/typescript/typescript",
+                "build/tree-sitter/typescript/tsx",
+            ]
+            # Keep only grammars that actually exist on the filesystem to avoid
+            # FileNotFoundError inside ``Language.build_library``.
+            grammar_paths = [p for p in grammar_paths if os.path.exists(p)]
+            if not grammar_paths:
+                logger.warning(
+                    "No tree-sitter grammar sources found – CodeParser will "
+                    "operate in *stub* mode for code parsing"
+                )
+                return
+            if not os.path.exists(lib_path) and hasattr(Language, "build_library"):
+                try:
+                    Language.build_library(lib_path, grammar_paths)
+                    logger.info("Compiled tree-sitter grammars → %s", lib_path)
+                except Exception:  # pragma: no cover
+                    logger.exception("Failed to compile tree-sitter grammars")
+            # ------------------------------------------------------------------
+            # Abort when the shared library is still missing after the build
+            # attempt so that downstream loading does not raise an OSError.
+            # ------------------------------------------------------------------
             if not os.path.exists(lib_path):
                 logger.warning("Tree-sitter languages not found at %s", lib_path)
                 return
@@ -71,16 +107,8 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                 # assume the shared object has been built during the Docker
                 # build stage or supplied via an external volume.
 
-                if hasattr(Language, "build_library"):
-                    Language.build_library(
-                        lib_path,
-                        [
-                            "build/tree-sitter/python",
-                            "build/tree-sitter/javascript",
-                            "build/tree-sitter/typescript/typescript",
-                            "build/tree-sitter/typescript/tsx",
-                        ],
-                    )
+                if hasattr(Language, "build_library") and grammar_paths:
+                    Language.build_library(lib_path, grammar_paths)
 
                 self.languages = {
                     "python": Language(lib_path, "python"),

@@ -1,4 +1,5 @@
 // frontend/src/pages/ProjectChatPage.jsx
+/* global navigator */
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
@@ -9,6 +10,7 @@ import CommandInput from '../components/chat/CommandInput';
 import CodePreview from '../components/chat/CodePreview';
 import MonacoEditor from '@monaco-editor/react';
 import { codeAPI } from '../api/code';
+import chatAPI from '../api/chat';
 import FileUpload from '../components/knowledge/FileUpload';
 
 // Tracks projects with files already fetched
@@ -47,16 +49,25 @@ export default function ProjectChatPage() {
   }, [projectId, stateProject]);
 
   useEffect(() => {
-    if (projectId) {
-      // Create/assign chat session and load files
-      setSessionId(`session_${projectId}_${Date.now()}`);
+    if (!projectId) return;
 
-      if (!filesFetchedForProject.has(projectId)) {
-        fetchProjectFiles().finally(() => filesFetchedForProject.add(projectId));
-      }
+    // Create chat session once per mount
+    if (!sessionId) {
+      chatAPI
+        .createSession(projectId)
+        .then((resp) => {
+          setSessionId(resp.id);
+        })
+        .catch((err) => {
+          console.error('Failed to create chat session:', err);
+        });
+    }
+
+    if (!filesFetchedForProject.has(projectId)) {
+      fetchProjectFiles().finally(() => filesFetchedForProject.add(projectId));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+  }, [projectId, sessionId]);
 
   const fetchProjectFiles = async () => {
     try {

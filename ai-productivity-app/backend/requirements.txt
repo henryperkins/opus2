@@ -36,6 +36,8 @@ tiktoken
 
 # Scientific computing library required for vector store math operations
 numpy==1.26.4
+# LLM provider
+openai==1.14.2
 
 # WebSocket support
 # FastAPI uses starlette which supports WebSocket communication, but the

@@ -1,6 +1,7 @@
 /* global WebSocket, setTimeout, clearTimeout */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './useAuth';
+import { attachDebug } from '../utils/wsDebug';
 
 export function useChat(sessionId) {
     const { user } = useAuth();
@@ -19,7 +20,9 @@ export function useChat(sessionId) {
         // Updated to match backend route: /api/chat/ws/sessions/{session_id}
         const wsUrl = `${protocol}//${window.location.host}/api/chat/ws/sessions/${sessionId}`;
 
-        const ws = new WebSocket(wsUrl);
+        // Attach instrumentation so we can trace the full lifecycle of this
+        // connection during the current debugging session.
+        const ws = attachDebug(new WebSocket(wsUrl), 'CHAT');
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -120,7 +123,14 @@ export function useChat(sessionId) {
 
     const sendMessage = useCallback((content, metadata = {}) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-            console.error('WebSocket not connected');
+            console.error('WebSocket not connected', {
+                id: wsRef.current?._debugId,
+                readyState: wsRef.current?.readyState,
+                OPEN: WebSocket.OPEN,
+            });
+            // Include a stack trace so we can see the call path.
+            // eslint-disable-next-line no-console
+            console.trace();
             return;
         }
 
