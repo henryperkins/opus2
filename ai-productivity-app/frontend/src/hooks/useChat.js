@@ -1,3 +1,4 @@
+/* global WebSocket, setTimeout, clearTimeout */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './useAuth';
 
@@ -15,7 +16,8 @@ export function useChat(sessionId) {
 
         // Correct backend path
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/api/chat/ws/${sessionId}`;
+        // Updated to match backend route: /api/chat/ws/sessions/{session_id}
+        const wsUrl = `${protocol}//${window.location.host}/api/chat/ws/sessions/${sessionId}`;
 
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;

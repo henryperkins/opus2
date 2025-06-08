@@ -1,12 +1,9 @@
-from fastapi import WebSocket, WebSocketDisconnect, Depends
+from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-import json
 import logging
-from typing import Optional
 
-from app.database import get_db
 from app.models.user import User
-from app.auth.utils import get_current_user_ws
+from app.models.chat import ChatMessage
 from app.services.chat_service import ChatService
 from app.chat.processor import ChatProcessor
 from .manager import connection_manager
@@ -22,6 +19,7 @@ async def handle_chat_connection(
 ):
     """Handle WebSocket connection for chat session."""
     await connection_manager.connect(websocket, session_id, current_user.id)
+    logger.debug(f"User {current_user.id} connected to session {session_id}")
     chat_service = ChatService(db)
     chat_processor = ChatProcessor(db)
 
@@ -32,17 +30,26 @@ async def handle_chat_connection(
             'user_id': current_user.id,
             'session_id': session_id
         })
+        logger.debug("Sent connection confirmation")
 
         # Send recent messages
-        recent_messages = chat_service.get_session_messages(session_id, limit=20)
+        recent_messages = chat_service.get_session_messages(
+            session_id, limit=20
+        )
         await websocket.send_json({
             'type': 'message_history',
-            'messages': [serialize_message(m) for m in reversed(recent_messages)]
+            'messages': [serialize_message(m) for m in reversed(recent_messages)],
         })
+        logger.debug(
+            "Sent %d recent messages to user %s",
+            len(recent_messages),
+            current_user.id,
+        )
 
         # Message handling loop
         while True:
             data = await websocket.receive_json()
+            logger.debug(f"Received data: {data}")
 
             if data['type'] == 'message':
                 # Process user message

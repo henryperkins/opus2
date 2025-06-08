@@ -1,6 +1,7 @@
+# flake8: max-line-length = 120
+# pylint: disable=line-too-long, unused-import
 from typing import Dict, List, Set
 from fastapi import WebSocket
-import json
 import asyncio
 import logging
 
@@ -26,6 +27,12 @@ class ConnectionManager:
             if session_id not in self.active_connections:
                 self.active_connections[session_id] = []
             self.active_connections[session_id].append(websocket)
+            logger.debug(
+                "Accepted WebSocket %s for user %s in session %s",
+                id(websocket),
+                user_id,
+                session_id,
+            )
 
             if user_id not in self.user_sessions:
                 self.user_sessions[user_id] = set()
@@ -40,6 +47,12 @@ class ConnectionManager:
                 self.active_connections[session_id].remove(websocket)
                 if not self.active_connections[session_id]:
                     del self.active_connections[session_id]
+            logger.debug(
+                "Disconnected WebSocket %s for user %s from session %s",
+                id(websocket),
+                user_id,
+                session_id,
+            )
 
             if user_id in self.user_sessions:
                 self.user_sessions[user_id].discard(session_id)
@@ -48,6 +61,7 @@ class ConnectionManager:
 
     async def send_message(self, message: dict, session_id: int):
         """Send message to all connections in a session."""
+        logger.debug("Broadcasting message to session %s: %s", session_id, message)
         if session_id in self.active_connections:
             disconnected = []
 
@@ -55,7 +69,7 @@ class ConnectionManager:
                 try:
                     await websocket.send_json(message)
                 except Exception as e:
-                    logger.error(f"Failed to send message: {e}")
+                    logger.error("Failed to send message to WebSocket %s: %s", id(websocket), e)
                     disconnected.append(websocket)
 
             # Clean up disconnected sockets
@@ -64,6 +78,7 @@ class ConnectionManager:
 
     async def broadcast_to_user(self, message: dict, user_id: int):
         """Send message to all sessions for a user."""
+        logger.debug("Broadcasting message to user %s across all sessions: %s", user_id, message)
         if user_id in self.user_sessions:
             for session_id in self.user_sessions[user_id]:
                 await self.send_message(message, session_id)

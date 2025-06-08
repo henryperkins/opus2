@@ -133,7 +133,7 @@ async def get_messages(
     return [MessageResponse.from_orm(msg) for msg in messages]
 
 
-@router.websocket("/ws/{session_id}")
+@router.websocket("/ws/sessions/{session_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
     session_id: int,
