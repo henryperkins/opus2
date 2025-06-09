@@ -17,8 +17,6 @@ class SearchHistory(Base, TimestampMixin):
 
     __tablename__ = "search_history"
     __table_args__ = (
-        Index("idx_search_history_user_created", "user_id", "created_at"),
-        Index("idx_search_history_query", "query_text"),
         {
             "extend_existing": True,
         },

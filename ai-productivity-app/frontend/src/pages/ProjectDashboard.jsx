@@ -85,19 +85,28 @@ export default function ProjectDashboard() {
     const totalPages = Math.ceil(totalProjects / filters.per_page);
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen gradient-bg">
             <Header />
 
             <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
                 {/* Header */}
-                <div className="flex justify-between items-center mb-8">
+                <div className="flex justify-between items-center mb-8 animate-fade-in">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Project Dashboard</h1>
-                        <p className="text-gray-600 mt-1">
-                            {totalProjects} project{totalProjects !== 1 ? 's' : ''} •
-                            {activeProjects.length} active •
-                            {archivedProjects.length} archived
-                        </p>
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent dark:from-gray-100 dark:to-gray-300">Project Dashboard</h1>
+                        <div className="flex items-center mt-2 space-x-4 text-sm">
+                            <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+                                {totalProjects} project{totalProjects !== 1 ? 's' : ''}
+                            </div>
+                            <div className="flex items-center text-green-600 dark:text-green-400">
+                                <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                {activeProjects.length} active
+                            </div>
+                            <div className="flex items-center text-gray-500">
+                                <div className="w-2 h-2 bg-gray-400 rounded-full mr-2"></div>
+                                {archivedProjects.length} archived
+                            </div>
+                        </div>
                     </div>
 
                     <div className="flex items-center space-x-4">
@@ -129,7 +138,7 @@ export default function ProjectDashboard() {
 
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            className="btn btn-primary animate-bounce-in"
                         >
                             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -144,28 +153,64 @@ export default function ProjectDashboard() {
 
                 {/* Quick Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white rounded-lg shadow p-4">
-                        <p className="text-sm text-gray-600">Total Projects</p>
-                        <p className="text-2xl font-bold text-gray-900">{totalProjects}</p>
+                    <div className="card card-hover p-6 animate-slide-in">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Projects</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{totalProjects}</p>
+                            </div>
+                            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                                <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
-                    <div className="bg-white rounded-lg shadow p-4">
-                        <p className="text-sm text-gray-600">Active</p>
-                        <p className="text-2xl font-bold text-green-600">{activeProjects.length}</p>
+                    <div className="card card-hover p-6 animate-slide-in" style={{animationDelay: '0.1s'}}>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active</p>
+                                <p className="text-3xl font-bold text-green-600">{activeProjects.length}</p>
+                            </div>
+                            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                                <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
-                    <div className="bg-white rounded-lg shadow p-4">
-                        <p className="text-sm text-gray-600">Archived</p>
-                        <p className="text-2xl font-bold text-gray-500">{archivedProjects.length}</p>
+                    <div className="card card-hover p-6 animate-slide-in" style={{animationDelay: '0.2s'}}>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Archived</p>
+                                <p className="text-3xl font-bold text-gray-500">{archivedProjects.length}</p>
+                            </div>
+                            <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                                <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
-                    <div className="bg-white rounded-lg shadow p-4">
-                        <p className="text-sm text-gray-600">This Week</p>
-                        <p className="text-2xl font-bold text-blue-600">
-                            {projects.filter(p => {
-                                const createdAt = new Date(p.created_at);
-                                const weekAgo = new Date();
-                                weekAgo.setDate(weekAgo.getDate() - 7);
-                                return createdAt > weekAgo;
-                            }).length}
-                        </p>
+                    <div className="card card-hover p-6 animate-slide-in" style={{animationDelay: '0.3s'}}>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">This Week</p>
+                                <p className="text-3xl font-bold text-blue-600">
+                                    {projects.filter(p => {
+                                        const createdAt = new Date(p.created_at);
+                                        const weekAgo = new Date();
+                                        weekAgo.setDate(weekAgo.getDate() - 7);
+                                        return createdAt > weekAgo;
+                                    }).length}
+                                </p>
+                            </div>
+                            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                                <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

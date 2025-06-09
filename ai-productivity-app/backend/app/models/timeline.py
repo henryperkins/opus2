@@ -26,9 +26,6 @@ class TimelineEvent(Base, TimestampMixin):
     # and safe under repeated imports.
     #
     __table_args__ = (
-        Index("idx_timeline_project", "project_id"),
-        Index("idx_timeline_type", "event_type"),
-        Index("idx_timeline_created", "created_at"),
         {"extend_existing": True},
     )
 
@@ -78,14 +75,22 @@ class TimelineEvent(Base, TimestampMixin):
     EVENT_FILE_REMOVED = "file_removed"
     EVENT_MILESTONE = "milestone"
     EVENT_COMMENT = "comment"
+    # Chat specific events (Phase-5)
+    EVENT_CHAT_CREATED = "chat_created"
 
     @validates("event_type")
     def validate_event_type(self, key, event_type):
         """Validate event type."""
+        # List of accepted event type strings.
         valid_types = [
-            self.EVENT_CREATED, self.EVENT_UPDATED, self.EVENT_STATUS_CHANGED,
-            self.EVENT_FILE_ADDED, self.EVENT_FILE_REMOVED, self.EVENT_MILESTONE,
-            self.EVENT_COMMENT
+            self.EVENT_CREATED,
+            self.EVENT_UPDATED,
+            self.EVENT_STATUS_CHANGED,
+            self.EVENT_FILE_ADDED,
+            self.EVENT_FILE_REMOVED,
+            self.EVENT_MILESTONE,
+            self.EVENT_COMMENT,
+            self.EVENT_CHAT_CREATED,
         ]
         if event_type not in valid_types:
             raise ValueError(

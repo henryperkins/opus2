@@ -6,7 +6,7 @@ from typing import Optional, ClassVar
 
 # Third-party
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
@@ -117,7 +117,17 @@ class Settings(BaseSettings):
 
     # LLM settings
     llm_provider: str = "openai"
-    llm_model: str = "gpt-4"
+
+    # Default model used for completion calls.  Can be overridden at runtime
+    # via the ``LLM_MODEL`` environment variable.  The old *llm_model* field
+    # remains for backwards-compatibility but is deprecated and should not be
+    # referenced by new code.
+
+    llm_default_model: str = Field("gpt-3.5-turbo", alias="LLM_MODEL")
+
+    # Deprecated – kept to avoid breaking existing environment variables /
+    # database fixtures.  New code should rely on *llm_default_model*.
+    llm_model: str | None = None
     max_context_tokens: int = 8000
 
     # WebSocket settings

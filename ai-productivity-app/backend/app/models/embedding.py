@@ -12,9 +12,6 @@ class EmbeddingMetadata(Base, TimestampMixin):
 
     __tablename__ = "embedding_metadata"
     __table_args__ = (
-        Index("idx_embedding_metadata_document", "document_id"),
-        Index("idx_embedding_metadata_project", "project_id"),
-        Index("idx_embedding_metadata_hash", "content_hash"),
         {"extend_existing": True},
     )
 

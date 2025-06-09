@@ -235,12 +235,39 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
+    # ---------------------------------------------------------------------
+    # The *python-jose* library (used in production) accepts standard
+    # ``datetime`` instances for the registered claims (*exp*, *iat*, …) and
+    # converts them to integer timestamps internally.  Our **light-weight
+    # stub** – activated when the real dependency cannot be installed inside
+    # the execution sandbox – serialises the payload using ``json.dumps``.
+    #
+    # ``datetime`` objects are **not** JSON serialisable which previously
+    # caused ``TypeError: Object of type datetime is not JSON serializable``
+    # during token generation.  As a result the */api/auth/login* endpoint
+    # returned a 500 error and users could not log in.
+    #
+    # To stay compatible with both implementations we normalise the
+    # timestamps **before** calling ``jwt.encode`` by converting them to Unix
+    # epoch integers – the canonical representation defined by RFC 7519.
+    # ---------------------------------------------------------------------
+
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire_dt = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
-    
-    to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
+        expire_dt = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.access_token_expire_minutes
+        )
+
+    now_dt = datetime.now(timezone.utc)
+
+    to_encode.update(
+        {
+            "exp": int(expire_dt.timestamp()),
+            "iat": int(now_dt.timestamp()),
+        }
+    )
+    # Guarantee a unique JWT ID so sessions can be tracked per token.
     if "jti" not in to_encode:
         to_encode["jti"] = secrets.token_urlsafe(32)
     

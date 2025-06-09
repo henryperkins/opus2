@@ -23,7 +23,7 @@ export default function Layout({ children }) {
   const isActive = (path) => location.pathname === path;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 flex flex-col">
+    <div className="min-h-screen gradient-bg transition-colors duration-200 flex flex-col">
       {/* Skip to main content link ------------------------------------------------*/}
       <a href="#main-content" className="skip-link">
         Skip to main content
@@ -32,13 +32,13 @@ export default function Layout({ children }) {
       {/* ------------------------------------------------------------------------*/}
       {/* Header                                                                  */}
       {/* ------------------------------------------------------------------------*/}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors duration-200">
+      <header className="glass border-b border-white/20 dark:border-gray-700/20 transition-all duration-200 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo & Desktop Nav -----------------------------------------------*/}
             <div className="flex items-center">
               <Link to="/" className="flex items-center space-x-2 no-underline">
-                <div className="w-8 h-8 bg-brand-primary-600 dark:bg-brand-primary-500 rounded-lg flex items-center justify-center transition-colors duration-200">
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center transition-all duration-200 hover:scale-110 shadow-lg">
                   <svg
                     className="w-5 h-5 text-white"
                     fill="none"
@@ -53,7 +53,7 @@ export default function Layout({ children }) {
                     />
                   </svg>
                 </div>
-                <span className="text-xl font-semibold text-gray-900 dark:text-gray-100 no-underline">
+                <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent dark:from-gray-100 dark:to-gray-300 no-underline">
                   AI Productivity
                 </span>
               </Link>
@@ -69,10 +69,10 @@ export default function Layout({ children }) {
                     <Link
                       key={item.name}
                       to={item.href}
-                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 no-underline ${
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 no-underline ${
                         isActive(item.href)
-                          ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
-                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'
+                          ? 'bg-white/20 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 shadow-sm'
+                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-white/10 dark:hover:bg-gray-700/30'
                       }`}
                       aria-current={isActive(item.href) ? 'page' : undefined}
                     >
@@ -111,7 +111,7 @@ export default function Layout({ children }) {
                   </button>
                 </>
               ) : (
-                <Link to="/login" className="btn btn-primary text-sm no-underline">
+                <Link to="/login" className="btn btn-primary text-sm no-underline animate-bounce-in">
                   Sign In
                 </Link>
               )}

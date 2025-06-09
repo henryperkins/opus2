@@ -17,9 +17,6 @@ class CodeDocument(Base, TimestampMixin):
 
     __tablename__ = 'code_documents'
     __table_args__ = (
-        Index("idx_code_document_project", "project_id"),
-        Index("idx_code_document_path", "file_path"),
-        Index("idx_code_document_hash", "content_hash"),
         {"extend_existing": True},
     )
 
@@ -121,8 +118,6 @@ class CodeEmbedding(Base, TimestampMixin):
 
     __tablename__ = 'code_embeddings'
     __table_args__ = (
-        Index("idx_embedding_document", "document_id"),
-        Index("idx_embedding_symbol", "symbol_name"),
         {"extend_existing": True},
     )
 

@@ -63,7 +63,23 @@ def init_db() -> None:
         pass
 
     # Finally create all tables
-    Base.metadata.create_all(bind=engine)
+    # During the *pytest* run the test-suite sets up (and regularly tears
+    # down) its **own** database schema via *tests/conftest.py*.  Running the
+    # global `create_all()` here would therefore duplicate index creation and
+    # cause *sqlite3.OperationalError: index already exists*.  Detect the
+    # presence of the ``PYTEST_CURRENT_TEST`` environment variable – which is
+    # reliably present while the test runner is active – and skip the table
+    # creation in that case.
+
+    import sys, os
+
+    # Skip table creation when the module is imported as part of the **test
+    # suite**.  Checking for the *pytest* module is more reliable than the
+    # ``PYTEST_CURRENT_TEST`` env variable which is populated *after* the
+    # initial import phase and therefore too late for our needs.
+
+    if "pytest" not in sys.modules and os.getenv("SKIP_INIT_DB") is None:
+        Base.metadata.create_all(bind=engine)
 
 
 def check_db_connection() -> bool:

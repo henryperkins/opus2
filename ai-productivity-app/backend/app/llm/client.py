@@ -38,8 +38,17 @@ class LLMClient:
     """Unified client for LLM providers."""
 
     def __init__(self):
+        # The *active* model can change at runtime when we need to fall back
+        # from a premium model (e.g. gpt-4) to a broadly available one.
         self.provider = settings.llm_provider  # 'openai' or 'azure'
-        self.model = settings.llm_model or 'gpt-4'
+        # Primary model comes from the new *llm_default_model* setting.  This
+        # can be overridden via the ``LLM_MODEL`` environment variable.
+        self.active_model = settings.llm_default_model
+
+        # Keep reference to a stable fallback so we can retry when the
+        # requested model is unavailable.
+        self._fallback_model = "gpt-3.5-turbo"
+
         self.client = self._create_client()
 
     def _create_client(self):
@@ -65,30 +74,50 @@ class LLMClient:
         stream: bool = False
     ):
         """Get completion from LLM."""
-        try:
-            params = {
-                'model': self.model,
-                'messages': messages,
-                'temperature': temperature,
-                'stream': stream
-            }
+        # We attempt the call *once* with the currently active model.  If the
+        # provider responds with a *model_not_found* error we transparently
+        # switch to the fallback model and retry **once**.
 
+        async def _invoke(model_name: str):
+            params = {
+                "model": model_name,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": stream,
+            }
             if max_tokens:
-                params['max_tokens'] = max_tokens
+                params["max_tokens"] = max_tokens
 
             if stream:
-                return self._stream_response(
-                    await self.client.chat.completions.create(**params)
-                )
-            else:
-                response = await self.client.chat.completions.create(**params)
-                return response.choices[0].message.content
+                raw_stream = await self.client.chat.completions.create(**params)
+                return self._stream_response(raw_stream)
 
-        except openai.APIError as e:
-            logger.error(f"LLM API error: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"LLM client error: {e}")
+            response = await self.client.chat.completions.create(**params)
+            return response.choices[0].message.content
+
+        try:
+            return await _invoke(self.active_model)
+
+        except Exception as exc:  # pylint: disable=broad-except
+            # Detect *model not found* condition – provider libs differ in
+            # exact exception classes, therefore we fall back to string
+            # inspection which is still deterministic enough.
+            error_text = str(exc).lower()
+            is_not_found = "model_not_found" in error_text or "model not found" in error_text
+
+            if is_not_found and self.active_model != self._fallback_model:
+                logger.warning(
+                    "Model '%s' unavailable, falling back to '%s'", self.active_model, self._fallback_model
+                )
+                self.active_model = self._fallback_model
+                try:
+                    return await _invoke(self.active_model)
+                except Exception as second_exc:  # pylint: disable=broad-except
+                    logger.error("Fallback model request failed: %s", second_exc, exc_info=True)
+                    raise second_exc from None
+
+            # Non-recoverable or already retried – propagate.
+            logger.error("LLM client error: %s", exc, exc_info=True)
             raise
 
     async def _stream_response(self, stream) -> AsyncIterator[str]:

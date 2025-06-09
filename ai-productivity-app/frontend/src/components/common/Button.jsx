@@ -23,7 +23,7 @@ const Button = forwardRef(
     ref
   ) => {
     const baseClasses =
-      'btn transition-all duration-150 font-medium rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2';
+      'btn transition-all duration-200 font-medium rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 transform hover:scale-[1.02] active:scale-[0.98]';
 
     const variantClasses = {
       primary: 'btn-primary',
@@ -44,7 +44,7 @@ const Button = forwardRef(
       sizeClasses[size],
       fullWidth && 'w-full',
       disabled && 'opacity-60 cursor-not-allowed',
-      loading && 'cursor-wait',
+      loading && 'cursor-wait animate-pulse',
       className,
     ]
       .filter(Boolean)

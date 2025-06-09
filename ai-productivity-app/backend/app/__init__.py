@@ -105,4 +105,39 @@ if getattr(socket, "_socketpair_patched", False) is False:
     socket.socketpair = _safe_socketpair  # type: ignore[assignment]
     socket._socketpair_patched = True  # type: ignore[attr-defined]
 
+# --------------------------------------------------------------------------
+# Path aliasing for test-runner import quirk
+# --------------------------------------------------------------------------
+#
+# Pytest collects the package twice via two *different* import paths when the
+# repository root is *also* on ``sys.path`` (e.g. ``ai-productivity-app.backend.app``
+# in addition to the plain top-level ``app`` package).  SQLAlchemy registers
+# ORM models using their **module path** for relationship strings such as
+# "Project".  When the same class is imported under two paths SQLAlchemy ends
+# up with *two* distinct classes that share the name "Project" → relationship
+# resolution fails with *Multiple classes found for path "Project"*.
+#
+# We publish *aliases* in ``sys.modules`` that point all known *long* import
+# paths back to the canonical short path so that every subsequent
+# ``import …`` receives the *same* module object.
+
+import sys as _sys  # isort: skip
+
+_ALIASES = [
+    "ai-productivity-app.backend.app",
+    "ai-productivity-app.backend.app.models",
+]
+
+for _alias in _ALIASES:
+    if _alias not in _sys.modules:
+        # Point alias to canonical module (created implicitly when this
+        # package is imported).
+        _sys.modules[_alias] = _sys.modules[__name__]
+
+# Mirror already imported *model* sub-modules.
+for _mod_name, _mod in list(_sys.modules.items()):
+    if _mod_name.startswith("app.models."):
+        _sub = _mod_name[len("app.models.") :]
+        _sys.modules[f"ai-productivity-app.backend.app.models.{_sub}"] = _mod
+
 # Nothing else to export from this package-initialisation.

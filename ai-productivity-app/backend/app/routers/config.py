@@ -81,6 +81,6 @@ async def get_config():  # noqa: D401
         # them as selected.
         "current": {
             "provider": settings.llm_provider,
-            "chat_model": settings.llm_model,
+            "chat_model": settings.llm_default_model or settings.llm_model,
         },
     }

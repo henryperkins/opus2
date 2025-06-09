@@ -191,9 +191,21 @@ When referencing code, mention the file path and line numbers."""
             self.db.commit()
 
         except Exception as e:
-            logger.error(f"AI generation error: {e}")
-            ai_message.content = "I apologize, but I encountered an error generating a response."
+            logger.error("AI generation error", exc_info=True)
+
+            # Update placeholder DB record so the user sees a helpful message
+            friendly_error = "LLM currently unavailable. Please try again."
+            ai_message.content = friendly_error
             self.db.commit()
+
+            # Notify front-end explicitly so it can show a toast / banner
+            try:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": friendly_error,
+                })
+            except Exception:  # pragma: no cover – websocket already gone
+                pass
 
     def _extract_code_snippets(self, text: str) -> List[Dict]:
         """Extract code snippets from response."""

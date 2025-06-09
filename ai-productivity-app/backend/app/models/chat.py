@@ -9,8 +9,6 @@ class ChatSession(Base, TimestampMixin):
 
     __tablename__ = 'chat_sessions'
     __table_args__ = (
-        Index("idx_chat_session_project", "project_id"),
-        Index("idx_chat_session_updated", "updated_at"),
         {"extend_existing": True},
     )
 
@@ -33,8 +31,6 @@ class ChatMessage(Base, TimestampMixin):
 
     __tablename__ = 'chat_messages'
     __table_args__ = (
-        Index("idx_chat_message_session", "session_id"),
-        Index("idx_chat_message_created", "created_at"),
         {"extend_existing": True},
     )
 

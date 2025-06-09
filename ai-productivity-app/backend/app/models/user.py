@@ -1,5 +1,5 @@
 # User model for authentication and ownership
-from sqlalchemy import Column, Integer, String, Boolean, Index, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import validates, relationship
 from .base import Base, TimestampMixin
 import re
@@ -9,11 +9,16 @@ class User(Base, TimestampMixin):
     """User account model"""
 
     __tablename__ = "users"
+    # Explicit indexes on *username* and *email* duplicate the *unique*
+    # constraints declared on the respective columns.  Maintaining them leads
+    # to *index already exists* errors when the model class is imported via
+    # different package paths during test collection (a known quirk on
+    # Windows / Pytest).  Rely on the implicit index provided by the UNIQUE
+    # constraint instead.
+
     __table_args__ = (
-        Index("idx_user_username", "username"),
-        Index("idx_user_email", "email"),
         {
-            "extend_existing": True,  # avoid table re-definition errors in repeated imports
+            "extend_existing": True,
         },
     )
 
