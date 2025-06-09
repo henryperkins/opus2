@@ -10,6 +10,9 @@ from app.config import settings
 from app.database import init_db
 from app.routers import auth, projects, monitoring, config as config_router
 from app.routers import code as code_router
+from app.routers import email as email_router
+from app.routers import notifications as notify_router
+from app.routers import import_git as import_git_router
 from app.routers import chat as chat_router
 
 
@@ -47,6 +50,9 @@ app.include_router(monitoring.router)
 app.include_router(code_router.router)
 app.include_router(chat_router.router)
 app.include_router(config_router.router)
+app.include_router(email_router.router)
+app.include_router(notify_router.router)
+app.include_router(import_git_router.router)
 
 
 @app.get("/health")

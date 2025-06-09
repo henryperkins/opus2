@@ -134,6 +134,11 @@ class Settings(BaseSettings):
     websocket_ping_interval: int = 30
     websocket_ping_timeout: int = 10
 
+    # URL where the user-facing frontend is served.  Used to build absolute
+    # links in transactional emails (e.g. password-reset).  Defaults to
+    # localhost dev-server.
+    frontend_base_url: str = "http://localhost:5173"
+
 
     @property
     def effective_secret_key(self) -> str:

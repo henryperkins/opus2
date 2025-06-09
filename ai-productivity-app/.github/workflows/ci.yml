@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  backend-tests:
+    name: Backend – Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install mypy pydantic pydantic-core pydantic-settings
+
+      - name: Run mypy (static type analysis)
+        working-directory: .
+        run: mypy --show-error-context --no-error-summary .
+
+      - name: Run pytest
+        working-directory: backend
+        run: pytest -q
+
+  frontend-tests:
+    name: Frontend – Node.js 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install NPM dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run React tests (watch mode disabled)
+        working-directory: frontend
+        run: npm run test:ci
+
+      - name: Run ESLint (no warnings allowed)
+        working-directory: frontend
+        run: npm run lint

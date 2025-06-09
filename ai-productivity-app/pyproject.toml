@@ -1,0 +1,25 @@
+[tool.mypy]
+# Global mypy configuration – enforced in CI.
+# The goal is to fail CI only when NEW type errors are introduced.
+# Baseline: the current codebase is *mostly* typed and passes with these settings.
+# If you add code that triggers mypy errors, please fix them or suppress with
+# carefully scoped `# type: ignore[<code>]` comments.
+
+python_version = "3.11"
+strict = true
+
+# Commonly-used flags that keep CI noise low.
+ignore_missing_imports = true
+show_error_codes = true
+
+# Pydantic v2 plugin for better model typing support.
+plugins = [ "pydantic.mypy" ]
+
+# Exclude auto-generated & compiled artefacts.
+exclude = '^(frontend|venv|dist|build|migrations|alembic|\.venv|\.pytest_cache|\.mypy_cache)/'
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"

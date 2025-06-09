@@ -1,4 +1,4 @@
-# AI Productivity App
+# AI Productivity App ![CI](https://github.com/your-org/ai-productivity-app/actions/workflows/ci.yml/badge.svg)
 
 A modern AI productivity application built for small teams with React frontend and FastAPI backend.
 

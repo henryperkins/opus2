@@ -51,6 +51,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.set_cookie(name, value, **opts)
 
         # Add security headers
+        # ------------------------------------------------------------------
+        # Content-Security-Policy – allow everything from *self* plus inline
+        # styles because the Vite dev-server injects them at runtime.  Tighten
+        # further in production by serving a separate “csp.json” via the
+        # config endpoint.
+        # ------------------------------------------------------------------
+
+        csp_policy = (
+            "default-src 'self'; "
+            "img-src 'self' data: blob:; "
+            "style-src 'self' 'unsafe-inline'; "
+            "font-src 'self' data:; "
+            "script-src 'self' 'unsafe-eval' 'unsafe-inline'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self';"
+        )
+
+        response.headers["Content-Security-Policy"] = csp_policy
         response.headers[
             "Strict-Transport-Security"
         ] = "max-age=63072000; includeSubDomains; preload"

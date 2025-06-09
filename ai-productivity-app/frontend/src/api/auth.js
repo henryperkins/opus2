@@ -34,8 +34,33 @@ export const authAPI = {
     return response.data;
   },
 
-  async resetPassword(email) {
-    const response = await client.post('/api/auth/reset-password', { email });
+  // -----------------------------------------------------------------------
+  // Password-reset flow
+  // -----------------------------------------------------------------------
+
+  /**
+   * Request password-reset link/token by email.
+   *
+   * Backend purposely does **not** reveal whether the email exists – it always
+   * returns 202 Accepted.  The UI should therefore show a generic success
+   * message regardless of the account state.
+   */
+  async requestPasswordReset(email) {
+    const response = await client.post('/api/auth/reset-request', { email });
+    return response.data;
+  },
+
+  /**
+   * Submit new password together with the one-time JWT token.
+   *
+   * @param {string} token  Token received by email / URL param
+   * @param {string} newPassword  The new password the user chose
+   */
+  async submitPasswordReset(token, newPassword) {
+    const response = await client.post('/api/auth/reset', {
+      token,
+      new_password: newPassword,
+    });
     return response.data;
   },
 

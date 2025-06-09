@@ -222,3 +222,62 @@ class ProjectService:
 
         self.db.commit()
         return project
+
+    # ---------------------------------------------------------------------
+    # Unarchive
+    # ---------------------------------------------------------------------
+
+    def unarchive_project(self, project_id: int, user_id: int) -> Optional[Project]:
+        """Re-activate an archived project and log timeline event.
+
+        A *Sentry* performance span is created around the database mutation so
+        operators can track latency in production.  The SDK is optional – the
+        call is wrapped in a `try/except ImportError` guard so local
+        environments without `sentry-sdk` installed continue to work.
+        """
+
+        # Optional Sentry integration ------------------------------------------------
+        try:
+            import sentry_sdk  # type: ignore
+
+            span_cm = sentry_sdk.start_span(
+                op="project.unarchive",
+                description=f"Unarchive project {project_id}",
+            )
+        except ImportError:  # pragma: no cover – SDK not present in CI
+            span_cm = None  # type: ignore[assignment]
+
+        # Enter span context manager if available
+        if span_cm:
+            span_cm.__enter__()
+
+        try:
+            project = (
+                self.db.query(Project)
+                .filter(Project.id == project_id)
+                .first()
+            )
+            if not project:
+                return None
+
+            old_status = project.status.value
+            project.status = ProjectStatus.ACTIVE
+
+            self.db.add(
+                TimelineEvent(
+                    project_id=project.id,
+                    event_type=TimelineEvent.EVENT_STATUS_CHANGED,
+                    title="Project unarchived",
+                    event_metadata={
+                        "old_status": old_status,
+                        "new_status": "active",
+                    },
+                    user_id=user_id,
+                )
+            )
+
+            self.db.commit()
+            return project
+        finally:
+            if span_cm:
+                span_cm.__exit__(None, None, None)

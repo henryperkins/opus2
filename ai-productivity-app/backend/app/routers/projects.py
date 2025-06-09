@@ -314,3 +314,47 @@ async def archive_project(
         created_at=archived_project.created_at,
         updated_at=archived_project.updated_at
     )
+
+
+# ---------------------------------------------------------------------------
+# Unarchive endpoint (Sprint-1 Ticket 1.3)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{project_id}/unarchive", response_model=ProjectResponse)
+async def unarchive_project(
+    project_id: int,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep,
+):
+    """Set project status back to *active* and log timeline event."""
+
+    project = get_project_or_404(project_id, db)
+
+    if not project.can_modify(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to unarchive this project",
+        )
+
+    service = ProjectService(db)
+    unarchived = service.unarchive_project(project_id, current_user.id)
+
+    if not unarchived:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    return ProjectResponse(
+        id=unarchived.id,
+        title=unarchived.title,
+        description=unarchived.description,
+        status=unarchived.status.value,
+        color=unarchived.color,
+        emoji=unarchived.emoji,
+        tags=unarchived.tags,
+        owner=serialize_user(unarchived.owner),
+        created_at=unarchived.created_at,
+        updated_at=unarchived.updated_at,
+    )

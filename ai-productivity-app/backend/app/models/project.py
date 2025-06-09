@@ -103,6 +103,13 @@ class Project(Base, TimestampMixin):
         cascade="all, delete-orphan"
     )
 
+    # Import jobs
+    import_jobs = relationship(
+        "ImportJob",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
     @validates("title")
     def validate_title(self, key, title):
         """Validate project title."""

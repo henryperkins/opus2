@@ -250,13 +250,38 @@ def update_profile(
 
 
 def _send_reset_email(email: str, token: str) -> None:  # placeholder
-    # In production, integrate with email provider.
-    import logging
+    """Delegate email delivery to the internal micro-service."""
+    from app.routers.email import EmailPayload, send_email_endpoint  # local import to avoid circular
 
-    logging.getLogger(__name__).info("Password-reset token for %s -> %s", email, token)
+    subject = "Your Opus 2 password-reset link"
+    reset_url = f"{settings.frontend_base_url or 'http://localhost:5173'}/reset/{token}"
+    body = (
+        "Hello,\n\n"
+        "We received a request to reset your password.  Use the link below to choose a new one.\n\n"
+        f"{reset_url}\n\n"
+        "If you did not request a password reset you can safely ignore this email.\n\n"
+        "— Opus 2"
+    )
+
+    payload = EmailPayload(to=email, subject=subject, body=body)
+    # Directly invoke the endpoint handler instead of making an HTTP call – it
+    # returns a JSON dict but we ignore the result.
+    import anyio
+
+    anyio.run(send_email_endpoint, payload)  # noqa: TID251
 
 
-@router.post("/reset-password", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_202_ACCEPTED,
+    include_in_schema=False,  # deprecated but kept for backward-compat
+)
+# NOTE: Alias kept for the public API that the new frontend consumes.
+#       This adheres to the requirements spec naming – `/reset-request`.
+#       Both routes execute the same handler to simplify maintenance.
+
+# Public route preferred going forward
+@router.post("/reset-request", status_code=status.HTTP_202_ACCEPTED)
 def request_password_reset(
     payload: Annotated[PasswordResetRequest, Body()],
     background: BackgroundTasks,
@@ -275,7 +300,10 @@ def request_password_reset(
     return {"detail": "Password-reset instructions sent if the address exists."}
 
 
-@router.post("/reset-password/submit")
+# Legacy path (hidden in docs)
+@router.post("/reset-password/submit", include_in_schema=False)
+# New spec-compliant path consumed by the frontend
+@router.post("/reset")
 def submit_password_reset(
     payload: Annotated[PasswordResetSubmit, Body()],
     db: DatabaseDep,

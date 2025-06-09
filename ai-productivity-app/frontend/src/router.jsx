@@ -19,6 +19,8 @@ import {
 } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import UserProfile from './components/auth/UserProfile';
 import SettingsPage from './pages/SettingsPage';
 import TimelinePage from './pages/TimelinePage';
@@ -46,6 +48,14 @@ export const router = createBrowserRouter(
     {
       path: '/login',
       element: <LoginPage />,
+    },
+    {
+      path: '/forgot',
+      element: <ForgotPasswordPage />,
+    },
+    {
+      path: '/reset/:token',
+      element: <ResetPasswordPage />,
     },
     {
       path: '/',
