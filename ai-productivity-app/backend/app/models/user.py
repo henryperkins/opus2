@@ -12,6 +12,9 @@ class User(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_user_username", "username"),
         Index("idx_user_email", "email"),
+        {
+            "extend_existing": True,  # avoid table re-definition errors in repeated imports
+        },
     )
 
     id = Column(Integer, primary_key=True)
@@ -35,6 +38,14 @@ class User(Base, TimestampMixin):
     # Relationships
     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+
+    # Search history relationship – loaded only when explicitly queried.
+    search_history = relationship(
+        "SearchHistory",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     @validates("username")
     def validate_username(self, key, username):

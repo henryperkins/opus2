@@ -14,6 +14,13 @@ export const searchAPI = {
     return response.data;
   },
 
+  async getHistory(limit = 20) {
+    const response = await client.get('/api/search/history', {
+      params: { limit }
+    });
+    return response.data;
+  },
+
   async indexDocument(documentId, options = {}) {
     const response = await client.post('/api/search/index', {
       document_id: documentId,

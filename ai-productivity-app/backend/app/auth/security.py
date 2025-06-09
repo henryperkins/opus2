@@ -112,6 +112,36 @@ AUTH_ATTEMPT_LIMIT = "5/minute"
 _rate_limiter_store: Dict[str, list] = {}
 
 # ---------------------------------------------------------------------------
+# Minimal *in-memory* rate-limiter used during unit-tests
+# ---------------------------------------------------------------------------
+
+
+def enforce_rate_limit(key: str, limit: int = 5, window: float = 60.0) -> None:  # noqa: D401
+    """Raise HTTP 429 when the number of *key* hits exceeds *limit* per *window*.
+
+    The implementation deliberately keeps state in a simple in-process dict
+    because the production stack runs behind a single Gunicorn worker during
+    the automated test-suite.  This avoids the heavy *slowapi* dependency while
+    providing deterministic behaviour expected by *backend/tests/test_auth.py*.
+    """
+
+    import time
+
+    now = time.time()
+    bucket = _rate_limiter_store.setdefault(key, [])
+    # Remove timestamps outside the time-window
+    bucket = [ts for ts in bucket if now - ts < window]
+
+    if len(bucket) >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded",
+        )
+
+    bucket.append(now)
+    _rate_limiter_store[key] = bucket
+
+# ---------------------------------------------------------------------------
 # CSRF protection helpers
 # ---------------------------------------------------------------------------
 import hmac  # placed here to avoid duplicate import when *python-jose* stub already imported it

@@ -2,11 +2,62 @@
 """OpenAI embedding generation with batching and error handling."""
 import openai
 from typing import List, Dict, Optional
-import numpy as np
-from tenacity import retry, stop_after_attempt, wait_exponential
+# ``numpy`` is only needed when the embedding functionality is exercised.  We
+# import it lazily so that the rest of the application (and lightweight test
+# suites) continue to work in environments where the dependency is absent.
+
+try:
+    import numpy as np  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover – optional dependency
+    np = None  # type: ignore
+# ``tenacity`` is only required for automatic retries when the real embedding
+# generation runs.  Similar to *numpy* we fall back to a *no-op* implementation
+# when the dependency is missing so that the broader application remains usable
+# in minimal environments.
+
+try:
+    from tenacity import retry, stop_after_attempt, wait_exponential  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover – optional dependency
+    import functools
+
+    def retry(*dargs, **dkwargs):  # noqa: D401 – simple wrapper
+        """No-op retry decorator when *tenacity* is unavailable."""
+
+        def decorator(func):
+            @functools.wraps(func)
+            async def wrapper(*args, **kwargs):  # pylint: disable=missing-docstring
+                return await func(*args, **kwargs)
+
+            return wrapper
+
+        # If used as @retry without (), dargs[0] is the function
+        if dargs and callable(dargs[0]):
+            return decorator(dargs[0])
+
+        return decorator
+
+    # Dummy stop/ wait objects for signature compatibility
+    def stop_after_attempt(_):  # noqa: D401
+        return None
+
+    def wait_exponential(**_):  # noqa: D401
+        return None
 import logging
 import asyncio
 from app.config import settings
+
+# The OpenAI python package provides dedicated *Async* client-classes for the
+# public OpenAI as well as the Azure OpenAI endpoints.  Selecting the correct
+# implementation ensures we use the right authentication- & endpoint
+# parameters while keeping the rest of the code-base provider agnostic.
+
+try:
+    from openai import AsyncOpenAI, AsyncAzureOpenAI
+except ImportError:  # pragma: no cover – the dependency is declared in our
+    # environment, therefore this should never happen in production.  We keep
+    # a defensive fallback for unit-tests that monkey-patch the dependency.
+    AsyncOpenAI = None  # type: ignore
+    AsyncAzureOpenAI = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +72,47 @@ class EmbeddingGenerator:
         self._init_client()
 
     def _init_client(self):
-        """Initialize OpenAI client."""
-        if not settings.openai_api_key:
-            logger.warning("OpenAI API key not configured")
-            return
+        """Initialise the correct OpenAI client implementation.
 
-        try:
-            self.client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
-        except Exception as e:
-            logger.error(f"Failed to initialize OpenAI client: {e}")
+        The application supports two *providers* configured via the
+        ``LLM_PROVIDER`` / ``llm_provider`` setting:
+
+        • "openai" – regular public OpenAI endpoint
+        • "azure"  – Azure OpenAI service (different host + auth headers)
+        """
+
+        provider = settings.llm_provider.lower()
+
+        if provider == "azure":
+            if not (settings.azure_openai_api_key and settings.azure_openai_endpoint):
+                logger.warning(
+                    "Azure OpenAI selected as provider, but 'azure_openai_api_key' "
+                    "or 'azure_openai_endpoint' is not configured."
+                )
+                return
+
+            try:
+                self.client = AsyncAzureOpenAI(
+                    api_key=settings.azure_openai_api_key,
+                    azure_endpoint=settings.azure_openai_endpoint,
+                    # Default to the most recent stable API version if the user
+                    # has not overridden it via an env-var.  The version *must*
+                    # be supplied for Azure requests.
+                    api_version=getattr(settings, "azure_openai_api_version", "2024-02-01"),
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Failed to initialise Azure OpenAI client: %s", exc)
+                self.client = None
+        else:  # public OpenAI
+            if not settings.openai_api_key:
+                logger.warning("OpenAI API key not configured – embeddings disabled")
+                return
+
+            try:
+                self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Failed to initialise OpenAI client: %s", exc)
+                self.client = None
 
     @retry(
         stop=stop_after_attempt(3),

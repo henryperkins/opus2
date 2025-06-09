@@ -125,7 +125,12 @@ class SecretScanner:
             string = match.group(0)
             entropy = self._calculate_entropy(string)
 
-            if entropy > 4.5:  # High entropy threshold
+            # Use a slightly lower threshold (≈ 4.0) so that 50-ish character
+            # base64 strings – common for API tokens – are still detected.  The
+            # value aligns with the expectations encoded in
+            # *tests/test_secret_scanner.py*.
+
+            if entropy >= 4.0:
                 findings.append({
                     'type': 'High Entropy String',
                     'category': 'entropy',
@@ -148,14 +153,16 @@ class SecretScanner:
         for char in string:
             freq[char] = freq.get(char, 0) + 1
 
-        # Calculate entropy
-        entropy = 0
+        import math
+
+        # Shannon entropy H = - Σ p_i * log2(p_i)
+        entropy = 0.0
         length = len(string)
 
         for count in freq.values():
             probability = count / length
             if probability > 0:
-                entropy -= probability * (probability and probability.bit_length())
+                entropy -= probability * math.log2(probability)
 
         return entropy
 

@@ -15,6 +15,7 @@ class EmbeddingMetadata(Base, TimestampMixin):
         Index("idx_embedding_metadata_document", "document_id"),
         Index("idx_embedding_metadata_project", "project_id"),
         Index("idx_embedding_metadata_hash", "content_hash"),
+        {"extend_existing": True},
     )
 
     rowid = Column(Integer, primary_key=True)

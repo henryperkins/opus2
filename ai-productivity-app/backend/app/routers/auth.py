@@ -24,6 +24,7 @@ from datetime import timedelta
 
 from fastapi import (
     APIRouter,
+    Request,
     BackgroundTasks,
     Body,
     Depends,
@@ -43,6 +44,7 @@ from app.auth.schemas import (
     UserLogin,
     UserRegister,
     UserResponse,
+    UserUpdate,
 )
 from app.config import settings
 from app.dependencies import CurrentUserRequired, DatabaseDep
@@ -86,12 +88,23 @@ def _issue_token_and_cookie(
      response_model=TokenResponse,
 )
 # @security.limiter.limit(security.AUTH_ATTEMPT_LIMIT)  # Temporarily disabled for testing
+# The test-suite expects the registration endpoint to enforce a simple
+# *5 requests / minute* limit.  Instead of relying on the heavyweight *SlowAPI*
+# middleware (which pulls in `limits` and *Redis* dependencies) we piggy-back
+# on the lightweight helper inside ``app.auth.security``.
+
+
 def register(
+    request: Request,
     payload: Annotated[UserRegister, Body()],
     response: Response,
     db: DatabaseDep,
 ) -> TokenResponse:
     """Invite-only registration. Returns token and sets cookie."""
+    # Rate-limit **per IP** to stay in line with the original SlowAPI behaviour.
+    client_ip = request.client.host if request.client else "unknown"
+    security.enforce_rate_limit(f"register:{client_ip}", limit=5, window=60)
+
     validate_invite_code(payload.invite_code)
 
     user = User(
@@ -122,12 +135,20 @@ def register(
      response_model=TokenResponse,
 )
 # @security.limiter.limit(security.AUTH_ATTEMPT_LIMIT)  # Temporarily disabled for testing
+# noqa: D401,E501
+
+
 def login(
+    request: Request,
     payload: Annotated[UserLogin, Body()],
     response: Response,
     db: DatabaseDep,
 ) -> TokenResponse:
     """Authenticate user credentials, return JWT cookie."""
+    # Rate-limit failed **and** successful attempts to curb brute-force.
+    client_ip = request.client.host if request.client else "unknown"
+    security.enforce_rate_limit(f"login:{client_ip}", limit=5, window=60)
+
     user = utils.verify_credentials(
         db, payload.username_or_email.lower(), payload.password
     )
@@ -173,6 +194,53 @@ def logout(response: Response) -> None:
 @router.get("/me", response_model=UserResponse)
 def me(current_user: CurrentUserRequired) -> UserResponse:
     """Return the authenticated user's public profile."""
+    return UserResponse.from_orm(current_user)
+
+
+###############################################################################
+# Profile Update (/me – PATCH)
+###############################################################################
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_profile(
+    payload: Annotated[UserUpdate, Body()],
+    db: DatabaseDep,
+    current_user: CurrentUserRequired,
+) -> UserResponse:
+    """Update authenticated user's profile.
+
+    Supports changing `username`, `email`, and `password` (hashed).
+    Performs uniqueness checks and returns the updated profile on success.
+    """
+
+    data = payload.dict(exclude_unset=True, exclude_none=True)
+
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No changes provided")
+
+    # Username
+    if (username := data.get("username")) and username != current_user.username:
+        conflict = db.query(User).filter(User.username == username).filter(User.id != current_user.id).first()
+        if conflict:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
+        current_user.username = username
+
+    # Email
+    if (email := data.get("email")) and email != current_user.email:
+        conflict = db.query(User).filter(User.email == email).filter(User.id != current_user.id).first()
+        if conflict:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+        current_user.email = email
+
+    # Password
+    if (password := data.get("password")):
+        current_user.password_hash = security.hash_password(password)
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
     return UserResponse.from_orm(current_user)
 
 

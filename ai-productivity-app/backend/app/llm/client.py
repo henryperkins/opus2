@@ -47,8 +47,8 @@ class LLMClient:
         if self.provider == 'azure':
             return AsyncAzureOpenAI(
                 api_key=settings.azure_openai_api_key,
-                api_version="2024-02-01",
-                azure_endpoint=settings.azure_openai_endpoint
+                api_version=settings.azure_openai_api_version,
+                azure_endpoint=settings.azure_openai_endpoint,
             )
         else:
             return AsyncOpenAI(api_key=settings.openai_api_key)

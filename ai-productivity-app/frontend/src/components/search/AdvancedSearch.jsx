@@ -23,12 +23,27 @@ export default function AdvancedSearch({ projectId }) {
         clearSearch
     } = useSearch('', { projectIds: projectId ? [projectId] : [] });
 
-    // Load saved searches
+    // Load search history from backend (fallback to localStorage when offline)
     useEffect(() => {
-        const saved = localStorage.getItem('savedSearches');
-        if (saved) {
-            setSavedSearches(JSON.parse(saved));
-        }
+        const fetchHistory = async () => {
+            try {
+                const resp = await searchAPI.getHistory(20);
+                if (resp && resp.history) {
+                    setSavedSearches(resp.history);
+                    return;
+                }
+            } catch (err) {
+                // Ignore – probably unauthenticated or backend missing. Fallback
+            }
+
+            // Fallback: localStorage
+            const saved = localStorage.getItem('savedSearches');
+            if (saved) {
+                setSavedSearches(JSON.parse(saved));
+            }
+        };
+
+        fetchHistory();
     }, []);
 
     const handleSaveSearch = () => {
@@ -150,7 +165,7 @@ export default function AdvancedSearch({ projectId }) {
                                             >
                                                 <div className="font-medium text-sm">{search.query}</div>
                                                 <div className="text-xs text-gray-500">
-                                                    {new Date(search.timestamp).toLocaleString()}
+                                                    {new Date(search.created_at || search.timestamp).toLocaleString()}
                                                 </div>
                                             </button>
                                         </li>

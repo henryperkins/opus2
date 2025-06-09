@@ -34,10 +34,16 @@ function Register({ onLoginSwitch }) {
         password: formData.password,
         invite_code: formData.inviteCode
       });
+      // Backend returns a token and sets the auth cookie, so we can immediately
+      // call the global login helper to populate user state and redirect.
+      // This provides a smoother UX – account available right after sign-up.
+      await login(formData.username || formData.email, formData.password);
+
       setSuccess(true);
+      // Delay a moment so the success message is visible before redirect.
       setTimeout(() => {
         onLoginSwitch?.();
-      }, 2000);
+      }, 500);
     } catch (err) {
       console.error('Registration error:', err);
       console.error('Response data:', err.response?.data);

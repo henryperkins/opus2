@@ -43,6 +43,34 @@ export const authAPI = {
     const response = await client.post('/api/auth/refresh');
     return response.data;
   }
+
+  /**
+   * Partially update the authenticated user's profile.
+   *
+   * Backend accepts any subset of { username, email, password } and returns
+   * the updated *UserResponse* model.  We simply forward the response data.
+   *
+   * @param {Object} changes - Partial user fields to update
+   * @returns {Promise<import('../types').User>} Updated user object
+   */
+  async updateProfile(changes) {
+    // Clean undefined / empty string values – backend treats missing keys as
+    // "no-change" whereas explicit null/empty may fail validation.
+    const payload = {};
+    ['username', 'email', 'password'].forEach((key) => {
+      const value = changes[key];
+      if (value !== undefined && value !== null && value !== '') {
+        payload[key] = value;
+      }
+    });
+
+    if (Object.keys(payload).length === 0) {
+      throw new Error('No profile changes provided');
+    }
+
+    const response = await client.patch('/api/auth/me', payload);
+    return response.data;
+  },
 };
 
 export default authAPI;

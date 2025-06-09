@@ -98,7 +98,22 @@ class Settings(BaseSettings):
 
     # API Keys (for future phases)
     openai_api_key: Optional[str] = None
+    # Azure OpenAI credentials – required when ``llm_provider`` is set to
+    # "azure".  We keep the keys *optional* so that local development can use
+    # the regular OpenAI backend without having to populate additional
+    # environment variables.  When `llm_provider="azure"` at runtime and
+    # the API-key / endpoint are *not* supplied we fail fast with a clear
+    # error message from the provider specific client constructor.
+
+    azure_openai_api_key: Optional[str] = None
     azure_openai_endpoint: Optional[str] = None
+
+    # The *api_version* parameter is mandatory for Azure OpenAI requests.  We
+    # expose it as a setting with a sane default matching the SDK's examples
+    # so users can easily pin a different version when Microsoft publishes a
+    # new stable release.
+
+    azure_openai_api_version: str = "2024-02-01"
 
     # LLM settings
     llm_provider: str = "openai"

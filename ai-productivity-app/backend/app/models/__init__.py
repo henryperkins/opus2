@@ -6,6 +6,7 @@ from .session import Session
 # creation.  These imports must remain *after* Base to avoid circular deps.
 from .project import Project, ProjectStatus
 from .code import CodeDocument, CodeEmbedding
+from .search_history import SearchHistory
 
 __all__ = [
     "Base",
@@ -16,4 +17,5 @@ __all__ = [
     "ProjectStatus",
     "CodeDocument",
     "CodeEmbedding",
+    "SearchHistory",
 ]

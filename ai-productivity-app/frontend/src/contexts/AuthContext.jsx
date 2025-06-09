@@ -61,11 +61,21 @@ export function AuthProvider({ children }) {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  const fetchMe = useCallback(async () => {
+  /**
+   * Fetch the currently authenticated user from the backend.
+   *
+   * The `force` flag bypasses the single-run guard that avoids the duplicate
+   * request caused by React 18 Strict-Mode double mounting.  This allows us to
+   * re-fetch the user *after* a successful login / registration while still
+   * skipping the unnecessary extra request that happens on the initial mount.
+   */
+  const fetchMe = useCallback(async (force = false) => {
     // Prevent duplicate requests across Strict-Mode double mounting by relying
-    // on a module-level flag that survives unmounts.
-    if (didFetchMeOnce) {
-      // Skip network, restore settled state
+    // on a module-level flag that survives unmounts.  Skip only when we have
+    // already fetched once *and* the caller didn't explicitly request a fresh
+    // fetch (e.g. right after login / registration).
+    if (didFetchMeOnce && !force) {
+      // Restore settled state without hitting the network.
       setLoading(false);
       setInitialCheckDone(true);
       return;
@@ -129,7 +139,7 @@ export function AuthProvider({ children }) {
         // Slight delay to ensure the HttpOnly cookie is set before /me request
         await new Promise((r) => setTimeout(r, 100));
 
-        await fetchMe();
+        await fetchMe(true);
 
         // Persist last-login metadata in zustand store
         startSession(username_or_email);
@@ -153,9 +163,44 @@ export function AuthProvider({ children }) {
     }
   }, [endSession]);
 
-  const refresh = fetchMe;
+  const refresh = (force = false) => fetchMe(force);
 
-  const value = { user, loading, login, logout, refresh };
+  /**
+   * Update the authenticated user's profile (username / email / password).
+   * Performs an **optimistic UI** update by immediately merging the changes
+   * into the `user` state while the request is in-flight.  If the backend
+   * rejects the update we roll back to the previous state so the UI remains
+   * consistent.
+   *
+   * @param {Partial<User>} changes
+   * @returns {Promise<void>}
+   */
+  const updateProfile = useCallback(
+    async (changes) => {
+      if (!user) {
+        throw new Error('Not authenticated');
+      }
+
+      // Store previous snapshot for rollback in case of failure
+      const prev = { ...user };
+
+      // Apply optimistic update – only merge provided keys
+      const optimisticallyUpdated = { ...user, ...changes };
+      setUser(optimisticallyUpdated);
+
+      try {
+        const { data } = await client.patch('/api/auth/me', changes);
+        setUser(data);
+      } catch (err) {
+        // Rollback and re-throw so callers can display the error
+        setUser(prev);
+        throw err;
+      }
+    },
+    [user]
+  );
+
+  const value = { user, loading, login, logout, refresh, updateProfile };
 
   return (
     <AuthContextInstance.Provider value={value}>{children}</AuthContextInstance.Provider>

@@ -110,6 +110,74 @@ class UserResponse(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+#                              MUTATION MODELS                               #
+# --------------------------------------------------------------------------- #
+
+
+class UserUpdate(BaseModel):
+    """Partial update payload for the authenticated user's profile."""
+
+    username: str | None = Field(
+        None,
+        min_length=3,
+        max_length=50,
+        description="New username (must be unique)",
+        examples=["alice"],
+    )
+    email: EmailStr | None = Field(
+        None, description="New email address (must be unique)", examples=["alice@example.com"]
+    )
+    password: str | None = Field(
+        None,
+        min_length=8,
+        max_length=128,
+        description="Optional new password (will be hashed server-side)",
+    )
+
+    @validator("username", "email", pre=True)
+    def _strip_and_lower(cls, v: str | None):  # noqa: N805
+        if v is None:
+            return v
+        return v.strip().lower()
+
+    @validator("password", pre=True)
+    def _strip(cls, v: str | None):  # noqa: N805
+        if v is None:
+            return v
+        return v.strip()
+
+    @validator("password")
+    def _password_strength(cls, v: str | None):  # noqa: N805
+        # Extra guard – length already enforced by Field but keep for clarity
+        if v is not None and len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        return v
+
+    @classmethod
+    def ensure_non_empty(cls, values):  # noqa: D401
+        if not any(values.get(f) is not None for f in ("username", "email", "password")):
+            raise ValueError("At least one field must be provided")
+        return values
+
+    class Config:  # noqa: D401
+        json_schema_extra = {
+            "example": {
+                "username": "newalice",
+                "email": "alice@newdomain.com",
+                "password": "newpassword123",
+            }
+        }
+
+    # Ensure at least one field present – works on Pydantic v1 & v2
+    def __init__(self, **data):  # noqa: D401
+        super().__init__(**data)
+        if not any(
+            getattr(self, field) is not None for field in ("username", "email", "password")
+        ):
+            raise ValueError("At least one field must be provided")
+
+
+# --------------------------------------------------------------------------- #
 #                               HELPER ALIASES                                #
 # --------------------------------------------------------------------------- #
 

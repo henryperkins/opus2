@@ -3,12 +3,14 @@
 Includes status tracking, visual customization (color/emoji), tags,
 and relationship to timeline events for comprehensive project management.
 """
-from sqlalchemy import Column, Integer, String, Text, Enum, JSON, ForeignKey, Index
+from sqlalchemy import Column, Enum, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship, validates
 from sqlalchemy.ext.mutable import MutableList
+
 from .base import Base, TimestampMixin
-from .timeline import TimelineEvent
-from .chat import ChatSession
+from .timeline import TimelineEvent  # noqa: F401  # pylint: disable=unused-import
+from .chat import ChatSession  # noqa: F401  # pylint: disable=unused-import
+
 import enum
 import re
 
@@ -28,6 +30,7 @@ class Project(Base, TimestampMixin):
         Index("idx_project_owner", "owner_id"),
         Index("idx_project_status", "status"),
         Index("idx_project_created", "created_at"),
+        {"extend_existing": True},
     )
 
     id = Column(Integer, primary_key=True)

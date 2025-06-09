@@ -13,6 +13,9 @@ from app.schemas.search import (
     IndexRequest, IndexResponse
 )
 
+# Model for search history (added Phase-5)
+from app.models.search_history import SearchHistory
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -39,38 +42,58 @@ async def search(
         projects = db.query(Project).filter_by(owner_id=current_user.id).all()
         request.project_ids = [p.id for p in projects]
 
-    # Execute search
+    # ------------------------------------------------------------------
+    # Execute search (may raise).
+    # ------------------------------------------------------------------
+
     try:
-        results = await hybrid_search.search(
+        raw_results = await hybrid_search.search(
             query=request.query,
             project_ids=request.project_ids,
             filters=request.filters,
             limit=request.limit,
-            search_types=request.search_types
+            search_types=request.search_types,
         )
+    except Exception as err:  # noqa: BLE001 – translate to HTTP 500
+        logger.error("Search failed: %s", err)
+        raise HTTPException(status_code=500, detail="Search failed") from err
 
-        # Format results
-        formatted_results = []
-        for result in results:
-            formatted_results.append(SearchResult(
-                type=result['type'],
-                score=result['score'],
-                document_id=result.get('document_id'),
-                chunk_id=result.get('chunk_id'),
-                content=result['content'],
-                metadata=result.get('metadata', {})
-            ))
-
-        return SearchResponse(
-            query=request.query,
-            results=formatted_results,
-            total=len(formatted_results),
-            search_types=request.search_types or ['hybrid']
+    formatted_results = [
+        SearchResult(
+            type=r["type"],
+            score=r["score"],
+            document_id=r.get("document_id"),
+            chunk_id=r.get("chunk_id"),
+            content=r["content"],
+            metadata=r.get("metadata", {}),
         )
+        for r in raw_results
+    ]
 
-    except Exception as e:
-        logger.error(f"Search failed: {e}")
-        raise HTTPException(status_code=500, detail="Search failed")
+    # Assemble response object
+    response_payload = SearchResponse(
+        query=request.query,
+        results=formatted_results,
+        total=len(formatted_results),
+        search_types=request.search_types or ["hybrid"],
+    )
+
+    # Best-effort: record search in history
+    try:
+        db.add(
+            SearchHistory(
+                user_id=current_user.id,
+                query_text=request.query.strip()[:255],
+                filters=request.filters,
+                project_ids=request.project_ids,
+            )
+        )
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 – don't fail request
+        db.rollback()
+        logger.warning("Failed to persist search history: %s", exc, exc_info=False)
+
+    return response_payload
 
 
 @router.get("/suggestions")
@@ -99,10 +122,65 @@ async def get_suggestions(
         if prefix in ['func', 'function', 'class', 'method', 'type', 'file']:
             suggestions.append(f"{prefix}:")
 
-    # Symbol suggestions from recent searches
-    # TODO: Implement search history tracking
+    # ------------------------------------------------------------------
+    # User search-history suggestions – use the most recent 50 queries so we
+    # do not hit the DB with DISTINCT which is expensive on Sqlite.  We then
+    # filter + de-duplicate on the python side.
+    # ------------------------------------------------------------------
+    if current_user:
+        history_rows = (
+            db.query(SearchHistory.query_text)
+            .filter(SearchHistory.user_id == current_user.id)
+            .order_by(SearchHistory.created_at.desc())
+            .limit(50)
+            .all()
+        )
+
+        recent_queries = [row[0] for row in history_rows]
+
+        for h_query in recent_queries:
+            if h_query.lower().startswith(q.lower()) and h_query not in suggestions:
+                suggestions.append(h_query)
 
     return {"suggestions": suggestions[:10]}
+
+
+# ---------------------------------------------------------------------------
+# Search history list (paginated)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/history")
+async def get_history(
+    limit: int = Query(20, ge=1, le=100),
+    current_user: CurrentUserRequired = None,
+    db: DatabaseDep = None,
+):
+    """Return the current user's recent search history (most recent first)."""
+
+    if not current_user:
+        return {"history": []}
+
+    rows = (
+        db.query(SearchHistory)
+        .filter(SearchHistory.user_id == current_user.id)
+        .order_by(SearchHistory.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    history = [
+        {
+            "id": r.id,
+            "query": r.query_text,
+            "filters": r.filters or {},
+            "project_ids": r.project_ids or [],
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in rows
+    ]
+
+    return {"history": history}
 
 
 @router.post("/index", response_model=IndexResponse)

@@ -12,10 +12,24 @@ class TimelineEvent(Base, TimestampMixin):
     """Timeline event for project activity tracking."""
 
     __tablename__ = "timeline_events"
+    #
+    # NOTE:
+    # -----
+    # During the test-suite collection phase the *app* package can be imported
+    # multiple times via different `sys.path` entries (e.g. once as
+    # ``ai-productivity-app.backend.app`` and again as the plain ``app``
+    # package).  When that happens SQLAlchemy ends up evaluating this model
+    # definition twice which normally results in the
+    # *Table 'timeline_events' is already defined* error.  By adding the
+    # ``extend_existing=True`` flag we instruct SQLAlchemy to quietly reuse the
+    # first table object instead of raising, making the declaration idempotent
+    # and safe under repeated imports.
+    #
     __table_args__ = (
         Index("idx_timeline_project", "project_id"),
         Index("idx_timeline_type", "event_type"),
         Index("idx_timeline_created", "created_at"),
+        {"extend_existing": True},
     )
 
     id = Column(Integer, primary_key=True)

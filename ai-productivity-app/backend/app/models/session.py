@@ -11,6 +11,9 @@ class Session(Base):
     __tablename__ = "sessions"
     __table_args__ = (
         UniqueConstraint("jti", name="uq_sessions_jti"),
+        {
+            "extend_existing": True,
+        },
     )
 
     id = Column(Integer, primary_key=True)

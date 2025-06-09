@@ -3,7 +3,7 @@ import { useAuth } from '../../hooks/useAuth';
 import Header from '../common/Header';
 
 function UserProfile() {
-  const { user, logout } = useAuth();
+  const { user, updateProfile, logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     username: user?.username || '',
@@ -35,8 +35,7 @@ function UserProfile() {
     setError('');
 
     try {
-      // TODO: Implement profile update API call
-      // await updateProfile(formData);
+      await updateProfile(formData);
       setSuccess('Profile updated successfully!');
       setIsEditing(false);
     } catch (err) {
