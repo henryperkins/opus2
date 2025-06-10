@@ -98,6 +98,52 @@ client.interceptors.response.use(
         'Service temporarily unavailable. Please ensure the backend and database are running.';
     }
 
+    // ---------------------------------------------------------------------
+    // FastAPI validation errors come back as an array of objects under
+    // `response.data.detail` – e.g. `[{loc: [...], msg: 'field required', ...}]`.
+    // Trying to render this object directly in React results in the
+    // "Objects are not valid as a React child" runtime error.
+    //
+    // To provide a smoother developer- and user-experience we convert those
+    // structures into a readable string right here in the centralised Axios
+    // interceptor.  That way every consumer that relies on
+    // `err.response?.data?.detail` will automatically receive a display-safe
+    // string without having to duplicate this logic in many places.
+    // ---------------------------------------------------------------------
+
+    if (response && response.data && response.data.detail) {
+      const { detail } = response.data;
+
+      // Case 1: Array of validation error objects
+      if (Array.isArray(detail)) {
+        // Collect human-readable messages, prefer the `msg` field, fall back to JSON stringification
+        const messages = detail
+          .map((item) => {
+            if (typeof item === 'string') return item;
+            if (item && typeof item === 'object' && 'msg' in item) return item.msg;
+            try {
+              return JSON.stringify(item);
+            } catch {
+              return String(item);
+            }
+          })
+          .filter(Boolean)
+          .join('; ');
+
+        response.data.detail = messages || 'Validation error';
+      }
+
+      // Case 2: Single error object
+      if (
+        !Array.isArray(detail) &&
+        typeof detail === 'object' &&
+        detail !== null
+      ) {
+        const message = 'msg' in detail ? detail.msg : JSON.stringify(detail);
+        response.data.detail = message;
+      }
+    }
+
     // Handle generic network / CORS errors (no response object present)
     if (!response && error.code === 'ERR_NETWORK') {
       error.message =
