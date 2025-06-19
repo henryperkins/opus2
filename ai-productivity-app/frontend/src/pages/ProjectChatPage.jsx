@@ -13,6 +13,7 @@ import { codeAPI } from '../api/code';
 import chatAPI from '../api/chat';
 import FileUpload from '../components/knowledge/FileUpload';
 import DependencyGraph from '../components/knowledge/DependencyGraph';
+import SplitPane from '../components/common/SplitPane';
 import { createTwoFilesPatch } from 'diff';
 
 // Tracks projects with files already fetched
