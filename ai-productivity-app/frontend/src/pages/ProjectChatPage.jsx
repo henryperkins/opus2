@@ -277,7 +277,11 @@ export default function ProjectChatPage() {
             {rightPanelMode === 'canvas' ? 'Editor' : 'Canvas'}
           </button>
           <button
-            onClick={() => navigator.clipboard.writeText(editorContent)}
+            onClick={() => {
+              navigator.clipboard.writeText(editorContent).catch(() => {
+                alert('Failed to copy code to clipboard.');
+              });
+            }}
             className="p-1 text-gray-600 hover:text-gray-900"
             title="Copy code"
           >
