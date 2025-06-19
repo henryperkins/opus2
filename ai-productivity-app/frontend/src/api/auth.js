@@ -64,10 +64,6 @@ export const authAPI = {
     return response.data;
   },
 
-  async refreshToken() {
-    const response = await client.post('/api/auth/refresh');
-    return response.data;
-  },
 
   /**
    * Partially update the authenticated user's profile.

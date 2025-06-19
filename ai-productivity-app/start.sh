@@ -34,12 +34,12 @@ sleep 5
 # Check backend health
 echo "🔍 Checking backend health..."
 for i in {1..30}; do
-    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
-        echo "✅ Backend is healthy"
+    if curl -s http://localhost:8000/health/ready > /dev/null 2>&1; then
+        echo "✅ Backend is ready"
         break
     fi
     if [ $i -eq 30 ]; then
-        echo "⚠️  Backend health check timeout - check logs with: docker compose logs backend"
+        echo "⚠️  Backend readiness timeout - check logs with: docker compose logs backend"
     fi
     sleep 2
 done

@@ -20,7 +20,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from app.models.user import User
-from app.auth.security import get_password_hash
+from app.auth.security import hash_password
 from app.config import settings   # pydantic settings singleton
 
 parser = argparse.ArgumentParser()
@@ -29,7 +29,7 @@ parser.add_argument("--password", required=True)
 parser.add_argument("--non-interactive", action="store_true")
 
 async def create_admin(email: str, password: str) -> None:
-    engine = create_async_engine(os.getenv("DATABASE_URL") or settings.SQLALCHEMY_DATABASE_URI)
+    engine = create_async_engine(os.getenv("DATABASE_URL") or settings.database_url)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
@@ -42,7 +42,7 @@ async def create_admin(email: str, password: str) -> None:
 
         admin = User(
             email=email,
-            hashed_password=get_password_hash(password),
+            hashed_password=hash_password(password),
             is_active=True,
             is_superuser=True,
         )

@@ -24,5 +24,11 @@ export const projectAPI = {
     client.get(`/api/projects/${id}/timeline`).then(r => r.data),
 
   addTimelineEvent: (id, data) =>
-    client.post(`/api/projects/${id}/timeline`, data).then(r => r.data)
+    client.post(`/api/projects/${id}/timeline`, data).then(r => r.data),
+
+  archive: (id) =>
+    client.post(`/api/projects/${id}/archive`).then(r => r.data),
+
+  unarchive: (id) =>
+    client.post(`/api/projects/${id}/unarchive`).then(r => r.data)
 };

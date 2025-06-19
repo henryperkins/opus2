@@ -1,3 +1,4 @@
+/* eslint-env browser */
 /**
  * useProjects.js — Custom hooks for project operations
  *

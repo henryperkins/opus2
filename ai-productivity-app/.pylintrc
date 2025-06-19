@@ -1,0 +1,7 @@
+[MASTER]
+# Add the backend directory to PYTHONPATH so Pylint can resolve `app.*` imports.
+init-hook='import sys, pathlib; backend = pathlib.Path(__file__).resolve().parent / "backend"; sys.path.insert(0, str(backend))'
+
+[MESSAGES CONTROL]
+# Disable common docstring warnings to keep noise low.
+disable=missing-module-docstring,missing-class-docstring,missing-function-docstring

@@ -6,24 +6,30 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
-from app.database import init_db
-from app.routers import auth, projects, monitoring, config as config_router
-from app.routers import code as code_router
-from app.routers import email as email_router
-from app.routers import notifications as notify_router
-from app.routers import import_git as import_git_router
-from app.routers import chat as chat_router
+from .config import settings
+from .database import init_db
+from .routers import auth, projects, monitoring, config as config_router
+from .routers import code as code_router
+from .routers import email as email_router
+from .routers import notifications as notify_router
+from .routers import import_git as import_git_router
+from .routers import chat as chat_router
+from .routers import timeline as timeline_router
+from .routers import search as search_router
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
+async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
+    """Application lifespan manager.
+
+    The parameter is required by the FastAPI lifespan hook but
+    is not used directly within this function.
+    """
     # Startup
     init_db()
     yield
     # Shutdown
-    pass
+    # Perform any necessary cleanup here
 
 
 # Create FastAPI application
@@ -54,6 +60,8 @@ app.include_router(config_router.router)
 app.include_router(email_router.router)
 app.include_router(notify_router.router)
 app.include_router(import_git_router.router)
+app.include_router(timeline_router.router)
+app.include_router(search_router.router)
 
 
 @app.get("/health")

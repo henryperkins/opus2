@@ -1,5 +1,6 @@
 /* eslint-env browser */
 /* eslint-disable react-refresh/only-export-components */
+/* global requestAnimationFrame */
 import {
   useEffect,
   useState,

@@ -6,7 +6,11 @@ WORKDIR /app
 
 # Install dependencies first for better layer caching
 COPY package*.json ./
-RUN npm ci
+# Set NODE_ENV=development to install devDependencies
+RUN NODE_ENV=development npm ci
+
+# Install wget for healthcheck probe
+RUN apk add --no-cache wget
 
 # Copy source code
 COPY . .

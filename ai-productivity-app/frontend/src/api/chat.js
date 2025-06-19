@@ -1,46 +1,34 @@
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+import client from './client';
 
 const chatAPI = {
   // Create a new chat session
   createSession: (data = {}) => {
-    return axios.post(`${API_BASE_URL}/chat/sessions`, data);
+    return client.post('/api/chat/sessions', data);
   },
 
   // Get session details
   getSession: (sessionId) => {
-    return axios.get(`${API_BASE_URL}/chat/sessions/${sessionId}`);
-  },
-
-  // Send a message in a session
-  sendMessage: (sessionId, data) => {
-    return axios.post(`${API_BASE_URL}/chat/sessions/${sessionId}/messages`, data);
+    return client.get(`/api/chat/sessions/${sessionId}`);
   },
 
   // Get messages from a session
   getMessages: (sessionId, params = {}) => {
-    return axios.get(`${API_BASE_URL}/chat/sessions/${sessionId}/messages`, { params });
-  },
-
-  // Update a message
-  updateMessage: (sessionId, messageId, data) => {
-    return axios.put(`${API_BASE_URL}/chat/sessions/${sessionId}/messages/${messageId}`, data);
-  },
-
-  // Delete a message
-  deleteMessage: (sessionId, messageId) => {
-    return axios.delete(`${API_BASE_URL}/chat/sessions/${sessionId}/messages/${messageId}`);
+    return client.get(`/api/chat/sessions/${sessionId}/messages`, { params });
   },
 
   // Get session history
   getSessionHistory: (params = {}) => {
-    return axios.get(`${API_BASE_URL}/chat/sessions`, { params });
+    return client.get('/api/chat/sessions', { params });
+  },
+
+  // Update a session
+  updateSession: (sessionId, data) => {
+    return client.patch(`/api/chat/sessions/${sessionId}`, data);
   },
 
   // Delete a session
   deleteSession: (sessionId) => {
-    return axios.delete(`${API_BASE_URL}/chat/sessions/${sessionId}`);
+    return client.delete(`/api/chat/sessions/${sessionId}`);
   }
 };
 
