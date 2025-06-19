@@ -4,21 +4,19 @@
  * Provides convenient hooks for common project operations including
  * single project fetching, timeline management, and search functionality.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import useProjectStore from "../stores/projectStore";
 
 /**
  * Hook for managing a single project with caching
  */
 export function useProject(id) {
-  const { 
-    currentProject, 
-    fetchProject, 
-    updateProject, 
-    deleteProject,
-    loading,
-    error 
-  } = useProjectStore();
+  const currentProject = useProjectStore(state => state.currentProject);
+  const fetchProject = useProjectStore(state => state.fetchProject);
+  const updateProject = useProjectStore(state => state.updateProject);
+  const deleteProject = useProjectStore(state => state.deleteProject);
+  const loading = useProjectStore(state => state.loading);
+  const error = useProjectStore(state => state.error);
   
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState(null);
@@ -77,13 +75,11 @@ export function useProject(id) {
  * Hook for managing project timeline events
  */
 export function useProjectTimeline(projectId) {
-  const { 
-    timeline, 
-    fetchTimeline, 
-    addTimelineEvent,
-    loading,
-    error 
-  } = useProjectStore();
+  const timeline = useProjectStore(state => state.timeline);
+  const fetchTimeline = useProjectStore(state => state.fetchTimeline);
+  const addTimelineEvent = useProjectStore(state => state.addTimelineEvent);
+  const loading = useProjectStore(state => state.loading);
+  const error = useProjectStore(state => state.error);
   
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState(null);
@@ -91,6 +87,7 @@ export function useProjectTimeline(projectId) {
   const fetch = useCallback(async () => {
     if (!projectId) return;
     
+    console.log('useProjectTimeline: Fetching timeline for project', projectId);
     setIsLoading(true);
     setLocalError(null);
     
@@ -115,12 +112,16 @@ export function useProjectTimeline(projectId) {
     }
   }, [addTimelineEvent, projectId]);
 
+  // Add ref to track last fetched project to prevent unnecessary refetches
+  const lastFetchedRef = useRef(null);
+  
   // Auto-fetch timeline when projectId changes
   useEffect(() => {
-    if (projectId) {
+    if (projectId && lastFetchedRef.current !== projectId) {
+      lastFetchedRef.current = projectId;
       fetch();
     }
-  }, [projectId, fetch]);
+  }, [projectId]);
 
   return {
     timeline,

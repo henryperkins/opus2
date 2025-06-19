@@ -10,7 +10,7 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Mount React app
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
+  // <React.StrictMode>
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
@@ -19,5 +19,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
-  </React.StrictMode>
+  // </React.StrictMode>
 );

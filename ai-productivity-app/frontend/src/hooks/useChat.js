@@ -16,18 +16,25 @@ export const useChat = (projectId) => {
   const mountedRef = useRef(true);
   const cleanupRef = useRef(false);
   const initializingRef = useRef(false);
+  const currentProjectRef = useRef(null);
 
   // Create chat session
   const createSession = useCallback(async () => {
-    if (!projectId || sessionCreatedRef.current || cleanupRef.current) return;
+    if (!projectId || sessionCreatedRef.current || cleanupRef.current) {
+      console.log('Skipping session creation - projectId:', projectId, 'sessionCreated:', sessionCreatedRef.current, 'cleanup:', cleanupRef.current);
+      return null;
+    }
 
     try {
       sessionCreatedRef.current = true;
       setError(null);
 
+      console.log('Creating session for project:', projectId);
       const response = await client.post(`/api/chat/sessions`, {
         project_id: projectId
       });
+
+      console.log('Session creation response:', response.data);
 
       if (mountedRef.current && !cleanupRef.current) {
         setSessionId(response.data.id);
@@ -36,9 +43,9 @@ export const useChat = (projectId) => {
 
       return null;
     } catch (err) {
+      console.error('Failed to create session:', err);
       sessionCreatedRef.current = false;
       if (mountedRef.current && !cleanupRef.current) {
-        console.error('Failed to create session:', err);
         setError('Failed to create chat session');
       }
       return null;
@@ -104,28 +111,71 @@ export const useChat = (projectId) => {
 
   // Initialize session and WebSocket
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId) {
+      setSessionId(null);
+      setMessages([]);
+      setConnectionState('disconnected');
+      return;
+    }
 
-    let cleanup = false;
+    // If this is the same project, don't reinitialize
+    if (currentProjectRef.current === projectId && sessionCreatedRef.current) {
+      return;
+    }
+
+    // Clean up previous session if switching projects
+    if (currentProjectRef.current !== projectId) {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      sessionCreatedRef.current = false;
+      setSessionId(null);
+      setMessages([]);
+    }
+
+    // Prevent multiple initializations for the same project
+    if (initializingRef.current && currentProjectRef.current === projectId) {
+      return;
+    }
+
+    currentProjectRef.current = projectId;
+    cleanupRef.current = false;
+    initializingRef.current = true;
+    setConnectionState('connecting');
 
     const initializeChat = async () => {
       console.log('Initializing chat for project:', projectId);
-      setConnectionState('connecting');
-      const newSessionId = await createSession();
-      console.log('Created session:', newSessionId);
+      
+      try {
+        const newSessionId = await createSession();
+        console.log('Created session:', newSessionId);
 
-      if (!cleanup && newSessionId) {
-        console.log('Connecting WebSocket for session:', newSessionId);
-        connectWebSocket(newSessionId);
-      } else {
-        console.log('Skipping WebSocket connection - cleanup:', cleanup, 'sessionId:', newSessionId);
+        if (!cleanupRef.current && newSessionId && mountedRef.current && currentProjectRef.current === projectId) {
+          console.log('Connecting WebSocket for session:', newSessionId);
+          connectWebSocket(newSessionId);
+        } else {
+          console.log('Skipping WebSocket connection - cleanup:', cleanupRef.current, 'sessionId:', newSessionId, 'mounted:', mountedRef.current, 'currentProject:', currentProjectRef.current);
+          if (mountedRef.current) {
+            setConnectionState('disconnected');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize chat:', error);
+        if (mountedRef.current) {
+          setConnectionState('error');
+          setError('Failed to initialize chat session');
+        }
+      } finally {
+        initializingRef.current = false;
       }
     };
 
     initializeChat();
 
     return () => {
-      cleanup = true;
+      cleanupRef.current = true;
+      initializingRef.current = false;
       console.log('Cleanup initiated for project:', projectId);
     };
   }, [projectId]);
@@ -134,6 +184,10 @@ export const useChat = (projectId) => {
   useEffect(() => {
     return () => {
       mountedRef.current = false;
+      cleanupRef.current = true;
+      sessionCreatedRef.current = false;
+      initializingRef.current = false;
+      currentProjectRef.current = null;
 
       if (wsRef.current) {
         wsRef.current.close();
