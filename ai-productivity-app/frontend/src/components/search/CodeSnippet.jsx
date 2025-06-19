@@ -1,15 +1,11 @@
 // Code snippet display with syntax highlighting and line numbers
-import React, { memo } from 'react';
-import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
-import python from 'react-syntax-highlighter/dist/esm/languages/hljs/python';
-import javascript from 'react-syntax-highlighter/dist/esm/languages/hljs/javascript';
-import typescript from 'react-syntax-highlighter/dist/esm/languages/hljs/typescript';
+import React, { memo, Suspense } from 'react';
+import PropTypes from 'prop-types';
+import { prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-// Register languages
-SyntaxHighlighter.registerLanguage('python', python);
-SyntaxHighlighter.registerLanguage('javascript', javascript);
-SyntaxHighlighter.registerLanguage('typescript', typescript);
+const LazySyntaxHighlighter = React.lazy(() =>
+  import('react-syntax-highlighter/dist/esm/prism-async-light')
+);
 
 const CodeSnippet = memo(({ content, language, startLine, highlightLines = [] }) => {
   // Limit preview to first 15 lines
@@ -27,31 +23,33 @@ const CodeSnippet = memo(({ content, language, startLine, highlightLines = [] })
           </span>
         </div>
 
-        <SyntaxHighlighter
-          language={language}
-          style={atomOneDark}
-          showLineNumbers
-          startingLineNumber={startLine || 1}
-          wrapLines
-          lineProps={lineNumber => {
-            const isHighlighted = highlightLines.includes(lineNumber);
-            return {
-              style: {
-                backgroundColor: isHighlighted ? '#364152' : 'transparent',
-                display: 'block',
-                width: '100%'
-              }
-            };
-          }}
-          customStyle={{
-            margin: 0,
-            padding: '1rem',
-            fontSize: '0.875rem',
-            lineHeight: '1.5'
-          }}
-        >
-          {previewContent}
-        </SyntaxHighlighter>
+        <Suspense fallback={<pre className="p-4 text-sm bg-gray-800 text-white">{previewContent}</pre>}>
+          <LazySyntaxHighlighter
+            language={language}
+            style={prism}
+            showLineNumbers
+            startingLineNumber={startLine || 1}
+            wrapLines
+            lineProps={lineNumber => {
+              const isHighlighted = highlightLines.includes(lineNumber);
+              return {
+                style: {
+                  backgroundColor: isHighlighted ? '#364152' : 'transparent',
+                  display: 'block',
+                  width: '100%'
+                }
+              };
+            }}
+            customStyle={{
+              margin: 0,
+              padding: '1rem',
+              fontSize: '0.875rem',
+              lineHeight: '1.5'
+            }}
+          >
+            {previewContent}
+          </LazySyntaxHighlighter>
+        </Suspense>
 
         {hasMore && (
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-gray-900 to-transparent h-8 flex items-end justify-center pb-1">
@@ -64,6 +62,13 @@ const CodeSnippet = memo(({ content, language, startLine, highlightLines = [] })
     </div>
   );
 });
+
+CodeSnippet.propTypes = {
+  content: PropTypes.string.isRequired,
+  language: PropTypes.string.isRequired,
+  startLine: PropTypes.number,
+  highlightLines: PropTypes.arrayOf(PropTypes.number),
+};
 
 CodeSnippet.displayName = 'CodeSnippet';
 

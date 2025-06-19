@@ -8,6 +8,7 @@ import CodePreview from './CodePreview';
 import MonacoEditor from '@monaco-editor/react';
 import SplitPane from '../common/SplitPane';
 import DependencyGraph from '../knowledge/DependencyGraph';
+import InteractiveCanvas from '../canvas/InteractiveCanvas';
 
 export default function CodeChat({ sessionId, projectId }) {
   const user = useUser();
@@ -25,7 +26,7 @@ export default function CodeChat({ sessionId, projectId }) {
   const [editorLanguage, setEditorLanguage] = useState('python');
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [showDiff, setShowDiff] = useState(false);
-  const [viewMode, setViewMode] = useState('editor');
+  const [viewMode, setViewMode] = useState('editor'); // 'editor', 'dependency', 'canvas'
 
   // Extract code from selected message
   useEffect(() => {
@@ -119,14 +120,15 @@ export default function CodeChat({ sessionId, projectId }) {
             >
               Diff View
             </button>
-            <button
-              onClick={() => setViewMode(viewMode === 'canvas' ? 'editor' : 'canvas')}
-              className={`text-sm px-3 py-1 rounded ${
-                viewMode === 'canvas' ? 'bg-blue-500 text-white' : 'bg-white border'
-              }`}
+            <select
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value)}
+              className="text-sm border rounded px-2 py-1 bg-white"
             >
-              {viewMode === 'canvas' ? 'Editor' : 'Canvas'}
-            </button>
+              <option value="editor">Code Editor</option>
+              <option value="dependency">Dependency Graph</option>
+              <option value="canvas">Canvas</option>
+            </select>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -143,18 +145,24 @@ export default function CodeChat({ sessionId, projectId }) {
         </div>
 
         <div className="flex-1">
-          <MonacoEditor
-            value={editorContent}
-            language={editorLanguage}
-            onChange={setEditorContent}
-            theme="vs-dark"
-            options={{
-              minimap: { enabled: false },
-              fontSize: 14,
-              wordWrap: 'on',
-              automaticLayout: true
-            }}
-          />
+          {viewMode === 'editor' ? (
+            <MonacoEditor
+              value={editorContent}
+              language={editorLanguage}
+              onChange={setEditorContent}
+              theme="vs-dark"
+              options={{
+                minimap: { enabled: false },
+                fontSize: 14,
+                wordWrap: 'on',
+                automaticLayout: true
+              }}
+            />
+          ) : viewMode === 'dependency' ? (
+            <DependencyGraph projectId={projectId} />
+          ) : (
+            <InteractiveCanvas projectId={projectId} />
+          )}
         </div>
 
         {/* Code preview for selected message */}

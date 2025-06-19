@@ -12,6 +12,20 @@ function eventIcon(type) {
       return "📦";
     case "file_added":
       return "📄";
+    case "canvas_created":
+      return "🎨";
+    case "canvas_updated":
+      return "🖌️";
+    case "chat_message":
+      return "💬";
+    case "code_generated":
+      return "⚡";
+    case "model_changed":
+      return "🤖";
+    case "dependency_analyzed":
+      return "🔗";
+    case "search_performed":
+      return "🔍";
     default:
       return "⏺️";
   }
@@ -30,6 +44,71 @@ function formatRelative(ts) {
 }
 
 export default function TimelineEvent({ event }) {
+  const renderEventDetails = () => {
+    const { metadata } = event;
+    
+    if (!metadata) return null;
+
+    switch (event.event_type) {
+      case "canvas_created":
+      case "canvas_updated":
+        return (
+          <div className="mt-2 p-2 bg-purple-50 rounded text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Canvas: {metadata.canvas_name}</span>
+              {metadata.shapes_count && (
+                <span className="text-purple-600">{metadata.shapes_count} elements</span>
+              )}
+            </div>
+          </div>
+        );
+      
+      case "chat_message":
+        return metadata.message_type === 'command' ? (
+          <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
+            <span className="font-mono text-blue-700">{metadata.command}</span>
+          </div>
+        ) : null;
+      
+      case "code_generated":
+        return (
+          <div className="mt-2 p-2 bg-green-50 rounded text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">{metadata.language} code</span>
+              {metadata.lines_count && (
+                <span className="text-green-600">{metadata.lines_count} lines</span>
+              )}
+            </div>
+          </div>
+        );
+      
+      case "model_changed":
+        return (
+          <div className="mt-2 p-2 bg-orange-50 rounded text-xs">
+            <div className="flex items-center justify-between">
+              <span>From: <span className="font-mono">{metadata.old_model}</span></span>
+              <span>To: <span className="font-mono">{metadata.new_model}</span></span>
+            </div>
+          </div>
+        );
+      
+      case "search_performed":
+        return (
+          <div className="mt-2 p-2 bg-yellow-50 rounded text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Query: "{metadata.query}"</span>
+              {metadata.results_count && (
+                <span className="text-yellow-700">{metadata.results_count} results</span>
+              )}
+            </div>
+          </div>
+        );
+      
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="timeline-event relative mb-6 pl-8">
       <div className="absolute left-0 top-1 flex flex-col items-center">
@@ -44,6 +123,7 @@ export default function TimelineEvent({ event }) {
         {event.description && (
           <div className="mt-1 text-sm text-gray-600">{event.description}</div>
         )}
+        {renderEventDetails()}
       </div>
     </div>
   );

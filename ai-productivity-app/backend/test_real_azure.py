@@ -17,8 +17,8 @@ async def test_azure_configuration():
     # Set your Azure OpenAI configuration
     test_config = {
         "LLM_PROVIDER": "azure",
-        "AZURE_OPENAI_API_KEY": "nClGElxn2jB3qTRQ0rxwMZi9ehHM3thZ3uVidNs0M8iXNOlnJ8lGJQQJ99BFACHYHv6XJ3w3AAABACOGY9E6",
-        "AZURE_OPENAI_ENDPOINT": "https://oairesourcehp.openai.azure.com/",
+        "AZURE_OPENAI_API_KEY": "your-azure-openai-key-here",
+        "AZURE_OPENAI_ENDPOINT": "https://your-resource.openai.azure.com/",
         "AZURE_OPENAI_API_VERSION": "2025-04-01-preview",
         "LLM_MODEL": "gpt-4.1"
     }
@@ -89,8 +89,8 @@ async def test_azure_configuration():
         print("\n🎉 Azure OpenAI configuration test passed!")
         print("\n📝 Your configuration is ready to use:")
         print("   LLM_PROVIDER=azure")
-        print("   AZURE_OPENAI_API_KEY=nClGElxn2jB3qTRQ0rxwMZi9ehHM3thZ3uVidNs0M8iXNOlnJ8lGJQQJ99BFACHYHv6XJ3w3AAABACOGY9E6")
-        print("   AZURE_OPENAI_ENDPOINT=https://oairesourcehp.openai.azure.com/")
+        print("   AZURE_OPENAI_API_KEY=your-azure-openai-key-here")
+        print("   AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/")
         print("   AZURE_OPENAI_API_VERSION=2025-04-01-preview")
         print("   LLM_MODEL=gpt-4.1")
 
@@ -116,8 +116,8 @@ async def test_simple_completion():
     # Set configuration again
     os.environ.update({
         "LLM_PROVIDER": "azure",
-        "AZURE_OPENAI_API_KEY": "nClGElxn2jB3qTRQ0rxwMZi9ehHM3thZ3uVidNs0M8iXNOlnJ8lGJQQJ99BFACHYHv6XJ3w3AAABACOGY9E6",
-        "AZURE_OPENAI_ENDPOINT": "https://oairesourcehp.openai.azure.com/",
+        "AZURE_OPENAI_API_KEY": "your-azure-openai-key-here",
+        "AZURE_OPENAI_ENDPOINT": "https://your-resource.openai.azure.com/",
         "AZURE_OPENAI_API_VERSION": "2025-04-01-preview",
         "LLM_MODEL": "gpt-4.1"
     })

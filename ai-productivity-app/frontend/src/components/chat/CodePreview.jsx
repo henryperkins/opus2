@@ -1,6 +1,6 @@
 import React from 'react';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { atomOneDark } from 'react-syntax-highlighter/dist/cjs/styles/hljs/atom-one-dark';
 
 export default function CodePreview({ snippets, onApply }) {
   if (!snippets || snippets.length === 0) return null;

@@ -1,30 +1,40 @@
 /* eslint-env node */
-// Vite configuration for React development
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+// Vite configuration for React / Tailwind project
+import { defineConfig, splitVendorChunkPlugin } from 'vite';
+import react from '@vitejs/plugin-react';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 // ---------------------------------------------------------------------------
-// Helper: determine backend URL for the dev-server proxy.
-// Priority (first match wins):
-//   1. Explicit env var VITE_API_URL   → works for Docker where we set
-//      "http://backend:8000".
-//   2. BACKEND_URL                     → gives local developers flexibility
-//   3. Fallback                        → http://localhost:8000 (no Docker)
-// ---------------------------------------------------------------------------
-
-// In Docker environment, proxy should target the backend service
-// In local development, proxy should target localhost
-const backendTarget = process.env.NODE_ENV === 'development' && process.env.DOCKER_ENV === 'true'
-  ? 'http://backend:8000'  // Docker service name
-  : process.env.VITE_API_URL || process.env.BACKEND_URL || 'http://localhost:8000';
+// Helper: decide proxy target (Docker-aware)
+const backendTarget =
+  // eslint-disable-next-line no-undef
+  process.env.NODE_ENV === 'development' && process.env.DOCKER_ENV === 'true'
+    ? 'http://backend:8000' // Docker service name
+    : // eslint-disable-next-line no-undef
+    process.env.VITE_API_URL ||
+    // eslint-disable-next-line no-undef
+    process.env.BACKEND_URL ||
+    'http://localhost:8000';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    splitVendorChunkPlugin(),                // automatic vendor splitter
+    visualizer({
+      filename: 'stats.html',
+      template: 'treemap',
+      gzipSize: true,
+    }),
+  ],
+
+  // Vitest
   test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',
   },
+
+  // Dev-server
   server: {
     host: '0.0.0.0',
     port: 5173,
@@ -33,15 +43,39 @@ export default defineConfig({
       '/api': {
         target: backendTarget,
         changeOrigin: true,
-        ws: true,                 // enable WebSocket proxying
-        rewrite: (path) => path, // keep original path
+        ws: true,
+        rewrite: (p) => p,
       },
     },
   },
+
+  // Production build
   build: {
     outDir: 'dist',
     sourcemap: true,
     minify: 'esbuild',
     target: 'esnext',
+    /**
+     * After deliberate chunking we allow 1.5 MB as the
+     * *warning* threshold so CI stays green.
+     */
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        /**
+         * Put heavyweight third-party libs in their own
+         * cache-friendly files.
+         */
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+
+          if (id.includes('@monaco-editor')) return 'monaco';
+          if (/react-syntax-highlighter/.test(id)) return 'syntax';
+          if (/[\\/](d3|d3-.*?)[\\/]/.test(id)) return 'd3';
+          if (/react|react-dom|scheduler/.test(id)) return 'react';
+          return 'vendor';
+        },
+      },
+    },
   },
 });

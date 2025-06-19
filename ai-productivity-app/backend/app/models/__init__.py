@@ -8,6 +8,8 @@ from .project import Project, ProjectStatus
 from .code import CodeDocument, CodeEmbedding
 from .search_history import SearchHistory
 from .import_job import ImportJob, ImportStatus
+from .chat import ChatSession, ChatMessage
+from .timeline import TimelineEvent
 
 __all__ = [
     "Base",
@@ -21,6 +23,9 @@ __all__ = [
     "SearchHistory",
     "ImportJob",
     "ImportStatus",
+    "ChatSession",
+    "ChatMessage",
+    "TimelineEvent",
 ]
 
 # ---------------------------------------------------------------------------
