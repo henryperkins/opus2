@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useProject, useProjectTimeline } from '../hooks/useProjects';
+import { useUser } from '../hooks/useAuth';
 import Header from '../components/common/Header';
 import MessageList from '../components/chat/MessageList';
 import CommandInput from '../components/chat/CommandInput';
@@ -14,6 +15,7 @@ import chatAPI from '../api/chat';
 import FileUpload from '../components/knowledge/FileUpload';
 import DependencyGraph from '../components/knowledge/DependencyGraph';
 import SplitPane from '../components/common/SplitPane';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 import { createTwoFilesPatch } from 'diff';
 
 // Tracks projects with files already fetched
@@ -23,6 +25,7 @@ export default function ProjectChatPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const user = useUser();
 
   // Prefer project passed via navigation state to avoid an extra API call.
   const stateProject = location.state?.project;
@@ -40,6 +43,7 @@ export default function ProjectChatPage() {
   const [projectFiles, setProjectFiles] = useState([]);
   const [splitView, setSplitView] = useState(true);
   const [rightPanelMode, setRightPanelMode] = useState('editor');
+  const [savingDiff, setSavingDiff] = useState(false);
 
   const refreshFiles = () => {
     fetchProjectFiles();
@@ -139,7 +143,8 @@ export default function ProjectChatPage() {
   };
 
   const handleSaveDiff = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || savingDiff) return;
+    setSavingDiff(true);
     const patch = createTwoFilesPatch(
       selectedFile.path,
       selectedFile.path,
@@ -158,6 +163,8 @@ export default function ProjectChatPage() {
       setOriginalContent(editorContent);
     } catch (err) {
       console.error('Failed to save diff:', err);
+    } finally {
+      setSavingDiff(false);
     }
   };
 
@@ -210,7 +217,7 @@ export default function ProjectChatPage() {
           onCodeSelect={handleCodeSelect}
           onMessageEdit={editMessage}
           onMessageDelete={deleteMessage}
-          currentUserId={1} // Replace with actual user ID
+          currentUserId={user?.id}
         />
       </div>
 
@@ -263,9 +270,10 @@ export default function ProjectChatPage() {
           </button>
           <button
             onClick={handleSaveDiff}
-            className="text-sm px-3 py-1 rounded bg-green-500 text-white"
+            disabled={savingDiff}
+            className={`text-sm px-3 py-1 rounded ${savingDiff ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600'} text-white`}
           >
-            Save Diff
+            {savingDiff ? 'Saving...' : 'Save Diff'}
           </button>
           <button
             onClick={() =>
@@ -322,7 +330,9 @@ export default function ProjectChatPage() {
         </button>
       </div>
       <div className="flex-1 overflow-auto p-4">
-        <DependencyGraph projectId={projectId} />
+        <ErrorBoundary>
+          <DependencyGraph projectId={projectId} />
+        </ErrorBoundary>
       </div>
     </div>
   );

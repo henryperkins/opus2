@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useChat } from '../../hooks/useChat';
 import { useCodeEditor } from '../../hooks/useCodeEditor';
+import { useUser } from '../../hooks/useAuth';
 import MessageList from './MessageList';
 import CommandInput from './CommandInput';
 import CodePreview from './CodePreview';
@@ -9,6 +10,7 @@ import SplitPane from '../common/SplitPane';
 import DependencyGraph from '../knowledge/DependencyGraph';
 
 export default function CodeChat({ sessionId, projectId }) {
+  const user = useUser();
   const {
     messages,
     connectionState,
