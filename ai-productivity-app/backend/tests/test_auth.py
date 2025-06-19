@@ -29,8 +29,7 @@ def test_user_data():
     return {
         "username": "testuser",
         "email": "test@example.com",
-        "password": "testpassword123",
-        "invite_code": "code1"
+        "password": "testpassword123"
     }
 
 
@@ -56,8 +55,7 @@ class TestUserRegistration:
         data = {
             "username": "newuser",
             "email": "new@example.com", 
-            "password": "password123",
-            "invite_code": "code1"
+            "password": "password123"
         }
         response = client.post("/api/auth/register", json=data)
         
@@ -73,26 +71,13 @@ class TestUserRegistration:
         assert user.email == "new@example.com"
         assert user.is_active is True
 
-    def test_register_invalid_invite_code(self):
-        """Test registration with invalid invite code."""
-        data = {
-            "username": "failuser",
-            "email": "fail@example.com",
-            "password": "password123", 
-            "invite_code": "invalid"
-        }
-        response = client.post("/api/auth/register", json=data)
-        
-        assert response.status_code == 403
-        assert "Invalid invite code" in response.json()["detail"]
 
     def test_register_duplicate_username(self, test_user):
         """Test registration with existing username."""
         data = {
             "username": test_user.username,
             "email": "different@example.com",
-            "password": "password123",
-            "invite_code": "code1"
+            "password": "password123"
         }
         response = client.post("/api/auth/register", json=data)
         
@@ -104,8 +89,7 @@ class TestUserRegistration:
         data = {
             "username": "differentuser",
             "email": test_user.email,
-            "password": "password123",
-            "invite_code": "code1"
+            "password": "password123"
         }
         response = client.post("/api/auth/register", json=data)
         
@@ -117,8 +101,7 @@ class TestUserRegistration:
         data = {
             "username": "newuser",
             "email": "new@example.com",
-            "password": "short",  # Too short
-            "invite_code": "code1"
+            "password": "short"  # Too short
         }
         response = client.post("/api/auth/register", json=data)
         
@@ -129,8 +112,7 @@ class TestUserRegistration:
         data = {
             "username": "newuser",
             "email": "not-an-email",
-            "password": "password123",
-            "invite_code": "code1"
+            "password": "password123"
         }
         response = client.post("/api/auth/register", json=data)
         
@@ -339,8 +321,7 @@ class TestSecurityFeatures:
         data = {
             "username": "spammer",
             "email": "spam@example.com",
-            "password": "password123",
-            "invite_code": "code1"
+            "password": "password123"
         }
         
         # Make multiple requests quickly (should hit rate limit)

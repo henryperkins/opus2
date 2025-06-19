@@ -11,7 +11,7 @@ from pathlib import Path
 # Ensure project root (backend) is importable when script executed directly
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from app.database import SessionLocal  # noqa: E402
+from app.database import SessionLocal, init_db  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.auth.security import hash_password  # noqa: E402
 
@@ -45,6 +45,9 @@ async def seed() -> None:
 
 
 def main() -> None:
+    print("🗄️ Initializing database...")
+    init_db()
+    print("✅ Database schema created")
     asyncio.run(seed())
 
 

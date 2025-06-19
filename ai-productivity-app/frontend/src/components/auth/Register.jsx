@@ -7,8 +7,7 @@ function Register({ onLoginSwitch }) {
     username: '',
     email: '',
     password: '',
-    confirmPassword: '',
-    inviteCode: ''
+    confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -31,8 +30,7 @@ function Register({ onLoginSwitch }) {
       await authAPI.register({
         username: formData.username,
         email: formData.email,
-        password: formData.password,
-        invite_code: formData.inviteCode
+        password: formData.password
       });
       // Backend returns a token and sets the auth cookie, so we can immediately
       // call the global login helper to populate user state and redirect.
@@ -134,20 +132,6 @@ function Register({ onLoginSwitch }) {
         />
       </div>
 
-      <div>
-        <label htmlFor="inviteCode" className="block text-sm font-medium text-gray-700">Invite Code</label>
-        <input
-          type="text"
-          id="inviteCode"
-          name="inviteCode"
-          value={formData.inviteCode}
-          onChange={handleChange}
-          required
-          disabled={loading}
-          placeholder="Required for registration"
-          className="mt-1 block w-full border rounded-md p-2 disabled:opacity-50"
-        />
-      </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-md p-4">
