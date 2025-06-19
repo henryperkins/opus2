@@ -47,10 +47,22 @@ _AZURE_CHAT_MODELS = [
     # an administrator can map to their concrete deployment names.  The
     # frontend usually provides a text-input when "azure" is selected so that
     # operators can fill in the correct value.
+
+    # Traditional Chat Completions models
     "gpt-4o",  # or your deployment named "gpt4o-general"
+    "gpt-4o-mini",
     "gpt-4-turbo",
     "gpt-4",
     "gpt-35-turbo",  # Azure naming convention for GPT-3.5
+
+    # Azure Responses API models (requires api_version="preview")
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+    "o3",
+    "o4-mini",
+    "gpt-image-1",
+    "computer-use-preview",
 ]
 
 
@@ -75,6 +87,20 @@ async def get_config():  # noqa: D401
                 "embedding_models": [
                     "text-embedding-ada-002",
                 ],
+                "api_versions": [
+                    "2024-02-01",  # Standard Chat Completions API
+                    "2025-04-01-preview",  # Latest Responses API with advanced features
+                    "preview",     # Legacy preview alias
+                ],
+                "features": {
+                    "responses_api": (
+                        settings.azure_openai_api_version in ["preview", "2025-04-01-preview"]
+                    ),
+                    "background_tasks": True,
+                    "image_generation": True,
+                    "computer_use": True,
+                    "mcp_servers": True,
+                },
             },
         },
         # Expose the **currently** configured defaults so the UI can mark

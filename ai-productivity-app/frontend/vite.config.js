@@ -12,10 +12,11 @@ import react from '@vitejs/plugin-react'
 //   3. Fallback                        → http://localhost:8000 (no Docker)
 // ---------------------------------------------------------------------------
 
-const backendTarget =
-  process.env.VITE_API_URL ||
-  process.env.BACKEND_URL ||
-  'http://localhost:8000';
+// In Docker environment, proxy should target the backend service
+// In local development, proxy should target localhost
+const backendTarget = process.env.NODE_ENV === 'development' && process.env.DOCKER_ENV === 'true'
+  ? 'http://backend:8000'  // Docker service name
+  : process.env.VITE_API_URL || process.env.BACKEND_URL || 'http://localhost:8000';
 
 export default defineConfig({
   plugins: [react()],

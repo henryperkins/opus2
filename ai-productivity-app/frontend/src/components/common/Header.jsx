@@ -12,6 +12,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import UserMenu from '../auth/UserMenu';
+import AIProviderStatus from './AIProviderStatus';
 
 function Header() {
   const { user, loading } = useAuth();
@@ -72,6 +73,9 @@ function Header() {
 
           {/* Right side - User menu or login */}
           <div className="flex items-center space-x-4">
+            {/* AI Provider Status */}
+            <AIProviderStatus className="hidden sm:block" />
+
             {loading ? (
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             ) : user ? (

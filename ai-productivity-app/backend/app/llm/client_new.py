@@ -1,4 +1,5 @@
-from typing import Optional, AsyncIterator, Dict, List
+from typing import Optional, AsyncIterator, Dict, List, Union
+import openai
 from openai import AsyncOpenAI, AsyncAzureOpenAI
 import logging
 
@@ -68,7 +69,7 @@ class LLMClient:
         # Track whether to use Responses API (Azure) or Chat Completions API
         self.use_responses_api = (
             self.provider == 'azure' and
-            settings.azure_openai_api_version in ["preview", "2025-04-01-preview"]
+            settings.azure_openai_api_version == "preview"
         )
 
         self.client = self._create_client()
@@ -223,8 +224,8 @@ class LLMClient:
 
             if is_not_found and self.active_model != self._fallback_model:
                 logger.warning(
-                    "Model '%s' unavailable, falling back to '%s'",
-                    self.active_model, self._fallback_model
+                    "Model '%s' unavailable (reason: %s), falling back to '%s'",
+                    self.active_model, str(exc), self._fallback_model
                 )
                 self.active_model = self._fallback_model
                 try:

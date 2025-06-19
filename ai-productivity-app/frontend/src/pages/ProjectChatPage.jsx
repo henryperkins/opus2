@@ -34,7 +34,6 @@ export default function ProjectChatPage() {
   const { addEvent } = useProjectTimeline(projectId);
 
   const project = stateProject || fetchedProject;
-  const [sessionId, setSessionId] = useState(null);
   const [editorContent, setEditorContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
   const [editorLanguage, setEditorLanguage] = useState('python');
@@ -60,24 +59,11 @@ export default function ProjectChatPage() {
 
   useEffect(() => {
     if (!projectId) return;
-
-    // Create chat session once per mount
-    if (!sessionId) {
-      chatAPI
-        .createSession(projectId)
-        .then((resp) => {
-          setSessionId(resp.id);
-        })
-        .catch((err) => {
-          console.error('Failed to create chat session:', err);
-        });
-    }
-
     if (!filesFetchedForProject.has(projectId)) {
       fetchProjectFiles().finally(() => filesFetchedForProject.add(projectId));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, sessionId]);
+  }, [projectId]);
 
   const fetchProjectFiles = async () => {
     try {
@@ -109,8 +95,9 @@ export default function ProjectChatPage() {
     sendMessage,
     editMessage,
     deleteMessage,
-    sendTypingIndicator
-  } = useChat(sessionId);
+    sendTypingIndicator,
+    sessionId,
+  } = useChat(projectId);
 
   const handleSendMessage = (content, metadata) => {
     // Include current editor content if mentioned
@@ -288,7 +275,7 @@ export default function ProjectChatPage() {
           <button
             onClick={() => {
               navigator.clipboard.writeText(editorContent).catch(() => {
-                alert('Failed to copy code to clipboard.');
+                window.alert('Failed to copy code to clipboard.');
               });
             }}
             className="p-1 text-gray-600 hover:text-gray-900"

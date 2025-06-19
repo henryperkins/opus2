@@ -108,6 +108,7 @@ class TimelineEventType(str, Enum):
     FILE_REMOVED = "file_removed"
     MILESTONE = "milestone"
     COMMENT = "comment"
+    CHAT_CREATED = "chat_created"
 
 
 class TimelineEventCreate(BaseModel):

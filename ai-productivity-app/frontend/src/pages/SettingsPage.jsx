@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import useAuthStore from '../stores/authStore';
 import Header from '../components/common/Header';
+import AIProviderInfo from '../components/settings/AIProviderInfo';
 
 function SettingsPage() {
   const { user } = useAuth();
@@ -40,7 +41,7 @@ function SettingsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      
+
       <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -56,7 +57,7 @@ function SettingsPage() {
               <h2 className="text-lg font-medium text-gray-900 mb-4">
                 User Preferences
               </h2>
-              
+
               <div className="space-y-4">
                 {/* Remember Me */}
                 <div className="flex items-center justify-between">
@@ -120,12 +121,20 @@ function SettingsPage() {
               </div>
             </div>
 
+            {/* AI Provider Configuration */}
+            <div className="border-t border-gray-200 pt-6">
+              <h2 className="text-lg font-medium text-gray-900 mb-4">
+                AI Provider Configuration
+              </h2>
+              <AIProviderInfo />
+            </div>
+
             {/* Account Security */}
             <div className="border-t border-gray-200 pt-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">
                 Account Security
               </h2>
-              
+
               <div className="space-y-4">
                 <div className="bg-gray-50 p-4 rounded-md">
                   <h3 className="text-sm font-medium text-gray-900">

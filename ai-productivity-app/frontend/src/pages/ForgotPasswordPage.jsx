@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import authAPI from '../api/auth';
 
 export default function ForgotPasswordPage() {
   const {
@@ -13,6 +12,7 @@ export default function ForgotPasswordPage() {
   async function onSubmit({ email }) {
     setServerError('');
     try {
+      const { authAPI } = await import('../api/auth');
       await authAPI.requestPasswordReset(email);
     } catch (err) {
       console.error(err);

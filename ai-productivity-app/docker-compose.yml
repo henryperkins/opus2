@@ -37,6 +37,7 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
+      - DOCKER_ENV=true
       # Frontend (inside container) must talk to backend service via its Docker
       # network alias "backend" rather than localhost.
       - VITE_API_URL=http://backend:8000

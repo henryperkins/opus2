@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     invite_codes: str = "code1,code2,code3"
 
     # CORS
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     # API Keys (for future phases)
     openai_api_key: Optional[str] = None
@@ -111,9 +111,12 @@ class Settings(BaseSettings):
     # The *api_version* parameter is mandatory for Azure OpenAI requests.  We
     # expose it as a setting with a sane default matching the SDK's examples
     # so users can easily pin a different version when Microsoft publishes a
-    # new stable release.
+    # new stable release. Use "preview" to enable Azure Responses API.
 
     azure_openai_api_version: str = "2024-02-01"
+
+    # Azure authentication method - can be "api_key" or "entra_id"
+    azure_auth_method: str = "api_key"
 
     # LLM settings
     llm_provider: str = "openai"
@@ -144,6 +147,11 @@ class Settings(BaseSettings):
     def effective_secret_key(self) -> str:
         """Return JWT secret key if set, otherwise fall back to main secret"""
         return self.jwt_secret_key or self.secret_key
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Return list of CORS origins"""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def invite_codes_list(self) -> list[str]:

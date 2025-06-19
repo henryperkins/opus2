@@ -40,6 +40,7 @@ tiktoken
 numpy==1.26.4
 # LLM provider
 openai==1.14.2
+azure-identity==1.15.0  # For Azure OpenAI authentication
 
 # WebSocket support
 # FastAPI uses starlette which supports WebSocket communication, but the

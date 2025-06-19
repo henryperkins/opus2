@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
-import authAPI from '../api/auth';
 
 export default function ResetPasswordPage() {
   const { token } = useParams();
@@ -19,6 +18,7 @@ export default function ResetPasswordPage() {
   async function onSubmit({ password }) {
     setServerError('');
     try {
+      const { authAPI } = await import('../api/auth');
       await authAPI.submitPasswordReset(token, password);
       setSuccess(true);
       // Optionally redirect to login after short delay
