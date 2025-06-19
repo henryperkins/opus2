@@ -3,7 +3,7 @@ Authentication API router.
 
 Endpoints
 ---------
-POST /api/auth/register       – Invite-only user registration
+POST /api/auth/register       – User registration
 POST /api/auth/login          – Username/email + password login
 POST /api/auth/logout         – Clear session cookie
 GET  /api/auth/me             – Return current authenticated user
@@ -51,7 +51,6 @@ from app.dependencies import CurrentUserRequired, DatabaseDep
 from app.models.user import User
 
 # Re-use shared helpers to avoid duplication
-from app.auth.utils import validate_invite_code
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -100,12 +99,11 @@ def register(
     response: Response,
     db: DatabaseDep,
 ) -> TokenResponse:
-    """Invite-only registration. Returns token and sets cookie."""
+    """User registration. Returns token and sets cookie."""
     # Rate-limit **per IP** to stay in line with the original SlowAPI behaviour.
     client_ip = request.client.host if request.client else "unknown"
     security.enforce_rate_limit(f"register:{client_ip}", limit=5, window=60)
 
-    validate_invite_code(payload.invite_code)
 
     user = User(
         username=payload.username.lower(),

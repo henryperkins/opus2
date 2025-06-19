@@ -50,6 +50,7 @@ def init_db() -> None:
         chat,
         code,
         search_history,
+        import_job,
     )
 
     # *Embedding* models are only needed in later phases of the application.

@@ -38,13 +38,12 @@ class UserLogin(BaseModel):
 
 class UserRegister(BaseModel):
     """
-    Registration payload (invite-only flow).
+    Registration payload.
     """
 
     username: str = Field(..., min_length=3, max_length=50, examples=["alice"])
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
-    invite_code: str = Field(..., examples=["code1"])
 
     class Config:
         json_schema_extra = {
@@ -52,7 +51,6 @@ class UserRegister(BaseModel):
                 "username": "alice",
                 "email": "alice@example.com",
                 "password": "hunter2",
-                "invite_code": "code1",
             }
         }
 

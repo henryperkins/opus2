@@ -11,7 +11,7 @@ router = APIRouter(prefix="/ws", tags=["notifications"], include_in_schema=False
 @router.websocket("/notify")
 async def websocket_notify(
     websocket: WebSocket,
-    current_user: CurrentUserRequired = Depends(),
+    current_user: CurrentUserRequired,
 ):  # noqa: D401
     """Push server-side events to the authenticated user."""
     await notify_manager.connect(websocket, current_user.id)
