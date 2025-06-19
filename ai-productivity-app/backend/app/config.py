@@ -1,4 +1,5 @@
 # Configuration management using Pydantic settings
+# flake8: noqa
 # Standard library
 from pathlib import Path
 from functools import lru_cache
@@ -150,8 +151,30 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        """Return list of CORS origins"""
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        """Return list of CORS origins.
+
+        Accepts either a comma-separated string (default) **or** a JSON-formatted
+        list such as `["http://localhost:5173"]`.  This makes the setting more
+        forgiving when developers copy different .env templates.
+        """
+        value = self.cors_origins
+
+        # ------------------------------------------------------------------
+        # 1. Attempt to parse as JSON list first
+        # ------------------------------------------------------------------
+        try:
+            import json  # local import to avoid unnecessary global dependency
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(origin).strip() for origin in parsed if str(origin).strip()]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            # Not JSON – fall back to comma-separated parsing.
+            pass
+
+        # ------------------------------------------------------------------
+        # 2. Fallback: treat as comma-separated string
+        # ------------------------------------------------------------------
+        return [origin.strip() for origin in value.split(",") if origin.strip()]
 
     @property
     def invite_codes_list(self) -> list[str]:

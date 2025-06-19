@@ -1,59 +1,87 @@
-import React, { useEffect, useState } from 'react';
+/* eslint-env browser */
+/* eslint-disable react-refresh/only-export-components */
+import {
+  useEffect,
+  useState,
+  useRef,
+  useId,
+  useCallback,
+} from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 
-// We create a container the first time this module is evaluated so it exists
-// before any toasts are rendered.
-const toastContainer = document.createElement('div');
-toastContainer.id = 'toast-container';
-toastContainer.className =
-  'fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none';
-if (typeof document !== 'undefined') {
-  document.body.appendChild(toastContainer);
+/* ------------------------------------------------------------------------- *
+ * Environment helpers
+ * ------------------------------------------------------------------------- */
+const isBrowser =
+  typeof window !== 'undefined' && typeof document !== 'undefined';
+
+/* ------------------------------------------------------------------------- *
+ * Container bootstrap – only once per runtime (HMR-safe)
+ * ------------------------------------------------------------------------- */
+function ensureContainer() {
+  if (!isBrowser) return null;
+
+  const existing = document.getElementById('toast-container');
+  if (existing) return existing;
+
+  const el = document.createElement('div');
+  el.id = 'toast-container';
+  el.className =
+    'fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none';
+  document.body.appendChild(el);
+  return el;
 }
 
+const toastContainer = ensureContainer();
+
+/* ------------------------------------------------------------------------- *
+ * Public toast API
+ * ------------------------------------------------------------------------- */
 let nextId = 0;
 
-// ---------------------------------------------------------------------------------------------
-// Public API – `toast()` helper & convenience shortcuts.
-// ---------------------------------------------------------------------------------------------
+function dispatchToast(detail) {
+  if (!isBrowser) return; // SSR no-op
+  window.dispatchEvent(new CustomEvent('show-toast', { detail }));
+}
 
 export function toast(message, options = {}) {
   const id = ++nextId;
-  const event = new CustomEvent('show-toast', {
-    detail: { id, message, ...options },
-  });
-  window.dispatchEvent(event);
+  dispatchToast({ id, message, ...options });
 }
 
-toast.success = (message, options) => toast(message, { ...options, type: 'success' });
-toast.error = (message, options) => toast(message, { ...options, type: 'error' });
-toast.info = (message, options) => toast(message, { ...options, type: 'info' });
-toast.warning = (message, options) => toast(message, { ...options, type: 'warning' });
+toast.success = (msg, opts) => toast(msg, { ...opts, type: 'success' });
+toast.error = (msg, opts) => toast(msg, { ...opts, type: 'error' });
+toast.info = (msg, opts) => toast(msg, { ...opts, type: 'info' });
+toast.warning = (msg, opts) => toast(msg, { ...opts, type: 'warning' });
+toast.clearAll = () => dispatchToast({ clear: true });
 
-// ---------------------------------------------------------------------------------------------
-// Toast item component
-// ---------------------------------------------------------------------------------------------
+/* ------------------------------------------------------------------------- *
+ * ToastItem component
+ * ------------------------------------------------------------------------- */
+function ToastItem({
+  id,
+  message,
+  type = 'info',
+  duration = 5000,
+  onClose,
+}) {
+  const [phase, setPhase] = useState('enter'); // enter → idle → exit
+  const timer = useRef(null);
+  const reactId = useId();
 
-function ToastItem({ id, message, type = 'info', duration = 5000, onClose }) {
-  const [isVisible, setIsVisible] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
-
-  // Trigger entrance + auto-dismiss -----------------------------------------------------------
-  useEffect(() => {
-    requestAnimationFrame(() => setIsVisible(true));
-
-    const timer = setTimeout(() => {
-      handleClose();
-    }, duration);
-
-    return () => clearTimeout(timer);
-  }, [duration]);
-
-  const handleClose = () => {
-    setIsExiting(true);
+  const handleClose = useCallback(() => {
+    clearTimeout(timer.current);
+    setPhase('exit');
     setTimeout(() => onClose(id), 200);
-  };
+  }, [id, onClose]);
+
+  /* animate in + auto-dismiss ------------------------------------------------ */
+  useEffect(() => {
+    requestAnimationFrame(() => setPhase('idle'));
+    timer.current = setTimeout(handleClose, duration);
+    return () => clearTimeout(timer.current);
+  }, [duration, handleClose]);
 
   const typeClasses = {
     success:
@@ -62,7 +90,8 @@ function ToastItem({ id, message, type = 'info', duration = 5000, onClose }) {
       'bg-red-50 dark:bg-red-900/50 text-red-800 dark:text-red-200 border-red-200 dark:border-red-800',
     warning:
       'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800',
-    info: 'bg-blue-50 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-800',
+    info:
+      'bg-blue-50 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-800',
   };
 
   const icons = {
@@ -95,11 +124,21 @@ function ToastItem({ id, message, type = 'info', duration = 5000, onClose }) {
 
   return (
     <div
+      key={reactId}
       role="alert"
       aria-live="polite"
-      className={`pointer-events-auto flex items-center gap-3 p-4 rounded-lg border shadow-lg transform transition-all duration-200 ${
-        typeClasses[type]
-      } ${isVisible && !isExiting ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`}
+      className={`
+        pointer-events-auto flex items-center gap-3 p-4 rounded-lg border shadow-lg
+        transform transition-all duration-200
+        ${typeClasses[type]}
+        ${
+          phase === 'enter'
+            ? 'translate-x-full opacity-0'
+            : phase === 'idle'
+              ? 'translate-x-0 opacity-100'
+              : 'translate-x-full opacity-0'
+        }
+      `}
     >
       <div className="flex-shrink-0">{icons[type]}</div>
       <p className="text-sm font-medium">{message}</p>
@@ -125,24 +164,27 @@ ToastItem.propTypes = {
   onClose: PropTypes.func.isRequired,
 };
 
-// ---------------------------------------------------------------------------------------------
-// Toast container – listens for `show-toast` events.
-// ---------------------------------------------------------------------------------------------
-
+/* ------------------------------------------------------------------------- *
+ * ToastContainer — one per app
+ * ------------------------------------------------------------------------- */
 export function ToastContainer() {
   const [toasts, setToasts] = useState([]);
 
   useEffect(() => {
-    const handle = (event) => {
-      setToasts((prev) => [...prev, event.detail]);
+    if (!isBrowser) return () => {};
+
+    const handler = (evt) => {
+      if (evt.detail?.clear) return setToasts([]);
+      setToasts((prev) => [...prev, evt.detail]);
     };
-    window.addEventListener('show-toast', handle);
-    return () => window.removeEventListener('show-toast', handle);
+    window.addEventListener('show-toast', handler);
+    return () => window.removeEventListener('show-toast', handler);
   }, []);
 
-  const removeToast = (id) => {
+  const removeToast = (id) =>
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+
+  if (!toastContainer) return null; // SSR safety
 
   return createPortal(
     <>
@@ -150,6 +192,6 @@ export function ToastContainer() {
         <ToastItem key={t.id} {...t} onClose={removeToast} />
       ))}
     </>,
-    toastContainer
+    toastContainer,
   );
 }

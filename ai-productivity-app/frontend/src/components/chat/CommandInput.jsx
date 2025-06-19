@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+/* eslint-env browser */
+import { useState, useRef, useEffect, useCallback } from 'react';
 import MonacoEditor from '@monaco-editor/react';
-import { searchAPI } from '../../api/search';
 import { toast } from '../common/Toast';
 import { useProjectTimeline } from '../../hooks/useProjects';
+import PropTypes from 'prop-types';
 
 export default function CommandInput({ onSend, onTyping, projectId }) {
   const { addEvent } = useProjectTimeline(projectId);
@@ -12,43 +13,54 @@ export default function CommandInput({ onSend, onTyping, projectId }) {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [inputMode, setInputMode] = useState('simple'); // 'simple' or 'editor'
+  const [inputMode, setInputMode] = useState('simple');
   const [editorHeight, setEditorHeight] = useState(100);
   const [isSending, setIsSending] = useState(false);
   const [commandProcessing, setCommandProcessing] = useState(false);
 
-  // Command suggestions
-  const commands = [
+  const commands = useRef([
     { name: '/explain', description: 'Explain code functionality' },
     { name: '/generate-tests', description: 'Generate unit tests' },
     { name: '/summarize-pr', description: 'Summarize changes' },
-    { name: '/grep', description: 'Search codebase' }
-  ];
+    { name: '/grep', description: 'Search codebase' },
+  ]).current;
 
   useEffect(() => {
-    // Check for slash commands
     if (message.startsWith('/')) {
       const partial = message.split(' ')[0];
-      const matches = commands.filter(cmd =>
-        cmd.name.startsWith(partial)
-      );
+      const matches = commands.filter(cmd => cmd.name.startsWith(partial));
       setSuggestions(matches);
       setShowSuggestions(matches.length > 0);
     } else {
       setShowSuggestions(false);
     }
-  }, [message]);
+  }, [message, commands]);
 
-  // Handle typing indicator
   useEffect(() => {
-    if (message && !isTyping) {
-      setIsTyping(true);
-      onTyping?.(true);
-    } else if (!message && isTyping) {
-      setIsTyping(false);
-      onTyping?.(false);
+    const typingNow = Boolean(message.trim());
+    if (typingNow !== isTyping) {
+      setIsTyping(typingNow);
+      onTyping?.(typingNow);
     }
   }, [message, isTyping, onTyping]);
+
+  const handleCommand = useCallback(async (command, metadata) => {
+    const [cmd, ...args] = command.split(' ');
+    toast.info(`Executing command: ${cmd}`);
+
+    await onSend(command, { ...metadata, isCommand: true });
+
+    await addEvent({
+      event_type: 'chat_message',
+      title: `Command executed: ${cmd}`,
+      description: args.length ? `Arguments: ${args.join(' ')}` : 'No arguments',
+      metadata: {
+        message_type: 'command',
+        command: cmd,
+        arguments: args,
+      },
+    });
+  }, [onSend, addEvent]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,131 +68,68 @@ export default function CommandInput({ onSend, onTyping, projectId }) {
 
     setIsSending(true);
     const metadata = {};
+    const fileRefs = message.match(/[a-zA-Z0-9_\-./]+\.[a-zA-Z]+/g);
+    if (fileRefs) metadata.referenced_files = fileRefs;
 
     try {
-      // Check for file references
-      const fileRefs = message.match(/[a-zA-Z0-9_\-./]+\.[a-zA-Z]+/g);
-      if (fileRefs) {
-        metadata.referenced_files = fileRefs;
-      }
-
-      // Handle special commands
       if (message.startsWith('/')) {
         setCommandProcessing(true);
         await handleCommand(message, metadata);
       } else {
         await onSend(message, metadata);
-        
-        // Add chat activity to timeline
         await addEvent({
           event_type: 'chat_message',
           title: 'Chat message sent',
-          description: message.length > 50 ? message.substring(0, 50) + '...' : message,
+          description: message.slice(0, 50),
           metadata: {
             message_type: 'user',
             message_length: message.length,
-            has_code_snippets: !!metadata.code_snippets?.length,
-            referenced_files: metadata.referenced_files
-          }
+            referenced_files: metadata.referenced_files,
+          },
         });
       }
 
       setMessage('');
-      setIsTyping(false);
-      onTyping?.(false);
-      
     } catch (error) {
       toast.error('Failed to send message');
-      console.error('Message send error:', error);
+      console.error(error);
     } finally {
       setIsSending(false);
       setCommandProcessing(false);
     }
   };
 
-  const handleCommand = async (command, metadata) => {
-    const [cmd, ...args] = command.split(' ');
-    
-    switch (cmd) {
-      case '/explain':
-        toast.info('Processing code explanation...');
-        break;
-      case '/generate-tests':
-        toast.info('Generating tests...');
-        break;
-      case '/summarize-pr':
-        toast.info('Summarizing changes...');
-        break;
-      case '/grep':
-        if (args.length > 0) {
-          toast.info(`Searching for "${args.join(' ')}"...`);
-        }
-        break;
-      default:
-        toast.warning(`Unknown command: ${cmd}`);
-    }
-    
-    await onSend(command, { ...metadata, isCommand: true });
-    
-    // Add command activity to timeline
-    await addEvent({
-      event_type: 'chat_message',
-      title: `Command executed: ${cmd}`,
-      description: args.length > 0 ? `with arguments: ${args.join(' ')}` : 'no arguments',
-      metadata: {
-        message_type: 'command',
-        command: cmd,
-        arguments: args,
-        command_length: command.length
-      }
-    });
-  };
-
   const handleKeyDown = (e) => {
-    if (showSuggestions && suggestions.length > 0) {
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault();
-          setSelectedIndex(prev =>
-            prev < suggestions.length - 1 ? prev + 1 : prev
-          );
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
-          break;
-        case 'Tab':
-        case 'Enter':
-          if (selectedIndex >= 0) {
-            e.preventDefault();
-            const selected = suggestions[selectedIndex];
-            setMessage(selected.name + ' ');
-            setShowSuggestions(false);
-            inputRef.current?.focus();
-          }
-          break;
-        case 'Escape':
-          setShowSuggestions(false);
-          break;
+    if (!showSuggestions) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(i => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(i => Math.max(i - 1, 0));
+    } else if (['Tab', 'Enter'].includes(e.key)) {
+      if (selectedIndex >= 0) {
+        e.preventDefault();
+        setMessage(`${suggestions[selectedIndex].name} `);
+        setShowSuggestions(false);
+        inputRef.current?.focus();
       }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
     }
   };
 
   return (
     <div className="relative border-t border-gray-200">
-      {/* Command suggestions */}
       {showSuggestions && (
-        <div className="absolute bottom-full left-0 right-0 bg-white border border-gray-200 shadow-lg rounded-t-lg">
-          {suggestions.map((cmd, index) => (
+        <div className="absolute bottom-full inset-x-0 bg-white border shadow rounded-t-lg">
+          {suggestions.map((cmd, i) => (
             <div
               key={cmd.name}
-              className={
-                `px-4 py-2 hover:bg-gray-100 cursor-pointer ${
-                  index === selectedIndex ? 'bg-blue-50' : ''
-                }`
-              }
+              className={`px-4 py-2 cursor-pointer ${i === selectedIndex ? 'bg-blue-50' : 'hover:bg-gray-100'}`}
               onClick={() => {
-                setMessage(cmd.name + ' ');
+                setMessage(`${cmd.name} `);
                 setShowSuggestions(false);
                 inputRef.current?.focus();
               }}
@@ -192,61 +141,40 @@ export default function CommandInput({ onSend, onTyping, projectId }) {
         </div>
       )}
 
-      {/* Input mode toggle */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b">
-        <div className="flex items-center space-x-2">
+        <div className="flex space-x-2">
           <button
             onClick={() => setInputMode('simple')}
-            className={`px-2 py-1 text-xs rounded ${
-              inputMode === 'simple' 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+            className={`px-2 py-1 rounded text-xs ${inputMode === 'simple' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
           >
             Simple
           </button>
           <button
             onClick={() => setInputMode('editor')}
-            className={`px-2 py-1 text-xs rounded ${
-              inputMode === 'editor' 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+            className={`px-2 py-1 rounded text-xs ${inputMode === 'editor' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
           >
-            Code Editor
+            Editor
           </button>
         </div>
-        
         {inputMode === 'editor' && (
-          <div className="flex items-center space-x-2">
-            <label className="text-xs text-gray-600">Height:</label>
-            <select 
-              value={editorHeight} 
-              onChange={(e) => setEditorHeight(Number(e.target.value))}
-              className="text-xs border rounded px-1 py-0.5"
-            >
-              <option value={100}>Small</option>
-              <option value={200}>Medium</option>
-              <option value={300}>Large</option>
-            </select>
-          </div>
+          <select
+            value={editorHeight}
+            onChange={e => setEditorHeight(+e.target.value)}
+            className="text-xs border rounded px-1"
+          >
+            <option value={100}>Small</option>
+            <option value={200}>Medium</option>
+            <option value={300}>Large</option>
+          </select>
         )}
       </div>
 
-      {/* Command Processing Indicator */}
       {commandProcessing && (
-        <div className="px-4 py-2 bg-blue-50 border-b border-blue-200">
-          <div className="flex items-center text-blue-700 text-sm">
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Processing command...
-          </div>
+        <div className="px-4 py-2 bg-blue-50 text-blue-700 border-b">
+          <span className="animate-spin inline-block mr-2">⏳</span> Processing command...
         </div>
       )}
 
-      {/* Input form */}
       <form onSubmit={handleSubmit} className="p-4">
         {inputMode === 'simple' ? (
           <div className="flex gap-2">
@@ -254,63 +182,31 @@ export default function CommandInput({ onSend, onTyping, projectId }) {
               ref={inputRef}
               type="text"
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={e => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message or use /command..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Type or use /command"
+              className="flex-1 px-3 py-2 border rounded-lg focus:ring-2"
             />
-            <button
-              type="submit"
-              disabled={!message.trim() || isSending}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-            >
-              {isSending && (
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              )}
+            <button disabled={!message.trim() || isSending} className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50">
               {isSending ? 'Sending...' : 'Send'}
             </button>
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="border border-gray-300 rounded-lg overflow-hidden">
-              <MonacoEditor
-                height={`${editorHeight}px`}
-                defaultLanguage="markdown"
-                value={message}
-                onChange={(value) => setMessage(value || '')}
-                theme="vs-light"
-                options={{
-                  fontSize: 14,
-                  lineNumbers: 'off',
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  wordWrap: 'on',
-                  folding: false,
-                  lineDecorationsWidth: 0,
-                  lineNumbersMinChars: 0,
-                  glyphMargin: false,
-                  automaticLayout: true
-                }}
-              />
-            </div>
-            <div className="flex justify-between items-center">
-              <div className="text-xs text-gray-500">
-                Supports markdown, code blocks, and @mentions
-              </div>
-              <button
-                type="submit"
-                disabled={!message.trim() || isSending}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-              >
-                {isSending && (
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                )}
+            <MonacoEditor
+              height={editorHeight}
+              language="markdown"
+              value={message}
+              onChange={setMessage}
+              options={{
+                fontSize: 14,
+                minimap: { enabled: false },
+                wordWrap: 'on',
+                automaticLayout: true,
+              }}
+            />
+            <div className="flex justify-end">
+              <button disabled={!message.trim() || isSending} className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50">
                 {isSending ? 'Sending...' : 'Send Message'}
               </button>
             </div>
@@ -320,3 +216,13 @@ export default function CommandInput({ onSend, onTyping, projectId }) {
     </div>
   );
 }
+
+CommandInput.propTypes = {
+  onSend: PropTypes.func.isRequired,
+  onTyping: PropTypes.func,
+  projectId: PropTypes.string.isRequired,
+};
+
+CommandInput.defaultProps = {
+  onTyping: null,
+};

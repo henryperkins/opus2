@@ -1,248 +1,242 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+/* eslint-env browser */
+/* eslint-disable no-alert */
+import { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
+import PropTypes from 'prop-types';
+
 import { codeAPI } from '../../api/code';
 import { toast } from '../common/Toast';
 import { useProjectTimeline } from '../../hooks/useProjects';
 
+/**
+ * Interactive SVG canvas with free-hand drawing, shape + text tools, zoom / pan,
+ * and knowledge-base persistence.
+ */
 const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
-  const canvasRef = useRef(null);
   const svgRef = useRef(null);
   const { addEvent } = useProjectTimeline(projectId);
-  const [tool, setTool] = useState('select'); // 'select', 'draw', 'text', 'shape'
-  const [shapes, setShapes] = useState([]);
-  const [annotations, setAnnotations] = useState([]);
+
+  /* ──────────────────────────── State ──────────────────────────── */
+  const [tool, setTool] = useState('select');             // 'select' | 'draw'
+  const [shapes, setShapes] = useState([]);               // drawn paths / rects
+  const [annotations, setAnnotations] = useState([]);     // text labels
   const [isDrawing, setIsDrawing] = useState(false);
-  const [currentPath, setCurrentPath] = useState('');
   const [selectedElement, setSelectedElement] = useState(null);
   const [showGrid, setShowGrid] = useState(true);
   const [savedArtifacts, setSavedArtifacts] = useState([]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  /* ─────────────────────── Load saved artifacts ────────────────── */
   useEffect(() => {
-    initializeCanvas();
-    if (projectId) {
-      loadSavedArtifacts();
-    }
+    if (!projectId) return;
+    (async () => {
+      try {
+        const { artifacts = [] } = await codeAPI.getCanvasArtifacts(projectId);
+        setSavedArtifacts(artifacts);
+        toast.success(`Loaded ${artifacts.length} saved artifacts`);
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to load saved artifacts');
+      }
+    })();
   }, [projectId]);
 
-  const loadSavedArtifacts = async () => {
-    setLoading(true);
-    try {
-      const artifacts = await codeAPI.getCanvasArtifacts(projectId);
-      setSavedArtifacts(artifacts.artifacts || []);
-      toast.success(`Loaded ${artifacts.artifacts?.length || 0} saved artifacts`);
-    } catch (error) {
-      console.error('Failed to load canvas artifacts:', error);
-      toast.error('Failed to load saved artifacts');
-    } finally {
-      setLoading(false);
-    }
-  };
+  /* ──────────────────────────── Renderer ────────────────────────── */
+  const renderShapes = useCallback(
+    (group) => {
+      group.selectAll('.shape').remove();
 
-  const initializeCanvas = () => {
+      shapes.forEach((shape) => {
+        if (shape.type === 'path') {
+          group
+            .append('path')
+            .attr('class', 'shape')
+            .attr('d', shape.d)
+            .attr('stroke', shape.stroke)
+            .attr('stroke-width', shape.strokeWidth)
+            .attr('fill', shape.fill)
+            .style('cursor', 'pointer')
+            .on('click', () => setSelectedElement(shape));
+        } else if (shape.type === 'rect') {
+          group
+            .append('rect')
+            .attr('class', 'shape')
+            .attr('x', shape.x)
+            .attr('y', shape.y)
+            .attr('width', shape.width)
+            .attr('height', shape.height)
+            .attr('stroke', shape.stroke)
+            .attr('stroke-width', shape.strokeWidth)
+            .attr('fill', shape.fill)
+            .style('cursor', 'pointer')
+            .on('click', () => setSelectedElement(shape));
+        }
+      });
+
+      group.selectAll('.annotation').remove();
+      annotations.forEach((a) =>
+        group
+          .append('text')
+          .attr('class', 'annotation')
+          .attr('x', a.x)
+          .attr('y', a.y)
+          .attr('font-size', a.fontSize)
+          .attr('fill', a.color)
+          .text(a.text)
+          .style('cursor', 'pointer')
+          .on('click', () => setSelectedElement(a)),
+      );
+    },
+    [shapes, annotations],
+  );
+
+  /* ──────────────────────────── Init / Grid / Zoom ──────────────── */
+  useEffect(() => {
     if (!svgRef.current) return;
 
     const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
+    const gridSize = 20;
 
-    // Set up canvas
+    /* Reset */
+    svg.selectAll('*').remove();
+    svg.on('.zoom', null).on('mousedown.draw mousemove.draw mouseup.draw', null);
+
     svg
-      .attr("width", width)
-      .attr("height", height)
-      .style("border", "1px solid #e2e8f0")
-      .style("background", "#ffffff");
+      .attr('width', width)
+      .attr('height', height)
+      .style('border', '1px solid #e2e8f0')
+      .style('background', '#ffffff');
 
-    // Add grid if enabled
+    /* Grid */
     if (showGrid) {
-      const gridSize = 20;
-      const defs = svg.append("defs");
-      
-      const pattern = defs.append("pattern")
-        .attr("id", "grid")
-        .attr("width", gridSize)
-        .attr("height", gridSize)
-        .attr("patternUnits", "userSpaceOnUse");
+      const defs = svg.append('defs');
+      defs
+        .append('pattern')
+        .attr('id', 'grid')
+        .attr('width', gridSize)
+        .attr('height', gridSize)
+        .attr('patternUnits', 'userSpaceOnUse')
+        .append('path')
+        .attr('d', `M ${gridSize} 0 L 0 0 0 ${gridSize}`)
+        .attr('fill', 'none')
+        .attr('stroke', '#f1f5f9')
+        .attr('stroke-width', 1);
 
-      pattern.append("path")
-        .attr("d", `M ${gridSize} 0 L 0 0 0 ${gridSize}`)
-        .attr("fill", "none")
-        .attr("stroke", "#f1f5f9")
-        .attr("stroke-width", 1);
-
-      svg.append("rect")
-        .attr("width", "100%")
-        .attr("height", "100%")
-        .attr("fill", "url(#grid)");
+      svg.append('rect').attr('width', '100%').attr('height', '100%').attr('fill', 'url(#grid)');
     }
 
-    // Add main drawing group
-    const drawingGroup = svg.append("g").attr("class", "drawing-group");
+    /* Drawing layer */
+    const drawingGroup = svg.append('g').attr('class', 'drawing-group');
 
-    // Set up zoom and pan
-    const zoom = d3.zoom()
-      .scaleExtent([0.1, 5])
-      .on("zoom", (event) => {
-        drawingGroup.attr("transform", event.transform);
+    /* Zoom / pan */
+    svg.call(
+      d3
+        .zoom()
+        .scaleExtent([0.1, 5])
+        .on('zoom', (event) => drawingGroup.attr('transform', event.transform)),
+    );
+
+    /* Draw-tool handlers */
+    let pathStr = '';
+    svg
+      .on('mousedown.draw', (event) => {
+        if (tool !== 'draw') return;
+        const [x, y] = d3.pointer(event);
+        pathStr = `M${x},${y}`;
+        setIsDrawing(true);
+      })
+      .on('mousemove.draw', (event) => {
+        if (!isDrawing || tool !== 'draw') return;
+        const [x, y] = d3.pointer(event);
+        pathStr += ` L${x},${y}`;
+
+        drawingGroup.selectAll('.current-path').remove();
+        drawingGroup
+          .append('path')
+          .attr('class', 'current-path')
+          .attr('d', pathStr)
+          .attr('stroke', '#3b82f6')
+          .attr('stroke-width', 2)
+          .attr('fill', 'none');
+      })
+      .on('mouseup.draw', () => {
+        if (!isDrawing || tool !== 'draw') return;
+        setIsDrawing(false);
+
+        setShapes((s) => [
+          ...s,
+          {
+            id: Date.now(),
+            type: 'path',
+            d: pathStr,
+            stroke: '#3b82f6',
+            strokeWidth: 2,
+            fill: 'none',
+          },
+        ]);
+        setHasUnsavedChanges(true);
+        toast.success('Drawing saved to canvas');
       });
 
-    svg.call(zoom);
+    /* Initial render */
+    renderShapes(drawingGroup);
+  }, [width, height, showGrid, tool, renderShapes]);
 
-    // Set up drawing events
-    setupDrawingEvents(svg, drawingGroup);
-  };
-
-  const setupDrawingEvents = (svg, group) => {
-    let drawing = false;
-    let path = "";
-
-    svg.on("mousedown", (event) => {
-      if (tool === 'draw') {
-        drawing = true;
-        const [x, y] = d3.pointer(event);
-        path = `M${x},${y}`;
-        setCurrentPath(path);
-        setIsDrawing(true);
-      }
-    });
-
-    svg.on("mousemove", (event) => {
-      if (drawing && tool === 'draw') {
-        const [x, y] = d3.pointer(event);
-        path += ` L${x},${y}`;
-        setCurrentPath(path);
-        
-        // Update current drawing path
-        group.selectAll(".current-path").remove();
-        group.append("path")
-          .attr("class", "current-path")
-          .attr("d", path)
-          .attr("stroke", "#3b82f6")
-          .attr("stroke-width", 2)
-          .attr("fill", "none");
-      }
-    });
-
-    svg.on("mouseup", () => {
-      if (drawing && tool === 'draw') {
-        drawing = false;
-        setIsDrawing(false);
-        
-        // Save the drawn path
-        const newShape = {
-          id: Date.now(),
-          type: 'path',
-          d: path,
-          stroke: "#3b82f6",
-          strokeWidth: 2,
-          fill: "none"
-        };
-        
-        setShapes(prev => [...prev, newShape]);
-        setCurrentPath('');
-        setHasUnsavedChanges(true);
-        
-        // Remove current path and add permanent one
-        group.selectAll(".current-path").remove();
-        renderShapes(group);
-        
-        toast.success('Drawing saved to canvas');
-      }
-    });
-  };
-
-  const renderShapes = useCallback((group) => {
-    // Clear existing shapes
-    group.selectAll(".shape").remove();
-    
-    // Render all shapes
-    shapes.forEach(shape => {
-      if (shape.type === 'path') {
-        group.append("path")
-          .attr("class", "shape")
-          .attr("d", shape.d)
-          .attr("stroke", shape.stroke)
-          .attr("stroke-width", shape.strokeWidth)
-          .attr("fill", shape.fill)
-          .style("cursor", "pointer")
-          .on("click", () => setSelectedElement(shape));
-      } else if (shape.type === 'rect') {
-        group.append("rect")
-          .attr("class", "shape")
-          .attr("x", shape.x)
-          .attr("y", shape.y)
-          .attr("width", shape.width)
-          .attr("height", shape.height)
-          .attr("stroke", shape.stroke)
-          .attr("stroke-width", shape.strokeWidth)
-          .attr("fill", shape.fill)
-          .style("cursor", "pointer")
-          .on("click", () => setSelectedElement(shape));
-      }
-    });
-  }, [shapes]);
-
+  /* ──────────────────────────── Helpers ─────────────────────────── */
   const addShape = (shapeType) => {
-    const newShape = {
-      id: Date.now(),
-      type: shapeType,
-      x: 100,
-      y: 100,
-      width: 100,
-      height: 80,
-      stroke: "#3b82f6",
-      strokeWidth: 2,
-      fill: "rgba(59, 130, 246, 0.1)"
-    };
-    
-    setShapes(prev => [...prev, newShape]);
+    setShapes((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        type: shapeType,
+        x: 100,
+        y: 100,
+        width: 100,
+        height: 80,
+        stroke: '#3b82f6',
+        strokeWidth: 2,
+        fill: 'rgba(59,130,246,0.1)',
+      },
+    ]);
     setHasUnsavedChanges(true);
     toast.success(`${shapeType} added to canvas`);
   };
 
   const addTextAnnotation = () => {
-    const text = prompt("Enter text annotation:");
-    if (text) {
-      const newAnnotation = {
+    const text = window.prompt('Enter text annotation:');
+    if (!text) return;
+    setAnnotations((prev) => [
+      ...prev,
+      {
         id: Date.now(),
         text,
         x: 200,
         y: 200,
         fontSize: 14,
-        color: "#1f2937"
-      };
-      setAnnotations(prev => [...prev, newAnnotation]);
-      setHasUnsavedChanges(true);
-      toast.success('Text annotation added');
-    }
+        color: '#1f2937',
+      },
+    ]);
+    setHasUnsavedChanges(true);
+    toast.success('Text annotation added');
   };
 
   const clearCanvas = () => {
-    if (hasUnsavedChanges) {
-      if (!window.confirm('You have unsaved changes. Are you sure you want to clear the canvas?')) {
-        return;
-      }
-    }
-    
+    if (hasUnsavedChanges && !window.confirm('Unsaved changes will be lost. Continue?')) return;
     setShapes([]);
     setAnnotations([]);
     setSelectedElement(null);
     setHasUnsavedChanges(false);
-    initializeCanvas();
-    toast.info('Canvas cleared');
   };
 
   const saveToKnowledgeBase = async (name, description) => {
     setSaving(true);
     try {
-      const svg = svgRef.current;
-      const serializer = new XMLSerializer();
-      const svgContent = serializer.serializeToString(svg);
-      
-      const canvasData = {
+      const serializer = new window.XMLSerializer();
+      const svgContent = serializer.serializeToString(svgRef.current);
+
+      const payload = {
         name,
         description,
         svgContent,
@@ -253,16 +247,15 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
           height,
           tool,
           showGrid,
-          createdAt: new Date().toISOString()
-        }
+          createdAt: new Date().toISOString(),
+        },
       };
 
-      const savedArtifact = await codeAPI.saveCanvasArtifact(projectId, canvasData);
-      await loadSavedArtifacts();
+      const savedArtifact = await codeAPI.saveCanvasArtifact(projectId, payload);
+      setSavedArtifacts((a) => [...a, savedArtifact]);
       setShowSaveDialog(false);
       setHasUnsavedChanges(false);
-      
-      // Add timeline event
+
       await addEvent({
         event_type: 'canvas_created',
         title: `Canvas "${name}" created`,
@@ -271,84 +264,49 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
           canvas_name: name,
           shapes_count: shapes.length,
           annotations_count: annotations.length,
-          artifact_id: savedArtifact?.id
-        }
+          artifact_id: savedArtifact?.id,
+        },
       });
-      
+
       toast.success(`Canvas "${name}" saved to knowledge base`);
-    } catch (error) {
-      console.error('Failed to save canvas artifact:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to save canvas to knowledge base';
-      toast.error(errorMessage);
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.response?.data?.detail ?? 'Failed to save canvas');
     } finally {
       setSaving(false);
     }
   };
 
-  const loadArtifact = async (artifact) => {
-    try {
-      setShapes(artifact.shapes || []);
-      setAnnotations(artifact.annotations || []);
-      setHasUnsavedChanges(false);
-      // Reinitialize canvas with loaded data
-      initializeCanvas();
-      toast.success(`Loaded "${artifact.name}"`);
-    } catch (error) {
-      console.error('Failed to load artifact:', error);
-      toast.error('Failed to load artifact');
-    }
+  const loadArtifact = (artifact) => {
+    setShapes(artifact.shapes || []);
+    setAnnotations(artifact.annotations || []);
+    setHasUnsavedChanges(false);
+    toast.success(`Loaded "${artifact.name}"`);
   };
 
   const exportCanvas = () => {
-    const svg = svgRef.current;
-    const serializer = new XMLSerializer();
-    const source = serializer.serializeToString(svg);
-    const blob = new Blob([source], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    
+    const serializer = new window.XMLSerializer();
+    const source = serializer.serializeToString(svgRef.current);
+    const blob = new window.Blob([source], { type: 'image/svg+xml' });
+    const url = window.URL.createObjectURL(blob);
+
     const a = document.createElement('a');
     a.href = url;
     a.download = 'canvas-export.svg';
     a.click();
-    
-    URL.revokeObjectURL(url);
+    window.URL.revokeObjectURL(url);
   };
 
-  // Re-render when shapes or annotations change
-  useEffect(() => {
-    if (svgRef.current) {
-      const svg = d3.select(svgRef.current);
-      const group = svg.select(".drawing-group");
-      if (!group.empty()) {
-        renderShapes(group);
-        
-        // Render annotations
-        group.selectAll(".annotation").remove();
-        annotations.forEach(annotation => {
-          group.append("text")
-            .attr("class", "annotation")
-            .attr("x", annotation.x)
-            .attr("y", annotation.y)
-            .attr("font-size", annotation.fontSize)
-            .attr("fill", annotation.color)
-            .text(annotation.text)
-            .style("cursor", "pointer")
-            .on("click", () => setSelectedElement(annotation));
-        });
-      }
-    }
-  }, [shapes, annotations, renderShapes]);
-
+  /* ──────────────────────────── UI ─────────────────────────────── */
   return (
     <div className="interactive-canvas">
       {/* Toolbar */}
       <div className="flex items-center justify-between p-4 bg-gray-50 border-b">
         <div className="flex items-center space-x-2">
           {hasUnsavedChanges && (
-            <div className="flex items-center text-orange-600 text-xs mr-4">
-              <div className="w-2 h-2 bg-orange-500 rounded-full mr-1"></div>
-              Unsaved changes
-            </div>
+            <span className="flex items-center text-orange-600 text-xs mr-4">
+              <span className="w-2 h-2 bg-orange-500 rounded-full mr-1" /> Unsaved changes
+            </span>
           )}
           <button
             onClick={() => setTool('select')}
@@ -381,29 +339,27 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
         </div>
 
         <div className="flex items-center space-x-2">
-          {/* Saved Artifacts Dropdown */}
+          {/* Artifact selector */}
           {savedArtifacts.length > 0 && (
             <select
-              onChange={(e) => {
-                if (e.target.value) {
-                  const artifact = savedArtifacts.find(a => a.id === e.target.value);
-                  if (artifact) loadArtifact(artifact);
-                }
-              }}
-              className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
               defaultValue=""
+              className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+              onChange={(e) => {
+                const art = savedArtifacts.find((a) => String(a.id) === e.target.value);
+                if (art) loadArtifact(art);
+              }}
             >
-              <option value="">Load Artifact...</option>
-              {savedArtifacts.map(artifact => (
-                <option key={artifact.id} value={artifact.id}>
-                  {artifact.name}
+              <option value="">Load Artifact…</option>
+              {savedArtifacts.map(({ id, name }) => (
+                <option key={id} value={String(id)}>
+                  {name}
                 </option>
               ))}
             </select>
           )}
-          
+
           <button
-            onClick={() => setShowGrid(!showGrid)}
+            onClick={() => setShowGrid((g) => !g)}
             className={`px-3 py-1 text-sm rounded ${
               showGrid ? 'bg-gray-200 text-gray-800' : 'bg-white border hover:bg-gray-50'
             }`}
@@ -411,21 +367,36 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
             Grid
           </button>
           <button
-            onClick={() => setShowSaveDialog(true)}
             disabled={saving}
+            onClick={() => setShowSaveDialog(true)}
             className={`px-3 py-1 text-sm rounded flex items-center ${
-              hasUnsavedChanges 
-                ? 'bg-orange-600 text-white hover:bg-orange-700' 
+              hasUnsavedChanges
+                ? 'bg-orange-600 text-white hover:bg-orange-700'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             } disabled:opacity-50`}
           >
             {saving && (
-              <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-white" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              <svg
+                className="animate-spin -ml-1 mr-1 h-3 w-3 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
               </svg>
             )}
-            {saving ? 'Saving...' : 'Save to KB'}
+            {saving ? 'Saving…' : 'Save to KB'}
           </button>
           <button
             onClick={clearCanvas}
@@ -449,12 +420,10 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
           className="w-full h-full cursor-crosshair"
           style={{ minHeight: '400px' }}
         />
-        
-        {/* Status indicator */}
         {isDrawing && (
-          <div className="absolute top-2 left-2 px-2 py-1 bg-blue-500 text-white text-xs rounded">
-            Drawing...
-          </div>
+          <span className="absolute top-2 left-2 px-2 py-1 bg-blue-500 text-white text-xs rounded">
+            Drawing…
+          </span>
         )}
       </div>
 
@@ -467,10 +436,10 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
             {selectedElement.text && <div>Text: {selectedElement.text}</div>}
             <button
               onClick={() => {
-                if (selectedElement.type === 'path') {
-                  setShapes(prev => prev.filter(s => s.id !== selectedElement.id));
+                if (selectedElement.type === 'rect' || selectedElement.type === 'path') {
+                  setShapes((s) => s.filter((sh) => sh.id !== selectedElement.id));
                 } else {
-                  setAnnotations(prev => prev.filter(a => a.id !== selectedElement.id));
+                  setAnnotations((a) => a.filter((an) => an.id !== selectedElement.id));
                 }
                 setSelectedElement(null);
               }}
@@ -482,53 +451,51 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
         </div>
       )}
 
-      {/* Save Dialog */}
+      {/* Save dialog */}
       {showSaveDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-lg p-6 w-96 max-w-md">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Save Canvas to Knowledge Base</h3>
-            
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.target);
-              const name = formData.get('name');
-              const description = formData.get('description');
-              if (name) {
-                saveToKnowledgeBase(name, description);
-              }
-            }}>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Save Canvas to Knowledge Base
+            </h3>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const data = new window.FormData(e.target);
+                const name = data.get('name');
+                const description = data.get('description');
+                if (name) saveToKnowledgeBase(name, description);
+              }}
+            >
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Name *
-                  </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Name *
                   <input
                     name="name"
-                    type="text"
                     required
+                    type="text"
                     placeholder="e.g., Architecture Diagram"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
                   />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
+                </label>
+
+                <label className="block text-sm font-medium text-gray-700">
+                  Description
                   <textarea
                     name="description"
                     rows={3}
-                    placeholder="Describe what this canvas represents..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Describe what this canvas represents…"
+                    className="mt-1 w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
                   />
-                </div>
+                </label>
               </div>
 
               <div className="flex justify-end space-x-3 mt-6">
                 <button
                   type="button"
                   onClick={() => setShowSaveDialog(false)}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                  className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
                 >
                   Cancel
                 </button>
@@ -537,7 +504,7 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
                   disabled={saving}
                   className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {saving ? 'Saving...' : 'Save to Knowledge Base'}
+                  {saving ? 'Saving…' : 'Save'}
                 </button>
               </div>
             </form>
@@ -546,6 +513,18 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
       )}
     </div>
   );
+};
+
+/* ──────────────────────── PropTypes ──────────────────────────── */
+InteractiveCanvas.propTypes = {
+  projectId: PropTypes.string.isRequired,
+  width: PropTypes.number,
+  height: PropTypes.number,
+};
+
+InteractiveCanvas.defaultProps = {
+  width: 800,
+  height: 600,
 };
 
 export default InteractiveCanvas;
