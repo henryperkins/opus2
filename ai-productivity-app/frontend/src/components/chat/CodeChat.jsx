@@ -5,6 +5,8 @@ import MessageList from './MessageList';
 import CommandInput from './CommandInput';
 import CodePreview from './CodePreview';
 import MonacoEditor from '@monaco-editor/react';
+import SplitPane from '../common/SplitPane';
+import DependencyGraph from '../knowledge/DependencyGraph';
 
 export default function CodeChat({ sessionId, projectId }) {
   const {
@@ -21,6 +23,7 @@ export default function CodeChat({ sessionId, projectId }) {
   const [editorLanguage, setEditorLanguage] = useState('python');
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [showDiff, setShowDiff] = useState(false);
+  const [viewMode, setViewMode] = useState('editor');
 
   // Extract code from selected message
   useEffect(() => {
@@ -57,10 +60,8 @@ export default function CodeChat({ sessionId, projectId }) {
     }
   };
 
-  return (
-    <div className="flex h-full bg-gray-50">
-      {/* Chat Panel */}
-      <div className="w-1/2 flex flex-col bg-white border-r border-gray-200">
+  const chatPanel = (
+      <div className="flex flex-col h-full bg-white border-r border-gray-200">
         <div className="flex-1 overflow-hidden">
           <MessageList
             messages={messages}
@@ -92,9 +93,10 @@ export default function CodeChat({ sessionId, projectId }) {
           projectId={projectId}
         />
       </div>
+  );
 
-      {/* Code Editor Panel */}
-      <div className="w-1/2 flex flex-col">
+  const editorPanel = (
+      <div className="flex flex-col h-full bg-white">
         <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
           <div className="flex items-center space-x-4">
             <select
@@ -114,6 +116,14 @@ export default function CodeChat({ sessionId, projectId }) {
               }`}
             >
               Diff View
+            </button>
+            <button
+              onClick={() => setViewMode(viewMode === 'canvas' ? 'editor' : 'canvas')}
+              className={`text-sm px-3 py-1 rounded ${
+                viewMode === 'canvas' ? 'bg-blue-500 text-white' : 'bg-white border'
+              }`}
+            >
+              {viewMode === 'canvas' ? 'Editor' : 'Canvas'}
             </button>
           </div>
 
@@ -153,6 +163,29 @@ export default function CodeChat({ sessionId, projectId }) {
           />
         )}
       </div>
-    </div>
+  );
+
+  const canvasPanel = (
+      <div className="flex flex-col h-full bg-white">
+        <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
+          <h3 className="text-lg font-medium text-gray-900">Canvas</h3>
+          <button
+            onClick={() => setViewMode('editor')}
+            className="text-sm text-gray-600 hover:text-gray-900"
+          >
+            Close
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto p-4">
+          <DependencyGraph projectId={projectId} />
+        </div>
+      </div>
+  );
+
+  return (
+    <SplitPane
+      left={chatPanel}
+      right={viewMode === 'canvas' ? canvasPanel : editorPanel}
+    />
   );
 }

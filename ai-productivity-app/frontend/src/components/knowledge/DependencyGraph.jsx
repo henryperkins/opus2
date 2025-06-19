@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { searchAPI } from '../../api/search';
 
-export default function DependencyGraph({ projectId }) {
+export default function DependencyGraph({ projectId, width = 800, height = 600 }) {
   const svgRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,23 +37,24 @@ export default function DependencyGraph({ projectId }) {
   const renderGraph = () => {
     if (!graphData || !svgRef.current) return;
 
-    const width = 800;
-    const height = 600;
+    const container = svgRef.current.parentElement;
+    const w = container?.clientWidth || width;
+    const h = container?.clientHeight || height;
     const nodeRadius = 8;
 
     // Clear previous graph
     d3.select(svgRef.current).selectAll("*").remove();
 
     const svg = d3.select(svgRef.current)
-      .attr("width", width)
-      .attr("height", height)
-      .attr("viewBox", [0, 0, width, height]);
+      .attr("width", w)
+      .attr("height", h)
+      .attr("viewBox", [0, 0, w, h]);
 
     // Add zoom behavior
     const g = svg.append("g");
 
     svg.call(d3.zoom()
-      .extent([[0, 0], [width, height]])
+      .extent([[0, 0], [w, h]])
       .scaleExtent([0.1, 4])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
@@ -66,7 +67,7 @@ export default function DependencyGraph({ projectId }) {
         .distance(100))
       .force("charge", d3.forceManyBody()
         .strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("center", d3.forceCenter(w / 2, h / 2))
       .force("collision", d3.forceCollide()
         .radius(nodeRadius + 2));
 
@@ -254,8 +255,8 @@ export default function DependencyGraph({ projectId }) {
         </div>
       </div>
 
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <svg ref={svgRef}></svg>
+      <div className="border border-gray-200 rounded-lg overflow-hidden w-full h-full">
+        <svg ref={svgRef} className="w-full h-full"></svg>
       </div>
 
       {selectedNode && (
