@@ -16,6 +16,7 @@ import {
   RouterProvider,
   Route,
   Navigate,
+  Outlet,
 } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
@@ -27,6 +28,7 @@ import TimelinePage from './pages/TimelinePage';
 import SearchPage from './pages/SearchPage';
 import ProjectDashboard from './pages/ProjectDashboard';
 import ProjectChatPage from './pages/ProjectChatPage';
+import Layout from './components/common/Layout';
 import { useRequireAuth } from './hooks/useAuth';
 
 // -----------------------------------------------------------------------------
@@ -46,50 +48,56 @@ function ProtectedRoute({ element }) {
 export const router = createBrowserRouter(
   [
     {
-      path: '/login',
-      element: <LoginPage />,
-    },
-    {
-      path: '/forgot',
-      element: <ForgotPasswordPage />,
-    },
-    {
-      path: '/reset/:token',
-      element: <ResetPasswordPage />,
-    },
-    {
       path: '/',
-      element: <ProtectedRoute element={<Dashboard />} />,
-    },
-    {
-      path: '/projects',
-      element: <ProtectedRoute element={<ProjectDashboard />} />,
-    },
-    {
-      path: '/profile',
-      element: <ProtectedRoute element={<UserProfile />} />,
-    },
-    {
-      path: '/settings',
-      element: <ProtectedRoute element={<SettingsPage />} />,
-    },
-    {
-      path: '/search',
-      element: <ProtectedRoute element={<SearchPage />} />,
-    },
-    {
-      path: '/timeline',
-      element: <ProtectedRoute element={<TimelinePage />} />,
-    },
-    // Deprecated alias – kept temporarily so existing bookmarks to "/dashboard"
-    // still work.  Can be removed once users migrate.
-    {
-      path: '/dashboard',
-      element: <ProtectedRoute element={<ProjectDashboard />} />,
-    },
-    {
-      path: '/projects/:projectId/chat',
-      element: <ProtectedRoute element={<ProjectChatPage />} />,
+      element: <Layout><Outlet /></Layout>,
+      children: [
+        {
+          index: true,
+          element: <ProtectedRoute element={<Dashboard />} />,
+        },
+        {
+          path: 'login',
+          element: <LoginPage />,
+        },
+        {
+          path: 'forgot',
+          element: <ForgotPasswordPage />,
+        },
+        {
+          path: 'reset/:token',
+          element: <ResetPasswordPage />,
+        },
+        {
+          path: 'projects',
+          element: <ProtectedRoute element={<ProjectDashboard />} />,
+        },
+        {
+          path: 'profile',
+          element: <ProtectedRoute element={<UserProfile />} />,
+        },
+        {
+          path: 'settings',
+          element: <ProtectedRoute element={<SettingsPage />} />,
+        },
+        {
+          path: 'search',
+          element: <ProtectedRoute element={<SearchPage />} />,
+        },
+        {
+          path: 'timeline',
+          element: <ProtectedRoute element={<TimelinePage />} />,
+        },
+        // Deprecated alias – kept temporarily so existing bookmarks to "/dashboard"
+        // still work.  Can be removed once users migrate.
+        {
+          path: 'dashboard',
+          element: <ProtectedRoute element={<ProjectDashboard />} />,
+        },
+        {
+          path: 'projects/:projectId/chat',
+          element: <ProtectedRoute element={<ProjectChatPage />} />,
+        },
+      ],
     },
   ],
   {

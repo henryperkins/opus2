@@ -23,7 +23,7 @@ import KeyboardShortcutsModal from '../modals/KeyboardShortcutsModal';
 import WhatsNewModal from '../modals/WhatsNewModal';
 import DocumentationModal from '../modals/DocumentationModal';
 
-const Sidebar = ({ onToggle, className }) => {
+const Sidebar = ({ onToggle, className = '' }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -71,7 +71,7 @@ const Sidebar = ({ onToggle, className }) => {
       });
       
       // Transform API response to match expected format
-      const formattedChats = response.data.map(session => ({
+      const formattedChats = response.data.items.map(session => ({
         id: session.id,
         title: session.title || `Chat ${session.id}`,
         timestamp: new Date(session.updated_at),
@@ -543,8 +543,5 @@ Sidebar.propTypes = {
   className: PropTypes.string
 };
 
-Sidebar.defaultProps = {
-  className: ''
-};
 
 export default Sidebar;

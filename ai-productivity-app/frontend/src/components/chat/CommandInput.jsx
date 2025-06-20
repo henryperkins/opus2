@@ -53,7 +53,7 @@ export default function CommandInput({ onSend, onTyping = null, projectId }) {
     // Create timeline event (non-blocking)
     try {
       await addEvent({
-        event_type: 'chat_message',
+        event_type: 'comment',
         title: `Command executed: ${cmd}`,
         description: args.length ? `Arguments: ${args.join(' ')}` : 'No arguments',
         metadata: {
@@ -86,7 +86,7 @@ export default function CommandInput({ onSend, onTyping = null, projectId }) {
         // Create timeline event (non-blocking)
         try {
           await addEvent({
-            event_type: 'chat_message',
+            event_type: 'comment',
             title: 'Chat message sent',
             description: message.slice(0, 50),
             metadata: {
