@@ -56,7 +56,6 @@ export default function EnhancedCommandInput({
   const { addEvent }   = useProjectTimeline(projectId);
   const [message,          setMessage]          = useState('');
   const [attachments,      setAttachments]      = useState([]);     // NEW
-  const [isRecording,      setIsRecording]      = useState(false);  // NEW
   const [suggestions,      setSuggestions]      = useState([]);
   const [showSuggestions,  setShowSuggestions]  = useState(false);
   const [selectedIndex,    setSelectedIndex]    = useState(-1);
@@ -99,7 +98,6 @@ export default function EnhancedCommandInput({
   const insertCitation = (citation) =>
     setMessage(prev => `${prev}[${citation.number}] `);
 
-  const toggleRecording = () => setIsRecording(r => !r);
 
   /* ---------------- knowledge command runner ---------------- */
   const runKnowledgeCommand = async (cmdLine) => {
@@ -375,23 +373,25 @@ export default function EnhancedCommandInput({
             <div className="flex flex-col gap-1">
               <button
                 type="button"
-                onClick={() => console.log('Attach file')}
+                onClick={() => {}}
+                disabled
                 className="icon-btn"
-                title="Attach file"
+                title="Attach file (coming soon)"
               >
                 <Paperclip className="w-5 h-5" />
               </button>
               <button
                 type="button"
-                onClick={toggleRecording}
-                className={`icon-btn ${isRecording ? 'text-red-500' : ''}`}
-                title={isRecording ? 'Stop recording' : 'Start voice recording'}
+                onClick={() => {}}
+                disabled
+                className="icon-btn"
+                title="Voice recording (coming soon)"
               >
-                {isRecording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                <Mic className="w-5 h-5" />
               </button>
               <button
                 type="submit"
-                disabled={!message.trim() && attachments.length === 0}
+                disabled={isSending || (!message.trim() && attachments.length === 0)}
                 className="icon-btn text-blue-500 disabled:text-gray-300"
                 title="Send"
               >
@@ -426,13 +426,6 @@ export default function EnhancedCommandInput({
           </>
         )}
 
-        {/* recording badge */}
-        {isRecording && (
-          <div className="flex items-center gap-2 text-red-600 text-sm">
-            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            Recording…
-          </div>
-        )}
       </form>
     </div>
   );

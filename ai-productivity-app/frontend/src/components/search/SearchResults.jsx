@@ -7,7 +7,7 @@ export default function SearchResults({ results, query, loading }) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <LoadingSpinner label="Searching..." />
+        <LoadingSpinner label="Searching..." showLabel={true} />
       </div>
     );
   }
