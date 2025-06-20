@@ -4,7 +4,7 @@
     "version": "0.1.0",
     "type": "module",
     "scripts": {
-        "dev": "vite",
+        "dev": "vite --force",
         "start": "node server.js",
         "build": "vite build",
         "build:prod": "NODE_ENV=production vite build",
@@ -13,7 +13,7 @@
         "test:run": "vitest run",
         "test:coverage": "vitest run --coverage",
         "lint": "eslint src --max-warnings 0",
-        "test:ci": "echo \"No frontend tests yet – skipping.\"",
+        "test:ci": "npm run lint && vitest run --coverage",
         "serve": "vite preview --port 4173 --host"
     },
     "dependencies": {
