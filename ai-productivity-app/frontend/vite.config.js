@@ -27,6 +27,9 @@ export default defineConfig({
     }),
   ],
 
+  // Base URL for production
+  base: '/',
+
   // Vitest
   test: {
     globals: true,
@@ -39,6 +42,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: parseInt(process.env.PORT) || 5173, // eslint-disable-line no-undef
     strictPort: false,
+    allowedHosts: ['lakefrontdigital.io'],
     proxy: {
       '/api': {
         target: backendTarget,

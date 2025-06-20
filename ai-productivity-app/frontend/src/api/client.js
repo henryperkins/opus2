@@ -27,7 +27,23 @@ import axios from 'axios';
 //    server.  The previous empty string made the requests *relative* to the
 //    Vite origin (5173) which breaks unless a dev-proxy is configured.
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Determine base URL based on environment
+const getBaseURL = () => {
+  // If explicitly set via env var, use it
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // Production: use HTTPS and same domain
+  if (import.meta.env.PROD) {
+    return `${window.location.protocol}//${window.location.host}/api`;
+  }
+  
+  // Development fallback
+  return 'http://localhost:8000';
+};
+
+const BASE_URL = getBaseURL();
 
 const client = axios.create({
   baseURL: BASE_URL,

@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { toast } from '../components/common/Toast';
 import Register from '../components/auth/Register';
 
 export default function LoginPage() {
@@ -38,6 +39,7 @@ export default function LoginPage() {
       console.error(err);
       const msg = err?.response?.data?.detail || 'Login failed';
       setSubmitError(msg);
+      toast.error(msg);
     } finally {
       // Re-enable autocomplete
       formEl?.setAttribute('autocomplete', 'on');

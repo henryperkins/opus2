@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { toast } from '../common/Toast';
 
 function Login() {
   const { login } = useAuth();
@@ -18,7 +19,9 @@ function Login() {
     try {
       await login(formData.username_or_email, formData.password);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed');
+      const msg = err.response?.data?.detail || 'Login failed';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

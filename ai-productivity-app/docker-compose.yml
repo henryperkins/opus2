@@ -44,7 +44,8 @@ services:
       - DOCKER_ENV=true
       # Frontend (inside container) must talk to backend service via its Docker
       # network alias "backend" rather than localhost.
-      - VITE_API_URL=http://backend:8000
+      # For production deployment, set VITE_API_URL to https://yourdomain.com/api
+      - VITE_API_URL=${VITE_API_URL:-http://backend:8000}
     networks:
       - app-network
     depends_on:
