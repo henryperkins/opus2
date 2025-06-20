@@ -1,9 +1,276 @@
-// components/knowledge/KnowledgeContextPanel.jsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { useProject } from '../../hooks/useProjects';
+/* global AbortController, setTimeout, clearTimeout */
+
+import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { searchAPI } from '../../api/search';
 import { ChevronRight, ChevronDown, FileText, Code, Link, AlertCircle } from 'lucide-react';
 
+// Custom hook for search logic
+function useKnowledgeSearch(projectId, query) {
+  const [state, setState] = useState({
+    results: null,
+    loading: false,
+    error: null
+  });
+
+  useEffect(() => {
+    if (!query || query.length < 3) {
+      setState({ results: null, loading: false, error: null });
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const search = async () => {
+      setState(prev => ({ ...prev, loading: true, error: null }));
+
+      try {
+        const results = await searchAPI.searchProject(projectId, query, {
+          include_code: true,
+          include_docs: true,
+          max_results: 10,
+          signal: controller.signal
+        });
+
+        if (!cancelled) {
+          setState({
+            results: processResults(results, query),
+            loading: false,
+            error: null
+          });
+        }
+      } catch (err) {
+        if (!cancelled && err.name !== 'AbortError') {
+          setState({
+            results: null,
+            loading: false,
+            error: err.message || 'Search failed'
+          });
+        }
+      }
+    };
+
+    const timer = setTimeout(search, 300);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [projectId, query]);
+
+  return state;
+}
+
+// Process search results
+function processResults(results, query) {
+  const documents = (results.documents || []).map(doc => ({
+    ...doc,
+    type: 'document',
+    highlights: extractHighlights(doc.content, query)
+  }));
+
+  const code = (results.code_snippets || []).map(snippet => ({
+    ...snippet,
+    type: 'code'
+  }));
+
+  const allItems = [...documents, ...code].sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  return {
+    items: allItems,
+    totalCount: allItems.length
+  };
+}
+
+// Extract text highlights
+function extractHighlights(content, query) {
+  if (!content || !query) return [];
+
+  const terms = query.toLowerCase().split(/\s+/);
+  const sentences = content.split(/[.!?]+/).filter(s => s.trim());
+
+  return sentences
+    .filter(sentence => {
+      const lower = sentence.toLowerCase();
+      return terms.some(term => lower.includes(term));
+    })
+    .slice(0, 3)
+    .map(sentence => {
+      let highlighted = sentence.trim();
+      terms.forEach(term => {
+        const regex = new RegExp(`(${term})`, 'gi');
+        highlighted = highlighted.replace(regex, '<mark>$1</mark>');
+      });
+      return highlighted;
+    });
+}
+
+// Empty state component
+function EmptyState({ icon: Icon, message }) {
+  return (
+    <div className="flex items-center justify-center h-32 text-gray-500">
+      <div className="text-center">
+        <Icon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+        <p className="text-sm">{message}</p>
+      </div>
+    </div>
+  );
+}
+EmptyState.propTypes = {
+  icon: PropTypes.elementType.isRequired,
+  message: PropTypes.string.isRequired
+};
+// Loading component
+function LoadingState() {
+  return (
+    <div className="flex items-center justify-center h-32">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+        <p className="text-sm text-gray-600">Searching knowledge base...</p>
+      </div>
+    </div>
+  );
+}
+
+// Result item component
+function ResultItem({ item, isExpanded, isSelected, onToggleExpanded, onSelect }) {
+  const isDocument = item.type === 'document';
+  const title = item.title || item.file_path?.split('/').pop() || 'Untitled';
+  const path = item.path || item.file_path || '';
+  const score = Math.round((item.score || 0) * 100);
+
+  return (
+    <div className={`border rounded-lg overflow-hidden transition-colors ${
+      isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+    }`}>
+      {/* Header */}
+      <div className="px-4 py-3 cursor-pointer hover:bg-gray-50" onClick={onSelect}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3 flex-1 min-w-0">
+            {isDocument ? (
+              <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            ) : (
+              <Code className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            )}
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-medium text-gray-900 truncate">{title}</h4>
+              <p className="text-xs text-gray-600 truncate">{path}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-xs text-gray-500">{score}%</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpanded();
+              }}
+              className="p-1 hover:bg-gray-200 rounded"
+            >
+              {isExpanded ? (
+                <ChevronDown className="w-4 h-4" />
+              ) : (
+                <ChevronRight className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+          {isDocument ? (
+            <DocumentContent item={item} />
+          ) : (
+            <CodeContent item={item} />
+          )}
+
+          <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-300">
+            <div className="text-xs text-gray-500">
+              Click to {isSelected ? 'deselect' : 'select'}
+            </div>
+            <button className="p-1 text-gray-500 hover:text-gray-700 rounded" title="Open source">
+              <Link className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+ResultItem.propTypes = {
+  item: PropTypes.shape({
+    type: PropTypes.string,
+    title: PropTypes.string,
+    file_path: PropTypes.string,
+    path: PropTypes.string,
+    score: PropTypes.number,
+    content: PropTypes.string,
+    highlights: PropTypes.arrayOf(PropTypes.string),
+    id: PropTypes.any,
+    language: PropTypes.string,
+    start_line: PropTypes.number,
+    end_line: PropTypes.number,
+  }).isRequired,
+  isExpanded: PropTypes.bool.isRequired,
+  isSelected: PropTypes.bool.isRequired,
+  onToggleExpanded: PropTypes.func.isRequired,
+  onSelect: PropTypes.func.isRequired,
+};
+// Document content component
+function DocumentContent({ item }) {
+  if (item.highlights && item.highlights.length > 0) {
+    return (
+      <div className="space-y-1">
+        {item.highlights.map((highlight, idx) => (
+          <div key={idx} className="text-sm text-gray-700">
+            <span dangerouslySetInnerHTML={{ __html: highlight }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-sm text-gray-700">
+      {item.content?.slice(0, 200)}...
+    </p>
+  );
+}
+DocumentContent.propTypes = {
+  item: PropTypes.shape({
+    highlights: PropTypes.arrayOf(PropTypes.string),
+    content: PropTypes.string,
+  }).isRequired,
+};
+// Code content component
+function CodeContent({ item }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center space-x-2 text-xs text-gray-600">
+        <span>Lines {item.start_line}-{item.end_line}</span>
+        <span>•</span>
+        <span>{item.language}</span>
+      </div>
+      <pre className="text-sm bg-gray-100 p-2 rounded overflow-x-auto">
+        <code>{item.content?.slice(0, 300)}...</code>
+      </pre>
+    </div>
+  );
+}
+CodeContent.propTypes = {
+  item: PropTypes.shape({
+    start_line: PropTypes.number,
+    end_line: PropTypes.number,
+    language: PropTypes.string,
+    content: PropTypes.string,
+  }).isRequired,
+};
+
+// Main component
 export default function KnowledgeContextPanel({
   query,
   projectId,
@@ -11,315 +278,93 @@ export default function KnowledgeContextPanel({
   onCodeSelect,
   maxHeight = '400px'
 }) {
-  const [context, setContext] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [expandedItems, setExpandedItems] = useState(new Set());
-  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [expanded, setExpanded] = useState(new Set());
+  const [selected, setSelected] = useState(new Set());
+  const { results, loading, error } = useKnowledgeSearch(projectId, query);
 
-  const { project } = useProject(projectId);
+  const toggleExpanded = (id) => {
+    setExpanded(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
 
-  // Search for relevant context when query changes
-  useEffect(() => {
-    if (!query || query.length < 3) {
-      setContext(null);
-      return;
+  const handleSelect = (item) => {
+    const newSelected = new Set(selected);
+    if (newSelected.has(item.id)) {
+      newSelected.delete(item.id);
+    } else {
+      newSelected.add(item.id);
     }
+    setSelected(newSelected);
 
-    const searchContext = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const startTime = Date.now();
-        const results = await searchAPI.searchProject(projectId, query, {
-          include_code: true,
-          include_docs: true,
-          max_results: 10
-        });
-
-        const searchTime = Date.now() - startTime;
-
-        // Process and score results
-        const relevantDocs = results.documents?.map(doc => ({
-          ...doc,
-          type: doc.type || 'document',
-          highlights: extractHighlights(doc.content, query)
-        })) || [];
-
-        const codeSnippets = results.code_snippets || [];
-
-        // Calculate confidence based on scores and relevance
-        const avgScore = [...relevantDocs, ...codeSnippets]
-          .reduce((sum, item) => sum + (item.score || 0), 0) /
-          (relevantDocs.length + codeSnippets.length);
-
-        setContext({
-          relevantDocs,
-          codeSnippets,
-          totalMatches: relevantDocs.length + codeSnippets.length,
-          searchTime,
-          confidence: Math.min(avgScore || 0, 1)
-        });
-      } catch (err) {
-        console.error('Failed to search context:', err);
-        setError(err.message || 'Failed to search knowledge base');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const debounceTimer = setTimeout(searchContext, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [query, projectId]);
-
-  const toggleExpanded = (itemId) => {
-    setExpandedItems(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId);
-      } else {
-        newSet.add(itemId);
-      }
-      return newSet;
-    });
+    // Call appropriate callback
+    if (item.type === 'document') {
+      onDocumentSelect?.(item);
+    } else {
+      onCodeSelect?.(item);
+    }
   };
 
-  const toggleSelected = (itemId) => {
-    setSelectedItems(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId);
-      } else {
-        newSet.add(itemId);
-      }
-      return newSet;
-    });
-  };
-
-  const handleDocumentClick = (doc) => {
-    toggleSelected(doc.id);
-    onDocumentSelect?.(doc);
-  };
-
-  const handleCodeClick = (snippet) => {
-    toggleSelected(snippet.id);
-    onCodeSelect?.(snippet);
-  };
-
-  // Group and sort items by relevance
-  const sortedItems = useMemo(() => {
-    if (!context) return [];
-
-    const allItems = [
-      ...context.relevantDocs.map(doc => ({ ...doc, itemType: 'document' })),
-      ...context.codeSnippets.map(snippet => ({ ...snippet, itemType: 'code' }))
-    ];
-
-    return allItems.sort((a, b) => (b.score || 0) - (a.score || 0));
-  }, [context]);
+  // Reset state when query changes
+  useEffect(() => {
+    setExpanded(new Set());
+    setSelected(new Set());
+  }, [query]);
 
   if (!query || query.length < 3) {
-    return (
-      <div className="flex items-center justify-center h-32 text-gray-500">
-        <div className="text-center">
-          <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">Enter a search query to find relevant context</p>
-        </div>
-      </div>
-    );
+    return <EmptyState icon={FileText} message="Enter a search query to find relevant context" />;
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-32">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-          <p className="text-sm text-gray-600">Searching knowledge base...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (error) {
-    return (
-      <div className="flex items-center justify-center h-32 text-red-600">
-        <div className="text-center">
-          <AlertCircle className="w-8 h-8 mx-auto mb-2" />
-          <p className="text-sm">{error}</p>
-        </div>
-      </div>
-    );
+    return <EmptyState icon={AlertCircle} message={error} />;
   }
 
-  if (!context || context.totalMatches === 0) {
-    return (
-      <div className="flex items-center justify-center h-32 text-gray-500">
-        <div className="text-center">
-          <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">No relevant context found</p>
-        </div>
-      </div>
-    );
+  if (!results || results.totalCount === 0) {
+    return <EmptyState icon={FileText} message="No relevant context found" />;
   }
 
   return (
     <div className="space-y-4" style={{ maxHeight, overflow: 'auto' }}>
-      {/* Context Summary */}
+      {/* Summary */}
       <div className="px-4 py-3 bg-blue-50 rounded-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <FileText className="w-4 h-4 text-blue-600" />
-            <span className="text-sm font-medium text-blue-900">
-              Found {context.totalMatches} relevant items
-            </span>
-          </div>
-          <div className="flex items-center space-x-2 text-xs text-blue-700">
-            <span>{context.searchTime}ms</span>
-            <span>•</span>
-            <span>{Math.round(context.confidence * 100)}% confidence</span>
-          </div>
+        <div className="flex items-center space-x-2">
+          <FileText className="w-4 h-4 text-blue-600" />
+          <span className="text-sm font-medium text-blue-900">
+            Found {results.totalCount} relevant items
+          </span>
         </div>
       </div>
 
       {/* Results */}
       <div className="space-y-2">
-        {sortedItems.map(item => (
-          <div
+        {results.items.map(item => (
+          <ResultItem
             key={item.id}
-            className={`border rounded-lg overflow-hidden transition-all ${
-              selectedItems.has(item.id)
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-gray-300'
-            }`}
-          >
-            {/* Item Header */}
-            <div
-              className="px-4 py-3 cursor-pointer hover:bg-gray-50"
-              onClick={() => {
-                if (item.itemType === 'document') {
-                  handleDocumentClick(item);
-                } else {
-                  handleCodeClick(item);
-                }
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                  {item.itemType === 'document' ? (
-                    <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                  ) : (
-                    <Code className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-medium text-gray-900 truncate">
-                      {item.title || item.file_path?.split('/').pop() || 'Untitled'}
-                    </h4>
-                    <p className="text-xs text-gray-600 truncate">
-                      {item.path || item.file_path}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs text-gray-500">
-                    {Math.round((item.score || 0) * 100)}%
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleExpanded(item.id);
-                    }}
-                    className="p-1 hover:bg-gray-200 rounded"
-                  >
-                    {expandedItems.has(item.id) ? (
-                      <ChevronDown className="w-4 h-4" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Expanded Content */}
-            {expandedItems.has(item.id) && (
-              <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-                {item.itemType === 'document' ? (
-                  <div className="space-y-2">
-                    {item.highlights && item.highlights.length > 0 ? (
-                      <div className="space-y-1">
-                        {item.highlights.slice(0, 3).map((highlight, idx) => (
-                          <div key={idx} className="text-sm text-gray-700">
-                            <span dangerouslySetInnerHTML={{ __html: highlight }} />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-700">
-                        {item.content.slice(0, 200)}...
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2 text-xs text-gray-600">
-                      <span>Lines {item.start_line}-{item.end_line}</span>
-                      <span>•</span>
-                      <span>{item.language}</span>
-                    </div>
-                    <pre className="text-sm bg-gray-100 p-2 rounded overflow-x-auto">
-                      <code>{item.content.slice(0, 300)}...</code>
-                    </pre>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-300">
-                  <div className="text-xs text-gray-500">
-                    Click to {selectedItems.has(item.id) ? 'deselect' : 'select'}
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Open in external viewer
-                    }}
-                    className="p-1 text-gray-500 hover:text-gray-700 rounded"
-                    title="Open source"
-                  >
-                    <Link className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+            item={item}
+            isExpanded={expanded.has(item.id)}
+            isSelected={selected.has(item.id)}
+            onToggleExpanded={() => toggleExpanded(item.id)}
+            onSelect={() => handleSelect(item)}
+          />
         ))}
       </div>
     </div>
   );
 }
-
-// Helper function to extract highlights
-function extractHighlights(content, query) {
-  if (!content || !query) return [];
-
-  const terms = query.toLowerCase().split(/\s+/);
-  const sentences = content.split(/[.!?]+/);
-  const highlights = [];
-
-  sentences.forEach(sentence => {
-    const lowerSentence = sentence.toLowerCase();
-    const hasMatch = terms.some(term => lowerSentence.includes(term));
-
-    if (hasMatch) {
-      let highlighted = sentence;
-      terms.forEach(term => {
-        const regex = new RegExp(`(${term})`, 'gi');
-        highlighted = highlighted.replace(regex, '<mark>$1</mark>');
-      });
-      highlights.push(highlighted.trim());
-    }
-  });
-
-  return highlights.slice(0, 5); // Max 5 highlights
-}
+KnowledgeContextPanel.propTypes = {
+  query: PropTypes.string,
+  projectId: PropTypes.any,
+  onDocumentSelect: PropTypes.func,
+  onCodeSelect: PropTypes.func,
+  maxHeight: PropTypes.string,
+};

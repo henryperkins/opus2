@@ -57,7 +57,7 @@ export class KnowledgeCommand {
   async execute(args, context) {
     // eslint-disable-next-line no-unused-vars
     const _args = args;
-    // eslint-disable-next-line no-unused-vars  
+    // eslint-disable-next-line no-unused-vars
     const _context = context;
     throw new Error('Execute method must be implemented');
   }

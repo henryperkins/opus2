@@ -1,5 +1,5 @@
 // api/search.js
-import axios from '../utils/axios';
+import axios from './client';
 // Type imports removed (SearchOptions, SearchResults, DocumentMatch, KnowledgeSource)
 
 class SearchAPI {

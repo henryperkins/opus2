@@ -1,11 +1,10 @@
-// components/chat/EnhancedCommandInput.jsx
+// components/chat/CommandInput.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import { Search, Command, X, ChevronRight } from 'lucide-react';
 import { toast } from '../common/Toast';
 import { useProjectTimeline } from '../../hooks/useProjects';
-import { KnowledgeCommandRegistry } from '../../commands/knowledge-commands';
-import { Citation } from '../../types/knowledge';
+import { KnowledgeCommandRegistry } from '../../utils/commands/knowledge-commands';
 import PropTypes from 'prop-types';
 
 const commandRegistry = new KnowledgeCommandRegistry();
@@ -29,7 +28,7 @@ const allCommands = [
   }))
 ];
 
-export default function EnhancedCommandInput({
+export default function CommandInput({
   onSend,
   onTyping,
   projectId,
@@ -37,20 +36,20 @@ export default function EnhancedCommandInput({
   selectedText,
   currentFile,
   userId
-}: EnhancedCommandInputProps) {
+}) {
   const { addEvent } = useProjectTimeline(projectId);
   const [message, setMessage] = useState('');
-  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [inputMode, setInputMode] = useState('simple');
   const [editorHeight, setEditorHeight] = useState(100);
   const [isSending, setIsSending] = useState(false);
   const [commandProcessing, setCommandProcessing] = useState(false);
-  const [citations, setCitations] = useState<Citation[]>([]);
+  const [citations, setCitations] = useState([]);
   const [showCommandHelp, setShowCommandHelp] = useState(false);
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
 
   // Command suggestions
@@ -77,10 +76,7 @@ export default function EnhancedCommandInput({
     }
   }, [message, isTyping, onTyping]);
 
-  const handleKnowledgeCommand = async (commandLine: string): Promise<{
-    result: any;
-    shouldSend: boolean
-  }> => {
+  const handleKnowledgeCommand = async (commandLine) => {
     const context = {
       projectId,
       currentFile,
@@ -115,7 +111,7 @@ export default function EnhancedCommandInput({
     return { result, shouldSend: false };
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!message.trim() || isSending) return;
 
@@ -123,7 +119,7 @@ export default function EnhancedCommandInput({
     setCommandProcessing(true);
 
     try {
-      const metadata: any = {
+      const metadata = {
         citations: citations.length > 0 ? citations : undefined
       };
 
@@ -185,7 +181,7 @@ export default function EnhancedCommandInput({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e) => {
     if (showSuggestions && suggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -205,7 +201,7 @@ export default function EnhancedCommandInput({
     }
   };
 
-  const insertCitation = (citation: Citation) => {
+  const insertCitation = (citation) => {
     const citationText = `[${citation.number}]`;
     setMessage(prev => prev + citationText + ' ');
   };
@@ -391,7 +387,7 @@ export default function EnhancedCommandInput({
   );
 }
 
-EnhancedCommandInput.propTypes = {
+CommandInput.propTypes = {
   onSend: PropTypes.func.isRequired,
   onTyping: PropTypes.func,
   projectId: PropTypes.string.isRequired,

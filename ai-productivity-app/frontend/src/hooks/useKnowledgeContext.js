@@ -268,7 +268,7 @@ export function useKnowledgeChat(projectId) {
 function extractSearchTerms(message) {
   // Remove common chat words and extract meaningful terms
   const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'how', 'what', 'when', 'where', 'why', 'can', 'could', 'should', 'would', 'i', 'you', 'we', 'they', 'it', 'this', 'that', 'these', 'those']);
-  
+
   const words = message
     .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
