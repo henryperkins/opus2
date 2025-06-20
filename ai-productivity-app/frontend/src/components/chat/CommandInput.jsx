@@ -1,4 +1,4 @@
-// components/chat/EnhancedCommandInput.tsx
+// components/chat/EnhancedCommandInput.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import { Search, Command, X, ChevronRight } from 'lucide-react';
@@ -7,16 +7,6 @@ import { useProjectTimeline } from '../../hooks/useProjects';
 import { KnowledgeCommandRegistry } from '../../commands/knowledge-commands';
 import { Citation } from '../../types/knowledge';
 import PropTypes from 'prop-types';
-
-interface EnhancedCommandInputProps {
-  onSend: (message: string, metadata: any) => Promise<void>;
-  onTyping?: (isTyping: boolean) => void;
-  projectId: string;
-  editorContent?: string;
-  selectedText?: string;
-  currentFile?: string;
-  userId: string;
-}
 
 const commandRegistry = new KnowledgeCommandRegistry();
 

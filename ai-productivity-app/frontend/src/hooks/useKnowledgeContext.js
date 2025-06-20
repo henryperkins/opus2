@@ -1,51 +1,39 @@
-// hooks/useKnowledgeContext.ts
+// hooks/useKnowledgeContext.js
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { searchAPI } from '../api/search';
-import { KnowledgeContext, DocumentMatch, CodeChunk, Citation } from '../types/knowledge';
 import { useDebounce } from './useDebounce';
 
-interface UseKnowledgeContextOptions {
-  projectId: string;
-  autoSearch?: boolean;
-  searchDelay?: number;
-  maxResults?: number;
-  minConfidence?: number;
-}
-
-interface UseKnowledgeContextReturn {
-  context: KnowledgeContext | null;
-  loading: boolean;
-  error: string | null;
-  search: (query: string) => Promise<void>;
-  clearContext: () => void;
-  addToCitations: (items: DocumentMatch[] | CodeChunk[]) => Citation[];
-  citations: Citation[];
-  selectedItems: Set<string>;
-  toggleItemSelection: (itemId: string) => void;
-  clearSelections: () => void;
-}
-
+/**
+ * Hook for managing knowledge base context and search
+ * @param {object} options - Configuration options
+ * @param {string} options.projectId - Project ID
+ * @param {boolean} options.autoSearch - Whether to auto-search on query changes
+ * @param {number} options.searchDelay - Debounce delay for searches
+ * @param {number} options.maxResults - Maximum number of results
+ * @param {number} options.minConfidence - Minimum confidence threshold
+ * @returns {object} Knowledge context state and functions
+ */
 export function useKnowledgeContext({
   projectId,
   autoSearch = true,
   searchDelay = 300,
   maxResults = 10,
   minConfidence = 0.5
-}: UseKnowledgeContextOptions): UseKnowledgeContextReturn {
-  const [context, setContext] = useState<KnowledgeContext | null>(null);
+}) {
+  const [context, setContext] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [citations, setCitations] = useState<Citation[]>([]);
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [citations, setCitations] = useState([]);
+  const [selectedItems, setSelectedItems] = useState(new Set());
 
-  const searchAbortController = useRef<AbortController | null>(null);
+  const searchAbortController = useRef(null);
   const citationCounter = useRef(1);
 
   const debouncedQuery = useDebounce(searchQuery, searchDelay);
 
   // Perform knowledge search
-  const performSearch = useCallback(async (query: string) => {
+  const performSearch = useCallback(async (query) => {
     if (!query || query.length < 3) {
       setContext(null);
       return;
@@ -56,7 +44,7 @@ export function useKnowledgeContext({
       searchAbortController.current.abort();
     }
 
-    searchAbortController.current = new AbortController();
+    searchAbortController.current = new window.AbortController();
 
     setLoading(true);
     setError(null);
@@ -82,32 +70,36 @@ export function useKnowledgeContext({
 
       // Calculate overall confidence
       const allScores = [
-        ...docsResponse.results.map(d => d.score),
-        ...codeResponse.results.map(c => c.score)
+        ...(docsResponse.results || []).map(d => d.score),
+        ...(codeResponse.results || []).map(c => c.score)
       ];
 
       const avgScore = allScores.length > 0
         ? allScores.reduce((a, b) => a + b, 0) / allScores.length
         : 0;
 
-      const newContext: KnowledgeContext = {
-        relevantDocs: docsResponse.results,
-        codeSnippets: codeResponse.results.map(r => ({
+      const newContext = {
+        relevantDocs: (docsResponse.results || []).map(doc => ({
+          ...doc,
+          type: doc.type || 'document'
+        })),
+        codeSnippets: (codeResponse.results || []).map(r => ({
           id: r.id,
           documentId: r.documentId || r.id,
           content: r.content,
+          file_path: r.file_path || r.path,
           start_line: r.start_line || 1,
           end_line: r.end_line || r.content.split('\n').length,
-          type: 'other' as const,
+          language: r.language || 'text',
           score: r.score
         })),
-        totalMatches: docsResponse.total + codeResponse.total,
+        totalMatches: (docsResponse.total || 0) + (codeResponse.total || 0),
         searchTime,
         confidence: avgScore
       };
 
       setContext(newContext);
-    } catch (err: any) {
+    } catch (err) {
       if (err.name !== 'AbortError') {
         setError('Failed to search knowledge base');
         console.error('Knowledge search error:', err);
@@ -125,7 +117,7 @@ export function useKnowledgeContext({
   }, [debouncedQuery, autoSearch, performSearch]);
 
   // Manual search function
-  const search = useCallback(async (query: string) => {
+  const search = useCallback(async (query) => {
     setSearchQuery(query);
     if (!autoSearch) {
       await performSearch(query);
@@ -143,19 +135,18 @@ export function useKnowledgeContext({
   }, []);
 
   // Add items to citations
-  const addToCitations = useCallback((items: (DocumentMatch | CodeChunk)[]): Citation[] => {
-    const newCitations: Citation[] = items.map(item => {
+  const addToCitations = useCallback((items) => {
+    const newCitations = items.map(item => {
       const isDoc = 'title' in item;
       return {
         id: item.id,
         number: citationCounter.current++,
         source: {
-          title: isDoc ? (item as DocumentMatch).title : `Code snippet`,
-          path: isDoc ? (item as DocumentMatch).path : 'code',
+          id: item.id,
+          title: isDoc ? item.title : `Code snippet`,
+          path: isDoc ? item.path : (item.file_path || 'code'),
           type: isDoc
-            ? ((item as DocumentMatch).type === "comment"
-                ? "external"
-                : (item as DocumentMatch).type as "document" | "code" | "external")
+            ? (item.type === "comment" ? "external" : item.type)
             : "code"
         },
         content: item.content.slice(0, 200),
@@ -168,7 +159,7 @@ export function useKnowledgeContext({
   }, []);
 
   // Toggle item selection
-  const toggleItemSelection = useCallback((itemId: string) => {
+  const toggleItemSelection = useCallback((itemId) => {
     setSelectedItems(prev => {
       const newSet = new Set(prev);
       if (newSet.has(itemId)) {
@@ -186,10 +177,10 @@ export function useKnowledgeContext({
   }, []);
 
   // Get selected items from context
-  const getSelectedItemsFromContext = useCallback((): (DocumentMatch | CodeChunk)[] => {
+  const getSelectedItemsFromContext = useCallback(() => {
     if (!context) return [];
 
-    const items: (DocumentMatch | CodeChunk)[] = [];
+    const items = [];
 
     context.relevantDocs.forEach(doc => {
       if (selectedItems.has(doc.id)) {
@@ -216,19 +207,23 @@ export function useKnowledgeContext({
     citations,
     selectedItems,
     toggleItemSelection,
-    clearSelections
+    clearSelections,
+    getSelectedItemsFromContext
   };
 }
 
-// Helper hook for integrating knowledge context with chat
-export function useKnowledgeChat(projectId: string) {
+/**
+ * Helper hook for integrating knowledge context with chat
+ * @param {string} projectId - Project ID
+ * @returns {object} Enhanced knowledge context with chat integration
+ */
+export function useKnowledgeChat(projectId) {
   const knowledgeContext = useKnowledgeContext({ projectId });
   const [activeQuery, setActiveQuery] = useState('');
 
   // Update search based on chat input
-  const updateContextFromChat = useCallback((message: string) => {
+  const updateContextFromChat = useCallback((message) => {
     // Extract meaningful search terms from message
-    // This is a simple implementation - could be enhanced with NLP
     const searchTerms = extractSearchTerms(message);
     if (searchTerms && searchTerms !== activeQuery) {
       setActiveQuery(searchTerms);
@@ -237,11 +232,8 @@ export function useKnowledgeChat(projectId: string) {
   }, [knowledgeContext, activeQuery]);
 
   // Build enhanced message with context
-  const buildEnhancedMessage = useCallback((message: string): {
-    message: string;
-    metadata: any;
-  } => {
-    const metadata: any = {};
+  const buildEnhancedMessage = useCallback((message) => {
+    const metadata = {};
 
     // Add citations if any
     if (knowledgeContext.citations.length > 0) {
@@ -268,20 +260,21 @@ export function useKnowledgeChat(projectId: string) {
   };
 }
 
-// Helper function to extract search terms
-function extractSearchTerms(message: string): string {
-  // Remove common words and extract key terms
-  const stopWords = new Set([
-    'the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but',
-    'in', 'with', 'to', 'for', 'of', 'as', 'by', 'that', 'this',
-    'what', 'how', 'why', 'when', 'where', 'who'
-  ]);
-
-  const words = message.toLowerCase()
+/**
+ * Helper function to extract search terms from a message
+ * @param {string} message - Chat message
+ * @returns {string} Extracted search terms
+ */
+function extractSearchTerms(message) {
+  // Remove common chat words and extract meaningful terms
+  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'how', 'what', 'when', 'where', 'why', 'can', 'could', 'should', 'would', 'i', 'you', 'we', 'they', 'it', 'this', 'that', 'these', 'those']);
+  
+  const words = message
+    .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
     .filter(word => word.length > 2 && !stopWords.has(word));
 
-  // Return the most meaningful terms (max 5)
+  // Take first 3-5 meaningful words
   return words.slice(0, 5).join(' ');
 }

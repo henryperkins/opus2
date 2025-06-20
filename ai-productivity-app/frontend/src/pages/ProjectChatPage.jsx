@@ -7,7 +7,7 @@ import { useProject } from '../hooks/useProjects';
 import { useUser } from '../hooks/useAuth';
 import Header from '../components/common/Header';
 import EnhancedMessageRenderer from '../components/chat/EnhancedMessageRenderer';
-import EnhancedCommandInput from '../components/chat/EnhancedCommandInput';
+import CommandInput from '../components/chat/CommandInput';
 import KnowledgeAssistant from '../components/chat/KnowledgeAssistant';
 import MonacoEditor from '@monaco-editor/react';
 import SplitPane from '../components/common/SplitPane';
@@ -215,7 +215,7 @@ export default function EnhancedProjectChatPage() {
       </div>
 
       {/* Enhanced command input */}
-      <EnhancedCommandInput
+      <CommandInput
         onSend={handleSendMessage}
         onTyping={sendTypingIndicator}
         projectId={projectId}

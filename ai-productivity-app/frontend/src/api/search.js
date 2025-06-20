@@ -177,6 +177,69 @@ class SearchAPI {
     );
     return response.data;
   }
+
+  /**
+   * Get search history for a project
+   * @param {string} projectId
+   * @returns {Promise<Array<string>>}
+   */
+  async getSearchHistory(projectId) {
+    try {
+      const response = await axios.get(
+        `${this._baseURL}/projects/${projectId}/search/history`
+      );
+      return response.data.history || [];
+    } catch (error) {
+      console.warn('Search history not available:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get popular search queries for a project
+   * @param {string} projectId
+   * @returns {Promise<Array<string>>}
+   */
+  async getPopularQueries(projectId) {
+    try {
+      const response = await axios.get(
+        `${this._baseURL}/projects/${projectId}/search/popular`
+      );
+      return response.data.queries || [];
+    } catch (error) {
+      console.warn('Popular queries not available:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Search project content (legacy method for backward compatibility)
+   * @param {string} projectId
+   * @param {string} query
+   * @param {object} options
+   * @returns {Promise<object>}
+   */
+  async searchProject(projectId, query, options = {}) {
+    const searchOptions = {
+      query,
+      limit: options.max_results || 10,
+      threshold: options.min_score || 0.5,
+      ...options
+    };
+
+    try {
+      // Use hybrid search as fallback
+      return await this.hybridSearch(projectId, searchOptions);
+    } catch (error) {
+      console.error('Search failed:', error);
+      return {
+        documents: [],
+        code_snippets: [],
+        total: 0,
+        results: []
+      };
+    }
+  }
 }
 
 export const searchAPI = new SearchAPI();
