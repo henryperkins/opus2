@@ -113,12 +113,24 @@ def register(
     db.add(user)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Username or email already exists",
-        ) from None
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        if 'username' in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username already exists. Please choose a different username.",
+            ) from None
+        elif 'email' in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email address already registered. Try logging in instead.",
+            ) from None
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Registration failed. Username or email may already exist.",
+            ) from None
 
     return _issue_token_and_cookie(response, db, user)
 
@@ -151,9 +163,31 @@ def login(
         db, payload.username_or_email.lower(), payload.password
     )
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
-        )
+        # Check if user exists to give more specific feedback
+        from sqlalchemy import or_
+        existing_user = db.query(User).filter(
+            or_(
+                User.username == payload.username_or_email.lower(),
+                User.email == payload.username_or_email.lower(),
+            )
+        ).first()
+        
+        if existing_user:
+            if not existing_user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Account is inactive. Please contact support."
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Incorrect password. Please try again."
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No account found with this username or email."
+            )
 
     return _issue_token_and_cookie(response, db, user)
 
@@ -215,20 +249,29 @@ def update_profile(
     data = payload.dict(exclude_unset=True, exclude_none=True)
 
     if not data:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No changes provided")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="No changes provided. Please specify username, email, or password to update."
+        )
 
     # Username
     if (username := data.get("username")) and username != current_user.username:
         conflict = db.query(User).filter(User.username == username).filter(User.id != current_user.id).first()
         if conflict:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, 
+                detail=f"Username '{username}' is already taken. Please choose a different username."
+            )
         current_user.username = username
 
     # Email
     if (email := data.get("email")) and email != current_user.email:
         conflict = db.query(User).filter(User.email == email).filter(User.id != current_user.id).first()
         if conflict:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, 
+                detail=f"Email '{email}' is already registered to another account."
+            )
         current_user.email = email
 
     # Password
@@ -310,14 +353,27 @@ def submit_password_reset(
     """
     Step 2: User submits new password along with the token they received.
     """
-    data = security.decode_access_token(payload.token)
+    try:
+        data = security.decode_access_token(payload.token)
+    except HTTPException:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Invalid or expired reset token. Please request a new password reset."
+        )
+    
     if data.get("purpose") != "reset":
-        raise HTTPException(status_code=400, detail="Invalid reset token")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Invalid reset token. This token is not for password reset."
+        )
 
     email = data.get("sub", "")
     user: User | None = db.query(User).filter(User.email == email).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="No account found with this email address."
+        )
 
     user.password_hash = security.hash_password(payload.new_password)
     db.add(user)

@@ -28,7 +28,7 @@ class UserLogin(BaseModel):
 
     @validator("username_or_email", pre=True)
     def strip_whitespace(cls, v: str) -> str:  # noqa: N805
-        return v.strip()
+        return v.strip().lower()
 
     class Config:
         json_schema_extra = {
@@ -38,12 +38,17 @@ class UserLogin(BaseModel):
 
 class UserRegister(BaseModel):
     """
-    Registration payload.
+    Registration payload, optionally requires invite_code if enabled in settings.
     """
 
     username: str = Field(..., min_length=3, max_length=50, examples=["alice"])
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+    invite_code: str | None = Field(
+        None,
+        description="Invite code required if registration is invite-only",
+        examples=["INVITECODE"]
+    )
 
     class Config:
         json_schema_extra = {
@@ -51,6 +56,7 @@ class UserRegister(BaseModel):
                 "username": "alice",
                 "email": "alice@example.com",
                 "password": "hunter2",
+                "invite_code": "INVITECODE"
             }
         }
 

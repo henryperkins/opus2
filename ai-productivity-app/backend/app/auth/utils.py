@@ -225,7 +225,7 @@ def get_current_user(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail="Authentication required. Please log in to access this resource.",
         )
 
     if token.startswith("test_token_") and token[11:].isdigit():
@@ -233,10 +233,16 @@ def get_current_user(
         # Skip session validation for test tokens
         user: User | None = db.get(User, user_id)
         if not user or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Not authenticated",
-            )
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication token. Please log in again.",
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Account is inactive. Please contact support.",
+                )
         return user
     else:
         payload = security.decode_access_token(token)
@@ -247,18 +253,21 @@ def get_current_user(
         if jti and not is_session_active(db, jti):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Not authenticated",
+                detail="Session expired. Please log in again.",
             )
 
     user: User | None = db.get(User, user_id)
     if not user or not user.is_active:
-        # Align with tests that expect generic "Not authenticated" message when
-        # credentials are missing **or** reference a non-existent user (e.g. DB
-        # reset between tests while TestClient still holds an auth cookie).
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token. Please log in again.",
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account is inactive. Please contact support.",
+            )
 
     return user
 
