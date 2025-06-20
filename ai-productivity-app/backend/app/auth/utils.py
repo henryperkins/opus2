@@ -9,15 +9,25 @@ Contains:
 """
 from __future__ import annotations
 
+import datetime
 from typing import Annotated, Optional
 
-from fastapi import Cookie, Depends, Header, HTTPException, Request, status, WebSocket
-from sqlalchemy.orm import Session as DBSession
+from fastapi import (
+    Cookie,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    status,
+    WebSocket,
+)
 from sqlalchemy import or_
+from sqlalchemy.orm import Session as DBSession
 
+from app.config import settings
 from app.database import get_db
-from app.models.user import User
 from app.models.session import Session
+from app.models.user import User
 from . import security
 
 ###############################################################################
@@ -55,42 +65,37 @@ def verify_credentials(
 def create_session(db: DBSession, user: User, jti: str) -> Session:
     """
     Create a new session record and update user's last_login timestamp.
-    
+
     Args:
         db: Database session
         user: User instance
         jti: JWT ID claim (unique token identifier)
-        
+
     Returns:
         Session: The created session record
     """
-    from datetime import datetime, timezone
-
     # Update user's last login
-    user.last_login = datetime.now(tz=timezone.utc)
-    
+    user.last_login = datetime.datetime.now(tz=datetime.timezone.utc)
+
     # Create session record
-    session = Session(
-        user_id=user.id,
-        jti=jti
-    )
-    
+    session = Session(user_id=user.id, jti=jti)
+
     db.add(user)
     db.add(session)
     db.commit()
     db.refresh(session)
-    
+
     return session
 
 
 def revoke_session(db: DBSession, jti: str) -> bool:
     """
     Revoke a session by JWT ID.
-    
+
     Args:
         db: Database session
         jti: JWT ID claim to revoke
-        
+
     Returns:
         bool: True if session was found and revoked, False otherwise
     """
@@ -105,52 +110,50 @@ def revoke_session(db: DBSession, jti: str) -> bool:
 def is_session_active(db: DBSession, jti: str) -> bool:
     """
     Check if a session is active (not revoked).
-    
+
     Args:
         db: Database session
         jti: JWT ID claim to check
-        
+
     Returns:
         bool: True if session exists and is active, False otherwise
     """
     session = db.query(Session).filter_by(jti=jti).first()
 
-    # When no matching session exists we *assume* the token is valid.  This
-    # behaviour keeps the in-memory test-database – which does not persist
-    # sessions across token generation helpers – compatible with the runtime
-    # checks while still allowing the real application to *revoke* sessions
-    # explicitly by toggling the *is_active* flag.
-
+    # For security, only ACTIVE and PRESENT sessions are valid.
+    # Short-circuit for test tokens elsewhere.
     if session is None:
-        return True
+        return False
 
     return session.is_active
 
 
-def cleanup_expired_sessions(db: DBSession, user_id: Optional[int] = None) -> int:
+def cleanup_expired_sessions(
+    db: DBSession, user_id: Optional[int] = None
+) -> int:
     """
     Clean up old/expired sessions. This can be called periodically.
-    
+
     Args:
         db: Database session
         user_id: Optional user ID to limit cleanup to specific user
-        
+
     Returns:
         int: Number of sessions cleaned up
     """
-    from datetime import datetime, timezone, timedelta
-    
     # Remove sessions older than 30 days
-    cutoff_date = datetime.now(timezone.utc) - timedelta(days=30)
-    
+    cutoff_date = datetime.datetime.now(
+        datetime.timezone.utc
+    ) - datetime.timedelta(days=30)
+
     query = db.query(Session).filter(Session.created_at < cutoff_date)
     if user_id:
         query = query.filter(Session.user_id == user_id)
-    
+
     count = query.count()
     query.delete(synchronize_session=False)
     db.commit()
-    
+
     return count
 
 # ---------------------------------------------------------------------------
@@ -173,13 +176,9 @@ def validate_invite_code(code: str) -> None:  # noqa: D401 – simple helper
     ------
     fastapi.HTTPException
         With *403 Forbidden* status if the code is not present in the list.
-    """
-
-    from fastapi import HTTPException, status
-
-    from app.config import settings
-
-    allowed = [c.strip() for c in settings.invite_codes.split(",") if c.strip()]
+    """  # noqa: E501
+    codes = settings.invite_codes.split(",")
+    allowed = [c.strip() for c in codes if c.strip()]
 
     if code not in allowed:
         raise HTTPException(
@@ -194,7 +193,7 @@ def validate_invite_code(code: str) -> None:  # noqa: D401 – simple helper
 
 
 def get_current_user(
-    request: Request,
+    request: Request,  # noqa: W0613
     db: Annotated[DBSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
     access_cookie: Annotated[str | None, Cookie(alias="access_token")] = None,
@@ -225,7 +224,10 @@ def get_current_user(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required. Please log in to access this resource.",
+            detail=(
+                "Authentication required. "
+                "Please log in to access this resource."
+            ),
         )
 
     if token.startswith("test_token_") and token[11:].isdigit():
@@ -236,7 +238,10 @@ def get_current_user(
             if not user:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid authentication token. Please log in again.",
+                    detail=(
+                        "Invalid authentication token. "
+                        "Please log in again."
+                    ),
                 )
             else:
                 raise HTTPException(
@@ -248,7 +253,7 @@ def get_current_user(
         payload = security.decode_access_token(token)
         user_id = security.token_sub_identity(payload)
         jti = payload.get("jti")
-        
+
         # Validate session is active
         if jti and not is_session_active(db, jti):
             raise HTTPException(
@@ -261,7 +266,10 @@ def get_current_user(
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication token. Please log in again.",
+                detail=(
+                    "Invalid authentication token. "
+                    "Please log in again."
+                ),
             )
         else:
             raise HTTPException(
@@ -271,11 +279,11 @@ def get_current_user(
 
     return user
 
-    
+
 async def get_current_user_ws(
-    websocket: WebSocket,
+    websocket: WebSocket,  # noqa: W0613
     token: str,
-    db: DBSession
+    db: DBSession,
 ) -> Optional[User]:
     """Authenticate WebSocket connection."""
     try:
@@ -284,20 +292,20 @@ async def get_current_user_ws(
             user_id = int(token[11:])
             user = db.get(User, user_id)
             return user if user and user.is_active else None
-            
+
         payload = security.decode_access_token(token)
         user_id = security.token_sub_identity(payload)
         jti = payload.get("jti")
-        
+
         # Validate session is active
         if jti and not is_session_active(db, jti):
             return None
-            
+
         user = db.get(User, user_id)
 
         if not user or not user.is_active:
             return None
 
         return user
-    except Exception:
+    except Exception:  # Broad exception is acceptable here for JWT decoding
         return None

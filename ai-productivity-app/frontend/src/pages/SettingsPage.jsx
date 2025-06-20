@@ -9,44 +9,45 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import useAuthStore from '../stores/authStore';
-import Header from '../components/common/Header';
+import ChangePasswordModal from '../components/modals/ChangePasswordModal';
+import Enable2FAModal from '../components/modals/Enable2FAModal';
 import AIProviderInfo from '../components/settings/AIProviderInfo';
 
 function SettingsPage() {
-  const { user } = useAuth();
-  const { preferences, setPreference, setPreferences } = useAuthStore();
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const { user, loading } = useAuth();
+  const { preferences, setPreference } = useAuthStore();
+  const [isChangePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
+  const [isEnable2FAModalOpen, setEnable2FAModalOpen] = useState(false);
 
   const handlePreferenceChange = (key, value) => {
     setPreference(key, value);
-    setMessage('Settings saved automatically');
-    setTimeout(() => setMessage(''), 2000);
   };
 
-  const handleSaveAll = () => {
-    setLoading(true);
-    // In a real app, you might sync these with the backend
-    setTimeout(() => {
-      setLoading(false);
-      setMessage('All settings saved successfully');
-      setTimeout(() => setMessage(''), 3000);
-    }, 500);
-  };
-
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+        <span className="text-lg text-blue-600">Loadingâ€¦</span>
+      </div>
+    );
+  }
   if (!user) {
-    return <div>Loading...</div>;
+    // Only possible after auth check, so show nice unauthenticated UI if needed
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-500">
+        Not authenticated.
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
 
       <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
-            <p className="text-sm text-gray-600 mt-1">
+        <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h1 className="text-2xl font-semibold">Settings</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               Manage your account preferences and application settings
             </p>
           </div>
@@ -54,7 +55,7 @@ function SettingsPage() {
           <div className="p-6 space-y-6">
             {/* User Preferences */}
             <div>
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
+              <h2 className="text-lg font-medium mb-4">
                 User Preferences
               </h2>
 
@@ -62,10 +63,10 @@ function SettingsPage() {
                 {/* Remember Me */}
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">
+                    <label className="text-sm font-medium">
                       Remember Me
                     </label>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       Keep me logged in on this device
                     </p>
                   </div>
@@ -80,129 +81,70 @@ function SettingsPage() {
                 {/* Theme */}
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">
+                    <label className="text-sm font-medium">
                       Theme
                     </label>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       Choose your preferred theme
                     </p>
                   </div>
                   <select
                     value={preferences.theme}
                     onChange={(e) => handlePreferenceChange('theme', e.target.value)}
-                    className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
                   >
                     <option value="light">Light</option>
                     <option value="dark">Dark</option>
                     <option value="auto">Auto</option>
                   </select>
                 </div>
-
-                {/* Language */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">
-                      Language
-                    </label>
-                    <p className="text-sm text-gray-500">
-                      Select your preferred language
-                    </p>
-                  </div>
-                  <select
-                    value={preferences.language}
-                    onChange={(e) => handlePreferenceChange('language', e.target.value)}
-                    className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="en">English</option>
-                    <option value="es">Español</option>
-                    <option value="fr">Français</option>
-                  </select>
-                </div>
               </div>
             </div>
 
-            {/* AI Provider Configuration */}
-            <div className="border-t border-gray-200 pt-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
-                AI Provider Configuration
+            {/* Security Settings */}
+            <div>
+              <h2 className="text-lg font-medium mb-4">
+                Security
               </h2>
-              <AIProviderInfo />
-            </div>
-
-            {/* Account Security */}
-            <div className="border-t border-gray-200 pt-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
-                Account Security
-              </h2>
-
               <div className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-md">
-                  <h3 className="text-sm font-medium text-gray-900">
-                    Password
-                  </h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Last changed: Never
-                  </p>
-                  <button className="mt-2 text-sm text-blue-600 hover:text-blue-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium">
+                      Change Password
+                    </label>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Update your password periodically to keep your account secure.
+                    </p>
+                  </div>
+                  <button onClick={() => setChangePasswordModalOpen(true)} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     Change Password
                   </button>
                 </div>
-
-                <div className="bg-gray-50 p-4 rounded-md">
-                  <h3 className="text-sm font-medium text-gray-900">
-                    Two-Factor Authentication
-                  </h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Not enabled
-                  </p>
-                  <button className="mt-2 text-sm text-blue-600 hover:text-blue-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium">
+                      Two-Factor Authentication (2FA)
+                    </label>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Add an extra layer of security to your account.
+                    </p>
+                  </div>
+                  <button onClick={() => setEnable2FAModalOpen(true)} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     Enable 2FA
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Success Message */}
-            {message && (
-              <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                <div className="flex">
-                  <svg
-                    className="h-5 w-5 text-green-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  <p className="ml-3 text-sm text-green-700">{message}</p>
-                </div>
-              </div>
-            )}
+            {/* AI Provider Settings */}
+            <AIProviderInfo />
 
-            {/* Action Buttons */}
-            <div className="border-t border-gray-200 pt-6 flex justify-end space-x-3">
-              <button
-                type="button"
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Reset to Defaults
-              </button>
-              <button
-                onClick={handleSaveAll}
-                disabled={loading}
-                className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {loading ? 'Saving...' : 'Save All Settings'}
-              </button>
-            </div>
           </div>
         </div>
       </div>
+
+      <ChangePasswordModal isOpen={isChangePasswordModalOpen} onClose={() => setChangePasswordModalOpen(false)} />
+      <Enable2FAModal isOpen={isEnable2FAModalOpen} onClose={() => setEnable2FAModalOpen(false)} />
     </div>
   );
 }

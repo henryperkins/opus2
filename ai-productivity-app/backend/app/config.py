@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     # before moving it behind an HTTPS reverse-proxy.  When the application is
     # later deployed behind TLS one simply sets `INSECURE_COOKIES=false` (or
     # omits it entirely) to restore the Secure attribute.
-    insecure_cookies: bool = True
+    insecure_cookies: bool = False
 
     # Authentication
     jwt_secret_key: Optional[str] = None
@@ -190,3 +190,11 @@ def get_settings() -> Settings:
 
 # Global settings instance
 settings = get_settings()
+
+# --- Startup security checks ---
+DEFAULT_SECRET = "change-this-in-production-use-secrets-module"
+
+if settings.effective_secret_key == DEFAULT_SECRET:
+    raise RuntimeError(
+        "FATAL: Default JWT secret key is in use! Set 'JWT_SECRET_KEY' or 'SECRET_KEY' in your environment."
+    )

@@ -24,6 +24,8 @@ const useProjectStore = create((set, get) => ({
     per_page: 20
   },
   totalProjects: 0,
+  lastFetch: null,
+  fetchInProgress: false,
 
   // Actions (flattened to root level for easier access)
   setFilters: (newFilters) => {
@@ -38,22 +40,38 @@ const useProjectStore = create((set, get) => ({
     }));
   },
 
-  fetchProjects: async () => {
-    const { filters } = get();
-    set({ loading: true, error: null });
+  fetchProjects: async (force = false) => {
+    const { filters, fetchInProgress, lastFetch } = get();
+    
+    // Prevent duplicate calls within 30 seconds unless forced
+    const now = Date.now();
+    if (!force && fetchInProgress) {
+      console.log('Project fetch already in progress, skipping...');
+      return;
+    }
+    if (!force && lastFetch && (now - lastFetch) < 30000) {
+      console.log('Recent project fetch found, skipping...');
+      return;
+    }
+
+    set({ loading: true, error: null, fetchInProgress: true });
 
     try {
       const response = await projectAPI.list(filters);
       set({
         projects: response.items,
         totalProjects: response.total,
-        loading: false
+        loading: false,
+        fetchInProgress: false,
+        lastFetch: now
       });
     } catch (error) {
       set({
         error: error.response?.data?.detail || 'Failed to fetch projects',
-        loading: false
+        loading: false,
+        fetchInProgress: false
       });
+      throw error;
     }
   },
 

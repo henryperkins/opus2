@@ -7,6 +7,7 @@ import PropTypes from 'prop-types';
 import { codeAPI } from '../../api/code';
 import { toast } from '../common/Toast';
 import { useProjectTimeline } from '../../hooks/useProjects';
+import { useAuth } from "../../hooks/useAuth";
 
 /**
  * Interactive SVG canvas with free-hand drawing, shape + text tools, zoom / pan,
@@ -15,6 +16,7 @@ import { useProjectTimeline } from '../../hooks/useProjects';
 const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
   const svgRef = useRef(null);
   const { addEvent } = useProjectTimeline(projectId);
+  const { user, loading: authLoading } = useAuth();
 
   /* ──────────────────────────── State ──────────────────────────── */
   const [tool, setTool] = useState('select');             // 'select' | 'draw'
@@ -30,7 +32,7 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
 
   /* ─────────────────────── Load saved artifacts ────────────────── */
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || authLoading || !user) return;
     (async () => {
       try {
         const { artifacts = [] } = await codeAPI.getCanvasArtifacts(projectId);
@@ -41,7 +43,7 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
         toast.error('Failed to load saved artifacts');
       }
     })();
-  }, [projectId]);
+  }, [projectId, authLoading, user]);
 
   /* ──────────────────────────── Renderer ────────────────────────── */
   const renderShapes = useCallback(

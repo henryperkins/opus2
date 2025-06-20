@@ -136,8 +136,10 @@ export function AuthProvider({ children }) {
           password,
         });
 
-        // Slight delay to ensure the HttpOnly cookie is set before /me request
-        await new Promise((r) => setTimeout(r, 100));
+      // Slight delay to ensure the HttpOnly cookie is set before /me request
+      // Declare the delay as a named constant to satisfy strict lint rules
+      const AUTH_COOKIE_DELAY_MS = 100;
+      await new Promise((resolve) => setTimeout(resolve, AUTH_COOKIE_DELAY_MS));
 
         await fetchMe(true);
 
@@ -201,6 +203,24 @@ export function AuthProvider({ children }) {
   );
 
   const value = { user, loading, login, logout, refresh, updateProfile };
+
+  // Prevent app from rendering until initial auth check is complete. You can replace this spinner with your preferred loading global UI.
+  if (!initialCheckDone || loading) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#f8fafc'
+        }}
+      >
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mr-3"></div>
+        <span style={{ fontSize: 24, color: '#3b82f6', letterSpacing: 2 }}>Checking authentication…</span>
+      </div>
+    );
+  }
 
   return (
     <AuthContextInstance.Provider value={value}>{children}</AuthContextInstance.Provider>

@@ -15,17 +15,21 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { useAuth } from '../../hooks/useAuth';
-import useProjectStore from '../../stores/projectStore';
+import { useProjectSearch } from '../../hooks/useProjects';
 import useAuthStore from '../../stores/authStore';
+import chatAPI from '../../api/chat';
 import ThemeToggle from './ThemeToggle';
+import KeyboardShortcutsModal from '../modals/KeyboardShortcutsModal';
+import WhatsNewModal from '../modals/WhatsNewModal';
+import DocumentationModal from '../modals/DocumentationModal';
 
-const Sidebar = ({ isOpen, onToggle, className }) => {
+const Sidebar = ({ onToggle, className }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { projects, fetchProjects } = useProjectStore();
+  const { projects, loading: projectsLoading, search } = useProjectSearch();
   const { preferences } = useAuthStore();
-  
+
   const [isPinned, setIsPinned] = useState(preferences.sidebarPinned || false);
   const [collapsedSections, setCollapsedSections] = useState({
     recent: false,
@@ -35,22 +39,55 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
   });
   const [recentChats, setRecentChats] = useState([]);
   const [starredItems, setStarredItems] = useState([]);
+  const [loadingRecentChats, setLoadingRecentChats] = useState(false);
+  const [recentChatsError, setRecentChatsError] = useState(null);
+  const [isKeyboardShortcutsModalOpen, setKeyboardShortcutsModalOpen] = useState(false);
+  const [isWhatsNewModalOpen, setWhatsNewModalOpen] = useState(false);
+  const [isDocumentationModalOpen, setDocumentationModalOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
-      fetchProjects();
+      // Search hook automatically fetches projects when needed
+      // Only manually trigger if no projects and not loading
+      if (projects.length === 0 && !projectsLoading) {
+        search();
+      }
       loadRecentChats();
       loadStarredItems();
     }
-  }, [user, fetchProjects]);
+  }, [user, projects.length, projectsLoading, search]);
 
-  const loadRecentChats = () => {
-    // Mock recent chats - in real app, fetch from API
-    setRecentChats([
-      { id: 1, title: 'Code Review Assistant', timestamp: new Date(Date.now() - 1000 * 60 * 30), type: 'chat' },
-      { id: 2, title: 'API Documentation Help', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), type: 'chat' },
-      { id: 3, title: 'Database Schema Design', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), type: 'chat' },
-    ]);
+  const loadRecentChats = async () => {
+    if (!user) return;
+    
+    setLoadingRecentChats(true);
+    setRecentChatsError(null);
+    
+    try {
+      const response = await chatAPI.getSessionHistory({ 
+        limit: 5, 
+        sort: 'updated_at',
+        order: 'desc' 
+      });
+      
+      // Transform API response to match expected format
+      const formattedChats = response.data.map(session => ({
+        id: session.id,
+        title: session.title || `Chat ${session.id}`,
+        timestamp: new Date(session.updated_at),
+        type: 'chat',
+        projectId: session.project_id
+      }));
+      
+      setRecentChats(formattedChats);
+    } catch (error) {
+      console.error('Failed to load recent chats:', error);
+      setRecentChatsError('Failed to load recent chats');
+      // Fallback to empty array instead of mock data
+      setRecentChats([]);
+    } finally {
+      setLoadingRecentChats(false);
+    }
   };
 
   const loadStarredItems = () => {
@@ -66,11 +103,25 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
   };
 
   const handleNewChat = () => {
-    navigate('/projects/new-chat');
+    // Navigate to projects page for new chat creation
+    navigate('/projects', { state: { action: 'new-chat' } });
   };
 
   const handleNewProject = () => {
     navigate('/projects?action=create');
+  };
+
+  const handleProjectChatNavigation = (project) => {
+    // Ensure project exists and is valid before navigating
+    if (!project || !project.id) {
+      console.error('Invalid project for chat navigation:', project);
+      return;
+    }
+    
+    // Navigate with project context to avoid additional API calls
+    navigate(`/projects/${project.id}/chat`, { 
+      state: { project } 
+    });
   };
 
   const formatTimestamp = (timestamp) => {
@@ -78,7 +129,7 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
     const diff = now - timestamp;
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
+
     if (hours < 1) return 'Just now';
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
@@ -99,7 +150,7 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
           </div>
           <span className="text-lg font-bold text-gray-900 dark:text-gray-100">AI Productivity</span>
         </Link>
-        
+
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setIsPinned(!isPinned)}
@@ -114,7 +165,7 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
               )}
             </svg>
           </button>
-          
+
           <button
             onClick={onToggle}
             className="md:hidden p-1.5 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -131,17 +182,23 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
       <div className="p-4 space-y-2">
         <button
           onClick={handleNewChat}
-          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200 shadow-sm hover:shadow-md"
+          disabled={projectsLoading}
+          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors duration-200 shadow-sm hover:shadow-md"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
+          {projectsLoading ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          )}
           <span>New Chat</span>
         </button>
-        
+
         <button
           onClick={handleNewProject}
-          className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-medium transition-colors duration-200"
+          disabled={projectsLoading}
+          className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-200 rounded-lg font-medium transition-colors duration-200"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -157,8 +214,8 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
           <Link
             to="/"
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
-              isActive('/') 
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700' 
+              isActive('/')
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
                 : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
           >
@@ -172,8 +229,8 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
           <Link
             to="/search"
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
-              isActive('/search') 
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700' 
+              isActive('/search')
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
                 : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
           >
@@ -186,8 +243,8 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
           <Link
             to="/timeline"
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
-              isActive('/timeline') 
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700' 
+              isActive('/timeline')
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
                 : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
           >
@@ -205,23 +262,44 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
             className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
             <span>Recent Chats</span>
-            <svg 
+            <svg
               className={`w-4 h-4 transition-transform duration-200 ${collapsedSections.recent ? 'rotate-180' : ''}`}
-              fill="none" 
-              stroke="currentColor" 
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-          
+
           {!collapsedSections.recent && (
             <div className="mt-2 space-y-1">
-              {recentChats.map((chat) => (
-                <Link
+              {loadingRecentChats && (
+                <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+                  <div className="w-4 h-4 border border-gray-300 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  Loading recent chats...
+                </div>
+              )}
+
+              {recentChatsError && (
+                <div className="px-3 py-2 text-sm text-red-500 dark:text-red-400 text-center">
+                  {recentChatsError}
+                </div>
+              )}
+
+              {!loadingRecentChats && !recentChatsError && recentChats.map((chat) => (
+                <button
                   key={chat.id}
-                  to={`/chat/${chat.id}`}
-                  className="flex items-center justify-between px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
+                  onClick={() => {
+                    if (chat.projectId) {
+                      navigate(`/projects/${chat.projectId}/chat`, { 
+                        state: { sessionId: chat.id } 
+                      });
+                    } else {
+                      navigate(`/chat/${chat.id}`);
+                    }
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
                 >
                   <div className="flex items-center space-x-2 min-w-0 flex-1">
                     <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,10 +310,10 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
                   <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
                     {formatTimestamp(chat.timestamp)}
                   </span>
-                </Link>
+                </button>
               ))}
-              
-              {recentChats.length === 0 && (
+
+              {!loadingRecentChats && !recentChatsError && recentChats.length === 0 && (
                 <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
                   No recent chats
                 </div>
@@ -251,16 +329,16 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
             className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
             <span>Starred</span>
-            <svg 
+            <svg
               className={`w-4 h-4 transition-transform duration-200 ${collapsedSections.starred ? 'rotate-180' : ''}`}
-              fill="none" 
-              stroke="currentColor" 
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-          
+
           {!collapsedSections.starred && (
             <div className="mt-2 space-y-1">
               {starredItems.map((item) => (
@@ -276,7 +354,7 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
                   <span className="text-xs text-gray-400 uppercase">{item.type}</span>
                 </Link>
               ))}
-              
+
               {starredItems.length === 0 && (
                 <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
                   No starred items
@@ -297,24 +375,24 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
               <span className="text-xs bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full">
                 {projects.length}
               </span>
-              <svg 
+              <svg
                 className={`w-4 h-4 transition-transform duration-200 ${collapsedSections.projects ? 'rotate-180' : ''}`}
-                fill="none" 
-                stroke="currentColor" 
+                fill="none"
+                stroke="currentColor"
                 viewBox="0 0 24 24"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </div>
           </button>
-          
+
           {!collapsedSections.projects && (
             <div className="mt-2 space-y-1">
               <Link
                 to="/projects"
                 className={`flex items-center space-x-2 px-3 py-2 text-sm rounded-lg transition-colors ${
-                  isActive('/projects') 
-                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' 
+                  isActive('/projects')
+                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
@@ -322,22 +400,42 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
                 <span>All Projects</span>
+                {projectsLoading && (
+                  <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin ml-auto"></div>
+                )}
               </Link>
-              
+
               {projects.slice(0, 5).map((project) => (
-                <Link
+                <button
                   key={project.id}
-                  to={`/projects/${project.id}/chat`}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
+                  onClick={() => handleProjectChatNavigation(project)}
+                  className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
+                  disabled={projectsLoading}
                 >
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: project.color || '#6B7280' }}></div>
                   <span className="truncate">{project.title}</span>
                   {project.status === 'active' && (
                     <div className="w-2 h-2 bg-green-400 rounded-full ml-auto"></div>
                   )}
-                </Link>
+                  {projectsLoading && (
+                    <div className="w-3 h-3 border border-gray-300 border-t-transparent rounded-full animate-spin ml-auto"></div>
+                  )}
+                </button>
               ))}
-              
+
+              {projectsLoading && projects.length === 0 && (
+                <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+                  <div className="w-4 h-4 border border-gray-300 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  Loading projects...
+                </div>
+              )}
+
+              {!projectsLoading && projects.length === 0 && (
+                <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+                  No projects yet
+                </div>
+              )}
+
               {projects.length > 5 && (
                 <Link
                   to="/projects"
@@ -351,58 +449,36 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
         </div>
 
         {/* Help & Tips */}
-        <div className="pt-2">
+        <div className="pt-4">
           <button
             onClick={() => toggleSection('help')}
-            className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            className="flex items-center justify-between w-full text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
           >
             <span>Help & Tips</span>
-            <svg 
-              className={`w-4 h-4 transition-transform duration-200 ${collapsedSections.help ? 'rotate-180' : ''}`}
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <svg className={`w-4 h-4 transform transition-transform ${!collapsedSections.help ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
-          
-          {!collapsedSections.help && (
-            <div className="mt-2 space-y-1">
-              <a
-                href="#"
-                className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+          <ul className={`mt-2 space-y-1 ${collapsedSections.help ? 'hidden' : ''}`}>
+            <li>
+              <button onClick={() => setDocumentationModalOpen(true)} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
                 <span>Documentation</span>
-              </a>
-              
-              <a
-                href="#"
-                className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+              </button>
+            </li>
+            <li>
+              <button onClick={() => setWhatsNewModalOpen(true)} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 <span>What's New</span>
-                <span className="ml-auto bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-xs px-2 py-0.5 rounded-full">
-                  2
-                </span>
-              </a>
-              
-              <a
-                href="#"
-                className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                </svg>
+              </button>
+            </li>
+            <li>
+              <button onClick={() => setKeyboardShortcutsModalOpen(true)} className="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 <span>Keyboard Shortcuts</span>
-              </a>
-            </div>
-          )}
+              </button>
+            </li>
+          </ul>
         </div>
       </nav>
 
@@ -413,21 +489,21 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
           <span className="text-sm text-gray-600 dark:text-gray-400">Theme</span>
           <ThemeToggle />
         </div>
-        
+
         {/* Settings Link */}
         <Link
           to="/settings"
           className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-            isActive('/settings') 
-              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' 
+            isActive('/settings')
+              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            </svg>
-            <span>Settings</span>
-          </Link>
+          </svg>
+          <span>Settings</span>
+        </Link>
 
         {/* User Info */}
         {user && (
@@ -451,37 +527,18 @@ const Sidebar = ({ isOpen, onToggle, className }) => {
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <div 
-        className={`hidden md:flex flex-col fixed inset-y-0 left-0 z-50 transition-all duration-300 ${
-          isOpen ? 'w-80' : 'w-0'
-        } ${className}`}
-      >
+      <div className={className}>
         {sidebarContent}
       </div>
-
-      {/* Mobile Sidebar */}
-      {isOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop */}
-          <div 
-            className="fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity"
-            onClick={onToggle}
-          />
-          
-          {/* Sidebar */}
-          <div className="relative flex flex-col w-80 max-w-xs bg-white dark:bg-gray-900 shadow-xl">
-            {sidebarContent}
-          </div>
-        </div>
-      )}
+      <KeyboardShortcutsModal isOpen={isKeyboardShortcutsModalOpen} onClose={() => setKeyboardShortcutsModalOpen(false)} />
+      <WhatsNewModal isOpen={isWhatsNewModalOpen} onClose={() => setWhatsNewModalOpen(false)} />
+      <DocumentationModal isOpen={isDocumentationModalOpen} onClose={() => setDocumentationModalOpen(false)} />
     </>
   );
 };
 
 // PropTypes validation
 Sidebar.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
   onToggle: PropTypes.func.isRequired,
   className: PropTypes.string
 };

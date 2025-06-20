@@ -5,13 +5,17 @@ import { Link } from "react-router-dom";
 import { timelineAPI } from "../api/timeline";
 import Header from "../components/common/Header";
 import TimelineEvent from "../components/projects/TimelineEvent";
+import { useAuth } from "../hooks/useAuth";
 
 export default function TimelinePage() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    if (authLoading || !user) return;
+
     const fetchEvents = async () => {
       try {
         const data = await timelineAPI.list({ limit: 200 });
@@ -24,7 +28,7 @@ export default function TimelinePage() {
     };
 
     fetchEvents();
-  }, []);
+  }, [authLoading, user]);
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -1,24 +1,22 @@
 // Timeline.jsx: chronological timeline for project events.
 
 import React, { useEffect, useState } from "react";
-import useProjectStore from "../../stores/projectStore";
+import { useProjectTimeline } from "../../hooks/useProjects";
 import TimelineEvent from "./TimelineEvent";
 import { toast } from '../common/Toast';
 import TimelineErrorBoundary from '../common/TimelineErrorBoundary';
 
 export default function Timeline({ projectId }) {
-  const { fetchTimeline, timeline, timelineLoading, timelineError, clearTimelineError } = useProjectStore();
+  const { timeline, loading: timelineLoading, error: timelineError, fetch: fetchTimeline, clearError } = useProjectTimeline(projectId);
   const [error, setError] = useState(null);
   const [filterType, setFilterType] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (projectId) {
-      clearTimelineError(); // Clear previous errors
-      fetchTimeline(projectId).catch(e => {
-        setError(e.message);
-        toast.error('Failed to load timeline');
-      });
+      clearError(); // Clear previous errors
+      // useProjectTimeline hook automatically fetches timeline
+      // We don't need to manually call fetchTimeline here
     }
     // eslint-disable-next-line
   }, [projectId]);
@@ -26,9 +24,9 @@ export default function Timeline({ projectId }) {
   const handleRefresh = async () => {
     setRefreshing(true);
     setError(null);
-    clearTimelineError();
+    clearError();
     try {
-      await fetchTimeline(projectId);
+      await fetchTimeline();
       toast.success('Timeline refreshed');
     } catch (e) {
       setError(e.message);

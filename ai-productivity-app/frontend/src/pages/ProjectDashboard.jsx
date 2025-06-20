@@ -7,6 +7,7 @@ import CreateProjectModal from '../components/projects/CreateProjectModal';
 import Timeline from '../components/projects/Timeline';
 import ProjectFilters from '../components/projects/ProjectFilters';
 import useProjectStore from '../stores/projectStore';
+import { useAuth } from '../hooks/useAuth';
 
 export default function ProjectDashboard() {
     const navigate = useNavigate();
@@ -27,11 +28,14 @@ export default function ProjectDashboard() {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [selectedProject, setSelectedProject] = useState(null);
     const [view, setView] = useState('grid'); // grid or timeline
+    const { user, loading: authLoading } = useAuth();
 
-    // Initial load and whenever filters change
+    // Only fetch projects after user is known and auth check is done
     useEffect(() => {
-        fetchProjects();
-    }, [filters, fetchProjects]);
+        if (!authLoading && user) {
+            fetchProjects();
+        }
+    }, [filters, fetchProjects, authLoading, user]);
 
     const handleProjectClick = (project) => {
         setSelectedProject(project);

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
-import { useProject, useProjectTimeline } from '../hooks/useProjects';
+import { useProject, useProjectTimeline, useProjectSearch } from '../hooks/useProjects';
 import { useUser } from '../hooks/useAuth';
 import Header from '../components/common/Header';
 import MessageList from '../components/chat/MessageList';
@@ -30,10 +30,14 @@ export default function ProjectChatPage() {
   // Prefer project passed via navigation state to avoid an extra API call.
   const stateProject = location.state?.project;
 
+  // Use consistent project loading approach
+  const { projects } = useProjectSearch();
   const { project: fetchedProject, loading: projectLoading, fetch: fetchProject } = useProject(projectId);
   const { addEvent } = useProjectTimeline(projectId);
 
-  const project = stateProject || fetchedProject;
+  // Get project from search results first, then state, then individual fetch
+  const projectFromSearch = projects.find(p => p.id === parseInt(projectId));
+  const project = projectFromSearch || stateProject || fetchedProject;
   const [editorContent, setEditorContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
   const [editorLanguage, setEditorLanguage] = useState('python');
@@ -50,12 +54,12 @@ export default function ProjectChatPage() {
 
   // Create or get chat session
   useEffect(() => {
-    if (!project && projectId && !stateProject) {
-      // Fetch project details only if not provided via state
+    if (!project && projectId && !stateProject && !projectFromSearch) {
+      // Fetch project details only if not available from search results or state
       fetchProject();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, stateProject]);
+  }, [projectId, stateProject, projectFromSearch]);
 
   useEffect(() => {
     if (!projectId) return;

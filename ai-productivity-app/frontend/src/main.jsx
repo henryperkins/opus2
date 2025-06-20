@@ -5,6 +5,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import AppRouter from './router';
 import { ThemeProvider } from './hooks/useTheme';
 import { ToastContainer } from './components/common/Toast';
+import Layout from './components/common/Layout';
 import './styles/globals.css';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
@@ -14,8 +15,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <AppRouter />
-          <ToastContainer />
+          <Layout>
+            <AppRouter />
+            <ToastContainer />
+          </Layout>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

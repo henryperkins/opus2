@@ -211,13 +211,37 @@ def login(
 # Logout
 ###############################################################################
 
-
 @router.post("/logout")
-def logout(response: Response) -> None:
-    """Clear auth cookie."""
-    # Clear the cookie by setting it to empty; omit Max-Age so TestClient still
-    # exposes it in `response.cookies` for assertion, mirroring browser
-    # behaviour immediately after logout.
+def logout(
+    request: Request,
+    response: Response,
+    db: DatabaseDep,
+    access_cookie: str = None,
+) -> None:
+    """Revoke session (DB) and clear auth cookie."""
+    # Extract token from cookie or header (same as get_current_user)
+    token = None
+    authorization = request.headers.get("authorization")
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1]
+    elif access_cookie:
+        token = access_cookie
+    elif request.cookies.get("access_token"):
+        token = request.cookies["access_token"]
+
+    # Attempt to revoke session in DB
+    if token:
+        try:
+            payload = security.decode_access_token(token)
+            jti = payload.get("jti")
+            if jti:
+                from app.auth.utils import revoke_session
+                revoke_session(db, jti)
+        except Exception:
+            # If invalid/expired token: continue to clear cookie anyway
+            pass
+
+    # Clear the cookie (as before)
     response.set_cookie(
         "access_token",
         "",
@@ -227,10 +251,10 @@ def logout(response: Response) -> None:
         httponly=True,
         samesite="lax",
     )
-
     # Workaround for httpx TestClient: ensure empty cookie visible in response.cookies
     response.headers.append("Set-Cookie", "access_token=; Path=/")
     response.status_code = status.HTTP_204_NO_CONTENT
+
 
 
 ###############################################################################

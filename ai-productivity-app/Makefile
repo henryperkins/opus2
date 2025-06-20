@@ -95,6 +95,6 @@ shell-frontend: ## Open shell in frontend container
 # Monitoring
 status: ## Check status of all services
 	@echo "$(GREEN)Checking service status...$(NC)"
-	@curl -s http://localhost:8000/health/ready | python -m json.tool || echo "Backend not responding"
+	@curl -s http://localhost:8000/health/ready | python3 -m json.tool || echo "Backend not responding"
 	@echo ""
 	@curl -s http://localhost:5173 > /dev/null && echo "Frontend: ✅ Running" || echo "Frontend: ❌ Not running"
