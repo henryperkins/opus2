@@ -1,21 +1,11 @@
-// components/chat/ModelSwitcher.tsx
-import React, { useState, useRef, useEffect } from 'react';
+/* eslint-disable */
+// components/chat/ModelSwitcher.jsx
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Zap, Brain, DollarSign, Check, AlertCircle } from 'lucide-react';
 import { useConfig } from '../../hooks/useConfig';
 import { useModelSelection } from '../../hooks/useModelSelection';
 
-interface ModelOption {
-  id: string;
-  name: string;
-  provider: string;
-  speed: 'fast' | 'medium' | 'slow';
-  cost: 'low' | 'medium' | 'high';
-  quality: 'good' | 'better' | 'best';
-  contextLength: number;
-  recommended?: boolean;
-}
-
-const modelOptions: ModelOption[] = [
+const modelOptions = [
   {
     id: 'gpt-4o-mini',
     name: 'GPT-4 Omni Mini',
@@ -55,17 +45,11 @@ const modelOptions: ModelOption[] = [
   }
 ];
 
-interface ModelSwitcherProps {
-  onModelChange?: (model: string) => void;
-  compact?: boolean;
-  showCost?: boolean;
-}
-
 export default function ModelSwitcher({
   onModelChange,
   compact = false,
   showCost = true
-}: ModelSwitcherProps) {
+}) {
   const { config } = useConfig();
   const {
     currentModel,
@@ -76,14 +60,14 @@ export default function ModelSwitcher({
   } = useModelSelection();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [hoveredModel, setHoveredModel] = useState<string | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [hoveredModel, setHoveredModel] = useState(null);
+  const dropdownRef = useRef(null);
 
   const currentModelInfo = modelOptions.find(m => m.id === currentModel) || modelOptions[0];
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
@@ -92,7 +76,7 @@ export default function ModelSwitcher({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleModelSelect = async (modelId: string) => {
+  const handleModelSelect = async (modelId) => {
     if (modelId === currentModel) {
       setIsOpen(false);
       return;
@@ -105,7 +89,7 @@ export default function ModelSwitcher({
     }
   };
 
-  const getQualityIcon = (quality: string) => {
+  const getQualityIcon = (quality) => {
     switch (quality) {
       case 'best':
         return <Brain className="w-3 h-3 text-purple-500" />;
@@ -116,7 +100,7 @@ export default function ModelSwitcher({
     }
   };
 
-  const getCostIndicator = (cost: string) => {
+  const getCostIndicator = (cost) => {
     switch (cost) {
       case 'low':
         return <span className="text-green-600">$</span>;
@@ -129,7 +113,7 @@ export default function ModelSwitcher({
     }
   };
 
-  const getSpeedIndicator = (speed: string) => {
+  const getSpeedIndicator = (speed) => {
     switch (speed) {
       case 'fast':
         return <div className="flex space-x-0.5">

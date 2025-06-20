@@ -1,53 +1,70 @@
-// components/chat/InteractiveElements.tsx
-import React, { useState, useCallback } from 'react';
+/* eslint-disable */
+// components/chat/InteractiveElements.jsx
+import { useState } from 'react';
 import {
-  Play, Code, FileText, Download, ChevronRight,
-  ChevronDown, Check, X, AlertCircle, Loader
+  Play, Code, ChevronRight, Check, X, AlertCircle, Loader, Copy, Edit2, RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface InteractiveElement {
-  id: string;
-  type: 'code' | 'query' | 'decision' | 'form' | 'action';
-  data: any;
-  onInteraction: (action: string, data?: any) => Promise<any>;
-}
-
-interface InteractiveElementsProps {
-  elements: InteractiveElement[];
-  onElementComplete?: (elementId: string, result: any) => void;
-}
-
-// Executable Code Block
+// Enhanced Executable Code Block
 const ExecutableCode = ({
   element,
   onComplete
-}: {
-  element: InteractiveElement;
-  onComplete?: (result: any) => void;
 }) => {
   const [isRunning, setIsRunning] = useState(false);
-  const [output, setOutput] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [output, setOutput] = useState(null);
+  const [error, setError] = useState(null);
+  const [editedCode, setEditedCode] = useState(element.data.code);
+  const [isEditing, setIsEditing] = useState(false);
+  const [executionTime, setExecutionTime] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const handleRun = async () => {
     setIsRunning(true);
     setOutput(null);
     setError(null);
+    const startTime = Date.now();
 
     try {
       const result = await element.onInteraction('run', {
-        code: element.data.code,
+        code: editedCode,
         language: element.data.language
       });
 
       setOutput(result.output);
+      setExecutionTime(Date.now() - startTime);
       onComplete?.(result);
-    } catch (err: any) {
+    } catch (err) {
       setError(err.message || 'Execution failed');
     } finally {
       setIsRunning(false);
     }
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(editedCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy code:', err);
+    }
+  };
+
+  const handleEdit = () => {
+    setIsEditing(!isEditing);
+  };
+
+  const handleSave = () => {
+    setIsEditing(false);
+    // Optionally notify parent of code changes
+  };
+
+  const handleReset = () => {
+    setEditedCode(element.data.code);
+    setIsEditing(false);
+    setOutput(null);
+    setError(null);
   };
 
   return (
@@ -56,24 +73,82 @@ const ExecutableCode = ({
         <div className="flex items-center space-x-2">
           <Code className="w-4 h-4 text-gray-600" />
           <span className="text-sm font-medium">{element.data.language}</span>
-        </div>
-        <button
-          onClick={handleRun}
-          disabled={isRunning}
-          className="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 text-sm"
-        >
-          {isRunning ? (
-            <Loader className="w-4 h-4 animate-spin" />
-          ) : (
-            <Play className="w-4 h-4" />
+          {executionTime && (
+            <span className="text-xs text-gray-500">({executionTime}ms)</span>
           )}
-          <span>{isRunning ? 'Running...' : 'Run'}</span>
-        </button>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleCopy}
+            className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+            title="Copy code"
+          >
+            {copied ? (
+              <Check className="w-4 h-4 text-green-600" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
+          </button>
+          <button
+            onClick={handleEdit}
+            className={`p-1 transition-colors ${isEditing ? 'text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}
+            title="Edit code"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+          {editedCode !== element.data.code && (
+            <button
+              onClick={handleReset}
+              className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+              title="Reset to original"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={handleRun}
+            disabled={isRunning}
+            className="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 text-sm"
+          >
+            {isRunning ? (
+              <Loader className="w-4 h-4 animate-spin" />
+            ) : (
+              <Play className="w-4 h-4" />
+            )}
+            <span>{isRunning ? 'Running...' : 'Run'}</span>
+          </button>
+        </div>
       </div>
 
-      <pre className="p-4 bg-gray-50 dark:bg-gray-900 overflow-x-auto">
-        <code className="text-sm">{element.data.code}</code>
-      </pre>
+      {isEditing ? (
+        <div className="relative">
+          <textarea
+            value={editedCode}
+            onChange={(e) => setEditedCode(e.target.value)}
+            className="w-full p-4 bg-gray-50 dark:bg-gray-900 font-mono text-sm resize-none border-none focus:outline-none"
+            rows={Math.max(3, editedCode.split('\n').length)}
+            style={{ minHeight: '120px' }}
+          />
+          <div className="absolute bottom-2 right-2 flex space-x-2">
+            <button
+              onClick={() => setIsEditing(false)}
+              className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      ) : (
+        <pre className="p-4 bg-gray-50 dark:bg-gray-900 overflow-x-auto">
+          <code className="text-sm">{editedCode}</code>
+        </pre>
+      )}
 
       <AnimatePresence>
         {(output || error) && (
@@ -106,14 +181,11 @@ const ExecutableCode = ({
 const QueryBuilder = ({
   element,
   onComplete
-}: {
-  element: InteractiveElement;
-  onComplete?: (result: any) => void;
 }) => {
   const [query, setQuery] = useState(element.data.initialQuery || '');
-  const [filters, setFilters] = useState<Record<string, any>>(element.data.filters || {});
+  const [filters, setFilters] = useState(element.data.filters || {});
   const [isExecuting, setIsExecuting] = useState(false);
-  const [results, setResults] = useState<any[] | null>(null);
+  const [results, setResults] = useState(null);
 
   const handleExecute = async () => {
     setIsExecuting(true);
@@ -182,15 +254,12 @@ const QueryBuilder = ({
 const DecisionTree = ({
   element,
   onComplete
-}: {
-  element: InteractiveElement;
-  onComplete?: (result: any) => void;
 }) => {
   const [currentNode, setCurrentNode] = useState(element.data.root);
-  const [path, setPath] = useState<string[]>([]);
+  const [path, setPath] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleChoice = async (choice: any) => {
+  const handleChoice = async (choice) => {
     setIsProcessing(true);
     const newPath = [...path, choice.label];
     setPath(newPath);
@@ -218,7 +287,27 @@ const DecisionTree = ({
     if (path.length > 0) {
       const newPath = path.slice(0, -1);
       setPath(newPath);
-      // Would need to reconstruct the node from path
+
+      // Navigate back by reconstructing the path
+      if (newPath.length === 0) {
+        setCurrentNode(element.data.root);
+      } else {
+        // Traverse the tree following the remaining path
+        let node = element.data.root;
+        for (const stepLabel of newPath) {
+          const choice = node.choices.find(c => c.label === stepLabel);
+          if (choice && choice.nextNode) {
+            node = choice.nextNode;
+          } else {
+            // Fallback to root if path is invalid
+            console.warn('Invalid path detected, resetting to root');
+            node = element.data.root;
+            setPath([]);
+            break;
+          }
+        }
+        setCurrentNode(node);
+      }
     }
   };
 
@@ -247,7 +336,7 @@ const DecisionTree = ({
         )}
 
         <div className="space-y-2">
-          {currentNode.choices.map((choice: any, idx: number) => (
+          {currentNode.choices.map((choice, idx) => (
             <button
               key={idx}
               onClick={() => handleChoice(choice)}
@@ -275,17 +364,12 @@ const DecisionTree = ({
 const DynamicForm = ({
   element,
   onComplete
-}: {
-  element: InteractiveElement;
-  onComplete?: (result: any) => void;
 }) => {
-  const [formData, setFormData] = useState<Record<string, any>>(
-    element.data.initialValues || {}
-  );
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formData, setFormData] = useState(element.data.initialValues || {});
+  const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setErrors({});
@@ -293,7 +377,7 @@ const DynamicForm = ({
     try {
       const result = await element.onInteraction('submit', formData);
       onComplete?.(result);
-    } catch (error: any) {
+    } catch (error) {
       if (error.validationErrors) {
         setErrors(error.validationErrors);
       } else {
@@ -304,7 +388,7 @@ const DynamicForm = ({
     }
   };
 
-  const handleFieldChange = (fieldName: string, value: any) => {
+  const handleFieldChange = (fieldName, value) => {
     setFormData({ ...formData, [fieldName]: value });
     // Clear error for this field
     if (errors[fieldName]) {
@@ -316,7 +400,7 @@ const DynamicForm = ({
     <form onSubmit={handleSubmit} className="border rounded-lg p-4 space-y-4">
       <h4 className="font-medium text-gray-900">{element.data.title}</h4>
 
-      {element.data.fields.map((field: any) => (
+      {element.data.fields.map((field) => (
         <div key={field.name}>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {field.label}
@@ -331,7 +415,7 @@ const DynamicForm = ({
               required={field.required}
             >
               <option value="">Select...</option>
-              {field.options.map((option: any) => (
+              {field.options.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -378,13 +462,10 @@ const DynamicForm = ({
 const ActionButtons = ({
   element,
   onComplete
-}: {
-  element: InteractiveElement;
-  onComplete?: (result: any) => void;
 }) => {
-  const [processing, setProcessing] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(null);
 
-  const handleAction = async (action: any) => {
+  const handleAction = async (action) => {
     setProcessing(action.id);
     try {
       const result = await element.onInteraction('action', {
@@ -401,7 +482,7 @@ const ActionButtons = ({
 
   return (
     <div className="flex flex-wrap gap-2">
-      {element.data.actions.map((action: any) => (
+      {element.data.actions.map((action) => (
         <button
           key={action.id}
           onClick={() => handleAction(action)}
@@ -428,8 +509,8 @@ const ActionButtons = ({
 export default function InteractiveElements({
   elements,
   onElementComplete
-}: InteractiveElementsProps) {
-  const renderElement = (element: InteractiveElement) => {
+}) {
+  const renderElement = (element) => {
     switch (element.type) {
       case 'code':
         return (

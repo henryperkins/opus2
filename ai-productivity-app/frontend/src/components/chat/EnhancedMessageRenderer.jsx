@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import vs2015 from 'react-syntax-highlighter/dist/styles/hljs/vs2015';
 import {
   Copy,
   Check,
@@ -188,7 +188,7 @@ export default function EnhancedMessageRenderer({
           {/* code body */}
           <SyntaxHighlighter
             language={language}
-            style={vscDarkPlus}
+            style={vs2015}
             customStyle={{
               margin: 0,
               borderTopLeftRadius: 0,

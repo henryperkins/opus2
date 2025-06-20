@@ -1,17 +1,8 @@
-// components/chat/StreamingMessage.tsx
-import React, { useState, useEffect, useRef } from 'react';
+/* eslint-disable */
+// components/chat/StreamingMessage.jsx
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader, StopCircle, RefreshCw } from 'lucide-react';
-
-interface StreamingMessageProps {
-  messageId: string;
-  isStreaming: boolean;
-  content: string;
-  onStop?: () => void;
-  onRetry?: () => void;
-  showTokenCount?: boolean;
-  model?: string;
-}
 
 export default function StreamingMessage({
   messageId,
@@ -21,12 +12,12 @@ export default function StreamingMessage({
   onRetry,
   showTokenCount = true,
   model
-}: StreamingMessageProps) {
+}) {
   const [displayedContent, setDisplayedContent] = useState('');
   const [currentTokens, setCurrentTokens] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const lastUpdateRef = useRef<number>(Date.now());
+  const contentRef = useRef(null);
+  const lastUpdateRef = useRef(Date.now());
 
   // Simulate streaming effect
   useEffect(() => {

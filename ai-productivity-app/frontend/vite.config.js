@@ -3,6 +3,9 @@
 import { defineConfig, splitVendorChunkPlugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
+import tsconfigPaths from 'vite-tsconfig-paths';
+import svgr from 'vite-plugin-svgr';
+import checker from 'vite-plugin-checker';
 
 // ---------------------------------------------------------------------------
 // Helper: decide proxy target (Docker-aware)
@@ -19,6 +22,9 @@ const backendTarget =
 export default defineConfig({
   plugins: [
     react(),
+    tsconfigPaths(),
+    svgr(),
+    checker({ eslint: { lintCommand: 'eslint src --max-warnings 0' } }),
     splitVendorChunkPlugin(),                // automatic vendor splitter
     visualizer({
       filename: 'stats.html',

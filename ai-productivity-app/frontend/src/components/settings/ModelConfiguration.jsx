@@ -1,35 +1,13 @@
-// components/settings/ModelConfiguration.tsx
-import React, { useState, useEffect } from 'react';
+/* eslint-disable */
+// components/settings/ModelConfiguration.jsx
+import { useState, useEffect } from 'react';
 import { Settings, Zap, DollarSign, Brain, AlertCircle, Check, RefreshCw } from 'lucide-react';
 import { useConfig } from '../../hooks/useConfig';
 import { configAPI } from '../../api/config';
 import { toast } from '../common/Toast';
+import { defaultChatSettings, validateChatSettings } from '../../config/chat-settings';
 
-interface ModelConfig {
-  provider: 'openai' | 'azure' | 'anthropic' | 'custom';
-  model: string;
-  temperature: number;
-  maxTokens: number;
-  topP: number;
-  frequencyPenalty: number;
-  presencePenalty: number;
-  systemPrompt: string;
-  responseFormat: 'text' | 'json' | 'markdown';
-  customEndpoint?: string;
-  apiKey?: string;
-  azureDeploymentName?: string;
-  azureApiVersion?: string;
-}
-
-interface ModelPreset {
-  id: string;
-  name: string;
-  description: string;
-  config: Partial<ModelConfig>;
-  icon: React.ReactNode;
-}
-
-const modelPresets: ModelPreset[] = [
+const modelPresets = [
   {
     id: 'balanced',
     name: 'Balanced',
@@ -84,16 +62,7 @@ const modelPresets: ModelPreset[] = [
   }
 ];
 
-interface ModelInfo {
-  id: string;
-  name: string;
-  contextLength: number;
-  costPer1kTokens: { input: number; output: number };
-  capabilities: string[];
-  recommended?: boolean;
-}
-
-const modelInfo: Record<string, ModelInfo> = {
+const modelInfo = {
   'gpt-4o': {
     id: 'gpt-4o',
     name: 'GPT-4 Omni',
@@ -128,7 +97,7 @@ const modelInfo: Record<string, ModelInfo> = {
 
 export default function ModelConfiguration() {
   const { config, loading, error, refetch } = useConfig();
-  const [modelConfig, setModelConfig] = useState<ModelConfig>({
+  const [modelConfig, setModelConfig] = useState({
     provider: 'openai',
     model: 'gpt-4o-mini',
     temperature: 0.7,
@@ -140,11 +109,18 @@ export default function ModelConfiguration() {
     responseFormat: 'text'
   });
 
-  const [selectedPreset, setSelectedPreset] = useState<string>('balanced');
+  const [selectedPreset, setSelectedPreset] = useState('balanced');
   const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testResult, setTestResult] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [customModels, setCustomModels] = useState<string[]>([]);
+  const [customModels, setCustomModels] = useState([]);
+  const [qualitySettings, setQualitySettings] = useState(defaultChatSettings.quality);
+  const [qualityMetrics, setQualityMetrics] = useState({
+    averageRating: 0,
+    totalResponses: 0,
+    successRate: 0,
+    averageResponseTime: 0
+  });
 
   useEffect(() => {
     if (config?.current) {
@@ -156,7 +132,7 @@ export default function ModelConfiguration() {
     }
   }, [config]);
 
-  const handlePresetSelect = (presetId: string) => {
+  const handlePresetSelect = (presetId) => {
     const preset = modelPresets.find(p => p.id === presetId);
     if (preset) {
       setModelConfig(prev => ({
@@ -167,7 +143,7 @@ export default function ModelConfiguration() {
     }
   };
 
-  const handleModelChange = (model: string) => {
+  const handleModelChange = (model) => {
     setModelConfig(prev => ({ ...prev, model }));
 
     // Auto-adjust parameters based on model
@@ -208,6 +184,46 @@ export default function ModelConfiguration() {
       toast.error('Failed to save configuration');
     }
   };
+
+  const handleQualitySettingChange = (setting, value) => {
+    const newSettings = { ...qualitySettings, [setting]: value };
+    setQualitySettings(newSettings);
+    // Save to backend or localStorage
+    try {
+      localStorage.setItem('qualitySettings', JSON.stringify(newSettings));
+    } catch (error) {
+      console.error('Failed to save quality settings:', error);
+    }
+  };
+
+  const loadQualityMetrics = async () => {
+    try {
+      // In a real app, this would fetch from your analytics API
+      const mockMetrics = {
+        averageRating: 4.2,
+        totalResponses: 1547,
+        successRate: 0.94,
+        averageResponseTime: 2.3
+      };
+      setQualityMetrics(mockMetrics);
+    } catch (error) {
+      console.error('Failed to load quality metrics:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadQualityMetrics();
+
+    // Load quality settings
+    try {
+      const saved = localStorage.getItem('qualitySettings');
+      if (saved) {
+        setQualitySettings(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Failed to load quality settings:', error);
+    }
+  }, []);
 
   const estimateCost = () => {
     const info = modelInfo[modelConfig.model];
@@ -258,7 +274,7 @@ export default function ModelConfiguration() {
             </label>
             <select
               value={modelConfig.provider}
-              onChange={(e) => setModelConfig({ ...modelConfig, provider: e.target.value as any })}
+              onChange={(e) => setModelConfig({ ...modelConfig, provider: e.target.value })}
               className="w-full border rounded-lg px-3 py-2"
             >
               <option value="openai">OpenAI</option>
@@ -447,7 +463,7 @@ export default function ModelConfiguration() {
                 </label>
                 <select
                   value={modelConfig.responseFormat}
-                  onChange={(e) => setModelConfig({ ...modelConfig, responseFormat: e.target.value as any })}
+                  onChange={(e) => setModelConfig({ ...modelConfig, responseFormat: e.target.value })}
                   className="w-full border rounded-lg px-3 py-2"
                 >
                   <option value="text">Plain Text</option>
@@ -507,6 +523,95 @@ export default function ModelConfiguration() {
         >
           Save Configuration
         </button>
+      </div>
+
+      {/* Response Quality Tracking Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-center space-x-2 mb-4">
+          <AlertCircle className="w-5 h-5 text-purple-600" />
+          <h3 className="text-lg font-semibold text-gray-900">Response Quality Tracking</h3>
+        </div>
+
+        {/* Quality Metrics */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-blue-600">{qualityMetrics.averageRating}</div>
+            <div className="text-sm text-gray-600">Average Rating</div>
+          </div>
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-green-600">{qualityMetrics.totalResponses}</div>
+            <div className="text-sm text-gray-600">Total Responses</div>
+          </div>
+          <div className="bg-yellow-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-yellow-600">{(qualityMetrics.successRate * 100).toFixed(1)}%</div>
+            <div className="text-sm text-gray-600">Success Rate</div>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-purple-600">{qualityMetrics.averageResponseTime}s</div>
+            <div className="text-sm text-gray-600">Avg Response Time</div>
+          </div>
+        </div>
+
+        {/* Quality Settings */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Track Responses</label>
+              <p className="text-xs text-gray-500">Enable response quality tracking</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={qualitySettings.trackResponses}
+              onChange={(e) => handleQualitySettingChange('trackResponses', e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">User Feedback</label>
+              <p className="text-xs text-gray-500">Show thumbs up/down for responses</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={qualitySettings.feedbackEnabled}
+              onChange={(e) => handleQualitySettingChange('feedbackEnabled', e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Auto Rating</label>
+              <p className="text-xs text-gray-500">Automatically rate responses based on metrics</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={qualitySettings.autoRating}
+              onChange={(e) => handleQualitySettingChange('autoRating', e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Quality Threshold: {qualitySettings.qualityThreshold}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={qualitySettings.qualityThreshold}
+              onChange={(e) => handleQualitySettingChange('qualityThreshold', parseFloat(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            />
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>Low</span>
+              <span>High</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

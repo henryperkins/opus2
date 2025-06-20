@@ -1,4 +1,5 @@
-// components/chat/RichMessageRenderer.tsx
+/* eslint-disable */
+// components/chat/RichMessageRenderer.jsx
 import React, { useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -15,19 +16,6 @@ import {
 
 mermaid.initialize({ startOnLoad: false, theme: 'dark' });
 
-interface RichMessageProps {
-  content: string;
-  metadata?: {
-    language?: string;
-    format?: string;
-    charts?: any[];
-    tables?: any[];
-  };
-  onCodeRun?: (code: string, language: string) => void;
-  onCodeApply?: (code: string, language: string) => void;
-  onDiagramClick?: (diagram: string) => void;
-}
-
 // Custom code block with enhanced features
 const CodeBlock = ({
   inline,
@@ -36,7 +24,7 @@ const CodeBlock = ({
   onRun,
   onApply,
   ...props
-}: any) => {
+}) => {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
@@ -106,9 +94,9 @@ const CodeBlock = ({
 };
 
 // Mermaid diagram renderer
-const MermaidDiagram = ({ chart, onClick }: { chart: string; onClick?: () => void }) => {
-  const [svg, setSvg] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
+const MermaidDiagram = ({ chart, onClick }) => {
+  const [svg, setSvg] = useState('');
+  const [error, setError] = useState(null);
 
   React.useEffect(() => {
     const renderDiagram = async () => {
@@ -143,9 +131,9 @@ const MermaidDiagram = ({ chart, onClick }: { chart: string; onClick?: () => voi
 };
 
 // Interactive table component
-const InteractiveTable = ({ data }: { data: any[][] }) => {
-  const [sortColumn, setSortColumn] = useState<number | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+const InteractiveTable = ({ data }) => {
+  const [sortColumn, setSortColumn] = useState(null);
+  const [sortDirection, setSortDirection] = useState('asc');
 
   const sortedData = useMemo(() => {
     if (sortColumn === null || data.length < 2) return data;
@@ -167,7 +155,7 @@ const InteractiveTable = ({ data }: { data: any[][] }) => {
     return [header, ...sorted];
   }, [data, sortColumn, sortDirection]);
 
-  const handleSort = (columnIndex: number) => {
+  const handleSort = (columnIndex) => {
     if (sortColumn === columnIndex) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
     } else {
@@ -216,7 +204,7 @@ const InteractiveTable = ({ data }: { data: any[][] }) => {
 };
 
 // Chart renderer (placeholder - would integrate with a charting library)
-const ChartRenderer = ({ type, data }: { type: string; data: any }) => {
+const ChartRenderer = ({ type, data }) => {
   return (
     <div className="my-4 p-8 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
       <BarChart2 className="w-12 h-12 mx-auto mb-2 text-gray-400" />
@@ -233,13 +221,13 @@ export default function RichMessageRenderer({
   onCodeRun,
   onCodeApply,
   onDiagramClick
-}: RichMessageProps) {
-  const [activeTab, setActiveTab] = useState<'rendered' | 'raw'>('rendered');
+}) {
+  const [activeTab, setActiveTab] = useState('rendered');
 
   // Parse special content blocks
   const { processedContent, specialBlocks } = useMemo(() => {
     let processed = content;
-    const blocks: any[] = [];
+    const blocks = [];
 
     // Extract mermaid diagrams
     const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
@@ -270,7 +258,7 @@ export default function RichMessageRenderer({
 
   // Custom renderers for ReactMarkdown
   const renderers = {
-    code: (props: any) => (
+    code: (props) => (
       <CodeBlock
         {...props}
         onRun={onCodeRun}
@@ -278,20 +266,60 @@ export default function RichMessageRenderer({
       />
     ),
     // Override default table rendering with interactive table
-    table: ({ children }: any) => {
+    table: ({ children }) => {
       const tableData = extractTableData(children);
       return <InteractiveTable data={tableData} />;
     }
   };
 
   // Extract table data from markdown AST
-  const extractTableData = (children: any): any[][] => {
-    // This is simplified - in production, properly parse the table AST
-    return [];
+  const extractTableData = (children) => {
+    // Parse table AST and extract data
+    try {
+      if (!children || !Array.isArray(children)) return [];
+
+      const tableData = [];
+
+      // Find thead and tbody elements
+      children.forEach(child => {
+        if (child.type === 'thead' && child.children) {
+          const headerRow = [];
+          child.children.forEach(row => {
+            if (row.type === 'tr' && row.children) {
+              row.children.forEach(cell => {
+                if (cell.type === 'th' && cell.children) {
+                  headerRow.push(cell.children.map(c => c.value || '').join(''));
+                }
+              });
+            }
+          });
+          if (headerRow.length > 0) tableData.push(headerRow);
+        }
+
+        if (child.type === 'tbody' && child.children) {
+          child.children.forEach(row => {
+            if (row.type === 'tr' && row.children) {
+              const dataRow = [];
+              row.children.forEach(cell => {
+                if (cell.type === 'td' && cell.children) {
+                  dataRow.push(cell.children.map(c => c.value || '').join(''));
+                }
+              });
+              if (dataRow.length > 0) tableData.push(dataRow);
+            }
+          });
+        }
+      });
+
+      return tableData;
+    } catch (error) {
+      console.error('Error parsing table data:', error);
+      return [];
+    }
   };
 
   // Render special blocks
-  const renderSpecialBlock = (block: any) => {
+  const renderSpecialBlock = (block) => {
     switch (block.type) {
       case 'mermaid':
         return (

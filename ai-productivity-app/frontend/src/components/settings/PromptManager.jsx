@@ -1,36 +1,9 @@
-// components/settings/PromptManager.tsx
-import React, { useState, useEffect } from 'react';
+/* eslint-disable */
+// components/settings/PromptManager.jsx
+import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Copy, Save, X, FileText, Share2, Lock } from 'lucide-react';
 import { promptAPI } from '../../api/prompts';
 import { toast } from '../common/Toast';
-
-interface Variable {
-  name: string;
-  description: string;
-  defaultValue?: string;
-  required: boolean;
-}
-
-interface PromptTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  systemPrompt: string;
-  userPromptTemplate: string;
-  variables: Variable[];
-  modelPreferences?: {
-    provider?: string;
-    model?: string;
-    temperature?: number;
-    maxTokens?: number;
-  };
-  isPublic: boolean;
-  isDefault: boolean;
-  usageCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
 
 const categories = [
   'Code Generation',
@@ -43,7 +16,7 @@ const categories = [
   'Custom'
 ];
 
-const defaultTemplates: Partial<PromptTemplate>[] = [
+const defaultTemplates = [
   {
     name: 'Code Explainer',
     description: 'Explains code functionality in detail',
@@ -78,14 +51,14 @@ const defaultTemplates: Partial<PromptTemplate>[] = [
 ];
 
 export default function PromptManager() {
-  const [templates, setTemplates] = useState<PromptTemplate[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [templates, setTemplates] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [testingPrompt, setTestingPrompt] = useState<string | null>(null);
-  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
+  const [testingPrompt, setTestingPrompt] = useState(null);
+  const [variableValues, setVariableValues] = useState({});
 
   useEffect(() => {
     loadTemplates();
@@ -95,7 +68,15 @@ export default function PromptManager() {
     try {
       setLoading(true);
       const response = await promptAPI.getTemplates();
-      setTemplates(response.templates);
+
+      // Handle different response formats
+      if (response && response.templates) {
+        setTemplates(response.templates);
+      } else if (Array.isArray(response)) {
+        setTemplates(response);
+      } else {
+        throw new Error('Invalid response format');
+      }
     } catch (error) {
       console.error('Failed to load templates:', error);
       // Use default templates as fallback
@@ -106,13 +87,13 @@ export default function PromptManager() {
         usageCount: 0,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      } as PromptTemplate)));
+      })));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSaveTemplate = async (template: Partial<PromptTemplate>) => {
+  const handleSaveTemplate = async (template) => {
     try {
       if (editingTemplate) {
         await promptAPI.updateTemplate(editingTemplate.id, template);
@@ -129,7 +110,7 @@ export default function PromptManager() {
     }
   };
 
-  const handleDeleteTemplate = async (id: string) => {
+  const handleDeleteTemplate = async (id) => {
     if (!confirm('Are you sure you want to delete this template?')) return;
 
     try {
@@ -141,14 +122,14 @@ export default function PromptManager() {
     }
   };
 
-  const handleDuplicateTemplate = async (template: PromptTemplate) => {
+  const handleDuplicateTemplate = async (template) => {
     const newTemplate = {
       ...template,
       name: `${template.name} (Copy)`,
       isDefault: false,
       isPublic: false
     };
-    delete (newTemplate as any).id;
+    delete newTemplate.id;
 
     try {
       await promptAPI.createTemplate(newTemplate);
@@ -159,10 +140,10 @@ export default function PromptManager() {
     }
   };
 
-  const handleTestPrompt = (template: PromptTemplate) => {
+  const handleTestPrompt = (template) => {
     setTestingPrompt(template.id);
     // Initialize variable values with defaults
-    const defaults: Record<string, string> = {};
+    const defaults = {};
     template.variables.forEach(v => {
       defaults[v.name] = v.defaultValue || '';
     });
@@ -189,12 +170,33 @@ export default function PromptManager() {
       userPrompt = userPrompt.replace(new RegExp(`{{${name}}}`, 'g'), value);
     });
 
-    // Here you would send to the chat
-    console.log('System prompt:', template.systemPrompt);
-    console.log('User prompt:', userPrompt);
-    console.log('Model preferences:', template.modelPreferences);
+    try {
+      // Send to chat interface
+      // This would integrate with your chat component/service
+      if (window.chatService) {
+        await window.chatService.sendMessage({
+          systemPrompt: template.systemPrompt,
+          userPrompt: userPrompt,
+          modelPreferences: template.modelPreferences
+        });
+        toast.success('Prompt sent to chat successfully');
+      } else {
+        // Fallback: dispatch event or use context
+        const event = new CustomEvent('promptToChat', {
+          detail: {
+            systemPrompt: template.systemPrompt,
+            userPrompt: userPrompt,
+            modelPreferences: template.modelPreferences
+          }
+        });
+        window.dispatchEvent(event);
+        toast.success('Prompt prepared for chat');
+      }
+    } catch (error) {
+      console.error('Failed to send prompt to chat:', error);
+      toast.error('Failed to send prompt to chat');
+    }
 
-    toast.success('Prompt sent to chat');
     setTestingPrompt(null);
   };
 
@@ -286,7 +288,7 @@ export default function PromptManager() {
                 </span>
               </div>
 
-              {template.variables.length > 0 && (
+              {template.variables && template.variables.length > 0 && (
                 <div className="mt-3 pt-3 border-t">
                   <div className="text-xs text-gray-600">
                     Variables: {template.variables.map(v => v.name).join(', ')}
@@ -344,7 +346,7 @@ export default function PromptManager() {
             variables: [],
             isPublic: false,
             isDefault: false
-          } as any}
+          }}
           onSave={handleSaveTemplate}
           onCancel={() => {
             setEditingTemplate(null);
@@ -356,7 +358,7 @@ export default function PromptManager() {
       {/* Test Prompt Modal */}
       {testingPrompt && (
         <TestPromptModal
-          template={templates.find(t => t.id === testingPrompt)!}
+          template={templates.find(t => t.id === testingPrompt)}
           variableValues={variableValues}
           onVariableChange={(name, value) => setVariableValues({ ...variableValues, [name]: value })}
           onExecute={executeTestPrompt}
@@ -372,10 +374,6 @@ function TemplateEditor({
   template,
   onSave,
   onCancel
-}: {
-  template: Partial<PromptTemplate>;
-  onSave: (template: Partial<PromptTemplate>) => void;
-  onCancel: () => void;
 }) {
   const [formData, setFormData] = useState(template);
   const [newVariable, setNewVariable] = useState({ name: '', description: '', required: false });
@@ -390,7 +388,7 @@ function TemplateEditor({
     setNewVariable({ name: '', description: '', required: false });
   };
 
-  const handleRemoveVariable = (index: number) => {
+  const handleRemoveVariable = (index) => {
     const vars = [...(formData.variables || [])];
     vars.splice(index, 1);
     setFormData({ ...formData, variables: vars });
@@ -573,13 +571,9 @@ function TestPromptModal({
   onVariableChange,
   onExecute,
   onCancel
-}: {
-  template: PromptTemplate;
-  variableValues: Record<string, string>;
-  onVariableChange: (name: string, value: string) => void;
-  onExecute: () => void;
-  onCancel: () => void;
 }) {
+  if (!template) return null;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
@@ -595,7 +589,7 @@ function TestPromptModal({
 
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-2">Variables</h4>
-            {template.variables.map(variable => (
+            {(template.variables || []).map(variable => (
               <div key={variable.name} className="mb-3">
                 <label className="block text-sm text-gray-600 mb-1">
                   {variable.description || variable.name}
