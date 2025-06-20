@@ -1,8 +1,99 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  /* Brand colors */
+  --color-brand-primary-50: #eff6ff;
+  --color-brand-primary-100: #dbeafe;
+  --color-brand-primary-200: #bfdbfe;
+  --color-brand-primary-300: #93c5fd;
+  --color-brand-primary-400: #60a5fa;
+  --color-brand-primary-500: #3b82f6;
+  --color-brand-primary-600: #2563eb;
+  --color-brand-primary-700: #1d4ed8;
+  --color-brand-primary-800: #1e40af;
+  --color-brand-primary-900: #1e3a8a;
+
+  --color-brand-accent-50: #f0f9ff;
+  --color-brand-accent-100: #e0f2fe;
+  --color-brand-accent-200: #bae6fd;
+  --color-brand-accent-300: #7dd3fc;
+  --color-brand-accent-400: #38bdf8;
+  --color-brand-accent-500: #0ea5e9;
+  --color-brand-accent-600: #0284c7;
+  --color-brand-accent-700: #0369a1;
+  --color-brand-accent-800: #075985;
+  --color-brand-accent-900: #0c4a6e;
+
+  /* Semantic colors */
+  --color-success-50: #f0fdf4;
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+  --color-success-700: #047857;
+
+  --color-warning-50: #fffbeb;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+
+  --color-error-50: #fef2f2;
+  --color-error-400: #f87171;
+  --color-error-500: #ef4444;
+  --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
+
+  /* Fonts */
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+
+  /* Font sizes */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.25rem;
+  --font-size-5xl: 3rem;
+  --font-size-6xl: 3.75rem;
+  --font-size-7xl: 4.5rem;
+  --font-size-8xl: 6rem;
+  --font-size-9xl: 8rem;
+
+  /* Line heights */
+  --line-height-xs: 1rem;
+  --line-height-sm: 1.25rem;
+  --line-height-base: 1.5rem;
+  --line-height-lg: 1.75rem;
+  --line-height-xl: 1.75rem;
+  --line-height-2xl: 2rem;
+  --line-height-3xl: 2.25rem;
+  --line-height-4xl: 2.5rem;
+  --line-height-5xl: 1;
+  --line-height-6xl: 1;
+  --line-height-7xl: 1;
+  --line-height-8xl: 1;
+  --line-height-9xl: 1;
+
+  /* Font weights */
+  --font-weight-thin: 100;
+  --font-weight-extralight: 200;
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  --font-weight-black: 900;
+
+  /* Custom animations */
+  --animate-fade-in: fadeIn 0.3s ease-out;
+  --animate-slide-in: slideIn 0.3s ease-out;
+  --animate-bounce-in: bounceIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --animate-scale-in: scaleIn 0.2s ease-out;
+}
 
 /* -------------------------------------------------------------------------------------------------
  * Base styles & resets
@@ -126,13 +217,15 @@
  * ------------------------------------------------------------------------------------------------*/
 
 @layer components {
+
   /* Button variants */
   .btn {
     @apply inline-flex items-center justify-center px-4 py-2 rounded-lg;
     @apply font-medium text-sm transition-all duration-200;
     @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
     @apply disabled:opacity-60 disabled:cursor-not-allowed;
-    @apply min-h-[44px] min-w-[44px]; /* Touch target size */
+    @apply min-h-[44px] min-w-[44px];
+    /* Touch target size */
     @apply shadow-sm hover:shadow-md;
   }
 
@@ -204,7 +297,7 @@
     @apply absolute z-50 mt-2 rounded-md shadow-lg;
     @apply bg-white dark:bg-gray-800;
     @apply border border-gray-200 dark:border-gray-700;
-    @apply ring-1 ring-black ring-opacity-5;
+    @apply ring-1 ring-black/5;
     @apply animate-fade-in;
   }
 
@@ -222,21 +315,22 @@
  * ------------------------------------------------------------------------------------------------*/
 
 @layer components {
+
   /* Animation utilities */
   .animate-fade-in {
-    animation: fadeIn 0.3s ease-out;
+    animation: var(--animate-fade-in);
   }
 
   .animate-slide-in {
-    animation: slideIn 0.3s ease-out;
+    animation: var(--animate-slide-in);
   }
 
   .animate-bounce-in {
-    animation: bounceIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    animation: var(--animate-bounce-in);
   }
 
   .animate-scale-in {
-    animation: scaleIn 0.2s ease-out;
+    animation: var(--animate-scale-in);
   }
 
   /* Glass morphism effect */
@@ -270,25 +364,57 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideIn {
-  from { transform: translateY(-10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes bounceIn {
-  from { transform: scale(0.3); opacity: 0; }
-  50% { transform: scale(1.05); }
-  70% { transform: scale(0.9); }
-  to { transform: scale(1); opacity: 1; }
+  from {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
+
+  70% {
+    transform: scale(0.9);
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @keyframes scaleIn {
-  from { transform: scale(0.95); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -296,6 +422,7 @@
  * ------------------------------------------------------------------------------------------------*/
 
 @layer utilities {
+
   /* Text truncation */
   .line-clamp-1 {
     @apply overflow-hidden;
