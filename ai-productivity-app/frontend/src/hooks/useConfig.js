@@ -1,90 +1,118 @@
-// frontend/src/hooks/useConfig.js
-import { useState, useEffect, useRef } from 'react';
-import configAPI from '../api/config';
+// hooks/useConfig.ts
+import { useState, useEffect, useCallback } from 'react';
+import { configAPI } from '../api/config';
 
-// Simple cache to prevent repeated requests
-let cachedConfig = null;
-let isConfigLoading = false;
-const configCallbacks = new Set();
+interface ConfigData {
+  providers: {
+    [key: string]: {
+      chat_models: string[];
+      embedding_models?: string[];
+      features?: Record<string, boolean>;
+      api_versions?: string[];
+    };
+  };
+  current: {
+    provider: string;
+    chat_model: string;
+  };
+}
 
-export function useConfig() {
-    const [config, setConfig] = useState(cachedConfig);
-    const [loading, setLoading] = useState(!cachedConfig);
-    const [error, setError] = useState(null);
-    const mountedRef = useRef(true);
+interface UseConfigReturn {
+  config: ConfigData | null;
+  loading: boolean;
+  error: Error | null;
+  refetch: () => Promise<void>;
+  updateConfig: (updates: Partial<ConfigData['current']>) => Promise<void>;
+}
 
-    useEffect(() => {
-        // If we already have cached config, use it
-        if (cachedConfig) {
-            setConfig(cachedConfig);
-            setLoading(false);
-            return;
-        }
+export function useConfig(): UseConfigReturn {
+  const [config, setConfig] = useState<ConfigData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-        // If already loading, just register callback
-        if (isConfigLoading) {
-            const callback = (result) => {
-                if (!mountedRef.current) return;
-                if (result.error) {
-                    setError(result.error);
-                } else {
-                    setConfig(result.data);
-                }
-                setLoading(false);
-            };
-            configCallbacks.add(callback);
-            
-            return () => {
-                configCallbacks.delete(callback);
-            };
-        }
+  const fetchConfig = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await configAPI.getConfig();
+      setConfig(data);
+    } catch (err) {
+      setError(err as Error);
+      console.error('Failed to fetch config:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-        // First time loading
-        isConfigLoading = true;
-        const fetchConfig = async () => {
-            try {
-                console.log('useConfig: Fetching config...');
-                const data = await configAPI.getConfig();
-                cachedConfig = data;
-                
-                // Update all waiting callbacks
-                configCallbacks.forEach(callback => {
-                    callback({ data });
-                });
-                configCallbacks.clear();
-                
-                if (mountedRef.current) {
-                    setConfig(data);
-                    setError(null);
-                }
-            } catch (err) {
-                console.error('Failed to fetch config:', err);
-                
-                // Update all waiting callbacks
-                configCallbacks.forEach(callback => {
-                    callback({ error: err });
-                });
-                configCallbacks.clear();
-                
-                if (mountedRef.current) {
-                    setError(err);
-                }
-            } finally {
-                isConfigLoading = false;
-                if (mountedRef.current) {
-                    setLoading(false);
-                }
-            }
-        };
+  const updateConfig = useCallback(async (updates: Partial<ConfigData['current']>) => {
+    try {
+      await configAPI.updateModelConfig({
+        provider: updates.provider || config?.current.provider || 'openai',
+        chat_model: updates.chat_model || config?.current.chat_model || 'gpt-4o-mini'
+      });
 
-        fetchConfig();
-    }, []);
+      // Refetch to get updated config
+      await fetchConfig();
+    } catch (err) {
+      setError(err as Error);
+      throw err;
+    }
+  }, [config, fetchConfig]);
 
-    useEffect(() => {
-        return () => {
-            mountedRef.current = false;
-        };
-    }, []);
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
-    return { config, loading, error };
+  return {
+    config,
+    loading,
+    error,
+    refetch: fetchConfig,
+    updateConfig
+  };
+}
+
+// Hook for managing available models
+export function useAvailableModels(provider?: string) {
+  const { config } = useConfig();
+  const [models, setModels] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (config && provider) {
+      const providerModels = config.providers[provider]?.chat_models || [];
+      setModels(providerModels);
+    }
+  }, [config, provider]);
+
+  return models;
+}
+
+// Hook for checking feature availability
+export function useFeatureAvailability() {
+  const { config } = useConfig();
+
+  const isFeatureAvailable = useCallback((feature: string): boolean => {
+    if (!config) return false;
+
+    const provider = config.current.provider;
+    const features = config.providers[provider]?.features || {};
+
+    return features[feature] === true;
+  }, [config]);
+
+  const getAvailableFeatures = useCallback((): string[] => {
+    if (!config) return [];
+
+    const provider = config.current.provider;
+    const features = config.providers[provider]?.features || {};
+
+    return Object.entries(features)
+      .filter(([_, enabled]) => enabled)
+      .map(([feature]) => feature);
+  }, [config]);
+
+  return {
+    isFeatureAvailable,
+    getAvailableFeatures
+  };
 }

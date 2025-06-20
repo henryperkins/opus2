@@ -32,7 +32,7 @@ class UserFeedback(BaseModel):
 class FlowMetrics(BaseModel):
     """Metrics for chat flow execution."""
     project_id: str
-    flow_type: str = Field(..., regex="^(knowledge|model|rendering)$")
+    flow_type: str = Field(..., pattern=r"^(knowledge|model|rendering)$")
     success: bool
     response_time: Optional[float] = Field(None, ge=0)
     knowledge_hit: Optional[bool] = None
@@ -57,7 +57,9 @@ class TimeRange(BaseModel):
     """Time range for analytics queries."""
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    period: Optional[str] = Field(None, regex="^(hour|day|week|month|year)$")
+    period: Optional[str] = Field(
+        None, pattern=r"^(hour|day|week|month|year)$"
+    )
 
 
 class DashboardMetrics(BaseModel):

@@ -30,7 +30,7 @@ class ChunkRenderRequest(BaseModel):
 class InteractiveElement(BaseModel):
     """Interactive element definition."""
     id: str
-    type: str = Field(..., regex="^(code|decision_tree|form|button|chart)$")
+    type: str = Field(..., pattern=r"^(code|decision_tree|form|button|chart)$")
     content: str
     actions: List[str]
     metadata: Optional[Dict[str, Any]] = None
@@ -68,13 +68,13 @@ class StreamingOptions(BaseModel):
 class MathRenderRequest(BaseModel):
     """Math rendering request."""
     expression: str
-    renderer: str = Field("katex", regex="^(katex|mathjax)$")
+    renderer: str = Field("katex", pattern=r"^(katex|mathjax)$")
 
 
 class DiagramRenderRequest(BaseModel):
     """Diagram rendering request."""
     code: str
-    type: str = Field("mermaid", regex="^(mermaid|d3|graphviz)$")
+    type: str = Field("mermaid", pattern=r"^(mermaid|d3|graphviz)$")
 
 
 class ContentValidationRequest(BaseModel):

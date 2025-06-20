@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 class ModelConfig(BaseModel):
     """Model configuration settings."""
     model_id: str
-    provider: str = Field(..., regex="^(openai|anthropic|azure|local)$")
+    provider: str = Field(..., pattern=r"^(openai|anthropic|azure|local)$")
     temperature: Optional[float] = Field(0.7, ge=0, le=2)
     max_tokens: Optional[int] = Field(1000, ge=1, le=8000)
     top_p: Optional[float] = Field(1.0, ge=0, le=1)
@@ -41,7 +41,7 @@ class ModelInfo(BaseModel):
     capabilities: List[str]
     available: bool = True
     performance_tier: Optional[str] = Field(
-        None, regex="^(fast|balanced|powerful)$"
+        None, pattern=r"^(fast|balanced|powerful)$"
     )
 
 

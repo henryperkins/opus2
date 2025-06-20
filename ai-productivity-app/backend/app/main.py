@@ -16,6 +16,10 @@ from .routers import import_git as import_git_router
 from .routers import chat as chat_router
 from .routers import timeline as timeline_router
 from .routers import search as search_router
+from .routers import analytics as analytics_router
+from .routers import knowledge as knowledge_router
+from .routers import models as models_router
+from .routers import rendering as rendering_router
 
 
 @asynccontextmanager
@@ -62,6 +66,10 @@ app.include_router(notify_router.router)
 app.include_router(import_git_router.router)
 app.include_router(timeline_router.router)
 app.include_router(search_router.router)
+app.include_router(analytics_router.router)
+app.include_router(knowledge_router.router)
+app.include_router(models_router.router)
+app.include_router(rendering_router.router)
 
 
 @app.get("/health")

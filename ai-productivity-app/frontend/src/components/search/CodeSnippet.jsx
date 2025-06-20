@@ -1,10 +1,47 @@
 // Code snippet display with syntax highlighting and line numbers
 import React, { memo, Suspense } from 'react';
 import PropTypes from 'prop-types';
-import { prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+// Use a simple dark theme object instead of importing
+const codeTheme = {
+  'code[class*="language-"]': {
+    color: '#f8f8f2',
+    background: 'none',
+    fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
+    fontSize: '0.875rem',
+    textAlign: 'left',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    wordWrap: 'normal',
+    lineHeight: '1.5',
+    tabSize: '4',
+    hyphens: 'none',
+  },
+  'pre[class*="language-"]': {
+    color: '#f8f8f2',
+    background: '#2d3748',
+    fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
+    fontSize: '0.875rem',
+    textAlign: 'left',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    wordWrap: 'normal',
+    lineHeight: '1.5',
+    tabSize: '4',
+    hyphens: 'none',
+    padding: '1em',
+    margin: '0',
+    overflow: 'auto',
+    borderRadius: '0.375rem',
+  },
+};
 
 const LazySyntaxHighlighter = React.lazy(() =>
-  import('react-syntax-highlighter/dist/esm/prism-async-light')
+  import('react-syntax-highlighter').then(module => ({
+    default: module.Prism
+  }))
 );
 
 const CodeSnippet = memo(({ content, language, startLine, highlightLines = [] }) => {

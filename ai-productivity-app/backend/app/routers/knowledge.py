@@ -29,7 +29,7 @@ async def search_knowledge(
     try:
         # Mock knowledge search implementation
         # In production, this would query your vector database or search index
-        
+
         mock_entries = [
             KnowledgeEntry(
                 id="kb_001",
@@ -50,13 +50,13 @@ async def search_knowledge(
                 similarity_score=0.72
             )
         ]
-        
+
         # Filter based on similarity threshold
         filtered_entries = [
             entry for entry in mock_entries
             if entry.similarity_score >= request.similarity_threshold
         ][:request.limit]
-        
+
         response_data = KnowledgeSearchResponse(
             results=filtered_entries,
             total_count=len(filtered_entries),
@@ -64,7 +64,7 @@ async def search_knowledge(
             has_more=len(mock_entries) > request.limit,
             suggestions=["AI configuration", "model setup", "prompt design"]
         )
-        
+
         return KnowledgeResponse(
             success=True,
             data=response_data.dict()
@@ -83,7 +83,7 @@ async def build_context(
     try:
         # Mock context building implementation
         # In production, this would intelligently combine and optimize content
-        
+
         # Simulate retrieving knowledge entries
         mock_sources = [
             KnowledgeEntry(
@@ -94,25 +94,25 @@ async def build_context(
             )
             for entry_id in request.knowledge_entries[:3]  # Limit for demo
         ]
-        
+
         # Build combined context
         combined_content = "\n\n".join([
             f"[{source.title}]\n{source.content}"
             for source in mock_sources
         ])
-        
+
         # Truncate if needed
         if len(combined_content) > request.max_context_length:
             combined_content = combined_content[:request.max_context_length]
             combined_content += "... [truncated]"
-        
+
         context_result = ContextResult(
             context=combined_content,
             sources=mock_sources,
             context_length=len(combined_content),
             relevance_score=0.82
         )
-        
+
         return KnowledgeResponse(
             success=True,
             data=context_result.dict()
@@ -131,7 +131,7 @@ async def get_knowledge_stats(
     try:
         # Mock statistics implementation
         # In production, this would query your database for real stats
-        
+
         stats = KnowledgeStats(
             total_entries=1250,
             categories={
@@ -150,7 +150,7 @@ async def get_knowledge_stats(
             ],
             last_updated=datetime.utcnow()
         )
-        
+
         return KnowledgeResponse(
             success=True,
             data=stats.dict()
@@ -170,12 +170,12 @@ async def add_knowledge_entry(
         # Mock entry creation
         # In production, this would store in your database and update
         # search index
-        
+
         # Generate ID if not provided
         if not entry.id:
             import uuid
             entry.id = f"kb_{uuid.uuid4().hex[:8]}"
-        
+
         return KnowledgeResponse(
             success=True,
             message="Knowledge entry added successfully",
@@ -202,7 +202,7 @@ async def get_knowledge_entry(
             category="general",
             tags=["sample", "demo"]
         )
-        
+
         return KnowledgeResponse(
             success=True,
             data=mock_entry.dict()
