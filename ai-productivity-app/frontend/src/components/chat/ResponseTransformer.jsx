@@ -1,4 +1,4 @@
-// components/chat/ResponseTransformer.tsx
+// components/chat/ResponseTransformer.jsx
 import React, { useState } from 'react';
 import {
   FileText, Code, List, Hash, Globe,
@@ -6,29 +6,14 @@ import {
 } from 'lucide-react';
 import { toast } from '../common/Toast';
 
-interface TransformOption {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ReactNode;
-  transform: (content: string) => Promise<string>;
-  outputFormat?: string;
-}
-
-interface ResponseTransformerProps {
-  content: string;
-  onTransform?: (transformedContent: string, format: string) => void;
-  allowedTransforms?: string[];
-}
-
-const transformOptions: TransformOption[] = [
+const transformOptions = [
   {
     id: 'markdown',
     name: 'To Markdown',
     description: 'Convert to properly formatted Markdown',
     icon: <FileText className="w-4 h-4" />,
     outputFormat: 'markdown',
-    transform: async (content: string) => {
+    transform: async (content) => {
       // Clean up and format as proper markdown
       return content
         .replace(/^- /gm, '* ') // Convert dashes to asterisks for lists
@@ -42,7 +27,7 @@ const transformOptions: TransformOption[] = [
     description: 'Extract and format JSON data',
     icon: <FileJson className="w-4 h-4" />,
     outputFormat: 'json',
-    transform: async (content: string) => {
+    transform: async (content) => {
       // Extract JSON from content
       const jsonMatch = content.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
       if (jsonMatch) {
@@ -56,7 +41,7 @@ const transformOptions: TransformOption[] = [
 
       // Try to convert content to JSON structure
       const lines = content.split('\n').filter(line => line.trim());
-      const data: any = {};
+      const data = {};
 
       lines.forEach(line => {
         const match = line.match(/^([^:]+):\s*(.+)$/);
@@ -74,7 +59,7 @@ const transformOptions: TransformOption[] = [
     description: 'Extract all code blocks',
     icon: <Code className="w-4 h-4" />,
     outputFormat: 'code',
-    transform: async (content: string) => {
+    transform: async (content) => {
       const codeBlocks = content.match(/```[\s\S]*?```/g) || [];
       return codeBlocks
         .map(block => block.replace(/```\w*\n?/g, '').trim())
@@ -87,7 +72,7 @@ const transformOptions: TransformOption[] = [
     description: 'Convert to bullet points',
     icon: <List className="w-4 h-4" />,
     outputFormat: 'text',
-    transform: async (content: string) => {
+    transform: async (content) => {
       const sentences = content
         .split(/[.!?]+/)
         .map(s => s.trim())
@@ -102,10 +87,10 @@ const transformOptions: TransformOption[] = [
     description: 'Extract key points',
     icon: <Zap className="w-4 h-4" />,
     outputFormat: 'text',
-    transform: async (content: string) => {
+    transform: async (content) => {
       // Extract headers and first sentences
       const lines = content.split('\n');
-      const keyPoints: string[] = [];
+      const keyPoints = [];
 
       lines.forEach((line, i) => {
         // Headers
@@ -133,11 +118,11 @@ const transformOptions: TransformOption[] = [
     description: 'Convert list data to table',
     icon: <Hash className="w-4 h-4" />,
     outputFormat: 'markdown',
-    transform: async (content: string) => {
+    transform: async (content) => {
       const lines = content.split('\n').filter(line => line.trim());
 
       // Try to detect key-value pairs
-      const rows: string[][] = [];
+      const rows = [];
       lines.forEach(line => {
         const match = line.match(/^([^:]+):\s*(.+)$/);
         if (match) {
@@ -164,7 +149,7 @@ const transformOptions: TransformOption[] = [
     description: 'Remove all formatting',
     icon: <Type className="w-4 h-4" />,
     outputFormat: 'text',
-    transform: async (content: string) => {
+    transform: async (content) => {
       return content
         .replace(/```[\s\S]*?```/g, '') // Remove code blocks
         .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
@@ -181,7 +166,7 @@ const transformOptions: TransformOption[] = [
     description: 'Translate to another language',
     icon: <Globe className="w-4 h-4" />,
     outputFormat: 'text',
-    transform: async (content: string) => {
+    transform: async (content) => {
       // This would call a translation API
       // For demo, just return a message
       throw new Error('Translation requires API configuration');
@@ -193,16 +178,16 @@ export default function ResponseTransformer({
   content,
   onTransform,
   allowedTransforms
-}: ResponseTransformerProps) {
+}) {
   const [isOpen, setIsOpen] = useState(false);
-  const [transforming, setTransforming] = useState<string | null>(null);
-  const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
+  const [transforming, setTransforming] = useState(null);
+  const [copiedFormat, setCopiedFormat] = useState(null);
 
   const availableOptions = allowedTransforms
     ? transformOptions.filter(opt => allowedTransforms.includes(opt.id))
     : transformOptions;
 
-  const handleTransform = async (option: TransformOption) => {
+  const handleTransform = async (option) => {
     setTransforming(option.id);
 
     try {
@@ -210,26 +195,26 @@ export default function ResponseTransformer({
       onTransform?.(transformed, option.outputFormat || 'text');
       toast.success(`Transformed to ${option.name}`);
       setIsOpen(false);
-    } catch (error: any) {
+    } catch (error) {
       toast.error(error.message || `Failed to transform to ${option.name}`);
     } finally {
       setTransforming(null);
     }
   };
 
-  const handleCopy = async (option: TransformOption) => {
+  const handleCopy = async (option) => {
     try {
       const transformed = await option.transform(content);
       await navigator.clipboard.writeText(transformed);
       setCopiedFormat(option.id);
       setTimeout(() => setCopiedFormat(null), 2000);
       toast.success(`Copied as ${option.name}`);
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Failed to copy');
     }
   };
 
-  const handleDownload = async (option: TransformOption) => {
+  const handleDownload = async (option) => {
     try {
       const transformed = await option.transform(content);
       const blob = new Blob([transformed], { type: 'text/plain' });
@@ -242,7 +227,7 @@ export default function ResponseTransformer({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast.success(`Downloaded as ${option.name}`);
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Failed to download');
     }
   };

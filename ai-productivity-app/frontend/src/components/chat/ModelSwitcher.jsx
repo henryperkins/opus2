@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Zap, Brain, DollarSign, Check, AlertCircle } from 'lucide-react';
 import { useConfig } from '../../hooks/useConfig';
-import { useModelSelection } from '../../hooks/useModelSelection';
+import { useModelSelection } from '../../hooks/useModelSelect';
 
 const modelOptions = [
   {

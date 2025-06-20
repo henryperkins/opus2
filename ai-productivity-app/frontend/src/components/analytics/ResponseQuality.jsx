@@ -1,4 +1,4 @@
-// components/analytics/ResponseQuality.tsx
+// components/analytics/ResponseQuality.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp, ThumbsUp, ThumbsDown, MessageSquare,
@@ -6,43 +6,8 @@ import {
 } from 'lucide-react';
 import { Line, Bar } from 'recharts';
 
-interface QualityMetrics {
-  relevance: number;
-  accuracy: number;
-  helpfulness: number;
-  clarity: number;
-  completeness: number;
-  citations: number;
-  responseTime: number;
-  tokenCount: number;
-}
-
-interface Feedback {
-  rating: 'positive' | 'negative' | 'neutral';
-  comment?: string;
-  timestamp: Date;
-  userId: string;
-}
-
-interface ResponseQualityProps {
-  messageId: string;
-  content: string;
-  metadata?: {
-    model?: string;
-    temperature?: number;
-    citations?: any[];
-    responseTime?: number;
-    tokens?: {
-      prompt: number;
-      completion: number;
-    };
-  };
-  onFeedback?: (feedback: Feedback) => void;
-  showDetailedMetrics?: boolean;
-}
-
 // Quality assessment algorithms
-const assessQuality = (content: string, metadata?: any): QualityMetrics => {
+const assessQuality = (content, metadata) => {
   // Relevance - based on context and citations
   const relevance = metadata?.citations?.length > 0 ? 0.9 : 0.7;
 
@@ -84,10 +49,6 @@ const MetricBar = ({
   label,
   value,
   color = 'blue'
-}: {
-  label: string;
-  value: number;
-  color?: string;
 }) => {
   const percentage = Math.round(value * 100);
   const colorClass = {
@@ -119,8 +80,8 @@ export default function ResponseQuality({
   metadata,
   onFeedback,
   showDetailedMetrics = false
-}: ResponseQualityProps) {
-  const [userRating, setUserRating] = useState<'positive' | 'negative' | null>(null);
+}) {
+  const [userRating, setUserRating] = useState(null);
   const [showMetrics, setShowMetrics] = useState(false);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
@@ -137,11 +98,11 @@ export default function ResponseQuality({
     };
 
     return Object.entries(weights).reduce((score, [key, weight]) => {
-      return score + (metrics[key as keyof QualityMetrics] as number) * weight;
+      return score + (metrics[key] || 0) * weight;
     }, 0);
   }, [metrics]);
 
-  const handleRating = (rating: 'positive' | 'negative') => {
+  const handleRating = (rating) => {
     setUserRating(rating);
 
     if (rating === 'negative') {
@@ -168,13 +129,13 @@ export default function ResponseQuality({
     }
   };
 
-  const getScoreColor = (score: number) => {
+  const getScoreColor = (score) => {
     if (score >= 0.8) return 'green';
     if (score >= 0.6) return 'yellow';
     return 'red';
   };
 
-  const getScoreLabel = (score: number) => {
+  const getScoreLabel = (score) => {
     if (score >= 0.8) return 'Excellent';
     if (score >= 0.6) return 'Good';
     if (score >= 0.4) return 'Fair';
@@ -354,14 +315,10 @@ export default function ResponseQuality({
 }
 
 // Hook for tracking response quality over time
-export function useResponseQualityTracking(projectId: string) {
-  const [qualityHistory, setQualityHistory] = useState<Array<{
-    date: string;
-    averageScore: number;
-    responseCount: number;
-  }>>([]);
+export function useResponseQualityTracking(projectId) {
+  const [qualityHistory, setQualityHistory] = useState([]);
 
-  const trackResponseQuality = (messageId: string, metrics: QualityMetrics) => {
+  const trackResponseQuality = (messageId, metrics) => {
     const score = (
       metrics.relevance * 0.3 +
       metrics.accuracy * 0.25 +
@@ -382,7 +339,7 @@ export function useResponseQualityTracking(projectId: string) {
   };
 
   const loadQualityHistory = () => {
-    const history: typeof qualityHistory = [];
+    const history = [];
     const prefix = `quality_${projectId}_`;
 
     // Get last 30 days

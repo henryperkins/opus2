@@ -5,7 +5,7 @@ import { useChat } from '../hooks/useChat';
 import { useProject } from '../hooks/useProjects';
 import { useUser } from '../hooks/useAuth';
 import { useKnowledgeChat } from '../hooks/useKnowledgeContext';
-import { useModelSelection, useModelPerformance } from '../hooks/useModelSelection';
+import { useModelSelection, useModelPerformance } from '../hooks/useModelSelect';
 import { useResponseQualityTracking } from '../components/analytics/ResponseQuality';
 
 // Components
@@ -35,7 +35,7 @@ import ResponseQuality from '../components/analytics/ResponseQuality';
 import { Brain, Settings, Search, FileText, BarChart2, Sparkles } from 'lucide-react';
 
 // Types
-import { Citation } from '../types/knowledge';
+import { createCitation } from '../types/knowledge';
 
 interface EnhancedMessage {
   id: string;

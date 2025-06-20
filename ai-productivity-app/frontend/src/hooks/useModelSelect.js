@@ -1,38 +1,10 @@
-// hooks/useModelSelection.ts
+// hooks/useModelSelection.js
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { configAPI } from '../api/config';
 import { toast } from '../components/common/Toast';
 
-interface ModelStats {
-  requestsToday: number;
-  estimatedCost: number;
-  averageLatency: number;
-  errorRate: number;
-  lastUsed: Date;
-}
-
-interface ModelCapability {
-  id: string;
-  name: string;
-  supported: boolean;
-}
-
-interface UseModelSelectionReturn {
-  currentModel: string;
-  currentProvider: string;
-  setModel: (model: string) => Promise<boolean>;
-  setProvider: (provider: string) => Promise<boolean>;
-  modelStats: ModelStats | null;
-  isLoading: boolean;
-  error: string | null;
-  testModel: (model: string) => Promise<boolean>;
-  modelCapabilities: ModelCapability[];
-  autoSelectModel: (taskType: string) => Promise<string>;
-  modelHistory: string[];
-}
-
 // Task-based model recommendations
-const taskModelMap: Record<string, string[]> = {
+const taskModelMap = {
   'code-generation': ['gpt-4o', 'gpt-4-turbo'],
   'code-explanation': ['gpt-4o-mini', 'gpt-3.5-turbo'],
   'documentation': ['gpt-4o-mini', 'gpt-3.5-turbo'],
@@ -43,17 +15,17 @@ const taskModelMap: Record<string, string[]> = {
   'complex-analysis': ['gpt-4o', 'gpt-4-turbo']
 };
 
-export function useModelSelection(): UseModelSelectionReturn {
-  const [currentModel, setCurrentModel] = useState<string>('gpt-4o-mini');
-  const [currentProvider, setCurrentProvider] = useState<string>('openai');
-  const [modelStats, setModelStats] = useState<ModelStats | null>(null);
+export function useModelSelection() {
+  const [currentModel, setCurrentModel] = useState('gpt-4o-mini');
+  const [currentProvider, setCurrentProvider] = useState('openai');
+  const [modelStats, setModelStats] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [modelHistory, setModelHistory] = useState<string[]>([]);
-  const [modelCapabilities, setModelCapabilities] = useState<ModelCapability[]>([]);
+  const [error, setError] = useState(null);
+  const [modelHistory, setModelHistory] = useState([]);
+  const [modelCapabilities, setModelCapabilities] = useState([]);
 
-  const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const fallbackChainRef = useRef<string[]>(['gpt-4o-mini', 'gpt-3.5-turbo']);
+  const statsIntervalRef = useRef(null);
+  const fallbackChainRef = useRef(['gpt-4o-mini', 'gpt-3.5-turbo']);
 
   // Load initial configuration
   useEffect(() => {
@@ -98,7 +70,7 @@ export function useModelSelection(): UseModelSelectionReturn {
     }
   };
 
-  const setModel = useCallback(async (model: string): Promise<boolean> => {
+  const setModel = useCallback(async (model) => {
     if (model === currentModel) return true;
 
     setIsLoading(true);
@@ -130,7 +102,7 @@ export function useModelSelection(): UseModelSelectionReturn {
       loadModelStats();
 
       return true;
-    } catch (err: any) {
+    } catch (err) {
       const errorMessage = err.message || 'Failed to switch model';
       setError(errorMessage);
       toast.error(errorMessage);
@@ -150,7 +122,7 @@ export function useModelSelection(): UseModelSelectionReturn {
     }
   }, [currentModel, currentProvider, modelHistory]);
 
-  const setProvider = useCallback(async (provider: string): Promise<boolean> => {
+  const setProvider = useCallback(async (provider) => {
     if (provider === currentProvider) return true;
 
     setIsLoading(true);
@@ -180,7 +152,7 @@ export function useModelSelection(): UseModelSelectionReturn {
       toast.success(`Switched to ${provider}`);
 
       return true;
-    } catch (err: any) {
+    } catch (err) {
       const errorMessage = err.message || 'Failed to switch provider';
       setError(errorMessage);
       toast.error(errorMessage);
@@ -190,7 +162,7 @@ export function useModelSelection(): UseModelSelectionReturn {
     }
   }, [currentProvider]);
 
-  const testModel = useCallback(async (model: string): Promise<boolean> => {
+  const testModel = useCallback(async (model) => {
     try {
       const result = await configAPI.testModelConfig({
         provider: currentProvider,
@@ -204,7 +176,7 @@ export function useModelSelection(): UseModelSelectionReturn {
     }
   }, [currentProvider]);
 
-  const autoSelectModel = useCallback(async (taskType: string): Promise<string> => {
+  const autoSelectModel = useCallback(async (taskType) => {
     // Get recommended models for the task
     const recommendations = taskModelMap[taskType] || taskModelMap['quick-answer'];
 
@@ -234,7 +206,7 @@ export function useModelSelection(): UseModelSelectionReturn {
 
   // Detect model capabilities
   useEffect(() => {
-    const capabilities: ModelCapability[] = [
+    const capabilities = [
       {
         id: 'function-calling',
         name: 'Function Calling',
@@ -276,7 +248,7 @@ export function useModelSelection(): UseModelSelectionReturn {
 }
 
 // Hook for managing model performance tracking
-export function useModelPerformance(model: string) {
+export function useModelPerformance(model) {
   const [metrics, setMetrics] = useState({
     requestCount: 0,
     totalLatency: 0,
@@ -287,7 +259,7 @@ export function useModelPerformance(model: string) {
     }
   });
 
-  const trackRequest = useCallback((latency: number, tokens: { input: number; output: number }, error?: boolean) => {
+  const trackRequest = useCallback((latency, tokens, error = false) => {
     setMetrics(prev => ({
       requestCount: prev.requestCount + 1,
       totalLatency: prev.totalLatency + latency,

@@ -1,34 +1,20 @@
-// hooks/useConfig.ts
+// hooks/useConfig.js
 import { useState, useEffect, useCallback } from 'react';
 import { configAPI } from '../api/config';
 
-interface ConfigData {
-  providers: {
-    [key: string]: {
-      chat_models: string[];
-      embedding_models?: string[];
-      features?: Record<string, boolean>;
-      api_versions?: string[];
-    };
-  };
+// Factory functions for creating config objects
+export const createConfigData = (data = {}) => ({
+  providers: data.providers || {},
   current: {
-    provider: string;
-    chat_model: string;
-  };
-}
+    provider: data.current?.provider || 'openai',
+    chat_model: data.current?.chat_model || 'gpt-4o-mini'
+  }
+});
 
-interface UseConfigReturn {
-  config: ConfigData | null;
-  loading: boolean;
-  error: Error | null;
-  refetch: () => Promise<void>;
-  updateConfig: (updates: Partial<ConfigData['current']>) => Promise<void>;
-}
-
-export function useConfig(): UseConfigReturn {
-  const [config, setConfig] = useState<ConfigData | null>(null);
+export function useConfig() {
+  const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState(null);
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -37,14 +23,14 @@ export function useConfig(): UseConfigReturn {
       const data = await configAPI.getConfig();
       setConfig(data);
     } catch (err) {
-      setError(err as Error);
+      setError(err);
       console.error('Failed to fetch config:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const updateConfig = useCallback(async (updates: Partial<ConfigData['current']>) => {
+  const updateConfig = useCallback(async (updates) => {
     try {
       await configAPI.updateModelConfig({
         provider: updates.provider || config?.current.provider || 'openai',
@@ -54,7 +40,7 @@ export function useConfig(): UseConfigReturn {
       // Refetch to get updated config
       await fetchConfig();
     } catch (err) {
-      setError(err as Error);
+      setError(err);
       throw err;
     }
   }, [config, fetchConfig]);
@@ -73,9 +59,9 @@ export function useConfig(): UseConfigReturn {
 }
 
 // Hook for managing available models
-export function useAvailableModels(provider?: string) {
+export function useAvailableModels(provider) {
   const { config } = useConfig();
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState([]);
 
   useEffect(() => {
     if (config && provider) {
@@ -91,7 +77,7 @@ export function useAvailableModels(provider?: string) {
 export function useFeatureAvailability() {
   const { config } = useConfig();
 
-  const isFeatureAvailable = useCallback((feature: string): boolean => {
+  const isFeatureAvailable = useCallback((feature) => {
     if (!config) return false;
 
     const provider = config.current.provider;
@@ -100,7 +86,7 @@ export function useFeatureAvailability() {
     return features[feature] === true;
   }, [config]);
 
-  const getAvailableFeatures = useCallback((): string[] => {
+  const getAvailableFeatures = useCallback(() => {
     if (!config) return [];
 
     const provider = config.current.provider;
