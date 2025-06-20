@@ -1,13 +1,13 @@
 // Search results display with code previews and navigation
 import React from 'react';
 import CodeSnippet from './CodeSnippet';
+import LoadingSpinner from '../common/LoadingSpinner';
 
 export default function SearchResults({ results, query, loading }) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-3 text-gray-600">Searching...</span>
+        <LoadingSpinner label="Searching..." />
       </div>
     );
   }
@@ -29,7 +29,8 @@ export default function SearchResults({ results, query, loading }) {
   const highlightQuery = (text) => {
     if (!query) return text;
 
-    const regex = new RegExp(`(${query})`, 'gi');
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escapedQuery})`, 'gi');
     const parts = text.split(regex);
 
     return parts.map((part, i) =>

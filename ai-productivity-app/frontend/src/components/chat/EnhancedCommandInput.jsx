@@ -15,14 +15,8 @@ import {
 import { useProjectTimeline } from '../../hooks/useProjects';
 import { KnowledgeCommandRegistry } from '../../utils/commands/knowledge-commands';
 import PropTypes from 'prop-types';
+import { toast } from '../common/Toast';
 
-// ────────────────────────────────────────────────────────────
-// Mock toast – replace with your toast library
-// ────────────────────────────────────────────────────────────
-const toast = {
-  success: (msg) => console.log('Success:', msg),
-  error:   (msg) => console.error('Error:', msg)
-};
 
 // ────────────────────────────────────────────────────────────
 // Command registry + static commands
