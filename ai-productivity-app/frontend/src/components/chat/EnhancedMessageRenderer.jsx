@@ -3,7 +3,41 @@
 import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import vs2015 from 'react-syntax-highlighter/dist/styles/hljs/vs2015';
+// Use a simple theme object instead of importing
+const codeTheme = {
+  'code[class*="language-"]': {
+    color: '#f8f8f2',
+    background: 'none',
+    fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
+    fontSize: '1em',
+    textAlign: 'left',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    wordWrap: 'normal',
+    lineHeight: '1.5',
+    tabSize: '4',
+    hyphens: 'none',
+  },
+  'pre[class*="language-"]': {
+    color: '#f8f8f2',
+    background: '#2d3748',
+    fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
+    fontSize: '1em',
+    textAlign: 'left',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    wordWrap: 'normal',
+    lineHeight: '1.5',
+    tabSize: '4',
+    hyphens: 'none',
+    padding: '1em',
+    margin: '.5em 0',
+    overflow: 'auto',
+    borderRadius: '0.3em',
+  },
+};
 import {
   Copy,
   Check,
@@ -188,7 +222,7 @@ export default function EnhancedMessageRenderer({
           {/* code body */}
           <SyntaxHighlighter
             language={language}
-            style={vs2015}
+            style={codeTheme}
             customStyle={{
               margin: 0,
               borderTopLeftRadius: 0,
