@@ -1,97 +1,25 @@
-// frontend/src/pages/ProjectChatPage.jsx
+// pages/EnhancedProjectChatPage.tsx
 /* global navigator */
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
-import { useProject, useProjectTimeline, useProjectSearch } from '../hooks/useProjects';
+import { useProject } from '../hooks/useProjects';
 import { useUser } from '../hooks/useAuth';
 import Header from '../components/common/Header';
-import MessageList from '../components/chat/MessageList';
-import CommandInput from '../components/chat/CommandInput';
-import CodePreview from '../components/chat/CodePreview';
+import EnhancedMessageRenderer from '../components/chat/EnhancedMessageRenderer';
+import EnhancedCommandInput from '../components/chat/EnhancedCommandInput';
+import KnowledgeAssistant from '../components/chat/KnowledgeAssistant';
 import MonacoEditor from '@monaco-editor/react';
-import { codeAPI } from '../api/code';
-import chatAPI from '../api/chat';
-import FileUpload from '../components/knowledge/FileUpload';
-import DependencyGraph from '../components/knowledge/DependencyGraph';
 import SplitPane from '../components/common/SplitPane';
-import ErrorBoundary from '../components/common/ErrorBoundary';
-import { createTwoFilesPatch } from 'diff';
+import { Brain, Settings, FileText } from 'lucide-react';
 
-// Tracks projects with files already fetched
-const filesFetchedForProject = new Set();
-
-export default function ProjectChatPage() {
+export default function EnhancedProjectChatPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const user = useUser();
+  const { project, loading: projectLoading } = useProject(projectId);
 
-  // Prefer project passed via navigation state to avoid an extra API call.
-  const stateProject = location.state?.project;
-
-  // Use consistent project loading approach
-  const { projects } = useProjectSearch();
-  const { project: fetchedProject, loading: projectLoading, fetch: fetchProject } = useProject(projectId);
-  const { addEvent } = useProjectTimeline(projectId);
-
-  // Get project from search results first, then state, then individual fetch
-  const projectFromSearch = projects.find(p => p.id === parseInt(projectId));
-  const project = projectFromSearch || stateProject || fetchedProject;
-  const [editorContent, setEditorContent] = useState('');
-  const [originalContent, setOriginalContent] = useState('');
-  const [editorLanguage, setEditorLanguage] = useState('python');
-  const [showDiff, setShowDiff] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [projectFiles, setProjectFiles] = useState([]);
-  const [splitView, setSplitView] = useState(true);
-  const [rightPanelMode, setRightPanelMode] = useState('editor');
-  const [savingDiff, setSavingDiff] = useState(false);
-
-  const refreshFiles = () => {
-    fetchProjectFiles();
-  };
-
-  // Create or get chat session
-  useEffect(() => {
-    if (!project && projectId && !stateProject && !projectFromSearch) {
-      // Fetch project details only if not available from search results or state
-      fetchProject();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, stateProject, projectFromSearch]);
-
-  useEffect(() => {
-    if (!projectId) return;
-    if (!filesFetchedForProject.has(projectId)) {
-      fetchProjectFiles().finally(() => filesFetchedForProject.add(projectId));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
-
-  const fetchProjectFiles = async () => {
-    try {
-      const response = await codeAPI.getProjectFiles(projectId);
-      setProjectFiles(response.files || []);
-    } catch (err) {
-      if (err.response?.status === 404) {
-        setProjectFiles([]);
-      } else {
-        console.error('Failed to fetch project files:', err);
-      }
-    }
-  };
-
-  const handleDeleteFile = async (id) => {
-    if (!window.confirm('Delete this file?')) return;
-    try {
-      await codeAPI.deleteFile(id);
-      refreshFiles();
-    } catch (err) {
-      console.error('Failed to delete file:', err);
-    }
-  };
-
+  // Chat state
   const {
     messages,
     connectionState,
@@ -99,71 +27,65 @@ export default function ProjectChatPage() {
     sendMessage,
     editMessage,
     deleteMessage,
-    sendTypingIndicator,
-    sessionId,
+    sendTypingIndicator
   } = useChat(projectId);
 
-  const handleSendMessage = (content, metadata) => {
-    // Include current editor content if mentioned
-    if (content.includes('@code') || content.includes('@editor')) {
-      metadata.code_snippets = [{
-        language: editorLanguage,
-        code: editorContent,
-        file_path: selectedFile?.path || 'untitled'
-      }];
-    }
+  // UI state
+  const [splitView, setSplitView] = useState(true);
+  const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(true);
+  const [editorContent, setEditorContent] = useState('');
+  const [editorLanguage, setEditorLanguage] = useState('python');
+  const [selectedText, setSelectedText] = useState('');
+  const [currentFile, setCurrentFile] = useState(undefined);
 
-    sendMessage(content, metadata);
-  };
-
-  const handleCodeSelect = (codeBlock) => {
-    setEditorContent(codeBlock.code);
-    setEditorLanguage(codeBlock.language);
-  };
-
-  const handleFileSelect = async (file) => {
-    setSelectedFile(file);
+  // Enhanced message handling with knowledge context
+  const handleSendMessage = useCallback(async (content, metadata) => {
     try {
-      const content = await codeAPI.getFileContent(file.id);
-      setEditorContent(content.content);
-      setOriginalContent(content.content);
-      setEditorLanguage(file.language);
-    } catch (err) {
-      console.error('Failed to load file:', err);
-    }
-  };
-
-  const handleSaveDiff = async () => {
-    if (!selectedFile || savingDiff) return;
-    setSavingDiff(true);
-    const patch = createTwoFilesPatch(
-      selectedFile.path,
-      selectedFile.path,
-      originalContent,
-      editorContent,
-      '',
-      ''
-    );
-    try {
-      // Create timeline event (non-blocking)
-      try {
-        await addEvent({
-          event_type: 'updated',
-          title: `Edited ${selectedFile.path}`,
-          description: 'Code updated via editor',
-          metadata: { file_path: selectedFile.path, diff: patch }
-        });
-      } catch (timelineError) {
-        console.warn('Failed to create timeline event for file edit:', timelineError);
-        // Continue with saving - timeline events are non-critical
+      // Add editor context if requested
+      if (content.includes('@editor') && editorContent) {
+        metadata.code_snippets = [{
+          language: editorLanguage,
+          code: editorContent,
+          file_path: currentFile || 'editor'
+        }];
       }
-      setOriginalContent(editorContent);
-    } catch (err) {
-      console.error('Failed to save diff:', err);
-    } finally {
-      setSavingDiff(false);
+
+      // Send message with enhanced metadata
+      await sendMessage(content, metadata);
+    } catch (error) {
+      console.error('Failed to send message:', error);
     }
-  };
+  }, [sendMessage, editorContent, editorLanguage, currentFile]);
+
+  // Handle code application from chat
+  const handleCodeApply = useCallback((code, language) => {
+    setEditorContent(code);
+    setEditorLanguage(language);
+  }, []);
+
+  // Handle citation clicks
+  const handleCitationClick = useCallback((citation) => {
+    // Navigate to the source or open in editor
+    console.log('Citation clicked:', citation);
+    // Implementation depends on your routing/file system
+  }, []);
+
+  // Handle knowledge suggestions
+  const handleSuggestionApply = useCallback((suggestion, citations) => {
+    // Apply suggestion to the input or send directly
+    const metadata = {};
+    if (citations && citations.length > 0) {
+      metadata.citations = citations;
+    }
+
+    handleSendMessage(suggestion, metadata);
+  }, [handleSendMessage]);
+
+  // Handle context addition from knowledge assistant
+  const handleContextAdd = useCallback((context) => {
+    console.log('Adding context:', context);
+    // This could update the current message draft or add to metadata
+  }, []);
 
   if (projectLoading) {
     return (
@@ -190,153 +112,175 @@ export default function ProjectChatPage() {
   }
 
   const chatPanel = (
-    <div className="flex flex-col h-full bg-white border-r border-gray-200">
-      <div className="p-4 border-b flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">AI Chat</h2>
-        <button
-          onClick={() => setSplitView(!splitView)}
-          className="text-gray-600 hover:text-gray-900"
-          title={splitView ? 'Hide editor' : 'Show editor'}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            {splitView ? (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    <div className="flex flex-col h-full bg-white">
+      {/* Chat Header */}
+      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {project.name} - AI Chat
+            </h2>
+            {connectionState !== 'connected' && (
+              <span className="text-xs text-orange-600">
+                {connectionState}
+              </span>
             )}
-          </svg>
-        </button>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
+              className={`p-2 rounded-lg transition-colors ${
+                showKnowledgeAssistant
+                  ? 'bg-blue-100 text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="Toggle Knowledge Assistant"
+            >
+              <Brain className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setSplitView(!splitView)}
+              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg"
+              title={splitView ? 'Hide editor' : 'Show editor'}
+            >
+              <FileText className="w-5 h-5" />
+            </button>
+            <button
+              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg"
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        <MessageList
-          messages={messages}
-          onCodeSelect={handleCodeSelect}
-          onMessageEdit={editMessage}
-          onMessageDelete={deleteMessage}
-          currentUserId={user?.id}
-        />
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`flex ${
+              message.role === 'user' ? 'justify-end' : 'justify-start'
+            }`}
+          >
+            <div
+              className={`max-w-3xl rounded-lg px-4 py-3 ${
+                message.role === 'user'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-900'
+              }`}
+            >
+              {/* Message header */}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs opacity-75">
+                  {message.role === 'assistant' ? 'AI Assistant' : 'You'}
+                </span>
+                {message.metadata?.model && (
+                  <span className="text-xs opacity-75">
+                    {message.metadata.model}
+                  </span>
+                )}
+              </div>
+
+              {/* Enhanced message content */}
+              <EnhancedMessageRenderer
+                message={{
+                  id: message.id,
+                  content: message.content,
+                  role: message.role,
+                  metadata: message.metadata,
+                  codeBlocks: message.code_blocks
+                }}
+                onCodeApply={handleCodeApply}
+                onCitationClick={handleCitationClick}
+                showMetadata={message.role === 'assistant'}
+              />
+            </div>
+          </div>
+        ))}
+
+        {/* Typing indicators */}
+        {typingUsers.size > 0 && (
+          <div className="flex justify-start">
+            <div className="bg-gray-100 rounded-lg px-4 py-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {typingUsers.size > 0 && (
-        <div className="px-4 py-2 text-sm text-gray-500">
-          {typingUsers.size} user{typingUsers.size > 1 ? 's' : ''} typing...
-        </div>
-      )}
-
-      {connectionState !== 'connected' && (
-        <div className={`px-4 py-2 text-sm ${
-          connectionState === 'error' ? 'bg-red-50 text-red-800' :
-          connectionState === 'reconnecting' ? 'bg-orange-50 text-orange-800' :
-          'bg-yellow-50 text-yellow-800'
-        }`}>
-          {connectionState === 'connecting' ? 'Connecting...' : 
-           connectionState === 'reconnecting' ? 'Reconnecting...' :
-           connectionState === 'error' ? 'Connection error' :
-           'Disconnected'}
-        </div>
-      )}
-
-      <CommandInput
+      {/* Enhanced command input */}
+      <EnhancedCommandInput
         onSend={handleSendMessage}
         onTyping={sendTypingIndicator}
         projectId={projectId}
+        editorContent={editorContent}
+        selectedText={selectedText}
+        currentFile={currentFile}
+        userId={user?.id || ''}
       />
     </div>
   );
 
   const editorPanel = (
     <div className="flex flex-col h-full bg-white">
-      <div className="p-4 border-b flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <span className="text-sm font-medium text-gray-700">
-            {selectedFile ? selectedFile.path : 'Untitled'}
-          </span>
-          <select
-            value={editorLanguage}
-            onChange={(e) => setEditorLanguage(e.target.value)}
-            className="text-sm border rounded px-2 py-1"
-          >
-            <option value="python">Python</option>
-            <option value="javascript">JavaScript</option>
-            <option value="typescript">TypeScript</option>
-          </select>
-        </div>
-
-        <div className="flex items-center space-x-2">
+      {/* Editor Header */}
+      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <span className="text-sm font-medium text-gray-700">
+              {currentFile || 'Untitled'}
+            </span>
+            <select
+              value={editorLanguage}
+              onChange={(e) => setEditorLanguage(e.target.value)}
+              className="text-sm border rounded px-2 py-1"
+            >
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+              <option value="java">Java</option>
+              <option value="go">Go</option>
+              <option value="rust">Rust</option>
+            </select>
+          </div>
           <button
-            onClick={() => setShowDiff(!showDiff)}
-            className={`text-sm px-3 py-1 rounded ${
-              showDiff ? 'bg-blue-500 text-white' : 'bg-gray-100'
-            }`}
-          >
-            Diff
-          </button>
-          <button
-            onClick={handleSaveDiff}
-            disabled={savingDiff}
-            className={`text-sm px-3 py-1 rounded ${savingDiff ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600'} text-white`}
-          >
-            {savingDiff ? 'Saving...' : 'Save Diff'}
-          </button>
-          <button
-            onClick={() =>
-              setRightPanelMode(rightPanelMode === 'canvas' ? 'editor' : 'canvas')
-            }
-            className={`text-sm px-3 py-1 rounded ${
-              rightPanelMode === 'canvas' ? 'bg-blue-500 text-white' : 'bg-gray-100'
-            }`}
-          >
-            {rightPanelMode === 'canvas' ? 'Editor' : 'Canvas'}
-          </button>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(editorContent).catch(() => {
-                window.alert('Failed to copy code to clipboard.');
-              });
-            }}
-            className="p-1 text-gray-600 hover:text-gray-900"
+            onClick={() => navigator.clipboard.writeText(editorContent)}
+            className="text-sm text-gray-600 hover:text-gray-900"
             title="Copy code"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
+            Copy
           </button>
         </div>
       </div>
 
+      {/* Monaco Editor */}
       <div className="flex-1">
         <MonacoEditor
           value={editorContent}
           language={editorLanguage}
-          onChange={setEditorContent}
+          onChange={(value) => setEditorContent(value || '')}
+          onMount={(editor) => {
+            // Set up selection change handler
+            editor.onDidChangeCursorSelection((e) => {
+              const selection = editor.getModel()?.getValueInRange(e.selection);
+              setSelectedText(selection || '');
+            });
+          }}
           theme="vs-dark"
           options={{
             minimap: { enabled: false },
             fontSize: 14,
             wordWrap: 'on',
-            automaticLayout: true
+            automaticLayout: true,
+            scrollBeyondLastLine: false
           }}
         />
-      </div>
-    </div>
-  );
-
-  const canvasPanel = (
-    <div className="flex flex-col h-full bg-white">
-      <div className="p-4 border-b flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900">Canvas</h3>
-        <button
-          onClick={() => setRightPanelMode('editor')}
-          className="text-sm text-gray-600 hover:text-gray-900"
-        >
-          Close
-        </button>
-      </div>
-      <div className="flex-1 overflow-auto p-4">
-        <ErrorBoundary>
-          <DependencyGraph projectId={projectId} />
-        </ErrorBoundary>
       </div>
     </div>
   );
@@ -346,63 +290,34 @@ export default function ProjectChatPage() {
       <Header />
 
       <div className="flex-1 flex overflow-hidden">
-        {/* File Explorer Sidebar */}
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold text-gray-900 flex items-center">
-              <span className="text-xl mr-2">{project.emoji}</span>
-              {project.title}
-            </h3>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Files</h4>
-            {projectFiles.length > 0 ? (
-              <ul className="space-y-1">
-                {projectFiles.map(file => (
-                  <li key={file.id} className="flex items-center justify-between group">
-                    <button
-                      onClick={() => handleFileSelect(file)}
-                      className={`flex-1 text-left px-2 py-1 rounded text-sm truncate hover:bg-gray-100 ${
-                        selectedFile?.id === file.id ? 'bg-blue-50 text-blue-700' : ''
-                      }`}
-                    >
-                      {file.path.split('/').pop()}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteFile(file.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:text-red-700"
-                      title="Delete file"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-gray-500">No files uploaded yet</p>
-            )}
-          </div>
-          {/* Upload section */}
-          <div className="p-4 border-t">
-            <FileUpload projectId={projectId} onSuccess={refreshFiles} />
-          </div>
-        </div>
-
-        {/* Main Content Area */}
-        <div className="flex-1">
-          {splitView ? (
-            <SplitPane
-              left={chatPanel}
-              right={rightPanelMode === 'canvas' ? canvasPanel : editorPanel}
-            />
-          ) : (
-            chatPanel
-          )}
-        </div>
+        {splitView ? (
+          <SplitPane
+            split="vertical"
+            minSize={400}
+            defaultSize="50%"
+            resizerStyle={{
+              background: '#e5e7eb',
+              width: '4px',
+              cursor: 'col-resize'
+            }}
+          >
+            {chatPanel}
+            {editorPanel}
+          </SplitPane>
+        ) : (
+          chatPanel
+        )}
       </div>
+
+      {/* Knowledge Assistant */}
+      <KnowledgeAssistant
+        projectId={projectId}
+        message={messages[messages.length - 1]?.content || ''}
+        onSuggestionApply={handleSuggestionApply}
+        onContextAdd={handleContextAdd}
+        isVisible={showKnowledgeAssistant}
+        position="right"
+      />
     </div>
   );
 }

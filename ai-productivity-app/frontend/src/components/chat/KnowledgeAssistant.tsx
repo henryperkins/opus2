@@ -1,0 +1,230 @@
+// components/chat/KnowledgeAssistant.jsx
+import React, { useState, useEffect, useCallback } from 'react';
+import { Brain, Search, X, ChevronRight, Sparkles } from 'lucide-react';
+import { useKnowledgeChat } from '../../hooks/useKnowledgeContext';
+import KnowledgeContextPanel from '../knowledge/KnowledgeContextPanel';
+import SmartKnowledgeSearch from '../knowledge/SmartKnowledgeSearch';
+
+export default function KnowledgeAssistant({
+  projectId,
+  message,
+  onSuggestionApply,
+  onContextAdd,
+  isVisible = true,
+  position = 'right'
+}) {
+  const {
+    context,
+    loading,
+    error,
+    search,
+    citations,
+    addToCitations,
+    updateContextFromChat,
+    activeQuery,
+    selectedItems,
+    toggleItemSelection,
+    clearSelections
+  } = useKnowledgeChat(projectId);
+
+  const [showSearch, setShowSearch] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [isMinimized, setIsMinimized] = useState(false);
+
+  // Update context based on chat message
+  useEffect(() => {
+    if (message.length > 10) {
+      updateContextFromChat(message);
+    }
+  }, [message, updateContextFromChat]);
+
+  // Generate smart suggestions based on context
+  useEffect(() => {
+    if (context && context.confidence > 0.6) {
+      const newSuggestions = generateSuggestions(context, message);
+      setSuggestions(newSuggestions);
+    } else {
+      setSuggestions([]);
+    }
+  }, [context, message]);
+
+  const handleDocumentSelect = useCallback((doc) => {
+    toggleItemSelection(doc.id);
+  }, [toggleItemSelection]);
+
+  const handleCodeSelect = useCallback((snippet) => {
+    toggleItemSelection(snippet.id);
+  }, [toggleItemSelection]);
+
+  const handleApplyContext = useCallback(() => {
+    if (!context) return;
+
+    // Get selected items
+    const selectedDocs = context.relevantDocs.filter(doc => selectedItems.has(doc.id));
+    const selectedCode = context.codeSnippets.filter(snippet => selectedItems.has(snippet.id));
+
+    // Create citations
+    const newCitations = addToCitations([...selectedDocs, ...selectedCode]);
+
+    // Build context summary
+    const contextSummary = {
+      documents: selectedDocs.map(d => ({ id: d.id, title: d.title, path: d.path })),
+      codeSnippets: selectedCode.map(s => ({ id: s.id, content: s.content.slice(0, 100) })),
+      citations: newCitations
+    };
+
+    onContextAdd(contextSummary);
+    clearSelections();
+  }, [context, selectedItems, addToCitations, onContextAdd, clearSelections]);
+
+  const handleSearchResult = useCallback((result) => {
+    // Add search result to citations
+    const newCitations = addToCitations([result]);
+    onSuggestionApply(`Referenced: ${result.title}`, newCitations);
+    setShowSearch(false);
+  }, [addToCitations, onSuggestionApply]);
+
+  if (!isVisible) return null;
+
+  return (
+    <div className={`fixed ${position === 'right' ? 'right-4' : 'left-4'} top-20 w-96 z-40`}>
+      {/* Main Assistant Panel */}
+      <div className={`bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden transition-all ${
+        isMinimized ? 'h-12' : 'max-h-[70vh]'
+      }`}>
+        {/* Header */}
+        <div
+          className="px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white cursor-pointer"
+          onClick={() => setIsMinimized(!isMinimized)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Brain className="w-5 h-5" />
+              <span className="font-medium">Knowledge Assistant</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSearch(true);
+                }}
+                className="p-1 hover:bg-white/20 rounded"
+                title="Search knowledge base"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+              <ChevronRight className={`w-4 h-4 transition-transform ${
+                isMinimized ? '' : 'rotate-90'
+              }`} />
+            </div>
+          </div>
+        </div>
+
+        {!isMinimized && (
+          <>
+            {/* Active Query Indicator */}
+            {activeQuery && (
+              <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-blue-700">
+                    Searching: "{activeQuery}"
+                  </span>
+                  {loading && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Suggestions */}
+            {suggestions.length > 0 && (
+              <div className="p-4 border-b border-gray-200">
+                <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                  <Sparkles className="w-4 h-4 mr-1 text-yellow-500" />
+                  Smart Suggestions
+                </h4>
+                <div className="space-y-2">
+                  {suggestions.map((suggestion, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => onSuggestionApply(suggestion, citations)}
+                      className="w-full text-left px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Knowledge Context */}
+            <div className="overflow-y-auto" style={{ maxHeight: '400px' }}>
+              <KnowledgeContextPanel
+                query={activeQuery}
+                projectId={projectId}
+                onDocumentSelect={handleDocumentSelect}
+                onCodeSelect={handleCodeSelect}
+                maxHeight="400px"
+              />
+            </div>
+
+            {/* Actions */}
+            {selectedItems.size > 0 && (
+              <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                <button
+                  onClick={handleApplyContext}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  Add {selectedItems.size} item{selectedItems.size > 1 ? 's' : ''} as context
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Search Modal */}
+      {showSearch && (
+        <SmartKnowledgeSearch
+          projectId={projectId}
+          onResultSelect={handleSearchResult}
+          onClose={() => setShowSearch(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Helper function to generate smart suggestions
+function generateSuggestions(context, message) {
+  const suggestions = [];
+
+  // Based on context confidence and type
+  if (context.confidence > 0.8) {
+    suggestions.push('Include relevant code examples from knowledge base');
+  }
+
+  // Based on message content
+  if (message.toLowerCase().includes('how')) {
+    suggestions.push('Add step-by-step explanation with examples');
+  }
+
+  if (message.toLowerCase().includes('error') || message.toLowerCase().includes('bug')) {
+    suggestions.push('Search for similar issues and solutions');
+  }
+
+  if (message.toLowerCase().includes('implement') || message.toLowerCase().includes('create')) {
+    suggestions.push('Include implementation patterns from codebase');
+  }
+
+  // Based on available context
+  if (context.codeSnippets.length > 0) {
+    suggestions.push(`Reference ${context.codeSnippets.length} related code examples`);
+  }
+
+  if (context.relevantDocs.length > 0) {
+    suggestions.push(`Cite ${context.relevantDocs.length} relevant documents`);
+  }
+
+  return suggestions.slice(0, 3); // Max 3 suggestions
+}
