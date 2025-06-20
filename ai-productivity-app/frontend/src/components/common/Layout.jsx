@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import UserMenu from '../auth/UserMenu';
 import ThemeToggle from './ThemeToggle';
+import Sidebar from './Sidebar';
 
 // -------------------------------------------------------------------------------------------------
 // Global layout wrapper

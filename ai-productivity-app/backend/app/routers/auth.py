@@ -104,6 +104,21 @@ def register(
     client_ip = request.client.host if request.client else "unknown"
     security.enforce_rate_limit(f"register:{client_ip}", limit=5, window=60)
 
+    # Enforce invite code if enabled
+    invite_codes = settings.invite_codes_list
+    invite_required = bool(invite_codes)
+    if invite_required:
+        provided_code = (payload.invite_code or "").strip()
+        if not provided_code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invite code is required for registration."
+            )
+        if provided_code not in invite_codes:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid invite code."
+            )
 
     user = User(
         username=payload.username.lower(),
@@ -171,7 +186,7 @@ def login(
                 User.email == payload.username_or_email.lower(),
             )
         ).first()
-        
+
         if existing_user:
             if not existing_user.is_active:
                 raise HTTPException(
@@ -250,7 +265,7 @@ def update_profile(
 
     if not data:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="No changes provided. Please specify username, email, or password to update."
         )
 
@@ -259,7 +274,7 @@ def update_profile(
         conflict = db.query(User).filter(User.username == username).filter(User.id != current_user.id).first()
         if conflict:
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, 
+                status_code=status.HTTP_409_CONFLICT,
                 detail=f"Username '{username}' is already taken. Please choose a different username."
             )
         current_user.username = username
@@ -269,7 +284,7 @@ def update_profile(
         conflict = db.query(User).filter(User.email == email).filter(User.id != current_user.id).first()
         if conflict:
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, 
+                status_code=status.HTTP_409_CONFLICT,
                 detail=f"Email '{email}' is already registered to another account."
             )
         current_user.email = email
@@ -357,13 +372,13 @@ def submit_password_reset(
         data = security.decode_access_token(payload.token)
     except HTTPException:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired reset token. Please request a new password reset."
         )
-    
+
     if data.get("purpose") != "reset":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid reset token. This token is not for password reset."
         )
 
@@ -371,7 +386,7 @@ def submit_password_reset(
     user: User | None = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="No account found with this email address."
         )
 
