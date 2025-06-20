@@ -33,7 +33,7 @@
         "react-markdown": "^10.1.0",
         "react-router-dom": "^6.21.1",
         "react-split-pane-2": "^0.1.36",
-        "react-syntax-highlighter": "^5.8.0",
+        "react-syntax-highlighter": "^15.6.1",
         "recharts": "^2.15.3",
         "rehype-katex": "^7.0.1",
         "remark-gfm": "^4.0.1",
