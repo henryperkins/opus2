@@ -15,241 +15,101 @@ export const useChat = (projectId) => {
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
   const wsRef = useRef(null);
-  const sessionCreatedRef = useRef(false);
-  const mountedRef = useRef(true);
-  const cleanupRef = useRef(false);
-  const initializingRef = useRef(false);
-  const currentProjectRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const maxReconnectAttempts = 5;
   const { user, loading: authLoading } = useAuth();
 
-  // Create chat session (once authenticated)
-  const createSession = useCallback(async () => {
-    if (authLoading || !user) {
-      console.log('Skipping session creation - authLoading:', authLoading, 'user:', user);
-      return null;
-    }
-    if (!projectId || sessionCreatedRef.current || cleanupRef.current) {
-      console.log(
-        'Skipping session creation - projectId:',
-        projectId,
-        'sessionCreated:',
-        sessionCreatedRef.current,
-        'cleanup:',
-        cleanupRef.current,
-      );
-      return null;
-    }
-
-    try {
-      sessionCreatedRef.current = true;
-      setError(null);
-
-      console.log('Creating session for project:', projectId);
-      const response = await client.post(`/api/chat/sessions`, {
-        project_id: projectId
-      });
-
-      console.log('Session creation response:', response.data);
-
-      if (mountedRef.current && !cleanupRef.current) {
-        setSessionId(response.data.id);
-        return response.data.id;
-      }
-
-      return null;
-    } catch (err) {
-      console.error('Failed to create session:', err);
-      sessionCreatedRef.current = false;
-      if (mountedRef.current && !cleanupRef.current) {
-        setError('Failed to create chat session');
-      }
-      return null;
-    }
-  }, [projectId, authLoading, user]);
-
-  // Exponential backoff for reconnection
-  const getReconnectDelay = useCallback((attemptNumber) => {
-    return Math.min(1000 * Math.pow(2, attemptNumber), 30000); // Max 30 seconds
-  }, []);
-
-  // Connect to WebSocket with reconnection logic
-  const connectWebSocket = useCallback((sessionId, isReconnect = false) => {
-    if (!sessionId || wsRef.current || cleanupRef.current || !mountedRef.current) return;
-
-    const wsUrl = `${WS_BASE_URL}/chat/ws/sessions/${sessionId}`;
-    console.log('Attempting WebSocket connection to:', wsUrl, isReconnect ? '(reconnect)' : '(initial)');
-    
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      if (mountedRef.current && !cleanupRef.current) {
-        setConnectionState('connected');
-        setReconnectAttempts(0); // Reset reconnect attempts on successful connection
-        setError(null);
-        console.log('WebSocket connected to session:', sessionId);
-      }
-    };
-
-    ws.onmessage = (event) => {
-      if (!mountedRef.current || cleanupRef.current) return;
-
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'message') {
-          setMessages(prev => [...prev, data.message]);
-        } else if (data.type === 'typing') {
-          setTypingUsers(prev => {
-            const newSet = new Set(prev);
-            if (data.typing) {
-              newSet.add(data.user_id);
-            } else {
-              newSet.delete(data.user_id);
-            }
-            return newSet;
-          });
-        }
-      } catch (err) {
-        console.error('Failed to parse WebSocket message:', err);
-      }
-    };
-
-    ws.onclose = (event) => {
-      wsRef.current = null;
-      if (mountedRef.current && !cleanupRef.current) {
-        console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
-        
-        // Only attempt reconnection for unexpected disconnections
-        if (event.code !== 1000 && event.code !== 1001 && reconnectAttempts < maxReconnectAttempts) {
-          setConnectionState('reconnecting');
-          const delay = getReconnectDelay(reconnectAttempts);
-          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
-          
-          setReconnectAttempts(prev => prev + 1);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (mountedRef.current && !cleanupRef.current) {
-              connectWebSocket(sessionId, true);
-            }
-          }, delay);
-        } else {
-          setConnectionState('disconnected');
-          if (reconnectAttempts >= maxReconnectAttempts) {
-            setError('Connection failed after maximum retry attempts');
-          }
-        }
-      }
-    };
-
-    ws.onerror = (event) => {
-      if (mountedRef.current && !cleanupRef.current) {
-        console.error('WebSocket error:', event);
-        setConnectionState('error');
-        setError('Connection error');
-      }
-    };
-  }, [reconnectAttempts, getReconnectDelay, maxReconnectAttempts]);
-
-  // Initialize session and WebSocket (once authenticated)
   useEffect(() => {
-    if (!projectId) {
-      setSessionId(null);
-      setMessages([]);
+    if (authLoading || !user || !projectId) {
       setConnectionState('disconnected');
       return;
     }
-    if (authLoading || !user) {
-      console.log('Skipping chat initialization - authLoading:', authLoading, 'user:', user);
-      return;
-    }
-    // If this is the same project, don't reinitialize
-    if (currentProjectRef.current === projectId && sessionCreatedRef.current) {
-      return;
-    }
-
-    // Clean up previous session if switching projects
-    if (currentProjectRef.current !== projectId) {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+  
+    let isCancelled = false;
+    let currentWs = null;
+  
+    const connect = async () => {
+      setConnectionState('connecting');
+      setError(null);
+  
+      try {
+        // 1. Create a new session
+        const sessionResponse = await client.post(`/api/chat/sessions`, {
+          project_id: projectId,
+        });
+  
+        if (isCancelled) return;
+  
+        const newSessionId = sessionResponse.data.id;
+        setSessionId(newSessionId);
+        setMessages([]); // Clear messages for new session
+  
+        // 2. Connect to WebSocket
+        const wsUrl = `${WS_BASE_URL}/chat/ws/sessions/${newSessionId}`;
+        const ws = new WebSocket(wsUrl);
+        currentWs = ws;
+        wsRef.current = ws;
+  
+        ws.onopen = () => {
+          if (isCancelled) return;
+          console.log('WebSocket connected to session:', newSessionId);
+          setConnectionState('connected');
+          setReconnectAttempts(0);
+        };
+  
+        ws.onmessage = (event) => {
+          if (isCancelled) return;
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'message') {
+              setMessages((prev) => [...prev, data.message]);
+            } else if (data.type === 'typing') {
+              setTypingUsers((prev) => {
+                const newSet = new Set(prev);
+                data.typing ? newSet.add(data.user_id) : newSet.delete(data.user_id);
+                return newSet;
+              });
+            }
+          } catch (err) {
+            console.error('Failed to parse WebSocket message:', err);
+          }
+        };
+  
+        ws.onclose = (event) => {
+          if (isCancelled) return;
+          console.log('WebSocket disconnected. Code:', event.code);
+          setConnectionState('disconnected');
+          // Reconnection logic can be added here if needed
+        };
+  
+        ws.onerror = (event) => {
+          if (isCancelled) return;
+          console.error('WebSocket error:', event);
+          setError('Connection error');
+          setConnectionState('error');
+        };
+  
+      } catch (err) {
+        if (isCancelled) return;
+        console.error('Failed to create session or connect:', err);
+        setError('Failed to initialize chat session');
+        setConnectionState('error');
       }
-      sessionCreatedRef.current = false;
+    };
+  
+    connect();
+  
+    return () => {
+      isCancelled = true;
+      if (currentWs) {
+        console.log('Closing WebSocket for session:', sessionId);
+        currentWs.close();
+      }
+      wsRef.current = null;
       setSessionId(null);
       setMessages([]);
-    }
-
-    // Prevent multiple initializations for the same project
-    if (initializingRef.current && currentProjectRef.current === projectId) {
-      return;
-    }
-
-    currentProjectRef.current = projectId;
-    cleanupRef.current = false;
-    initializingRef.current = true;
-    setConnectionState('connecting');
-
-    const initializeChat = async () => {
-      console.log('Initializing chat for project:', projectId);
-      
-      try {
-        const newSessionId = await createSession();
-        console.log('Created session:', newSessionId);
-
-        if (!cleanupRef.current && newSessionId && mountedRef.current && currentProjectRef.current === projectId) {
-          console.log('Connecting WebSocket for session:', newSessionId);
-          connectWebSocket(newSessionId);
-        } else {
-          console.log('Skipping WebSocket connection - cleanup:', cleanupRef.current, 'sessionId:', newSessionId, 'mounted:', mountedRef.current, 'currentProject:', currentProjectRef.current);
-          if (mountedRef.current) {
-            setConnectionState('disconnected');
-          }
-        }
-      } catch (error) {
-        console.error('Failed to initialize chat:', error);
-        if (mountedRef.current) {
-          setConnectionState('error');
-          setError('Failed to initialize chat session');
-        }
-      } finally {
-        initializingRef.current = false;
-      }
     };
-
-    initializeChat();
-
-    return () => {
-      cleanupRef.current = true;
-      initializingRef.current = false;
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-      console.log('Cleanup initiated for project:', projectId);
-    };
-  }, [projectId, authLoading, user]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      cleanupRef.current = true;
-      sessionCreatedRef.current = false;
-      initializingRef.current = false;
-      currentProjectRef.current = null;
-
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-    };
-  }, []);
+  }, [projectId, user, authLoading]); // Effect dependencies
 
   // Send message
   const sendMessage = useCallback((content, metadata = {}) => {

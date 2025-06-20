@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { searchAPI } from '../../api/search';
+import LoadingSpinner from '../common/LoadingSpinner';
 
 export default function DependencyGraph({ projectId, width = 800, height = 600 }) {
   const svgRef = useRef(null);
@@ -211,8 +212,7 @@ export default function DependencyGraph({ projectId, width = 800, height = 600 }
   if (loading) {
     return (
       <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-3 text-gray-600">Loading dependency graph...</span>
+        <LoadingSpinner label="Loading dependency graph..." showLabel={true} />
       </div>
     );
   }

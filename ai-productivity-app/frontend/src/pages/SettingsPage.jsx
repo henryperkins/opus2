@@ -12,6 +12,7 @@ import useAuthStore from '../stores/authStore';
 import ChangePasswordModal from '../components/modals/ChangePasswordModal';
 import Enable2FAModal from '../components/modals/Enable2FAModal';
 import AIProviderInfo from '../components/settings/AIProviderInfo';
+import LoadingSpinner from '../components/common/LoadingSpinner';
 
 function SettingsPage() {
   const { user, loading } = useAuth();
@@ -26,8 +27,7 @@ function SettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
-        <span className="text-lg text-blue-600">Loading…</span>
+        <LoadingSpinner size="lg" label="Loading..." showLabel={true} />
       </div>
     );
   }

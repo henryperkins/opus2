@@ -8,6 +8,7 @@ import Timeline from '../components/projects/Timeline';
 import ProjectFilters from '../components/projects/ProjectFilters';
 import useProjectStore from '../stores/projectStore';
 import { useAuth } from '../hooks/useAuth';
+import LoadingSpinner from '../components/common/LoadingSpinner';
 
 export default function ProjectDashboard() {
     const navigate = useNavigate();
@@ -223,8 +224,7 @@ export default function ProjectDashboard() {
                     <div className="flex-1">
                         {loading ? (
                             <div className="flex justify-center items-center py-12">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                                <span className="ml-3 text-gray-600">Loading projects...</span>
+                                <LoadingSpinner label="Loading projects..." showLabel={true} />
                             </div>
                         ) : error ? (
                             <div className="bg-red-50 border border-red-200 rounded-md p-4">

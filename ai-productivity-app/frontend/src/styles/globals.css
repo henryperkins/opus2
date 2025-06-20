@@ -498,4 +498,47 @@
   .shadow-strong {
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.16);
   }
+
+  .profile-header {
+    @apply flex items-center justify-between mb-6;
+  }
+  .profile-header h2 {
+    @apply text-2xl font-bold text-gray-900 dark:text-gray-100;
+  }
+  .edit-button {
+    @apply px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700;
+  }
+  .profile-form .form-group {
+    @apply mb-4;
+  }
+  .profile-form label {
+    @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
+  }
+  .profile-form input {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600;
+  }
+  .profile-form .form-actions {
+    @apply flex justify-end space-x-2 mt-6;
+  }
+  .save-button {
+    @apply px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700;
+  }
+  .cancel-button {
+    @apply px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50;
+  }
+  .profile-info .info-group {
+    @apply flex justify-between py-2 border-b border-gray-200 dark:border-gray-700;
+  }
+  .profile-info label {
+    @apply text-sm font-medium text-gray-600 dark:text-gray-400;
+  }
+  .profile-info span {
+    @apply text-sm text-gray-900 dark:text-gray-100;
+  }
+  .error-message {
+    @apply text-sm text-red-600 p-2 bg-red-50 rounded-md;
+  }
+  .success-message {
+    @apply text-sm text-green-600 p-2 bg-green-50 rounded-md;
+  }
 }
