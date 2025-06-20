@@ -12,6 +12,7 @@ import {
   useState,
   useRef,
 } from 'react';
+import { useAuth } from './useAuth';
 import useProjectStore from '../stores/projectStore';
 
 /* ------------------------------------------------------------------------- *
@@ -37,7 +38,7 @@ export function useProject(id) {
     updateProject,
     deleteProject,
     clearError,
-  } = useProjectStore((s) => s.actions);
+  } = useProjectStore();
 
   const currentProject = useProjectStore((s) => s.currentProject);
   const loadingStore = useProjectStore((s) => s.loading);
@@ -128,16 +129,16 @@ export function useProject(id) {
  * Manage timeline events for a project (auto-fetch on projectId change).
  */
 export function useProjectTimeline(projectId) {
-  const { fetchTimeline, addTimelineEvent } = useProjectStore(
-    (s) => s.actions,
-  );
+  const { fetchTimeline, addTimelineEvent, clearTimeline } = useProjectStore();
+  const { user, loading: authLoading } = useAuth();
   const timeline = useProjectStore((s) => s.timeline);
-  const loadingStore = useProjectStore((s) => s.loading);
-  const errorStore = useProjectStore((s) => s.error);
+  const timelineLoadingStore = useProjectStore((s) => s.timelineLoading);
+  const timelineErrorStore = useProjectStore((s) => s.timelineError);
 
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState(null);
   const lastFetchedRef = useRef(null);
+  const authFailedRef = useRef(false);
 
   const fetch = useCallback(async () => {
     if (!projectId) return;
@@ -166,32 +167,95 @@ export function useProjectTimeline(projectId) {
     [addTimelineEvent, projectId],
   );
 
-  /* auto-fetch with abort safety */
+  /* auto-fetch with abort safety, only on projectId change */
   useEffect(() => {
-    if (!projectId || lastFetchedRef.current === projectId) return;
+    if (!projectId) {
+      setIsLoading(false);
+      setLocalError(null);
+      clearTimeline(); // Clear timeline when no project
+      return;
+    }
+    
+    // Clear timeline when switching to a different project
+    if (lastFetchedRef.current && lastFetchedRef.current !== projectId) {
+      clearTimeline();
+    }
+    
+    // Wait for auth to complete but don't block indefinitely
+    if (authLoading) {
+      console.log('Skipping timeline fetch for projectId:', projectId, '– auth loading');
+      return;
+    }
+    
+    // If not authenticated, don't fail permanently - just skip this attempt
+    if (!user) {
+      console.log('Skipping timeline fetch for projectId:', projectId, '– unauthenticated');
+      setIsLoading(false);
+      // Don't set authFailedRef here - user might authenticate later
+      return;
+    }
+
+    console.log(
+      'useProjectTimeline useEffect triggered for projectId:',
+      projectId,
+      'lastFetched:', lastFetchedRef.current,
+      'authFailed:', authFailedRef.current,
+    );
 
     const abort = new AbortController();
     const load = async () => {
       setIsLoading(true);
       setLocalError(null);
       lastFetchedRef.current = projectId;
+      
       try {
         await fetchTimeline(projectId, { signal: abort.signal });
+        authFailedRef.current = false; // Reset on successful fetch
+        console.log('Timeline fetch successful for projectId:', projectId);
       } catch (err) {
-        if (!abort.signal.aborted) setLocalError(err.message);
+        if (!abort.signal.aborted) {
+          const errorMessage = err.response?.data?.detail || err.message || 'Failed to fetch timeline';
+          setLocalError(errorMessage);
+          
+          // Only block future requests for persistent auth failures, not transient errors
+          if (err.response?.status === 401) {
+            console.log('Authentication failed (401) for projectId:', projectId);
+            authFailedRef.current = true;
+          } else {
+            console.log('Timeline fetch failed (non-auth error):', errorMessage);
+            // Don't block future attempts for non-auth errors
+          }
+        }
       } finally {
         if (!abort.signal.aborted) setIsLoading(false);
       }
     };
 
-    load();
+    // Reset auth failed flag when switching projects or when user changes
+    if (lastFetchedRef.current !== projectId) {
+      authFailedRef.current = false;
+    }
+
+    // Don't fetch if permanently blocked by auth failure for this session
+    if (authFailedRef.current) {
+      console.log('Skipping timeline fetch due to auth failure for projectId:', projectId);
+      setIsLoading(false);
+      setLocalError('Authentication required');
+    } else if (lastFetchedRef.current !== projectId) {
+      console.log('Fetching timeline for projectId:', projectId);
+      load();
+    } else {
+      console.log('Skipping timeline fetch, already fetched for projectId:', projectId);
+      setIsLoading(false);
+    }
+
     return () => abort.abort();
-  }, [projectId, fetchTimeline]);
+  }, [projectId, fetchTimeline, authLoading, user]);
 
   return {
     timeline,
-    loading: isLoading || loadingStore,
-    error: localError || errorStore,
+    loading: isLoading || timelineLoadingStore,
+    error: localError || timelineErrorStore,
     fetch,
     addEvent,
     clearError: () => setLocalError(null),
@@ -206,7 +270,9 @@ export function useProjectTimeline(projectId) {
 function useDebouncedValue(value, delay = 300) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
+    // eslint-disable-next-line no-undef
     const t = setTimeout(() => setDebounced(value), delay);
+    // eslint-disable-next-line no-undef
     return () => clearTimeout(t);
   }, [value, delay]);
   return debounced;
@@ -229,7 +295,7 @@ export function useProjectSearch() {
     loading: s.loading,
     error: s.error,
   }));
-  const { fetchProjects, setFilters } = useProjectStore((s) => s.actions);
+  const { fetchProjects, setFilters } = useProjectStore();
 
   const [searchTerm, setSearchTerm] = useState(filters.search || '');
   const debouncedSearch = useDebouncedValue(searchTerm);
@@ -281,7 +347,7 @@ export function useProjectSearch() {
  * Validate and create projects.
  */
 export function useProjectCreation() {
-  const { createProject } = useProjectStore((s) => s.actions);
+  const { createProject } = useProjectStore();
   const { loading, error } = useProjectStore((s) => ({
     loading: s.loading,
     error: s.error,

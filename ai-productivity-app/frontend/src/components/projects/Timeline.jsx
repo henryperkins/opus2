@@ -4,15 +4,17 @@ import React, { useEffect, useState } from "react";
 import useProjectStore from "../../stores/projectStore";
 import TimelineEvent from "./TimelineEvent";
 import { toast } from '../common/Toast';
+import TimelineErrorBoundary from '../common/TimelineErrorBoundary';
 
 export default function Timeline({ projectId }) {
-  const { fetchTimeline, timeline, loading } = useProjectStore();
+  const { fetchTimeline, timeline, timelineLoading, timelineError, clearTimelineError } = useProjectStore();
   const [error, setError] = useState(null);
   const [filterType, setFilterType] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (projectId) {
+      clearTimelineError(); // Clear previous errors
       fetchTimeline(projectId).catch(e => {
         setError(e.message);
         toast.error('Failed to load timeline');
@@ -23,6 +25,8 @@ export default function Timeline({ projectId }) {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    setError(null);
+    clearTimelineError();
     try {
       await fetchTimeline(projectId);
       toast.success('Timeline refreshed');
@@ -42,7 +46,7 @@ export default function Timeline({ projectId }) {
     return event.event_type === filterType;
   });
 
-  if (loading) {
+  if (timelineLoading) {
     return (
       <div className="space-y-4">
         {[1,2,3].map(i => (
@@ -63,7 +67,8 @@ export default function Timeline({ projectId }) {
     );
   }
 
-  if (error) {
+  if (error || timelineError) {
+    const displayError = error || timelineError;
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <div className="flex items-center">
@@ -72,7 +77,7 @@ export default function Timeline({ projectId }) {
           </svg>
           <div>
             <h3 className="text-sm font-medium text-red-800">Timeline Error</h3>
-            <p className="text-sm text-red-600 mt-1">{error}</p>
+            <p className="text-sm text-red-600 mt-1">{displayError}</p>
           </div>
         </div>
         <button
@@ -98,50 +103,52 @@ export default function Timeline({ projectId }) {
   }
 
   return (
-    <div className="timeline-container">
-      {/* Timeline Controls */}
-      <div className="flex items-center justify-between mb-6 pb-3 border-b">
-        <div className="flex items-center space-x-2">
-          <h3 className="text-lg font-medium text-gray-900">Activity Timeline</h3>
-          <span className="text-sm text-gray-500">({filteredTimeline.length} events)</span>
-        </div>
-        
-        <div className="flex items-center space-x-3">
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="text-sm border rounded px-2 py-1"
-          >
-            <option value="all">All Events</option>
-            <option value="canvas">Canvas</option>
-            <option value="chat">Chat & Code</option>
-            <option value="system">System</option>
-            <option value="file_added">Files</option>
-          </select>
+    <TimelineErrorBoundary onRetry={handleRefresh}>
+      <div className="timeline-container">
+        {/* Timeline Controls */}
+        <div className="flex items-center justify-between mb-6 pb-3 border-b">
+          <div className="flex items-center space-x-2">
+            <h3 className="text-lg font-medium text-gray-900">Activity Timeline</h3>
+            <span className="text-sm text-gray-500">({filteredTimeline.length} events)</span>
+          </div>
           
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
-          >
-            {refreshing ? (
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            ) : (
-              'Refresh'
-            )}
-          </button>
+          <div className="flex items-center space-x-3">
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="text-sm border rounded px-2 py-1"
+            >
+              <option value="all">All Events</option>
+              <option value="canvas">Canvas</option>
+              <option value="chat">Chat & Code</option>
+              <option value="system">System</option>
+              <option value="file_added">Files</option>
+            </select>
+            
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+            >
+              {refreshing ? (
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : (
+                'Refresh'
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Timeline Events */}
+        <div className="timeline border-l-2 border-gray-200 pl-6">
+          {filteredTimeline.map(event => (
+            <TimelineEvent key={event.id} event={event} />
+          ))}
         </div>
       </div>
-
-      {/* Timeline Events */}
-      <div className="timeline border-l-2 border-gray-200 pl-6">
-        {filteredTimeline.map(event => (
-          <TimelineEvent key={event.id} event={event} />
-        ))}
-      </div>
-    </div>
+    </TimelineErrorBoundary>
   );
 }

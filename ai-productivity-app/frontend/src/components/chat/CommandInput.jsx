@@ -5,7 +5,7 @@ import { toast } from '../common/Toast';
 import { useProjectTimeline } from '../../hooks/useProjects';
 import PropTypes from 'prop-types';
 
-export default function CommandInput({ onSend, onTyping, projectId }) {
+export default function CommandInput({ onSend, onTyping = null, projectId }) {
   const { addEvent } = useProjectTimeline(projectId);
   const [message, setMessage] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -50,16 +50,22 @@ export default function CommandInput({ onSend, onTyping, projectId }) {
 
     await onSend(command, { ...metadata, isCommand: true });
 
-    await addEvent({
-      event_type: 'chat_message',
-      title: `Command executed: ${cmd}`,
-      description: args.length ? `Arguments: ${args.join(' ')}` : 'No arguments',
-      metadata: {
-        message_type: 'command',
-        command: cmd,
-        arguments: args,
-      },
-    });
+    // Create timeline event (non-blocking)
+    try {
+      await addEvent({
+        event_type: 'chat_message',
+        title: `Command executed: ${cmd}`,
+        description: args.length ? `Arguments: ${args.join(' ')}` : 'No arguments',
+        metadata: {
+          message_type: 'command',
+          command: cmd,
+          arguments: args,
+        },
+      });
+    } catch (error) {
+      console.warn('Failed to create timeline event for command:', error);
+      // Don't block chat functionality - timeline events are non-critical
+    }
   }, [onSend, addEvent]);
 
   const handleSubmit = async (e) => {
@@ -77,16 +83,22 @@ export default function CommandInput({ onSend, onTyping, projectId }) {
         await handleCommand(message, metadata);
       } else {
         await onSend(message, metadata);
-        await addEvent({
-          event_type: 'chat_message',
-          title: 'Chat message sent',
-          description: message.slice(0, 50),
-          metadata: {
-            message_type: 'user',
-            message_length: message.length,
-            referenced_files: metadata.referenced_files,
-          },
-        });
+        // Create timeline event (non-blocking)
+        try {
+          await addEvent({
+            event_type: 'chat_message',
+            title: 'Chat message sent',
+            description: message.slice(0, 50),
+            metadata: {
+              message_type: 'user',
+              message_length: message.length,
+              referenced_files: metadata.referenced_files,
+            },
+          });
+        } catch (error) {
+          console.warn('Failed to create timeline event for message:', error);
+          // Don't block chat functionality - timeline events are non-critical
+        }
       }
 
       setMessage('');
@@ -223,6 +235,3 @@ CommandInput.propTypes = {
   projectId: PropTypes.string.isRequired,
 };
 
-CommandInput.defaultProps = {
-  onTyping: null,
-};

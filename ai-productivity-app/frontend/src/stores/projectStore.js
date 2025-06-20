@@ -13,7 +13,9 @@ const useProjectStore = create((set, get) => ({
   currentProject: null,
   timeline: [],
   loading: false,
+  timelineLoading: false,
   error: null,
+  timelineError: null,
   filters: {
     status: null,
     tags: [],
@@ -23,220 +25,223 @@ const useProjectStore = create((set, get) => ({
   },
   totalProjects: 0,
 
-  // Actions
-  actions: {
-    setFilters: (newFilters) => {
-      set(state => ({
-        filters: { ...state.filters, ...newFilters, page: 1 }
-      }));
-    },
+  // Actions (flattened to root level for easier access)
+  setFilters: (newFilters) => {
+    set(state => ({
+      filters: { ...state.filters, ...newFilters, page: 1 }
+    }));
+  },
 
-    setPage: (page) => {
-      set(state => ({
-        filters: { ...state.filters, page }
-      }));
-    },
+  setPage: (page) => {
+    set(state => ({
+      filters: { ...state.filters, page }
+    }));
+  },
 
-    fetchProjects: async () => {
-      const { filters } = get();
-      set({ loading: true, error: null });
+  fetchProjects: async () => {
+    const { filters } = get();
+    set({ loading: true, error: null });
 
-      try {
-        const response = await projectAPI.list(filters);
-        set({
-          projects: response.items,
-          totalProjects: response.total,
-          loading: false
-        });
-      } catch (error) {
-        set({
-          error: error.response?.data?.detail || 'Failed to fetch projects',
-          loading: false
-        });
-      }
-    },
+    try {
+      const response = await projectAPI.list(filters);
+      set({
+        projects: response.items,
+        totalProjects: response.total,
+        loading: false
+      });
+    } catch (error) {
+      set({
+        error: error.response?.data?.detail || 'Failed to fetch projects',
+        loading: false
+      });
+    }
+  },
 
-    fetchProject: async (id) => {
-      set({ loading: true, error: null });
+  fetchProject: async (id) => {
+    set({ loading: true, error: null });
 
-      try {
-        const project = await projectAPI.get(id);
-        set({
-          currentProject: project,
-          loading: false
-        });
-        return project;
-      } catch (error) {
-        set({
-          error: error.response?.data?.detail || 'Failed to fetch project',
-          loading: false
-        });
-        throw error;
-      }
-    },
+    try {
+      const project = await projectAPI.get(id);
+      set({
+        currentProject: project,
+        loading: false
+      });
+      return project;
+    } catch (error) {
+      set({
+        error: error.response?.data?.detail || 'Failed to fetch project',
+        loading: false
+      });
+      throw error;
+    }
+  },
 
-    createProject: async (data) => {
-      set({ loading: true, error: null });
+  createProject: async (data) => {
+    set({ loading: true, error: null });
 
-      // Optimistic update
-      const tempId = `temp_${Date.now()}`;
-      const tempProject = {
-        ...data,
-        id: tempId,
-        status: data.status || 'active',
-        owner: { id: 0, username: 'You' },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+    // Optimistic update
+    const tempId = `temp_${Date.now()}`;
+    const tempProject = {
+      ...data,
+      id: tempId,
+      status: data.status || 'active',
+      owner: { id: 0, username: 'You' },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
-      set(state => ({
-        projects: [tempProject, ...state.projects],
-        totalProjects: state.totalProjects + 1
-      }));
+    set(state => ({
+      projects: [tempProject, ...state.projects],
+      totalProjects: state.totalProjects + 1
+    }));
 
-      try {
-        const project = await projectAPI.create(data);
+    try {
+      const project = await projectAPI.create(data);
 
-        // Replace temp with real project
-        set(state => ({
-          projects: state.projects.map(p =>
-            p.id === tempId ? project : p
-          ),
-          loading: false
-        }));
-
-        return project;
-      } catch (error) {
-        // Rollback optimistic update
-        set(state => ({
-          projects: state.projects.filter(p => p.id !== tempId),
-          totalProjects: state.totalProjects - 1,
-          error: error.response?.data?.detail || 'Failed to create project',
-          loading: false
-        }));
-        throw error;
-      }
-    },
-
-    updateProject: async (id, data) => {
-      set({ loading: true, error: null });
-
-      // Store original for rollback
-      const { projects } = get();
-      const original = projects.find(p => p.id === id);
-
-      if (!original) {
-        set({ error: 'Project not found', loading: false });
-        return;
-      }
-
-      // Optimistic update
+      // Replace temp with real project
       set(state => ({
         projects: state.projects.map(p =>
-          p.id === id ? { ...p, ...data, updated_at: new Date().toISOString() } : p
-        )
+          p.id === tempId ? project : p
+        ),
+        loading: false
       }));
 
-      try {
-        const updated = await projectAPI.update(id, data);
-
-        // Replace with server response
-        set(state => ({
-          projects: state.projects.map(p => p.id === id ? updated : p),
-          currentProject: state.currentProject?.id === id ? updated : state.currentProject,
-          loading: false
-        }));
-
-        return updated;
-      } catch (error) {
-        // Rollback
-        set(state => ({
-          projects: state.projects.map(p => p.id === id ? original : p),
-          error: error.response?.data?.detail || 'Failed to update project',
-          loading: false
-        }));
-        throw error;
-      }
-    },
-
-    deleteProject: async (id) => {
-      set({ loading: true, error: null });
-
-      // Store for rollback
-      const { projects, totalProjects } = get();
-      const original = projects.find(p => p.id === id);
-      const originalIndex = projects.findIndex(p => p.id === id);
-
-      // Optimistic delete
+      return project;
+    } catch (error) {
+      // Rollback optimistic update
       set(state => ({
-        projects: state.projects.filter(p => p.id !== id),
-        totalProjects: state.totalProjects - 1
+        projects: state.projects.filter(p => p.id !== tempId),
+        totalProjects: state.totalProjects - 1,
+        error: error.response?.data?.detail || 'Failed to create project',
+        loading: false
+      }));
+      throw error;
+    }
+  },
+
+  updateProject: async (id, data) => {
+    set({ loading: true, error: null });
+
+    // Store original for rollback
+    const { projects } = get();
+    const original = projects.find(p => p.id === id);
+
+    if (!original) {
+      set({ error: 'Project not found', loading: false });
+      return;
+    }
+
+    // Optimistic update
+    set(state => ({
+      projects: state.projects.map(p =>
+        p.id === id ? { ...p, ...data, updated_at: new Date().toISOString() } : p
+      )
+    }));
+
+    try {
+      const updated = await projectAPI.update(id, data);
+
+      // Replace with server response
+      set(state => ({
+        projects: state.projects.map(p => p.id === id ? updated : p),
+        currentProject: state.currentProject?.id === id ? updated : state.currentProject,
+        loading: false
       }));
 
-      try {
-        await projectAPI.delete(id);
-        set({ loading: false });
-      } catch (error) {
-        // Rollback
-        if (original && originalIndex >= 0) {
-          set(state => {
-            const newProjects = [...state.projects];
-            newProjects.splice(originalIndex, 0, original);
-            return {
-              projects: newProjects,
-              totalProjects: totalProjects,
-              error: error.response?.data?.detail || 'Failed to delete project',
-              loading: false
-            };
-          });
-        }
-        throw error;
-      }
-    },
+      return updated;
+    } catch (error) {
+      // Rollback
+      set(state => ({
+        projects: state.projects.map(p => p.id === id ? original : p),
+        error: error.response?.data?.detail || 'Failed to update project',
+        loading: false
+      }));
+      throw error;
+    }
+  },
 
-    archiveProject: async (id) => {
-      const { actions } = get();
-      return actions.updateProject(id, { status: 'archived' });
-    },
+  deleteProject: async (id) => {
+    set({ loading: true, error: null });
 
-    fetchTimeline: async (projectId) => {
-      set({ loading: true, error: null });
+    // Store for rollback
+    const { projects, totalProjects } = get();
+    const original = projects.find(p => p.id === id);
+    const originalIndex = projects.findIndex(p => p.id === id);
 
-      try {
-        const timeline = await projectAPI.timeline(projectId);
-        set({
-          timeline,
-          loading: false
+    // Optimistic delete
+    set(state => ({
+      projects: state.projects.filter(p => p.id !== id),
+      totalProjects: state.totalProjects - 1
+    }));
+
+    try {
+      await projectAPI.delete(id);
+      set({ loading: false });
+    } catch (error) {
+      // Rollback
+      if (original && originalIndex >= 0) {
+        set(state => {
+          const newProjects = [...state.projects];
+          newProjects.splice(originalIndex, 0, original);
+          return {
+            projects: newProjects,
+            totalProjects: totalProjects,
+            error: error.response?.data?.detail || 'Failed to delete project',
+            loading: false
+          };
         });
-      } catch (error) {
-        set({
-          error: error.response?.data?.detail || 'Failed to fetch timeline',
-          loading: false
-        });
       }
-    },
+      throw error;
+    }
+  },
 
-    addTimelineEvent: async (projectId, eventData) => {
-      set({ loading: true, error: null });
+  archiveProject: async (id) => {
+    const { updateProject } = get();
+    return updateProject(id, { status: 'archived' });
+  },
 
-      try {
-        const newEvent = await projectAPI.addTimelineEvent(projectId, eventData);
-        set(state => ({
-          timeline: [...state.timeline, newEvent].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)),
-          loading: false
-        }));
-        return newEvent;
-      } catch (error) {
-        set({
-          error: error.response?.data?.detail || 'Failed to add timeline event',
-          loading: false
-        });
-        throw error;
-      }
-    },
+  unarchiveProject: async (id) => {
+    const { updateProject } = get();
+    return updateProject(id, { status: 'active' });
+  },
 
-    clearError: () => set({ error: null }),
-  }
+  fetchTimeline: async (projectId) => {
+    set({ timelineLoading: true, timelineError: null });
+
+    try {
+      const timeline = await projectAPI.getTimeline(projectId);
+      set({
+        timeline,
+        timelineLoading: false
+      });
+    } catch (error) {
+      set({
+        timelineError: error.response?.data?.detail || 'Failed to fetch timeline',
+        timelineLoading: false
+      });
+      throw error; // Re-throw to allow caller to handle
+    }
+  },
+
+  addTimelineEvent: async (projectId, eventData) => {
+    // Don't set loading state for adding events - it's non-blocking
+    try {
+      const newEvent = await projectAPI.addTimelineEvent(projectId, eventData);
+      set(state => ({
+        timeline: [...state.timeline, newEvent].sort((a, b) => new Date(b.created_at || b.timestamp) - new Date(a.created_at || a.timestamp))
+      }));
+      return newEvent;
+    } catch (error) {
+      set({
+        timelineError: error.response?.data?.detail || 'Failed to add timeline event'
+      });
+      throw error;
+    }
+  },
+
+  clearError: () => set({ error: null }),
+  clearTimelineError: () => set({ timelineError: null }),
+  clearTimeline: () => set({ timeline: [], timelineError: null, timelineLoading: false })
 }));
 
 export default useProjectStore;

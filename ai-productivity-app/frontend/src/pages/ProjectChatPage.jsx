@@ -141,12 +141,18 @@ export default function ProjectChatPage() {
       ''
     );
     try {
-      await addEvent({
-        event_type: 'updated',
-        title: `Edited ${selectedFile.path}`,
-        description: 'Code updated via editor',
-        metadata: { file_path: selectedFile.path, diff: patch }
-      });
+      // Create timeline event (non-blocking)
+      try {
+        await addEvent({
+          event_type: 'updated',
+          title: `Edited ${selectedFile.path}`,
+          description: 'Code updated via editor',
+          metadata: { file_path: selectedFile.path, diff: patch }
+        });
+      } catch (timelineError) {
+        console.warn('Failed to create timeline event for file edit:', timelineError);
+        // Continue with saving - timeline events are non-critical
+      }
       setOriginalContent(editorContent);
     } catch (err) {
       console.error('Failed to save diff:', err);
@@ -215,8 +221,15 @@ export default function ProjectChatPage() {
       )}
 
       {connectionState !== 'connected' && (
-        <div className="px-4 py-2 bg-yellow-50 text-yellow-800 text-sm">
-          {connectionState === 'connecting' ? 'Connecting...' : 'Disconnected'}
+        <div className={`px-4 py-2 text-sm ${
+          connectionState === 'error' ? 'bg-red-50 text-red-800' :
+          connectionState === 'reconnecting' ? 'bg-orange-50 text-orange-800' :
+          'bg-yellow-50 text-yellow-800'
+        }`}>
+          {connectionState === 'connecting' ? 'Connecting...' : 
+           connectionState === 'reconnecting' ? 'Reconnecting...' :
+           connectionState === 'error' ? 'Connection error' :
+           'Disconnected'}
         </div>
       )}
 

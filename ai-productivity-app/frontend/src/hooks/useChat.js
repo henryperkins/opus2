@@ -1,8 +1,10 @@
 /* global WebSocket */
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from './useAuth';
 import client from '../api/client';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/api';
 
 export const useChat = (projectId) => {
   const [sessionId, setSessionId] = useState(null);
@@ -10,6 +12,7 @@ export const useChat = (projectId) => {
   const [connectionState, setConnectionState] = useState('disconnected');
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [error, setError] = useState(null);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
   const wsRef = useRef(null);
   const sessionCreatedRef = useRef(false);
@@ -17,11 +20,25 @@ export const useChat = (projectId) => {
   const cleanupRef = useRef(false);
   const initializingRef = useRef(false);
   const currentProjectRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  const maxReconnectAttempts = 5;
+  const { user, loading: authLoading } = useAuth();
 
-  // Create chat session
+  // Create chat session (once authenticated)
   const createSession = useCallback(async () => {
+    if (authLoading || !user) {
+      console.log('Skipping session creation - authLoading:', authLoading, 'user:', user);
+      return null;
+    }
     if (!projectId || sessionCreatedRef.current || cleanupRef.current) {
-      console.log('Skipping session creation - projectId:', projectId, 'sessionCreated:', sessionCreatedRef.current, 'cleanup:', cleanupRef.current);
+      console.log(
+        'Skipping session creation - projectId:',
+        projectId,
+        'sessionCreated:',
+        sessionCreatedRef.current,
+        'cleanup:',
+        cleanupRef.current,
+      );
       return null;
     }
 
@@ -50,20 +67,28 @@ export const useChat = (projectId) => {
       }
       return null;
     }
-  }, [projectId]);
+  }, [projectId, authLoading, user]);
 
-  // Connect to WebSocket
-  const connectWebSocket = useCallback((sessionId) => {
+  // Exponential backoff for reconnection
+  const getReconnectDelay = useCallback((attemptNumber) => {
+    return Math.min(1000 * Math.pow(2, attemptNumber), 30000); // Max 30 seconds
+  }, []);
+
+  // Connect to WebSocket with reconnection logic
+  const connectWebSocket = useCallback((sessionId, isReconnect = false) => {
     if (!sessionId || wsRef.current || cleanupRef.current || !mountedRef.current) return;
 
-    const wsUrl = `ws://localhost:8000/api/chat/ws/sessions/${sessionId}`;
-    console.log('Attempting WebSocket connection to:', wsUrl);
+    const wsUrl = `${WS_BASE_URL}/chat/ws/sessions/${sessionId}`;
+    console.log('Attempting WebSocket connection to:', wsUrl, isReconnect ? '(reconnect)' : '(initial)');
+    
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       if (mountedRef.current && !cleanupRef.current) {
         setConnectionState('connected');
+        setReconnectAttempts(0); // Reset reconnect attempts on successful connection
+        setError(null);
         console.log('WebSocket connected to session:', sessionId);
       }
     };
@@ -93,11 +118,29 @@ export const useChat = (projectId) => {
     };
 
     ws.onclose = (event) => {
-      if (mountedRef.current && !cleanupRef.current) {
-        setConnectionState('disconnected');
-        console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
-      }
       wsRef.current = null;
+      if (mountedRef.current && !cleanupRef.current) {
+        console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
+        
+        // Only attempt reconnection for unexpected disconnections
+        if (event.code !== 1000 && event.code !== 1001 && reconnectAttempts < maxReconnectAttempts) {
+          setConnectionState('reconnecting');
+          const delay = getReconnectDelay(reconnectAttempts);
+          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
+          
+          setReconnectAttempts(prev => prev + 1);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (mountedRef.current && !cleanupRef.current) {
+              connectWebSocket(sessionId, true);
+            }
+          }, delay);
+        } else {
+          setConnectionState('disconnected');
+          if (reconnectAttempts >= maxReconnectAttempts) {
+            setError('Connection failed after maximum retry attempts');
+          }
+        }
+      }
     };
 
     ws.onerror = (event) => {
@@ -107,9 +150,9 @@ export const useChat = (projectId) => {
         setError('Connection error');
       }
     };
-  }, []);
+  }, [reconnectAttempts, getReconnectDelay, maxReconnectAttempts]);
 
-  // Initialize session and WebSocket
+  // Initialize session and WebSocket (once authenticated)
   useEffect(() => {
     if (!projectId) {
       setSessionId(null);
@@ -117,7 +160,10 @@ export const useChat = (projectId) => {
       setConnectionState('disconnected');
       return;
     }
-
+    if (authLoading || !user) {
+      console.log('Skipping chat initialization - authLoading:', authLoading, 'user:', user);
+      return;
+    }
     // If this is the same project, don't reinitialize
     if (currentProjectRef.current === projectId && sessionCreatedRef.current) {
       return;
@@ -176,9 +222,13 @@ export const useChat = (projectId) => {
     return () => {
       cleanupRef.current = true;
       initializingRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
       console.log('Cleanup initiated for project:', projectId);
     };
-  }, [projectId]);
+  }, [projectId, authLoading, user]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -188,6 +238,11 @@ export const useChat = (projectId) => {
       sessionCreatedRef.current = false;
       initializingRef.current = false;
       currentProjectRef.current = null;
+
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
 
       if (wsRef.current) {
         wsRef.current.close();
