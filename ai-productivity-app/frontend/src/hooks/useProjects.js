@@ -140,18 +140,21 @@ export function useProjectTimeline(projectId) {
   const lastFetchedRef = useRef(null);
   const authFailedRef = useRef(false);
 
+  // Stable reference to fetchTimeline to avoid unnecessary re-renders
+  const stableFetchTimeline = useCallback(fetchTimeline, []);
+
   const fetch = useCallback(async () => {
     if (!projectId) return;
     setIsLoading(true);
     setLocalError(null);
     try {
-      await fetchTimeline(projectId);
+      await stableFetchTimeline(projectId);
     } catch (err) {
       setLocalError(err.message);
     } finally {
       setIsLoading(false);
     }
-  }, [fetchTimeline, projectId]);
+  }, [stableFetchTimeline, projectId]);
 
   const addEvent = useCallback(
     async (eventData) => {
@@ -209,7 +212,7 @@ export function useProjectTimeline(projectId) {
       lastFetchedRef.current = projectId;
       
       try {
-        await fetchTimeline(projectId, { signal: abort.signal });
+        await stableFetchTimeline(projectId, { signal: abort.signal });
         authFailedRef.current = false; // Reset on successful fetch
         console.log('Timeline fetch successful for projectId:', projectId);
       } catch (err) {
@@ -250,7 +253,7 @@ export function useProjectTimeline(projectId) {
     }
 
     return () => abort.abort();
-  }, [projectId, fetchTimeline, authLoading, user]);
+  }, [projectId, stableFetchTimeline, authLoading, user]);
 
   return {
     timeline,
