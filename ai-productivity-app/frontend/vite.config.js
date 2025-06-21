@@ -49,17 +49,24 @@ export default defineConfig({
     port: parseInt(process.env.PORT) || 5173, // eslint-disable-line no-undef
     strictPort: false,
     allowedHosts: ['localhost', '127.0.0.1', 'lakefrontdigital.io'],
-    // Only proxy when using localhost backend
-    ...(backendTarget.includes('localhost') && {
-      proxy: {
-        '/api': {
-          target: backendTarget,
-          changeOrigin: true,
-          ws: true,
-          rewrite: (p) => p,
-        },
-      },
-    }),
+    // HMR configuration for reverse proxy
+    hmr: {
+      port: 5173,
+      host: 'lakefrontdigital.io',
+      clientPort: 443, // Use HTTPS port for client connections
+      protocol: 'wss', // Use secure WebSocket
+    },
+    // Disable proxy since NGINX handles API routing
+    // ...(backendTarget.includes('localhost') && {
+    //   proxy: {
+    //     '/api': {
+    //       target: backendTarget,
+    //       changeOrigin: true,
+    //       ws: true,
+    //       rewrite: (p) => p,
+    //     },
+    //   },
+    // }),
   },
 
   // Production build
