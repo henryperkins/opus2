@@ -1,4 +1,4 @@
-// pages/EnhancedChatPage.jsx
+// pages/ChatPage.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
@@ -37,7 +37,7 @@ import { Brain, Settings, Search, FileText, BarChart2, Sparkles } from 'lucide-r
 // Types - Commented out for JSX compatibility
 // import { createCitation } from '../types/knowledge';
 
-export default function EnhancedChatPage() {
+export default function ChatPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const user = useUser();
@@ -499,17 +499,8 @@ export default function EnhancedChatPage() {
       <div className="flex-1 flex overflow-hidden">
           {splitView ? (
             <SplitPane
-              split="vertical"
-              minSize={400}
-              defaultSize="50%"
-              resizerStyle={{
-                background: '#e5e7eb',
-                width: '4px',
-                cursor: 'col-resize'
-              }}
               left={chatPanel}
               right={editorPanel}
-              children={[chatPanel, editorPanel]}
             />
           ) : (
             chatPanel

@@ -48,7 +48,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: parseInt(process.env.PORT) || 5173, // eslint-disable-line no-undef
     strictPort: false,
-    allowedHosts: ['localhost', '127.0.0.1'],
+    allowedHosts: ['localhost', '127.0.0.1', 'lakefrontdigital.io'],
     // Only proxy when using localhost backend
     ...(backendTarget.includes('localhost') && {
       proxy: {
