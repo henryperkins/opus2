@@ -10,8 +10,15 @@ import { useResponseQualityTracking } from '../components/analytics/ResponseQual
 
 // Components
 import Header from '../components/common/Header';
-import SplitPane from '../components/common/SplitPane';
+import ResponsiveSplitPane from '../components/common/ResponsiveSplitPane';
+import MobileBottomSheet from '../components/common/MobileBottomSheet';
+import SkeletonLoader from '../components/common/SkeletonLoader';
+import ErrorBoundary from '../components/common/ErrorBoundary';
+import EmptyState from '../components/common/EmptyState';
 import MonacoEditor from '@monaco-editor/react';
+
+// Hooks
+import useMediaQuery from '../hooks/useMediaQuery';
 
 // Phase 1 - Knowledge Integration
 import KnowledgeContextPanel from '../components/knowledge/KnowledgeContextPanel';
@@ -41,6 +48,7 @@ export default function ChatPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const user = useUser();
+  const { isMobile, isTablet, isTouchDevice } = useMediaQuery();
 
   // Core hooks
   const projectData = useProject(projectId);
@@ -297,26 +305,40 @@ export default function ChatPage() {
     );
   };
 
+  // Loading state with context-aware skeleton
   if (projectLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gray-50">
+        <ErrorBoundary>
+          <div className="flex items-center justify-center min-h-screen">
+            <SkeletonLoader
+              type="websocket-connecting"
+              className="max-w-md"
+            />
+          </div>
+        </ErrorBoundary>
       </div>
     );
   }
 
+  // Project not found with enhanced error state
   if (!project) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900">Project not found</h2>
-          <button
-            onClick={() => navigate('/projects')}
-            className="mt-4 text-blue-600 hover:text-blue-800"
-          >
-            Back to Projects
-          </button>
-        </div>
+      <div className="min-h-screen bg-gray-50">
+        <ErrorBoundary>
+          <div className="flex items-center justify-center min-h-screen">
+            <EmptyState
+              type="projects"
+              title="Project not found"
+              description="The requested project could not be found or you don't have access to it."
+              action={{
+                text: "Back to Projects",
+                onClick: () => navigate('/projects'),
+                variant: 'primary'
+              }}
+            />
+          </div>
+        </ErrorBoundary>
       </div>
     );
   }
@@ -338,20 +360,22 @@ export default function ChatPage() {
           </div>
 
           <div className="flex items-center space-x-2">
-            {/* Model Switcher */}
+            {/* Model Switcher - Responsive sizing */}
             <ModelSwitcher
-              compact
+              compact={isTouchDevice}
+              className={isTouchDevice ? "touch-target" : ""}
               onModelChange={(model) => console.log('Model changed:', model)}
             />
 
-            {/* Feature Toggles */}
+            {/* Feature Toggles - Touch-friendly on mobile */}
             <button
               onClick={() => setShowKnowledgePanel(!showKnowledgePanel)}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-2 rounded-lg transition-colors touch-target ${
                 showKnowledgePanel
                   ? 'bg-blue-100 text-blue-600'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
+              style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
               title="Knowledge Context"
             >
               <FileText className="w-5 h-5" />
@@ -359,11 +383,12 @@ export default function ChatPage() {
 
             <button
               onClick={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-2 rounded-lg transition-colors touch-target ${
                 showKnowledgeAssistant
                   ? 'bg-blue-100 text-blue-600'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
+              style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
               title="AI Assistant"
             >
               <Brain className="w-5 h-5" />
@@ -371,7 +396,8 @@ export default function ChatPage() {
 
             <button
               onClick={() => setShowSearch(true)}
-              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg"
+              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg touch-target"
+              style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
               title="Search Knowledge Base"
             >
               <Search className="w-5 h-5" />
@@ -379,11 +405,12 @@ export default function ChatPage() {
 
             <button
               onClick={() => setShowAnalytics(!showAnalytics)}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-2 rounded-lg transition-colors touch-target ${
                 showAnalytics
                   ? 'bg-purple-100 text-purple-600'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
+              style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
               title="Analytics"
             >
               <BarChart2 className="w-5 h-5" />
@@ -391,7 +418,8 @@ export default function ChatPage() {
 
             <button
               onClick={() => setShowPromptManager(true)}
-              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg"
+              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg touch-target"
+              style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
               title="Prompt Templates"
             >
               <Settings className="w-5 h-5" />
@@ -496,20 +524,99 @@ export default function ChatPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
 
-      <div className="flex-1 flex overflow-hidden">
+      <ErrorBoundary>
+        <div className="flex-1 flex overflow-hidden">
+          {/* Responsive Layout */}
           {splitView ? (
-            <SplitPane
+            <ResponsiveSplitPane
               left={chatPanel}
               right={editorPanel}
+              leftTitle="Chat"
+              rightTitle={currentFile || "Editor"}
+              orientation="horizontal"
+              defaultSize="60%"
+              minSize={isMobile ? 300 : 400}
+              className="h-full"
             />
           ) : (
-            chatPanel
+            <div className="h-full">
+              {chatPanel}
+            </div>
           )}
-      </div>
+        </div>
 
-      {/* Floating Components */}
+        {/* Mobile Knowledge Panel as Bottom Sheet */}
+        {isMobile && (
+          <MobileBottomSheet
+            isOpen={showKnowledgePanel}
+            onClose={() => setShowKnowledgePanel(false)}
+            title="Knowledge Context"
+            snapPoints={[0.3, 0.6, 0.8]}
+            initialSnap={0.6}
+          >
+            <div className="p-4">
+              <KnowledgeContextPanel
+                query={knowledgeChat.activeQuery}
+                projectId={projectId}
+                onDocumentSelect={(doc) => knowledgeChat.toggleItemSelection(doc.id)}
+                onCodeSelect={(snippet) => knowledgeChat.toggleItemSelection(snippet.id)}
+              />
+            </div>
+          </MobileBottomSheet>
+        )}
 
-      {/* Knowledge Assistant */}
+        {/* Mobile Search as Bottom Sheet */}
+        {isMobile && showSearch && (
+          <MobileBottomSheet
+            isOpen={showSearch}
+            onClose={() => setShowSearch(false)}
+            title="Knowledge Search"
+            snapPoints={[0.4, 0.7, 0.9]}
+            initialSnap={0.7}
+          >
+            <SmartKnowledgeSearch
+              projectId={projectId}
+              onResultSelect={handleSearchResultSelect}
+              onClose={() => setShowSearch(false)}
+              isMobile={true}
+            />
+          </MobileBottomSheet>
+        )}
+
+        {/* Desktop modals remain as overlays */}
+        {!isMobile && showSearch && (
+          <SmartKnowledgeSearch
+            projectId={projectId}
+            onResultSelect={handleSearchResultSelect}
+            onClose={() => setShowSearch(false)}
+          />
+        )}
+
+        {/* Prompt Manager Modal */}
+        {showPromptManager && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className={`bg-white rounded-lg max-h-[90vh] overflow-y-auto ${
+              isMobile ? 'w-full max-w-full m-4' : 'max-w-6xl w-full'
+            }`}>
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-bold">Prompt Templates</h2>
+                  <button
+                    onClick={() => setShowPromptManager(false)}
+                    className="text-gray-500 hover:text-gray-700 touch-target"
+                    style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <PromptManager />
+              </div>
+            </div>
+          </div>
+        )}
+      </ErrorBoundary>
+
+      {/* Knowledge Assistant - Responsive positioning */}
       <KnowledgeAssistant
         projectId={projectId}
         message={messages.length > 0 ? messages[messages.length - 1].content : ''}
@@ -520,37 +627,9 @@ export default function ChatPage() {
           console.log('Context added:', context);
         }}
         isVisible={showKnowledgeAssistant}
-        position="right"
+        position={isMobile ? "bottom" : "right"}
+        isMobile={isMobile}
       />
-
-      {/* Search Modal */}
-      {showSearch && (
-        <SmartKnowledgeSearch
-          projectId={projectId}
-          onResultSelect={handleSearchResultSelect}
-          onClose={() => setShowSearch(false)}
-        />
-      )}
-
-      {/* Prompt Manager Modal */}
-      {showPromptManager && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold">Prompt Templates</h2>
-                <button
-                  onClick={() => setShowPromptManager(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  ✕
-                </button>
-              </div>
-              <PromptManager />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

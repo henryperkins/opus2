@@ -105,7 +105,7 @@ export const renderingAPI = {
 
         // Create EventSource for real-time streaming
         const eventSource = new EventSource(
-            `${client.defaults.baseURL}/api/rendering/stream?${params}`,
+            `/api/rendering/stream?${params}`,
             { withCredentials: true }
         );
 

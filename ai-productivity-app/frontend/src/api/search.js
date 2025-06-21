@@ -1,10 +1,11 @@
 // api/search.js
-import axios from 'axios';
+import client from './client';
 // Type imports removed (SearchOptions, SearchResults, DocumentMatch, KnowledgeSource)
 
 class SearchAPI {
   constructor() {
-    this._baseURL = '/api';
+    // Base URL is already set in client.js, we just need the API path
+    this._baseURL = 'api';
   }
 
   /**
@@ -15,7 +16,7 @@ class SearchAPI {
    * @returns {Promise<object>}
    */
   async searchDocuments(projectId, options, signal) {
-    const response = await axios.post(
+    const response = await client.post(
       `${this._baseURL}/projects/${projectId}/search/documents`,
       options,
       { signal }
@@ -31,7 +32,7 @@ class SearchAPI {
    * @returns {Promise<object>}
    */
   async searchCode(projectId, options, signal) {
-    const response = await axios.post(
+    const response = await client.post(
       `${this._baseURL}/projects/${projectId}/search/code`,
       options,
       { signal }
@@ -47,7 +48,7 @@ class SearchAPI {
    * @returns {Promise<object>}
    */
   async hybridSearch(projectId, options, signal) {
-    const response = await axios.post(
+    const response = await client.post(
       `${this._baseURL}/projects/${projectId}/search/hybrid`,
       options,
       { signal }
@@ -63,7 +64,7 @@ class SearchAPI {
    * @returns {Promise<{ items: Array, total: number }>}
    */
   async findSimilar(projectId, options, signal) {
-    const response = await axios.post(
+    const response = await client.post(
       `${this._baseURL}/projects/${projectId}/search/similar`,
       options,
       { signal }
@@ -78,7 +79,7 @@ class SearchAPI {
    * @returns {Promise<object>}
    */
   async getDocument(projectId, documentId) {
-    const response = await axios.get(
+    const response = await client.get(
       `${this._baseURL}/projects/${projectId}/documents/${documentId}`
     );
     return response.data;
@@ -91,7 +92,7 @@ class SearchAPI {
    * @returns {Promise<{ id: string, status: string }>}
    */
   async indexContent(projectId, content) {
-    const response = await axios.post(
+    const response = await client.post(
       `${this._baseURL}/projects/${projectId}/knowledge/index`,
       content
     );
@@ -106,7 +107,7 @@ class SearchAPI {
    * @returns {Promise<object>}
    */
   async updateDocument(projectId, documentId, updates) {
-    const response = await axios.patch(
+    const response = await client.patch(
       `${this._baseURL}/projects/${projectId}/documents/${documentId}`,
       updates
     );
@@ -120,7 +121,7 @@ class SearchAPI {
    * @returns {Promise<void>}
    */
   async deleteDocument(projectId, documentId) {
-    await axios.delete(
+    await client.delete(
       `${this._baseURL}/projects/${projectId}/documents/${documentId}`
     );
   }
@@ -133,7 +134,7 @@ class SearchAPI {
    * @returns {Promise<Array<string>>}
    */
   async getSuggestions(projectId, query, limit = 5) {
-    const response = await axios.get(
+    const response = await client.get(
       `${this._baseURL}/projects/${projectId}/search/suggestions`,
       { params: { q: query, limit } }
     );
@@ -146,7 +147,7 @@ class SearchAPI {
    * @returns {Promise<object>}
    */
   async getFacets(projectId) {
-    const response = await axios.get(
+    const response = await client.get(
       `${this._baseURL}/projects/${projectId}/search/facets`
     );
     return response.data;
@@ -158,7 +159,7 @@ class SearchAPI {
    * @returns {Promise<{ status: string, jobId: string }>}
    */
   async reindexProject(projectId) {
-    const response = await axios.post(
+    const response = await client.post(
       `${this._baseURL}/projects/${projectId}/knowledge/reindex`
     );
     return response.data;
@@ -171,7 +172,7 @@ class SearchAPI {
    * @returns {Promise<object>}
    */
   async getIndexingStatus(projectId, jobId) {
-    const response = await axios.get(
+    const response = await client.get(
       `${this._baseURL}/projects/${projectId}/knowledge/status`,
       { params: { jobId } }
     );
@@ -185,7 +186,7 @@ class SearchAPI {
    */
   async getSearchHistory(projectId) {
     try {
-      const response = await axios.get(
+      const response = await client.get(
         `${this._baseURL}/projects/${projectId}/search/history`
       );
       return response.data.history || [];
@@ -202,7 +203,7 @@ class SearchAPI {
    */
   async getPopularQueries(projectId) {
     try {
-      const response = await axios.get(
+      const response = await client.get(
         `${this._baseURL}/projects/${projectId}/search/popular`
       );
       return response.data.queries || [];

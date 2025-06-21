@@ -1,6 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Search, MessageCircle, FileText, Brain, Plus } from 'lucide-react';
+import { Search, MessageCircle, FileText, Brain, Plus, Wifi, WifiOff, Zap } from 'lucide-react';
 
 /**
  * Contextual empty state component with helpful user guidance
@@ -56,6 +56,46 @@ export default function EmptyState({
           action: { text: 'Create project', variant: 'primary' }
         };
 
+      case 'websocket-disconnected':
+        return {
+          icon: WifiOff,
+          title: 'Connection lost',
+          description: 'Unable to connect to the chat server. Check your connection and try again.',
+          action: { text: 'Reconnect', variant: 'primary' }
+        };
+
+      case 'websocket-connecting':
+        return {
+          icon: Wifi,
+          title: 'Connecting...',
+          description: 'Establishing connection to the chat server.',
+          action: null
+        };
+
+      case 'chat-history':
+        return {
+          icon: MessageCircle,
+          title: 'No chat history',
+          description: 'Your conversation history will appear here as you chat with the AI.',
+          action: null
+        };
+
+      case 'streaming-interrupted':
+        return {
+          icon: Zap,
+          title: 'Response interrupted',
+          description: 'The AI response was interrupted. You can retry or continue with a new message.',
+          action: { text: 'Retry', variant: 'primary' }
+        };
+
+      case 'model-unavailable':
+        return {
+          icon: Brain,
+          title: 'AI model unavailable',
+          description: 'The selected AI model is currently unavailable. Try switching to a different model.',
+          action: { text: 'Switch model', variant: 'primary' }
+        };
+
       default:
         return {
           icon: FileText,
@@ -109,7 +149,12 @@ EmptyState.propTypes = {
     'chat',
     'knowledge',
     'ai-suggestions',
-    'projects'
+    'projects',
+    'websocket-disconnected',
+    'websocket-connecting',
+    'chat-history',
+    'streaming-interrupted',
+    'model-unavailable'
   ]),
   title: PropTypes.string,
   description: PropTypes.string,

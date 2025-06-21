@@ -25,49 +25,65 @@ export const useChat = (projectId) => {
       setConnectionState('disconnected');
       return;
     }
-  
+
     let isCancelled = false;
     let currentWs = null;
-  
+
     const connect = async () => {
       setConnectionState('connecting');
       setError(null);
-  
+
       try {
         // 1. Create a new session
         const sessionResponse = await client.post(`/api/chat/sessions`, {
           project_id: projectId,
         });
-  
+
         if (isCancelled) return;
-  
+
         const newSessionId = sessionResponse.data.id;
         setSessionId(newSessionId);
         setMessages([]); // Clear messages for new session
-  
-        // 2. Connect to WebSocket
-        const wsUrl = `${WS_BASE_URL.replace('http', 'ws')}/chat/ws/sessions/${newSessionId}`;
+
+        // 2. Connect to WebSocket (with access_token fallback as query param)
+        let token = null;
+        try {
+          token = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('access_token='))
+            ?.split('=')[1];
+        } catch (e) {
+          // Ignore errors, fallback to cookie-less
+        }
+
+        // If token found in cookie, append as query param (for cross-origin or when SameSite prevents sending)
+        let wsUrl = `${WS_BASE_URL.replace('http', 'ws')}/chat/ws/sessions/${newSessionId}`;
+        if (token) {
+          if (!wsUrl.includes('?')) {
+            wsUrl += `?token=${encodeURIComponent(token)}`;
+          }
+        }
         const ws = new WebSocket(wsUrl);
         currentWs = ws;
         wsRef.current = ws;
-  
+
         ws.onopen = () => {
           if (isCancelled) return;
           console.log('WebSocket connected to session:', newSessionId);
           setConnectionState('connected');
           setReconnectAttempts(0);
         };
-  
+
         ws.onmessage = (event) => {
           if (isCancelled) return;
           try {
             const data = JSON.parse(event.data);
-            
+
             switch (data.type) {
               case 'message':
                 setMessages((prev) => [...prev, data.message]);
                 break;
-                
+
               case 'typing':
                 setTypingUsers((prev) => {
                   const newSet = new Set(prev);
@@ -75,7 +91,7 @@ export const useChat = (projectId) => {
                   return newSet;
                 });
                 break;
-                
+
               case 'stream_chunk':
                 setStreamingMessages((prev) => {
                   const newMap = new Map(prev);
@@ -85,18 +101,18 @@ export const useChat = (projectId) => {
                     isStreaming: true,
                     metadata: data.metadata || {}
                   };
-                  
+
                   existingMessage.content += data.chunk;
                   newMap.set(data.message_id, existingMessage);
                   return newMap;
                 });
                 break;
-                
+
               case 'stream_end':
                 setStreamingMessages((prev) => {
                   const newMap = new Map(prev);
                   const streamingMessage = newMap.get(data.message_id);
-                  
+
                   if (streamingMessage) {
                     // Move completed message to main messages array
                     const finalMessage = {
@@ -104,25 +120,25 @@ export const useChat = (projectId) => {
                       isStreaming: false,
                       completed_at: new Date().toISOString()
                     };
-                    
+
                     setMessages((prevMessages) => [...prevMessages, finalMessage]);
                     newMap.delete(data.message_id);
                   }
-                  
+
                   return newMap;
                 });
                 break;
-                
+
               case 'message_update':
-                setMessages((prev) => 
-                  prev.map(msg => 
-                    msg.id === data.message_id 
+                setMessages((prev) =>
+                  prev.map(msg =>
+                    msg.id === data.message_id
                       ? { ...msg, ...data.updates, edited: true, edited_at: new Date().toISOString() }
                       : msg
                   )
                 );
                 break;
-                
+
               case 'message_delete':
                 setMessages((prev) => prev.filter(msg => msg.id !== data.message_id));
                 // Also remove from streaming messages if it exists
@@ -132,27 +148,27 @@ export const useChat = (projectId) => {
                   return newMap;
                 });
                 break;
-                
+
               case 'error':
                 console.error('WebSocket error received:', data.error);
                 setError(data.error.message || 'An error occurred');
-                
+
                 // If error is related to a specific message, stop its streaming
                 if (data.message_id) {
                   setStreamingMessages((prev) => {
                     const newMap = new Map(prev);
                     const streamingMessage = newMap.get(data.message_id);
-                    
+
                     if (streamingMessage) {
                       streamingMessage.isStreaming = false;
                       streamingMessage.error = data.error.message;
                     }
-                    
+
                     return newMap;
                   });
                 }
                 break;
-                
+
               default:
                 console.warn('Unknown WebSocket message type:', data.type);
             }
@@ -161,21 +177,32 @@ export const useChat = (projectId) => {
             setError('Failed to process message from server');
           }
         };
-  
+
         ws.onclose = (event) => {
           if (isCancelled) return;
           console.log('WebSocket disconnected. Code:', event.code);
           setConnectionState('disconnected');
-          // Reconnection logic can be added here if needed
+          setError(null); // Clear error on normal close
+
+          // Auto-reconnect logic for mobile
+          if (event.code !== 1000 && event.code !== 1001 && reconnectAttempts < maxReconnectAttempts) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000); // Exponential backoff
+            setTimeout(() => {
+              if (!isCancelled) {
+                setReconnectAttempts(prev => prev + 1);
+                connect();
+              }
+            }, delay);
+          }
         };
-  
+
         ws.onerror = (event) => {
           if (isCancelled) return;
           console.error('WebSocket error:', event);
           setError('Connection error');
           setConnectionState('error');
         };
-  
+
       } catch (err) {
         if (isCancelled) return;
         console.error('Failed to create session or connect:', err);
@@ -183,9 +210,9 @@ export const useChat = (projectId) => {
         setConnectionState('error');
       }
     };
-  
+
     connect();
-  
+
     return () => {
       isCancelled = true;
       if (currentWs) {
@@ -276,6 +303,28 @@ export const useChat = (projectId) => {
     });
   }, [messages, streamingMessages]);
 
+  // Force reconnect function
+  const forceReconnect = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+    setReconnectAttempts(0);
+    setError(null);
+    // The useEffect will handle reconnection
+  }, []);
+
+  // Get connection status with enhanced info
+  const getConnectionInfo = useCallback(() => {
+    return {
+      state: connectionState,
+      reconnectAttempts,
+      maxReconnectAttempts,
+      canReconnect: reconnectAttempts < maxReconnectAttempts,
+      sessionId,
+      error
+    };
+  }, [connectionState, reconnectAttempts, maxReconnectAttempts, sessionId, error]);
+
   // Check if any message is currently streaming
   const hasStreamingMessages = streamingMessages.size > 0;
 
@@ -292,6 +341,8 @@ export const useChat = (projectId) => {
     stopStreaming,
     getAllMessages,
     hasStreamingMessages,
+    forceReconnect,
+    getConnectionInfo,
     error
   };
 };

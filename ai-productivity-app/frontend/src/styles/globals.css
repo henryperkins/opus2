@@ -502,43 +502,265 @@
   .profile-header {
     @apply flex items-center justify-between mb-6;
   }
+
   .profile-header h2 {
     @apply text-2xl font-bold text-gray-900 dark:text-gray-100;
   }
+
   .edit-button {
     @apply px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700;
   }
+
   .profile-form .form-group {
     @apply mb-4;
   }
+
   .profile-form label {
     @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
   }
+
   .profile-form input {
     @apply w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600;
   }
+
   .profile-form .form-actions {
     @apply flex justify-end space-x-2 mt-6;
   }
+
   .save-button {
     @apply px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700;
   }
+
   .cancel-button {
     @apply px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50;
   }
+
   .profile-info .info-group {
     @apply flex justify-between py-2 border-b border-gray-200 dark:border-gray-700;
   }
+
   .profile-info label {
     @apply text-sm font-medium text-gray-600 dark:text-gray-400;
   }
+
   .profile-info span {
     @apply text-sm text-gray-900 dark:text-gray-100;
   }
+
   .error-message {
     @apply text-sm text-red-600 p-2 bg-red-50 rounded-md;
   }
+
   .success-message {
     @apply text-sm text-green-600 p-2 bg-green-50 rounded-md;
+  }
+
+  /* Mobile and Touch Optimizations */
+  .touch-target {
+    /* Ensure minimum touch target size of 44px */
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Mobile-specific styles */
+  @media (max-width: 768px) {
+
+    /* Increase touch targets on mobile */
+    button,
+    [role="button"],
+    input[type="button"],
+    input[type="submit"] {
+      min-height: 44px;
+      padding: 0.75rem 1rem;
+    }
+
+    /* Improve input field touch targets */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    textarea,
+    select {
+      min-height: 44px;
+      padding: 0.75rem;
+      font-size: 16px;
+      /* Prevent zoom on iOS */
+    }
+
+    /* Modal spacing for mobile */
+    .modal-content {
+      margin: 1rem;
+      max-height: calc(100vh - 2rem);
+    }
+
+    /* Bottom sheet styles */
+    .bottom-sheet {
+      border-radius: 1rem 1rem 0 0;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Prevent text selection during drag */
+    .dragging {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Momentum scrolling on iOS */
+    .scroll-container {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+  }
+
+  /* Tablet optimizations */
+  @media (min-width: 768px) and (max-width: 1024px) {
+
+    /* Slightly larger touch targets for tablet */
+    .touch-target {
+      min-width: 40px;
+      min-height: 40px;
+    }
+
+    /* Adjust modal sizing for tablet */
+    .modal-content {
+      max-width: 90vw;
+      max-height: 85vh;
+    }
+  }
+
+  /* Focus styles for accessibility */
+  .touch-target:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+
+  /* WebSocket connection status styles */
+  .connection-status {
+    transition: all 0.3s ease;
+  }
+
+  .connection-status.connecting {
+    background-color: #fef3c7;
+    color: #92400e;
+  }
+
+  .connection-status.connected {
+    background-color: #d1fae5;
+    color: #065f46;
+  }
+
+  .connection-status.disconnected {
+    background-color: #fee2e2;
+    color: #991b1b;
+  }
+
+  .connection-status.error {
+    background-color: #fee2e2;
+    color: #991b1b;
+    animation: pulse 2s infinite;
+  }
+
+  /* Streaming message styles */
+  .streaming-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .streaming-dots .dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    background-color: #3b82f6;
+    border-radius: 50%;
+    animation: bounce 1.5s infinite;
+  }
+
+  .streaming-dots .dot:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+
+  .streaming-dots .dot:nth-child(3) {
+    animation-delay: 0.2s;
+  }
+
+  /* Error boundary styles */
+  .error-boundary {
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+  }
+
+  .error-boundary .error-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+  }
+
+  .error-boundary .error-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .error-boundary .error-actions {
+      flex-direction: row;
+      justify-content: center;
+    }
+  }
+
+  /* Skeleton loader enhancements */
+  .skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+  }
+
+  @keyframes skeleton-loading {
+    0% {
+      background-position: 200% 0;
+    }
+
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  /* Dark mode skeleton */
+  @media (prefers-color-scheme: dark) {
+    .skeleton {
+      background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+      background-size: 200% 100%;
+    }
+  }
+
+  /* Responsive text sizes */
+  @media (max-width: 640px) {
+    .text-responsive-sm {
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+    }
+
+    .text-responsive-base {
+      font-size: 1rem;
+      line-height: 1.5rem;
+    }
+
+    .text-responsive-lg {
+      font-size: 1.125rem;
+      line-height: 1.75rem;
+    }
+
+    .text-responsive-xl {
+      font-size: 1.25rem;
+      line-height: 1.75rem;
+    }
   }
 }

@@ -27,23 +27,18 @@ import axios from 'axios';
 //    server.  The previous empty string made the requests *relative* to the
 //    Vite origin (5173) which breaks unless a dev-proxy is configured.
 
-// Determine base URL based on environment
-const getBaseURL = () => {
-  // If explicitly set via env var, use it
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  
-  // Production: use HTTPS and same domain
-  if (import.meta.env.PROD) {
-    return `${window.location.protocol}//${window.location.host}/api`;
-  }
-  
-  // Development fallback
-  return 'http://localhost:8000';
-};
-
-const BASE_URL = getBaseURL();
+// Use a relative baseURL. This ensures that API requests are sent to the
+// same host that serves the frontend application. In the development setup,
+// NGINX is configured as a reverse proxy to route these requests from
+// `lakefrontdigital.io/api/...` to the backend service on port 8000.
+// Using a relative path is crucial to avoid CORS issues and to ensure
+// cookies are handled correctly by the browser.
+//
+// NOTE: The baseURL is set to '/' (root) because:
+// 1. API calls will be made to relative paths like '/api/...'
+// 2. NGINX reverse proxy will route these to the backend
+// 3. This ensures consistent URL handling across dev/prod environments
+const BASE_URL = '/';
 
 const client = axios.create({
   baseURL: BASE_URL,
@@ -65,9 +60,13 @@ function getCookie(name) {
 function attachCsrf(config) {
   const csrfToken = getCookie('csrftoken');
   const mutating = ['post', 'put', 'patch', 'delete'];
-  if (csrfToken && mutating.includes(config.method)) {
+
+  if (csrfToken && mutating.includes(config.method?.toLowerCase())) {
+    // Ensure headers object exists
+    config.headers = config.headers || {};
     config.headers['X-CSRFToken'] = csrfToken;
   }
+
   return config;
 }
 
@@ -94,10 +93,35 @@ async function retryRequest(error) {
 // Interceptors
 // -----------------------------------------------------------------------------
 
-client.interceptors.request.use(attachCsrf);
+// Request interceptor: attach CSRF token and optional logging
+client.interceptors.request.use(
+  (config) => {
+    // Attach CSRF token for mutating requests
+    attachCsrf(config);
+
+    // Optional request logging in development
+    if (import.meta.env.DEV && import.meta.env.VITE_API_DEBUG) {
+      console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    }
+
+    return config;
+  },
+  (error) => {
+    if (import.meta.env.DEV) {
+      console.error('❌ Request Error:', error);
+    }
+    return Promise.reject(error);
+  }
+);
 
 client.interceptors.response.use(
-  (resp) => resp,
+  (resp) => {
+    // Optional response logging in development
+    if (import.meta.env.DEV && import.meta.env.VITE_API_DEBUG) {
+      console.log(`✅ API Response: ${resp.status} ${resp.config.method?.toUpperCase()} ${resp.config.url}`);
+    }
+    return resp;
+  },
   async (error) => {
     const { response } = error;
 
@@ -164,6 +188,18 @@ client.interceptors.response.use(
     if (!response && error.code === 'ERR_NETWORK') {
       error.message =
         'Network error. Unable to reach backend server. Check that it is running and not blocked by CORS.';
+    }
+
+    // Handle timeout errors
+    if (!response && error.code === 'ECONNABORTED') {
+      error.message =
+        'Request timeout. The server is taking too long to respond.';
+    }
+
+    // Handle connection refused errors (common in development)
+    if (!response && (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED'))) {
+      error.message =
+        'Connection refused. Backend server may not be running on the expected port.';
     }
 
     // Retry transient 5xx
