@@ -20,7 +20,9 @@ slowapi==0.1.9
 email-validator
 
 # Code parsing / analysis
-tree_sitter==0.20.4
+# v0.19.0 is the last release that still provides ``Language.build_library``
+# which our Docker build relies on to compile the language bundle.
+tree_sitter==0.19.0
 GitPython==3.1.40
 aiofiles==23.2.1
 

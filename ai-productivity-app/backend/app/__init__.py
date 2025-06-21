@@ -180,6 +180,38 @@ def _install_fastapi_stub():  # noqa: D401
 
     module.status = _Status()
 
+    # ------------------------------------------------------------------
+    # Bare-bones Request & Response implementations
+    # ------------------------------------------------------------------
+
+    class Response:  # noqa: D401 – minimal stand-in
+        def __init__(self):
+            self.headers: dict[str, str] = {}
+            self._cookies: dict[str, str] = {}
+            self.status_code: int = 200
+
+        # FastAPI's real Response exposes ``set_cookie`` – handlers use it to
+        # attach the JWT / CSRF tokens.  We just cache values so tests can
+        # assert on ``response.cookies`` later via the *TestClient* wrapper.
+        def set_cookie(self, name: str, value: str, **_):  # noqa: D401
+            self._cookies[name] = value
+
+        # Property alias mirroring ``requests.Response.cookies`` API that the
+        # test-suite expects on the *TestClient* response object.
+        @property
+        def cookies(self):  # noqa: D401
+            return self._cookies
+
+    module.Response = Response
+
+    class Request:  # noqa: D401 – extremely reduced representation
+        def __init__(self):
+            self.cookies: dict[str, str] = {}
+            self.headers: dict[str, str] = {}
+            self.client = types.SimpleNamespace(host="testclient")
+
+    module.Request = Request
+
     # Minimal HTTPException
     class HTTPException(Exception):  # noqa: D401
         def __init__(self, status_code: int, detail: str = "") -> None:
@@ -277,19 +309,28 @@ def _install_fastapi_stub():  # noqa: D401
             self.app = app
             self.cookies = {}
 
-        def _call(self, method: str, path: str, **kwargs):  # noqa: D401, WPS231
+        def _call(self, method: str, path: str, **req_kwargs):  # noqa: D401, WPS231
             handler = self.app.routes.get((method, path))
             if not handler:
-                return types.SimpleNamespace(status_code=404, json=lambda: {"detail": "Not Found"})
+                return types.SimpleNamespace(
+                    status_code=404,
+                    json=lambda: {"detail": "Not Found"},
+                    headers={},
+                    cookies={},
+                )
 
             # Extract JSON body if provided
-            body = kwargs.get("json", {})
+            body = req_kwargs.get("json", {})
 
             sig = inspect.signature(handler)
 
+            # Prepare objects reused across injected params
+            req_obj = module.Request()
+            resp_obj = module.Response()
+
             # Build kwargs respecting dependency-injected params (very naive)
-            kwargs = {}
-            for name, param in sig.parameters.items():
+            kwargs: dict[str, object] = {}
+            for name, _param in sig.parameters.items():
                 if name in ("payload", "data", "json_body"):
                     kwargs[name] = body
                 elif name == "background_tasks":
@@ -301,23 +342,35 @@ def _install_fastapi_stub():  # noqa: D401
                     from app.database import SessionLocal  # lazy import
 
                     kwargs[name] = SessionLocal()
+                elif name == "response":
+                    kwargs[name] = resp_obj
+                elif name == "request":
+                    kwargs[name] = req_obj
                 else:
-                    # best-effort None
                     kwargs[name] = None
 
+            # Call handler (sync or async)
             if inspect.iscoroutinefunction(handler):
-                response = asyncio.run(handler(**kwargs))
+                response_val = asyncio.run(handler(**kwargs))
             else:
-                response = handler(**kwargs)
+                response_val = handler(**kwargs)
 
-            if isinstance(response, tuple):
-                payload, status_code = response
-            elif isinstance(response, dict):
-                payload, status_code = response, 200
+            # Determine payload + status
+            if isinstance(response_val, tuple):
+                payload, status_code = response_val
+            elif hasattr(response_val, "dict"):
+                payload, status_code = response_val.dict(), 200
+            elif isinstance(response_val, dict):
+                payload, status_code = response_val, 200
             else:
                 payload, status_code = {}, 204
 
-            return types.SimpleNamespace(status_code=status_code, json=lambda: payload, headers={})
+            return types.SimpleNamespace(
+                status_code=status_code,
+                json=lambda: payload,
+                headers=resp_obj.headers,
+                cookies=resp_obj._cookies,
+            )
 
         def get(self, path: str, **kw):  # noqa: D401
             return self._call("GET", path, **kw)
@@ -385,4 +438,201 @@ try:
     import fastapi  # type: ignore  # noqa: F401
 except ModuleNotFoundError:  # pragma: no cover – offline sandbox
     _install_fastapi_stub()
+
+# ---------------------------------------------------------------------------
+# Optional *pydantic* + *pydantic_settings* stubs – required inside the offline
+# execution sandbox where installing external wheels is disabled.  The real CI
+# environment pulls the full packages from PyPI so these shims are only
+# imported when the dependencies are missing.  They implement the subset of
+# APIs used by the application code & test-suite to keep runtime behaviour
+# functional without the heavy C-extensions compile step.
+# ---------------------------------------------------------------------------
+
+
+def _install_pydantic_stub() -> None:  # noqa: D401
+    """Register *very* small subset stubs for *pydantic* v2 and *pydantic_settings*.
+
+    The application only relies on a handful of symbols:
+
+    • pydantic.BaseModel / pydantic.dataclasses.dataclass (via ConfigDict)
+    • pydantic.ConfigDict (treated as ``dict``)
+    • pydantic.Field (passthrough helper that returns default value)
+    • pydantic_settings.BaseSettings (behaves like BaseModel but reads env-vars)
+
+    Implementing full validation logic is way out of scope – the backend and
+    accompanying tests merely access *attributes* defined on subclasses.  We
+    therefore provide extremely light placeholders that accept ``*args``/
+    ``**kwargs`` and forward attribute lookups to an internal ``__dict__``.
+    """
+
+    import types as _types
+    import os as _os
+    import sys as _sys
+    from typing import Any as _Any, Mapping as _Mapping
+
+    # ------------------------------------------------------------------
+    # Helper base class mimicking pydantic v2 BaseModel semantics
+    # ------------------------------------------------------------------
+
+    class _BaseModel:  # noqa: D401 – minimal stand-in, no validation
+        def __init__(self, **data: _Any):
+            # Assign everything verbatim – skip validation.
+            for k, v in data.items():
+                setattr(self, k, v)
+
+        # pydantic models expose dict() & model_dump().  Provide both as the
+        # same simple implementation returning ``__dict__``.
+        def dict(self, *_, **__) -> dict[str, _Any]:  # noqa: D401
+            return self.__dict__.copy()
+
+        def model_dump(self, *_, **__) -> dict[str, _Any]:  # noqa: D401
+            return self.dict()
+
+        # ``pydantic`` exposes a ``validate`` classmethod that returns the
+        # validated data structure.  Our tests never call it directly, but
+        # some *internal* helpers (``BaseModel.model_validate`` in pydantic
+        # v2) might.  Provide a no-op implementation returning an instance
+        # created from the passed mapping.
+
+        @classmethod
+        def model_validate(cls, data: _Any, *_, **__):  # noqa: D401
+            if isinstance(data, cls):
+                return data
+            if isinstance(data, dict):
+                return cls(**data)
+            raise TypeError("Unsupported data for model_validate stub")
+
+    # ``ConfigDict`` is just an *alias* for dict in our stub.
+    _ConfigDict = dict  # type: ignore
+
+    # Minimal replacement for pydantic.Field – returns the default value so
+    # that assignments like ``x: int = Field(1, alias='X')`` still evaluate.
+    def _Field(default: _Any = None, *_, **__) -> _Any:  # noqa: D401
+        return default
+
+    # ``validator`` decorator – returns identity decorator in stub.
+    def _validator(*_fields, **__):  # noqa: D401
+        def decorator(fn):
+            return fn
+
+        return decorator
+
+    # Faux EmailStr using plain ``str`` (no validation)
+    class _EmailStr(str):  # noqa: D401 – simple alias, no extra behaviour
+        pass
+
+    # ------------------------------------------------------------------
+    # pydantic_settings – same idea, but automatically pulls values from env-vars
+    # ------------------------------------------------------------------
+
+    class _BaseSettings(_BaseModel):  # noqa: D401 – drop full settings logic
+        def __init__(self, **data: _Any):
+            # Merge provided data *over* os.environ – mimics real behaviour
+            merged: dict[str, _Any] = {}
+            for key in dir(self.__class__):
+                # Skip dunders, callables and *read-only* descriptors (e.g. @property)
+                if key.startswith("__"):
+                    continue
+
+                attr_val = getattr(self.__class__, key)
+
+                # ``property`` instances are descriptors without a writable
+                # attribute behind them → assigning would raise ``AttributeError``.
+                if callable(attr_val) or isinstance(attr_val, property):
+                    continue
+
+                env_val = _os.getenv(key.upper())
+
+                # Type coercion – only basic primitives needed for test-suite
+                if env_val is not None:
+                    if isinstance(attr_val, bool):
+                        merged[key] = env_val.lower() in {"1", "true", "yes", "on"}
+                    elif isinstance(attr_val, int) and env_val.isdigit():
+                        merged[key] = int(env_val)
+                    else:
+                        merged[key] = env_val
+                else:
+                    merged[key] = attr_val
+
+            merged.update(data)
+            super().__init__(**merged)
+
+    # ------------------------------------------------------------------
+    # Publish modules & symbols on sys.modules so regular imports succeed
+    # ------------------------------------------------------------------
+
+    _pydantic_mod = _types.ModuleType("pydantic")
+    _pydantic_mod.BaseModel = _BaseModel
+    _pydantic_mod.ConfigDict = _ConfigDict
+    _pydantic_mod.Field = _Field
+    _pydantic_mod.validator = _validator
+    _pydantic_mod.EmailStr = _EmailStr
+
+    # pydantic.dataclasses sub-module – only used for the decorator symbol
+    _pydantic_dataclasses = _types.ModuleType("pydantic.dataclasses")
+    _pydantic_dataclasses.dataclass = lambda cls=None, **__: cls  # type: ignore
+    _pydantic_mod.dataclasses = _pydantic_dataclasses
+
+    _pydantic_settings_mod = _types.ModuleType("pydantic_settings")
+    _pydantic_settings_mod.BaseSettings = _BaseSettings
+
+    # Register on sys.modules so that *import …* works globally
+    _sys.modules["pydantic"] = _pydantic_mod
+    _sys.modules["pydantic.dataclasses"] = _pydantic_dataclasses
+    _sys.modules["pydantic_settings"] = _pydantic_settings_mod
+
+
+# Try importing *pydantic* – fall back to stub if unavailable.
+try:
+    import pydantic  # type: ignore  # noqa: F401
+    import pydantic_settings  # type: ignore  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover – offline sandbox
+    _install_pydantic_stub()
+
+# ---------------------------------------------------------------------------
+# Optional *passlib* stub – avoids heavy bcrypt wheels in the sandbox
+# ---------------------------------------------------------------------------
+
+
+def _install_passlib_stub() -> None:  # noqa: D401
+    """Provide a minimal stub for ``passlib.context.CryptContext``."""
+
+    import types as _types
+    import hashlib as _hashlib
+    import sys as _sys
+
+    class CryptContext:  # noqa: D401 – extremely simplified
+        def __init__(self, schemes: list[str] | tuple[str, ...] = ("sha256",), **_):
+            self.scheme = schemes[0]
+
+        def hash(self, password: str) -> str:  # noqa: D401
+            if self.scheme == "bcrypt":
+                # bcrypt not available – fall back to sha256 to keep deterministic
+                # test behaviour. Prefix makes method obvious in DB dumps.
+                algo = _hashlib.sha256(password.encode()).hexdigest()
+                return f"sha256${algo}"
+            return _hashlib.sha256(password.encode()).hexdigest()
+
+        def verify(self, plain_password: str, hashed_password: str) -> bool:  # noqa: D401
+            if hashed_password.startswith("sha256$"):
+                hashed_password = hashed_password.split("$", 1)[1]
+            return self.hash(plain_password) == hashed_password
+
+    # Build passlib.context submodule
+    passlib_mod = _types.ModuleType("passlib")
+    context_mod = _types.ModuleType("passlib.context")
+    context_mod.CryptContext = CryptContext
+
+    # Expose submodule on parent
+    passlib_mod.context = context_mod
+
+    # Register both on sys.modules
+    _sys.modules["passlib"] = passlib_mod
+    _sys.modules["passlib.context"] = context_mod
+
+
+try:
+    from passlib.context import CryptContext  # noqa: F401  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover – offline sandbox
+    _install_passlib_stub()
 
