@@ -3,11 +3,12 @@
 import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
+import { useChatFlows } from '../hooks/useChatFlows';
 import { useProject } from '../hooks/useProjects';
 import { useUser } from '../hooks/useAuth';
 import Header from '../components/common/Header';
 import EnhancedMessageRenderer from '../components/chat/EnhancedMessageRenderer';
-import CommandInput from '../components/chat/CommandInput';
+import EnhancedCommandInput from '../components/chat/EnhancedCommandInput';
 import KnowledgeAssistant from '../components/chat/KnowledgeAssistant';
 import MonacoEditor from '@monaco-editor/react';
 import SplitPane from '../components/common/SplitPane';
@@ -30,6 +31,16 @@ export default function EnhancedProjectChatPage() {
     sendTypingIndicator
   } = useChat(projectId);
 
+  // Chat flows integration
+  const {
+    flowState,
+    metrics,
+    executeKnowledgeFlow,
+    executeModelSelectionFlow,
+    executeRenderingFlow,
+    resetFlows
+  } = useChatFlows();
+
   // UI state
   const [splitView, setSplitView] = useState(true);
   const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(true);
@@ -39,7 +50,7 @@ export default function EnhancedProjectChatPage() {
   const [currentFile, setCurrentFile] = useState(undefined);
 
   // Enhanced message handling with knowledge context
-  const handleSendMessage = useCallback(async (content, metadata) => {
+  const handleSendMessage = useCallback(async (content, metadata = {}) => {
     try {
       // Add editor context if requested
       if (content.includes('@editor') && editorContent) {
@@ -50,12 +61,34 @@ export default function EnhancedProjectChatPage() {
         }];
       }
 
-      // Send message with enhanced metadata
+      // Execute knowledge flow to get contextualized response
+      const knowledgeResponse = await executeKnowledgeFlow(content, projectId);
+
+      // Send the user message first
       await sendMessage(content, metadata);
+
+      // Process the AI response through rendering flow
+      const renderedResponse = await executeRenderingFlow(knowledgeResponse, (chunks) => {
+        // Update streaming content in real-time
+        // This would integrate with the message state to show streaming
+        console.log('Streaming update:', chunks);
+      });
+
+      // Send the AI response with enhanced rendering
+      await sendMessage(renderedResponse.content || knowledgeResponse.content, {
+        role: 'assistant',
+        model: knowledgeResponse.model,
+        citations: knowledgeResponse.citations,
+        interactive_elements: renderedResponse.interactive_elements || [],
+        flow_state: flowState
+      });
+
     } catch (error) {
       console.error('Failed to send message:', error);
+      // Reset flows on error
+      resetFlows();
     }
-  }, [sendMessage, editorContent, editorLanguage, currentFile]);
+  }, [sendMessage, editorContent, editorLanguage, currentFile, executeKnowledgeFlow, executeRenderingFlow, projectId, flowState, resetFlows]);
 
   // Handle code application from chat
   const handleCodeApply = useCallback((code, language) => {
@@ -86,6 +119,101 @@ export default function EnhancedProjectChatPage() {
     console.log('Adding context:', context);
     // This could update the current message draft or add to metadata
   }, []);
+
+  // Handle interactive element interactions
+  const handleInteractiveElementAction = useCallback(async (elementId, action, data) => {
+    try {
+      let response;
+
+      switch (action) {
+        case 'run':
+          // Execute code via backend
+          response = await fetch('/api/code/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              code: data.code,
+              language: data.language,
+              project_id: projectId
+            })
+          });
+          break;
+
+        case 'execute':
+          // Execute query via knowledge API
+          response = await fetch('/api/knowledge/execute-query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              query: data.query,
+              filters: data.filters,
+              project_id: projectId
+            })
+          });
+          break;
+
+        case 'choose':
+          // Handle decision tree choices
+          response = await fetch('/api/chat/decision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              element_id: elementId,
+              node_id: data.nodeId,
+              choice: data.choice,
+              path: data.path,
+              project_id: projectId
+            })
+          });
+          break;
+
+        case 'submit':
+          // Handle form submissions
+          response = await fetch('/api/chat/form-submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              element_id: elementId,
+              form_data: data,
+              project_id: projectId
+            })
+          });
+          break;
+
+        case 'action':
+          // Handle general actions
+          response = await fetch('/api/chat/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              element_id: elementId,
+              action_id: data.actionId,
+              params: data.params,
+              project_id: projectId
+            })
+          });
+          break;
+
+        default:
+          throw new Error(`Unknown action: ${action}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(`Action failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+
+    } catch (error) {
+      console.error('Interactive element action failed:', error);
+      throw error;
+    }
+  }, [projectId]);
 
   if (projectLoading) {
     return (
@@ -190,10 +318,12 @@ export default function EnhancedProjectChatPage() {
                   content: message.content,
                   role: message.role,
                   metadata: message.metadata,
-                  codeBlocks: message.code_blocks
+                  codeBlocks: message.code_blocks,
+                  interactive_elements: message.metadata?.interactive_elements || []
                 }}
                 onCodeApply={handleCodeApply}
                 onCitationClick={handleCitationClick}
+                onInteraction={handleInteractiveElementAction}
                 showMetadata={message.role === 'assistant'}
               />
             </div>
@@ -215,7 +345,7 @@ export default function EnhancedProjectChatPage() {
       </div>
 
       {/* Enhanced command input */}
-      <CommandInput
+      <EnhancedCommandInput
         onSend={handleSendMessage}
         onTyping={sendTypingIndicator}
         projectId={projectId}

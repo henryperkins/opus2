@@ -233,185 +233,22 @@ export const useChatFlows = (settings = defaultChatSettings) => {
         }
     }, [settings]);
 
-    // Utility functions (these would be implemented based on your backend APIs)
-    const analyzeQuery = async (query) => {
-        // Mock implementation - replace with actual API call
-        return {
-            intent: 'code_analysis',
-            taskType: 'coding',
-            complexity: 'medium',
-            keywords: query.split(' ').filter(word => word.length > 3)
-        };
-    };
-
-    const retrieveKnowledge = async (analysis, projectId, knowledgeSettings) => {
-        // Mock implementation - replace with actual knowledge base API
-        return [
-            { id: '1', content: 'Relevant context 1', confidence: 0.9 },
-            { id: '2', content: 'Relevant context 2', confidence: 0.8 }
-        ].filter(item => item.confidence >= knowledgeSettings.minConfidence)
-            .slice(0, knowledgeSettings.maxContextDocs);
-    };
-
-    const injectContext = async (query, knowledge, settings) => {
-        const contextPrefix = knowledge.map(k => k.content).join('\n\n');
-        return `Context:\n${contextPrefix}\n\nQuery: ${query}`;
-    };
-
-    const addCitations = async (response, knowledge, citationStyle) => {
-        // Add citations based on style preference
-        if (citationStyle === 'inline') {
-            return {
-                ...response,
-                content: response.response + '\n\nSources: ' + knowledge.map(k => k.id).join(', ')
-            };
-        }
-        return response;
-    };
-
-    const detectTask = async (query) => {
-        // Simple task detection - enhance with actual ML model
-        if (query.includes('code') || query.includes('function')) return 'coding';
-        if (query.includes('analyze') || query.includes('explain')) return 'analysis';
-        return 'general';
-    };
-
-    const matchCapabilities = async (taskType, modelSettings) => {
-        // Mock model capability matching
-        const models = {
-            'gpt-4': { coding: 0.9, analysis: 0.95, creative: 0.8, cost: 0.03 },
-            'gpt-3.5-turbo': { coding: 0.8, analysis: 0.85, creative: 0.7, cost: 0.002 },
-            'claude-3-sonnet': { coding: 0.85, analysis: 0.9, creative: 0.9, cost: 0.015 }
-        };
-
-        return Object.entries(models)
-            .filter(([model]) => [modelSettings.default, ...modelSettings.fallbacks].includes(model))
-            .map(([model, capabilities]) => ({ model, capabilities }));
-    };
-
-    const evaluateCostPerformance = async (models, settings) => {
-        return models.map(({ model, capabilities }) => ({
-            model,
-            capabilities,
-            score: (capabilities.coding + capabilities.analysis) / (capabilities.cost * 10),
-            withinBudget: capabilities.cost <= (settings.costLimit || 1)
-        }));
-    };
-
-    const selectOptimalModel = (evaluatedModels, settings) => {
-        const withinBudget = evaluatedModels.filter(m => m.withinBudget);
-        const candidates = withinBudget.length > 0 ? withinBudget : evaluatedModels;
-        return candidates.sort((a, b) => b.score - a.score)[0]?.model || settings.default;
-    };
-
-    const callModel = async (model, query) => {
-        // Mock API call - replace with actual model API
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve({
-                    response: `Response from ${model}: ${query}`,
-                    model,
-                    timestamp: new Date()
-                });
-            }, 1000 + Math.random() * 2000);
-        });
-    };
-
-    const handleFallback = async (failedModel, query, fallbacks) => {
-        for (const fallbackModel of fallbacks) {
-            if (fallbackModel !== failedModel) {
-                try {
-                    return await callModel(fallbackModel, query);
-                } catch (error) {
-                    continue;
-                }
-            }
-        }
-        throw new Error('All models failed');
-    };
-
-    const createStreamProcessor = (responseData, renderingSettings) => {
-        return {
-            buffer: responseData.response || '',
-            process: async (onChunk) => {
-                const chunks = responseData.response.split(' ');
-                for (let i = 0; i < chunks.length; i++) {
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                    await onChunk(chunks.slice(0, i + 1).join(' '));
-                }
-            }
-        };
-    };
-
-    const detectFormats = async (content) => {
-        return {
-            hasCode: /```/.test(content),
-            hasMath: /\$\$/.test(content),
-            hasDiagrams: /mermaid|graph/.test(content),
-            hasInteractive: /\[interactive\]/.test(content)
-        };
-    };
-
-    const renderChunk = async (chunk, formatInfo, settings) => {
-        try {
-            const result = await renderingAPI.renderChunk(chunk, formatInfo, settings);
-
-            return {
-                content: result.content || chunk,
-                formatted: result.formatted || true,
-                timestamp: Date.now(),
-                type: result.type || 'text',
-                metadata: result.metadata || {}
-            };
-        } catch (error) {
-            console.error('Chunk rendering failed:', error);
-            return {
-                content: chunk,
-                formatted: false,
-                timestamp: Date.now(),
-                type: 'text',
-                metadata: {}
-            };
-        }
-    };
-
-    const injectInteractiveElements = async (chunks, formatInfo) => {
-        try {
-            const result = await renderingAPI.injectInteractiveElements(chunks, formatInfo);
-
-            return result || chunks.map(chunk => ({
-                ...chunk,
-                interactive: formatInfo?.hasInteractive || false,
-                interactiveElements: []
-            }));
-        } catch (error) {
-            console.error('Interactive element injection failed:', error);
-            return chunks.map(chunk => ({
-                ...chunk,
-                interactive: formatInfo?.hasInteractive || false,
-                interactiveElements: []
-            }));
-        }
-    };
-
-    const bindActions = async (elements) => {
-        try {
-            const result = await renderingAPI.bindActions(elements);
-
-            return result || elements.map(element => ({
-                ...element,
-                actions: element.interactive ? ['copy', 'edit', 'run'] : ['copy'],
-                actionHandlers: {}
-            }));
-        } catch (error) {
-            console.error('Action binding failed:', error);
-            return elements.map(element => ({
-                ...element,
-                actions: element.interactive ? ['copy', 'edit', 'run'] : ['copy'],
-                actionHandlers: {}
-            }));
-        }
-    };
+    // Direct API calls (replacing mock implementations)
+    const analyzeQuery = knowledgeAPI.analyzeQuery;
+    const retrieveKnowledge = knowledgeAPI.retrieveKnowledge;
+    const injectContext = knowledgeAPI.injectContext;
+    const addCitations = knowledgeAPI.addCitations;
+    const detectTask = modelsAPI.detectTask;
+    const matchCapabilities = modelsAPI.matchCapabilities;
+    const evaluateCostPerformance = modelsAPI.evaluateCostPerformance;
+    const selectOptimalModel = modelsAPI.selectOptimalModel;
+    const callModel = modelsAPI.callModel;
+    const handleFallback = modelsAPI.handleFallback;
+    const createStreamProcessor = renderingAPI.createStreamProcessor;
+    const detectFormats = renderingAPI.detectFormats;
+    const renderChunk = renderingAPI.renderChunk;
+    const injectInteractiveElements = renderingAPI.injectInteractiveElements;
+    const bindActions = renderingAPI.bindActions;
 
     const updateMetrics = async (update) => {
         // Update local state

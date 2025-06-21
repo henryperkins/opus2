@@ -78,7 +78,7 @@ export const authAPI = {
     // Clean undefined / empty string values – backend treats missing keys as
     // "no-change" whereas explicit null/empty may fail validation.
     const payload = {};
-    ['username', 'email', 'password'].forEach((key) => {
+    ['username', 'email', 'password', 'current_password'].forEach((key) => {
       const value = changes[key];
       if (value !== undefined && value !== null && value !== '') {
         payload[key] = value;
@@ -90,6 +90,45 @@ export const authAPI = {
     }
 
     const response = await client.patch('/api/auth/me', payload);
+    return response.data;
+  },
+
+  /**
+   * Setup two-factor authentication for the current user
+   * @returns {Promise<object>} 2FA setup data including QR code and secret
+   */
+  async setup2FA() {
+    const response = await client.post('/api/auth/2fa/setup');
+    return response.data;
+  },
+
+  /**
+   * Verify and enable two-factor authentication
+   * @param {string} code - 6-digit verification code from authenticator app
+   * @returns {Promise<object>} Verification result
+   */
+  async verify2FA(code) {
+    const response = await client.post('/api/auth/2fa/verify', { code });
+    return response.data;
+  },
+
+  /**
+   * Disable two-factor authentication
+   * @param {string} code - 6-digit verification code or backup code
+   * @returns {Promise<object>} Disable result
+   */
+  async disable2FA(code) {
+    const response = await client.post('/api/auth/2fa/disable', { code });
+    return response.data;
+  },
+
+  /**
+   * Generate new backup codes for 2FA
+   * @param {string} code - 6-digit verification code from authenticator app
+   * @returns {Promise<object>} New backup codes
+   */
+  async generateBackupCodes(code) {
+    const response = await client.post('/api/auth/2fa/backup-codes', { code });
     return response.data;
   },
 };

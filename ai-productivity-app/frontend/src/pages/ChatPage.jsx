@@ -1,4 +1,4 @@
-// pages/EnhancedChatPage.tsx
+// pages/EnhancedChatPage.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
@@ -26,7 +26,7 @@ import PromptManager from '../components/settings/PromptManager';
 
 // Phase 3 - Response Rendering
 import StreamingMessage from '../components/chat/StreamingMessage';
-import RichMessageRenderer from '../components/chat/RichMessageRenderer';
+import EnhancedMessageRenderer from '../components/chat/EnhancedMessageRenderer';
 import InteractiveElements from '../components/chat/InteractiveElements';
 import ResponseTransformer from '../components/chat/ResponseTransformer';
 import ResponseQuality from '../components/analytics/ResponseQuality';
@@ -34,26 +34,8 @@ import ResponseQuality from '../components/analytics/ResponseQuality';
 // Icons
 import { Brain, Settings, Search, FileText, BarChart2, Sparkles } from 'lucide-react';
 
-// Types
-import { createCitation } from '../types/knowledge';
-
-interface EnhancedMessage {
-  id: string;
-  content: string;
-  role: 'user' | 'assistant' | 'system';
-  isStreaming?: boolean;
-  metadata?: {
-    model?: string;
-    citations?: Citation[];
-    contextSummary?: any;
-    responseTime?: number;
-    tokens?: {
-      prompt: number;
-      completion: number;
-    };
-  };
-  interactiveElements?: any[];
-}
+// Types - Commented out for JSX compatibility
+// import { createCitation } from '../types/knowledge';
 
 export default function EnhancedChatPage() {
   const { projectId } = useParams();
@@ -61,64 +43,95 @@ export default function EnhancedChatPage() {
   const user = useUser();
 
   // Core hooks
-  const { project, loading: projectLoading } = useProject(projectId!);
-  const {
-    messages,
-    connectionState,
-    typingUsers,
-    sendMessage,
-    editMessage,
-    deleteMessage,
-    sendTypingIndicator
-  } = useChat(projectId!);
+  const projectData = useProject(projectId);
+  const project = projectData.project;
+  const projectLoading = projectData.loading;
+  const chatData = useChat(projectId);
+  const messages = chatData.messages;
+  const connectionState = chatData.connectionState;
+  const typingUsers = chatData.typingUsers;
+  const sendMessage = chatData.sendMessage;
+  const editMessage = chatData.editMessage;
+  const deleteMessage = chatData.deleteMessage;
+  const sendTypingIndicator = chatData.sendTypingIndicator;
 
   // Knowledge integration
-  const knowledgeChat = useKnowledgeChat(projectId!);
+  const knowledgeChat = useKnowledgeChat(projectId);
 
   // Model configuration
   const modelSelection = useModelSelection();
   const modelPerformance = useModelPerformance(modelSelection.currentModel);
 
   // Response quality tracking
-  const qualityTracking = useResponseQualityTracking(projectId!);
+  const qualityTracking = useResponseQualityTracking(projectId);
 
   // UI State
-  const [splitView, setSplitView] = useState(true);
-  const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(true);
-  const [showKnowledgePanel, setShowKnowledgePanel] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const [showPromptManager, setShowPromptManager] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const splitViewState = useState(true);
+  const splitView = splitViewState[0];
+  const setSplitView = splitViewState[1];
+  const showKnowledgeAssistantState = useState(true);
+  const showKnowledgeAssistant = showKnowledgeAssistantState[0];
+  const setShowKnowledgeAssistant = showKnowledgeAssistantState[1];
+  const showKnowledgePanelState = useState(false);
+  const showKnowledgePanel = showKnowledgePanelState[0];
+  const setShowKnowledgePanel = showKnowledgePanelState[1];
+  const showSearchState = useState(false);
+  const showSearch = showSearchState[0];
+  const setShowSearch = showSearchState[1];
+  const showPromptManagerState = useState(false);
+  const showPromptManager = showPromptManagerState[0];
+  const setShowPromptManager = showPromptManagerState[1];
+  const showAnalyticsState = useState(false);
+  const showAnalytics = showAnalyticsState[0];
+  const setShowAnalytics = showAnalyticsState[1];
 
   // Editor state
-  const [editorContent, setEditorContent] = useState('');
-  const [editorLanguage, setEditorLanguage] = useState('python');
-  const [selectedText, setSelectedText] = useState('');
-  const [currentFile, setCurrentFile] = useState<string | undefined>();
+  const editorContentState = useState('');
+  const editorContent = editorContentState[0];
+  const setEditorContent = editorContentState[1];
+  const editorLanguageState = useState('python');
+  const editorLanguage = editorLanguageState[0];
+  const setEditorLanguage = editorLanguageState[1];
+  const selectedTextState = useState('');
+  const selectedText = selectedTextState[0];
+  const setSelectedText = selectedTextState[1];
+  const currentFileState = useState();
+  const currentFile = currentFileState[0];
+  const setCurrentFile = currentFileState[1];
 
   // Message state
-  const [streamingMessages, setStreamingMessages] = useState<Map<string, string>>(new Map());
-  const [messageQualities, setMessageQualities] = useState<Map<string, any>>(new Map());
+  const streamingMessagesState = useState(new Map());
+  const streamingMessages = streamingMessagesState[0];
+  const setStreamingMessages = streamingMessagesState[1];
+  const messageQualitiesState = useState(new Map());
+  const messageQualities = messageQualitiesState[0];
+  const setMessageQualities = messageQualitiesState[1];
 
   // Enhanced message sending with all integrations
-  const handleSendMessage = useCallback(async (content: string, metadata: any) => {
+  const handleSendMessage = useCallback(async function(content, metadata) {
     const startTime = Date.now();
 
     try {
       // Auto-detect task type for model selection
       const taskType = detectTaskType(content);
-      if (modelSelection.currentModel !== await modelSelection.autoSelectModel(taskType)) {
+      const newModel = await modelSelection.autoSelectModel(taskType);
+      if (modelSelection.currentModel !== newModel) {
         // Model was switched, notify user
-        toast.info(`Switched to optimal model for ${taskType}`);
+        console.log('Switched to optimal model for ' + taskType);
+        modelSelection.currentModel = newModel;
       }
 
       // Build enhanced metadata
       const enhancedMetadata = {
-        ...metadata,
         model: modelSelection.currentModel,
-        taskType,
+        taskType: taskType,
         timestamp: new Date().toISOString()
       };
+      for (var key in metadata) {
+        if (metadata.hasOwnProperty(key)) {
+          enhancedMetadata[key] = metadata[key];
+        }
+      }
 
       // Add editor context if referenced
       if (content.includes('@editor') && editorContent) {
@@ -149,15 +162,15 @@ export default function EnhancedChatPage() {
   }, [sendMessage, editorContent, editorLanguage, currentFile, modelSelection, modelPerformance]);
 
   // Handle streaming responses
-  const handleStreamingUpdate = useCallback((messageId: string, chunk: string, done: boolean) => {
+  const handleStreamingUpdate = useCallback(function(messageId, chunk, done) {
     if (done) {
-      setStreamingMessages(prev => {
+      setStreamingMessages(function(prev) {
         const updated = new Map(prev);
         updated.delete(messageId);
         return updated;
       });
     } else {
-      setStreamingMessages(prev => {
+      setStreamingMessages(function(prev) {
         const updated = new Map(prev);
         const current = updated.get(messageId) || '';
         updated.set(messageId, current + chunk);
@@ -167,27 +180,27 @@ export default function EnhancedChatPage() {
   }, []);
 
   // Handle interactive elements
-  const handleInteractiveElement = useCallback(async (element: any) => {
+  const handleInteractiveElement = useCallback(async function(element) {
     // Process interactive element action
     console.log('Interactive element:', element);
   }, []);
 
   // Handle knowledge search result selection
-  const handleSearchResultSelect = useCallback((result: any) => {
+  const handleSearchResultSelect = useCallback((result) => {
     // Add to citations and inject into context
     const citations = knowledgeChat.addToCitations([result]);
-    toast.success('Added to context');
+    console.log('Added to context');
     setShowSearch(false);
   }, [knowledgeChat]);
 
   // Handle response quality feedback
-  const handleQualityFeedback = useCallback((messageId: string, feedback: any) => {
+  const handleQualityFeedback = useCallback((messageId, feedback) => {
     console.log('Quality feedback:', messageId, feedback);
     // Send feedback to backend
   }, []);
 
   // Render enhanced message with all features
-  const renderMessage = (message: EnhancedMessage) => {
+  const renderMessage = (message) => {
     const isStreaming = streamingMessages.has(message.id);
     const streamingContent = streamingMessages.get(message.id);
 
@@ -208,7 +221,7 @@ export default function EnhancedChatPage() {
           {/* Message Header */}
           <div className="flex items-center justify-between mb-2 text-xs opacity-75">
             <span>{message.role === 'assistant' ? 'AI Assistant' : 'You'}</span>
-            {message.metadata?.model && (
+            {message.metadata && message.metadata.model && (
               <span className="flex items-center space-x-1">
                 <Sparkles className="w-3 h-3" />
                 <span>{message.metadata.model}</span>
@@ -222,16 +235,19 @@ export default function EnhancedChatPage() {
               messageId={message.id}
               isStreaming={true}
               content={streamingContent || ''}
-              model={message.metadata?.model}
+              model={message.metadata && message.metadata.model ? message.metadata.model : ''}
+              onStop={() => console.log('Stop streaming')}
+              onRetry={() => console.log('Retry streaming')}
             />
-          ) : message.metadata?.citations && message.metadata.citations.length > 0 ? (
+          ) : message.metadata && message.metadata.citations && message.metadata.citations.length > 0 ? (
             <CitationRenderer
               text={message.content}
               citations={message.metadata.citations}
               inline={true}
             />
           ) : (
-            <RichMessageRenderer
+            <EnhancedMessageRenderer
+              message={message}
               content={message.content}
               metadata={message.metadata}
               onCodeRun={handleInteractiveElement}
@@ -239,6 +255,8 @@ export default function EnhancedChatPage() {
                 setEditorContent(code);
                 setEditorLanguage(language);
               }}
+              onDiagramClick={(diagram) => console.log('Diagram clicked:', diagram)}
+              onCitationClick={(citation) => console.log('Citation clicked:', citation)}
             />
           )}
 
@@ -261,6 +279,7 @@ export default function EnhancedChatPage() {
                   onTransform={(transformed, format) => {
                     console.log('Transformed:', format);
                   }}
+                  allowedTransforms={[]}
                 />
 
                 <ResponseQuality
@@ -386,7 +405,7 @@ export default function EnhancedChatPage() {
         <div className="border-b border-gray-200 max-h-64 overflow-y-auto">
           <KnowledgeContextPanel
             query={knowledgeChat.activeQuery}
-            projectId={projectId!}
+            projectId={projectId}
             onDocumentSelect={(doc) => knowledgeChat.toggleItemSelection(doc.id)}
             onCodeSelect={(snippet) => knowledgeChat.toggleItemSelection(snippet.id)}
           />
@@ -395,7 +414,7 @@ export default function EnhancedChatPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
-        {messages.map((msg) => renderMessage(msg as EnhancedMessage))}
+        {messages.map((msg) => renderMessage(msg))}
 
         {/* Typing indicators */}
         {typingUsers.size > 0 && (
@@ -415,11 +434,11 @@ export default function EnhancedChatPage() {
       <EnhancedCommandInput
         onSend={handleSendMessage}
         onTyping={sendTypingIndicator}
-        projectId={projectId!}
+        projectId={projectId}
         editorContent={editorContent}
         selectedText={selectedText}
         currentFile={currentFile}
-        userId={user?.id || ''}
+        userId={user && user.id ? user.id : ''}
       />
     </div>
   );
@@ -457,7 +476,7 @@ export default function EnhancedChatPage() {
           onChange={(value) => setEditorContent(value || '')}
           onMount={(editor) => {
             editor.onDidChangeCursorSelection((e) => {
-              const selection = editor.getModel()?.getValueInRange(e.selection);
+              const selection = editor.getModel() && editor.getModel().getValueInRange ? editor.getModel().getValueInRange(e.selection) : '';
               setSelectedText(selection || '');
             });
           }}
@@ -478,31 +497,31 @@ export default function EnhancedChatPage() {
       <Header />
 
       <div className="flex-1 flex overflow-hidden">
-        {splitView ? (
-          <SplitPane
-            split="vertical"
-            minSize={400}
-            defaultSize="50%"
-            resizerStyle={{
-              background: '#e5e7eb',
-              width: '4px',
-              cursor: 'col-resize'
-            }}
-          >
-            {chatPanel}
-            {editorPanel}
-          </SplitPane>
-        ) : (
-          chatPanel
-        )}
+          {splitView ? (
+            <SplitPane
+              split="vertical"
+              minSize={400}
+              defaultSize="50%"
+              resizerStyle={{
+                background: '#e5e7eb',
+                width: '4px',
+                cursor: 'col-resize'
+              }}
+              left={chatPanel}
+              right={editorPanel}
+              children={[chatPanel, editorPanel]}
+            />
+          ) : (
+            chatPanel
+          )}
       </div>
 
       {/* Floating Components */}
 
       {/* Knowledge Assistant */}
       <KnowledgeAssistant
-        projectId={projectId!}
-        message={messages[messages.length - 1]?.content || ''}
+        projectId={projectId}
+        message={messages.length > 0 ? messages[messages.length - 1].content : ''}
         onSuggestionApply={(suggestion, citations) => {
           handleSendMessage(suggestion, { citations });
         }}
@@ -516,7 +535,7 @@ export default function EnhancedChatPage() {
       {/* Search Modal */}
       {showSearch && (
         <SmartKnowledgeSearch
-          projectId={projectId!}
+          projectId={projectId}
           onResultSelect={handleSearchResultSelect}
           onClose={() => setShowSearch(false)}
         />
@@ -546,7 +565,7 @@ export default function EnhancedChatPage() {
 }
 
 // Helper function to detect task type from message
-function detectTaskType(message: string): string {
+function detectTaskType(message) {
   const lower = message.toLowerCase();
 
   if (lower.includes('explain') || lower.includes('what is') || lower.includes('how does')) {

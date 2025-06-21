@@ -1,4 +1,4 @@
-// components/chat/InteractiveElements.tsx
+// components/chat/InteractiveElements.jsx
 import React, { useState, useCallback } from 'react';
 import {
   Play, Code, FileText, Download, ChevronRight,
@@ -6,29 +6,11 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface InteractiveElement {
-  id: string;
-  type: 'code' | 'query' | 'decision' | 'form' | 'action';
-  data: any;
-  onInteraction: (action: string, data?: any) => Promise<any>;
-}
-
-interface InteractiveElementsProps {
-  elements: InteractiveElement[];
-  onElementComplete?: (elementId: string, result: any) => void;
-}
-
 // Executable Code Block
-const ExecutableCode = ({
-  element,
-  onComplete
-}: {
-  element: InteractiveElement;
-  onComplete?: (result: any) => void;
-}) => {
+const ExecutableCode = ({ element, onComplete }) => {
   const [isRunning, setIsRunning] = useState(false);
-  const [output, setOutput] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [output, setOutput] = useState(null);
+  const [error, setError] = useState(null);
 
   const handleRun = async () => {
     setIsRunning(true);
@@ -43,7 +25,7 @@ const ExecutableCode = ({
 
       setOutput(result.output);
       onComplete?.(result);
-    } catch (err: any) {
+    } catch (err) {
       setError(err.message || 'Execution failed');
     } finally {
       setIsRunning(false);
@@ -103,17 +85,11 @@ const ExecutableCode = ({
 };
 
 // Interactive Query Builder
-const QueryBuilder = ({
-  element,
-  onComplete
-}: {
-  element: InteractiveElement;
-  onComplete?: (result: any) => void;
-}) => {
+const QueryBuilder = ({ element, onComplete }) => {
   const [query, setQuery] = useState(element.data.initialQuery || '');
-  const [filters, setFilters] = useState<Record<string, any>>(element.data.filters || {});
+  const [filters, setFilters] = useState(element.data.filters || {});
   const [isExecuting, setIsExecuting] = useState(false);
-  const [results, setResults] = useState<any[] | null>(null);
+  const [results, setResults] = useState(null);
 
   const handleExecute = async () => {
     setIsExecuting(true);
@@ -179,18 +155,12 @@ const QueryBuilder = ({
 };
 
 // Decision Tree
-const DecisionTree = ({
-  element,
-  onComplete
-}: {
-  element: InteractiveElement;
-  onComplete?: (result: any) => void;
-}) => {
+const DecisionTree = ({ element, onComplete }) => {
   const [currentNode, setCurrentNode] = useState(element.data.root);
-  const [path, setPath] = useState<string[]>([]);
+  const [path, setPath] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleChoice = async (choice: any) => {
+  const handleChoice = async (choice) => {
     setIsProcessing(true);
     const newPath = [...path, choice.label];
     setPath(newPath);
@@ -247,7 +217,7 @@ const DecisionTree = ({
         )}
 
         <div className="space-y-2">
-          {currentNode.choices.map((choice: any, idx: number) => (
+          {currentNode.choices.map((choice, idx) => (
             <button
               key={idx}
               onClick={() => handleChoice(choice)}
@@ -272,20 +242,12 @@ const DecisionTree = ({
 };
 
 // Dynamic Form
-const DynamicForm = ({
-  element,
-  onComplete
-}: {
-  element: InteractiveElement;
-  onComplete?: (result: any) => void;
-}) => {
-  const [formData, setFormData] = useState<Record<string, any>>(
-    element.data.initialValues || {}
-  );
-  const [errors, setErrors] = useState<Record<string, string>>({});
+const DynamicForm = ({ element, onComplete }) => {
+  const [formData, setFormData] = useState(element.data.initialValues || {});
+  const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setErrors({});
@@ -293,7 +255,7 @@ const DynamicForm = ({
     try {
       const result = await element.onInteraction('submit', formData);
       onComplete?.(result);
-    } catch (error: any) {
+    } catch (error) {
       if (error.validationErrors) {
         setErrors(error.validationErrors);
       } else {
@@ -304,7 +266,7 @@ const DynamicForm = ({
     }
   };
 
-  const handleFieldChange = (fieldName: string, value: any) => {
+  const handleFieldChange = (fieldName, value) => {
     setFormData({ ...formData, [fieldName]: value });
     // Clear error for this field
     if (errors[fieldName]) {
@@ -316,7 +278,7 @@ const DynamicForm = ({
     <form onSubmit={handleSubmit} className="border rounded-lg p-4 space-y-4">
       <h4 className="font-medium text-gray-900">{element.data.title}</h4>
 
-      {element.data.fields.map((field: any) => (
+      {element.data.fields.map((field) => (
         <div key={field.name}>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {field.label}
@@ -331,7 +293,7 @@ const DynamicForm = ({
               required={field.required}
             >
               <option value="">Select...</option>
-              {field.options.map((option: any) => (
+              {field.options.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -375,16 +337,10 @@ const DynamicForm = ({
 };
 
 // Action Buttons
-const ActionButtons = ({
-  element,
-  onComplete
-}: {
-  element: InteractiveElement;
-  onComplete?: (result: any) => void;
-}) => {
-  const [processing, setProcessing] = useState<string | null>(null);
+const ActionButtons = ({ element, onComplete }) => {
+  const [processing, setProcessing] = useState(null);
 
-  const handleAction = async (action: any) => {
+  const handleAction = async (action) => {
     setProcessing(action.id);
     try {
       const result = await element.onInteraction('action', {
@@ -401,7 +357,7 @@ const ActionButtons = ({
 
   return (
     <div className="flex flex-wrap gap-2">
-      {element.data.actions.map((action: any) => (
+      {element.data.actions.map((action) => (
         <button
           key={action.id}
           onClick={() => handleAction(action)}
@@ -425,11 +381,8 @@ const ActionButtons = ({
   );
 };
 
-export default function InteractiveElements({
-  elements,
-  onElementComplete
-}: InteractiveElementsProps) {
-  const renderElement = (element: InteractiveElement) => {
+export default function InteractiveElements({ elements, onElementComplete }) {
+  const renderElement = (element) => {
     switch (element.type) {
       case 'code':
         return (

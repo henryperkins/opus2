@@ -1,22 +1,56 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
 import Modal from '../common/Modal';
+import { authAPI } from '../../api/auth';
+import { toast } from '../common/Toast';
 
 const ChangePasswordModal = ({ isOpen, onClose }) => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    
     if (newPassword !== confirmPassword) {
       setError('New passwords do not match.');
       return;
     }
-    // Handle password change logic here
-    console.log('Changing password...');
-    onClose();
+
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters long.');
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // Use authAPI.updateProfile to change password
+      await authAPI.updateProfile({
+        current_password: currentPassword,
+        password: newPassword
+      });
+      
+      toast.success('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      onClose();
+    } catch (error) {
+      console.error('Failed to change password:', error);
+      if (error.response?.status === 400) {
+        setError('Current password is incorrect.');
+      } else if (error.response?.status === 422) {
+        setError('New password does not meet requirements.');
+      } else {
+        setError('Failed to change password. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -57,8 +91,12 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
             Cancel
           </button>
-          <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-            Change Password
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Changing...' : 'Change Password'}
           </button>
         </div>
       </form>

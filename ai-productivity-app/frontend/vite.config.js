@@ -48,15 +48,18 @@ export default defineConfig({
     host: '0.0.0.0',
     port: parseInt(process.env.PORT) || 5173, // eslint-disable-line no-undef
     strictPort: false,
-    allowedHosts: ['lakefrontdigital.io'],
-    proxy: {
-      '/api': {
-        target: backendTarget,
-        changeOrigin: true,
-        ws: true,
-        rewrite: (p) => p,
+    allowedHosts: ['localhost', '127.0.0.1'],
+    // Only proxy when using localhost backend
+    ...(backendTarget.includes('localhost') && {
+      proxy: {
+        '/api': {
+          target: backendTarget,
+          changeOrigin: true,
+          ws: true,
+          rewrite: (p) => p,
+        },
       },
-    },
+    }),
   },
 
   // Production build

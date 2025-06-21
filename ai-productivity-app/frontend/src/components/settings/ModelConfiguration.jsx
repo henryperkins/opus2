@@ -5,6 +5,7 @@ import { Settings, Zap, DollarSign, Brain, AlertCircle, Check, RefreshCw } from 
 import { useConfig } from '../../hooks/useConfig';
 import { configAPI } from '../../api/config';
 import { toast } from '../common/Toast';
+import client from '../../api/client';
 import { defaultChatSettings, validateChatSettings } from '../../config/chat-settings';
 
 const modelPresets = [
@@ -185,14 +186,21 @@ export default function ModelConfiguration() {
     }
   };
 
-  const handleQualitySettingChange = (setting, value) => {
+  const handleQualitySettingChange = async (setting, value) => {
     const newSettings = { ...qualitySettings, [setting]: value };
     setQualitySettings(newSettings);
-    // Save to backend or localStorage
+    
+    // Save to backend API instead of localStorage
     try {
-      localStorage.setItem('qualitySettings', JSON.stringify(newSettings));
+      await client.patch('/api/auth/preferences', {
+        quality_settings: newSettings
+      });
+      toast.success('Quality settings saved');
     } catch (error) {
       console.error('Failed to save quality settings:', error);
+      toast.error('Failed to save quality settings');
+      // Revert the change on error
+      setQualitySettings(qualitySettings);
     }
   };
 
@@ -211,18 +219,22 @@ export default function ModelConfiguration() {
     }
   };
 
-  useEffect(() => {
-    loadQualityMetrics();
-
-    // Load quality settings
+  const loadQualitySettings = async () => {
     try {
-      const saved = localStorage.getItem('qualitySettings');
-      if (saved) {
-        setQualitySettings(JSON.parse(saved));
+      const response = await client.get('/api/auth/preferences');
+      if (response.data.quality_settings) {
+        setQualitySettings(response.data.quality_settings);
       }
     } catch (error) {
       console.error('Failed to load quality settings:', error);
+      // Fall back to defaults if API fails
+      setQualitySettings(defaultChatSettings.quality);
     }
+  };
+
+  useEffect(() => {
+    loadQualityMetrics();
+    loadQualitySettings();
   }, []);
 
   const estimateCost = () => {

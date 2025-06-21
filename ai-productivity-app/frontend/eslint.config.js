@@ -38,6 +38,10 @@ export default [
       react: {
         version: 'detect'
       }
+    },
+    env: {
+      browser: true,
+      es6: true
     }
   }
 ];

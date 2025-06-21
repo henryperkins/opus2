@@ -3,7 +3,7 @@ import { useChat } from '../../hooks/useChat';
 import { useCodeEditor } from '../../hooks/useCodeEditor';
 import { useUser } from '../../hooks/useAuth';
 import MessageList from './MessageList';
-import CommandInput from './CommandInput';
+import EnhancedCommandInput from './EnhancedCommandInput';
 import CodePreview from './CodePreview';
 import MonacoEditor from '@monaco-editor/react';
 import SplitPane from '../common/SplitPane';
@@ -27,6 +27,8 @@ export default function CodeChat({ sessionId, projectId }) {
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [showDiff, setShowDiff] = useState(false);
   const [viewMode, setViewMode] = useState('editor'); // 'editor', 'dependency', 'canvas'
+  const [selectedText, setSelectedText] = useState('');
+  const [currentFile, setCurrentFile] = useState(undefined);
 
   // Extract code from selected message
   useEffect(() => {
@@ -37,12 +39,13 @@ export default function CodeChat({ sessionId, projectId }) {
     }
   }, [selectedMessage]);
 
-  const handleSendMessage = (content, metadata) => {
+  const handleSendMessage = (content, metadata = {}) => {
     // Add current editor content if referenced
-    if (content.includes('@editor')) {
+    if (content.includes('@editor') && editorContent) {
       metadata.code_snippets = [{
         language: editorLanguage,
-        code: editorContent
+        code: editorContent,
+        file_path: currentFile || 'editor'
       }];
     }
 
@@ -90,10 +93,14 @@ export default function CodeChat({ sessionId, projectId }) {
           </div>
         )}
 
-        <CommandInput
+        <EnhancedCommandInput
           onSend={handleSendMessage}
           onTyping={sendTypingIndicator}
           projectId={projectId}
+          editorContent={editorContent}
+          selectedText={selectedText}
+          currentFile={currentFile}
+          userId={user?.id}
         />
       </div>
   );

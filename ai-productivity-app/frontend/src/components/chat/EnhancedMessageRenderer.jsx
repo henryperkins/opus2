@@ -3,64 +3,43 @@
 import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-// Use a simple theme object instead of importing
-const codeTheme = {
-  'code[class*="language-"]': {
-    color: '#f8f8f2',
-    background: 'none',
-    fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
-    fontSize: '1em',
-    textAlign: 'left',
-    whiteSpace: 'pre',
-    wordSpacing: 'normal',
-    wordBreak: 'normal',
-    wordWrap: 'normal',
-    lineHeight: '1.5',
-    tabSize: '4',
-    hyphens: 'none',
-  },
-  'pre[class*="language-"]': {
-    color: '#f8f8f2',
-    background: '#2d3748',
-    fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
-    fontSize: '1em',
-    textAlign: 'left',
-    whiteSpace: 'pre',
-    wordSpacing: 'normal',
-    wordBreak: 'normal',
-    wordWrap: 'normal',
-    lineHeight: '1.5',
-    tabSize: '4',
-    hyphens: 'none',
-    padding: '1em',
-    margin: '.5em 0',
-    overflow: 'auto',
-    borderRadius: '0.3em',
-  },
-};
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import mermaid from 'mermaid';
+import 'katex/dist/katex.min.css';
+
 import {
   Copy,
   Check,
+  Play,
   ExternalLink,
   FileText,
   Code,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Table,
+  BarChart2,
+  Hash
 } from 'lucide-react';
 
 import CitationRenderer from './CitationRenderer';
+
+// Initialize mermaid
+mermaid.initialize({ startOnLoad: false, theme: 'dark' });
 
 /* ───────────────────────────────────────────────────────────
  * Inline helpers
  * ─────────────────────────────────────────────────────────── */
 function ContextBanner({ summary }) {
   return (
-    <div className="flex items-center gap-2 text-sm text-gray-600 bg-blue-50 px-3 py-2 rounded-lg">
+    <div className="flex items-center gap-2 text-sm text-gray-600 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
       <FileText className="w-4 h-4" />
       <span>
         Using {summary.documentsFound} documents and {summary.codeSnippetsFound} code snippets
       </span>
-      <span className="text-xs text-gray-500">
+      <span className="text-xs text-gray-500 dark:text-gray-400">
         ({Math.round(summary.confidence * 100)}% confidence)
       </span>
     </div>
@@ -69,17 +48,17 @@ function ContextBanner({ summary }) {
 
 function MetadataPanel({ metadata, open, onToggle }) {
   return (
-    <div className="mt-4 pt-4 border-t border-gray-200 text-sm">
+    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-sm">
       <button
         onClick={onToggle}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+        className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
       >
         <span>Metadata</span>
         {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
 
       {open && (
-        <div className="mt-2 space-y-2 text-xs text-gray-600">
+        <div className="mt-2 space-y-2 text-xs text-gray-600 dark:text-gray-400">
           {metadata.model && <div>Model: {metadata.model}</div>}
           {metadata.timestamp && (
             <div>Time: {new Date(metadata.timestamp).toLocaleString()}</div>
@@ -97,14 +76,144 @@ function MetadataPanel({ metadata, open, onToggle }) {
 }
 
 /* ───────────────────────────────────────────────────────────
+ * Special content renderers
+ * ─────────────────────────────────────────────────────────── */
+// Mermaid diagram renderer
+const MermaidDiagram = ({ chart, onClick }) => {
+  const [svg, setSvg] = useState('');
+  const [error, setError] = useState(null);
+
+  React.useEffect(() => {
+    const renderDiagram = async () => {
+      try {
+        const id = `mermaid-${Date.now()}`;
+        const { svg } = await mermaid.render(id, chart);
+        setSvg(svg);
+      } catch (err) {
+        setError('Failed to render diagram');
+        console.error('Mermaid error:', err);
+      }
+    };
+
+    renderDiagram();
+  }, [chart]);
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 dark:text-red-400">
+        {error}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="my-4 bg-gray-50 dark:bg-gray-800 rounded-lg p-4 overflow-x-auto cursor-pointer"
+      onClick={onClick}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+};
+
+// Interactive table component
+const InteractiveTable = ({ data }) => {
+  const [sortColumn, setSortColumn] = useState(null);
+  const [sortDirection, setSortDirection] = useState('asc');
+
+  const sortedData = useMemo(() => {
+    if (sortColumn === null || data.length < 2) return data;
+
+    const [header, ...rows] = data;
+    const sorted = [...rows].sort((a, b) => {
+      const aVal = a[sortColumn];
+      const bVal = b[sortColumn];
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
+      return sortDirection === 'asc'
+        ? String(aVal).localeCompare(String(bVal))
+        : String(bVal).localeCompare(String(aVal));
+    });
+
+    return [header, ...sorted];
+  }, [data, sortColumn, sortDirection]);
+
+  const handleSort = (columnIndex) => {
+    if (sortColumn === columnIndex) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(columnIndex);
+      setSortDirection('asc');
+    }
+  };
+
+  if (data.length === 0) return null;
+
+  const [header, ...rows] = sortedData;
+
+  return (
+    <div className="my-4 overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead className="bg-gray-50 dark:bg-gray-800">
+          <tr>
+            {header.map((cell, idx) => (
+              <th
+                key={idx}
+                onClick={() => handleSort(idx)}
+                className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <div className="flex items-center space-x-1">
+                  <span>{cell}</span>
+                  <Hash className="w-3 h-3 opacity-50" />
+                </div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+          {rows.map((row, rowIdx) => (
+            <tr key={rowIdx} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+              {row.map((cell, cellIdx) => (
+                <td key={cellIdx} className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// Chart renderer (placeholder - would integrate with a charting library)
+const ChartRenderer = ({ type, data }) => {
+  return (
+    <div className="my-4 p-8 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
+      <BarChart2 className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        {type} chart visualization would appear here
+      </p>
+    </div>
+  );
+};
+
+/* ───────────────────────────────────────────────────────────
  * Main component
  * ─────────────────────────────────────────────────────────── */
 export default function EnhancedMessageRenderer({
   message,
+  content,  // Support both message.content and direct content
+  metadata, // Support both message.metadata and direct metadata
+  onCodeRun,
   onCodeApply,
+  onDiagramClick,
   onCitationClick,
   showMetadata = false
 }) {
+  const [activeTab, setActiveTab] = useState('rendered');
   const [copiedBlocks, setCopiedBlocks] = useState(new Set());
   const [expandedBlocks, setExpandedBlocks] = useState(new Set());
   const [showFullMetadata, setShowFullMetadata] = useState(false);
@@ -133,9 +242,44 @@ export default function EnhancedMessageRenderer({
   };
 
   /* --------------------------------------------------------
-   * Memo-ised (in case heavy messages)
+   * Content processing
    * -------------------------------------------------------- */
-  const processedContent = useMemo(() => message.content, [message.content]);
+  // Handle both message object style and direct content style
+  const messageContent = message?.content || content;
+  const messageMetadata = message?.metadata || metadata;
+  const messageId = message?.id || 'msg';
+
+  // Parse special content blocks
+  const { processedContent, specialBlocks } = useMemo(() => {
+    let processed = messageContent;
+    const blocks = [];
+
+    // Extract mermaid diagrams
+    const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
+    processed = processed.replace(mermaidRegex, (match, diagram) => {
+      const id = `mermaid-${blocks.length}`;
+      blocks.push({ type: 'mermaid', id, content: diagram.trim() });
+      return `<div id="${id}"></div>`;
+    });
+
+    // Extract tables (simple markdown tables)
+    const tableRegex = /\|(.+)\|[\s\S]*?\n\|(.+)\|/g;
+    const tables = processed.match(tableRegex);
+    if (tables) {
+      tables.forEach((table, idx) => {
+        const rows = table.trim().split('\n')
+          .filter(row => row.includes('|') && !row.match(/^\|[-:\s|]+\|$/))
+          .map(row => row.split('|').slice(1, -1).map(cell => cell.trim()));
+
+        if (rows.length > 1) {
+          const id = `table-${idx}`;
+          blocks.push({ type: 'table', id, content: rows });
+        }
+      });
+    }
+
+    return { processedContent: processed, specialBlocks: blocks };
+  }, [messageContent]);
 
   /* --------------------------------------------------------
    * Markdown renderers
@@ -147,14 +291,15 @@ export default function EnhancedMessageRenderer({
       const codeString = String(children).replace(/\n$/, '');
 
       // 🔑 stable identifier = message.id + starting position of the node
-      const { line, column } = node.position.start;
-      const blockId = `${message.id}-${line}-${column}`;
+      const position = node.position || { start: { line: 0, column: 0 } };
+      const { line, column } = position.start;
+      const blockId = `${messageId}-${line}-${column}`;
 
       /* ---------- INLINE ---------- */
       if (inline || !language) {
         return (
           <code
-            className="bg-gray-100 px-1 py-0.5 rounded text-sm"
+            className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm"
             {...props}
           >
             {children}
@@ -181,10 +326,20 @@ export default function EnhancedMessageRenderer({
             </span>
 
             <span className="flex items-center gap-2">
+              {['python', 'javascript', 'typescript'].includes(language) && onCodeRun && (
+                <button
+                  onClick={() => onCodeRun(codeString, language)}
+                  className="p-1 hover:bg-green-600 bg-green-700 rounded"
+                  title="Run code"
+                >
+                  <Play className="w-4 h-4" />
+                </button>
+              )}
+
               {onCodeApply && (
                 <button
                   onClick={() => onCodeApply(codeString, language)}
-                  className="p-1 hover:bg-gray-700 rounded"
+                  className="p-1 hover:bg-blue-600 bg-blue-700 rounded"
                   title="Apply to editor"
                 >
                   <ExternalLink className="w-4 h-4" />
@@ -222,7 +377,7 @@ export default function EnhancedMessageRenderer({
           {/* code body */}
           <SyntaxHighlighter
             language={language}
-            style={codeTheme}
+            style={oneDark}
             customStyle={{
               margin: 0,
               borderTopLeftRadius: 0,
@@ -238,34 +393,124 @@ export default function EnhancedMessageRenderer({
     }
   };
 
+  // Render special blocks
+  const renderSpecialBlock = (block) => {
+    switch (block.type) {
+      case 'mermaid':
+        return (
+          <MermaidDiagram
+            key={block.id}
+            chart={block.content}
+            onClick={() => onDiagramClick?.(block.content)}
+          />
+        );
+      case 'table':
+        return (
+          <InteractiveTable
+            key={block.id}
+            data={block.content}
+          />
+        );
+      case 'chart':
+        return (
+          <ChartRenderer
+            key={block.id}
+            type={block.chartType}
+            data={block.content}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   /* --------------------------------------------------------
    * JSX
    * -------------------------------------------------------- */
   return (
     <div className="space-y-4">
       {/* Context banner */}
-      {message.metadata?.contextSummary && (
-        <ContextBanner summary={message.metadata.contextSummary} />
+      {messageMetadata?.contextSummary && (
+        <ContextBanner summary={messageMetadata.contextSummary} />
       )}
 
-      {/* Content (with inline citations if present) */}
-      {message.metadata?.citations?.length ? (
-        <CitationRenderer
-          text={processedContent}
-          citations={message.metadata.citations}
-          inline
-          onCitationClick={onCitationClick}
-        />
-      ) : (
-        <div className="prose prose-sm max-w-none">
-          <ReactMarkdown components={components}>{processedContent}</ReactMarkdown>
+      {/* Tab switcher for raw/rendered view */}
+      <div className="flex items-center justify-end mb-2 space-x-2">
+        <button
+          onClick={() => setActiveTab('rendered')}
+          className={`text-xs px-2 py-1 rounded ${
+            activeTab === 'rendered'
+              ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <FileText className="w-3 h-3 inline mr-1" />
+          Rendered
+        </button>
+        <button
+          onClick={() => setActiveTab('raw')}
+          className={`text-xs px-2 py-1 rounded ${
+            activeTab === 'raw'
+              ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Code className="w-3 h-3 inline mr-1" />
+          Raw
+        </button>
+      </div>
+
+      {activeTab === 'rendered' ? (
+        <div>
+          {/* Content (with inline citations if present) */}
+          {messageMetadata?.citations?.length ? (
+            <CitationRenderer
+              text={processedContent}
+              citations={messageMetadata.citations}
+              inline
+              onCitationClick={onCitationClick}
+            />
+          ) : (
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown
+                components={components}
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+              >
+                {processedContent}
+              </ReactMarkdown>
+            </div>
+          )}
+
+          {/* Render special blocks */}
+          {specialBlocks.map(block => renderSpecialBlock(block))}
+
+          {/* Render metadata charts/tables if any */}
+          {messageMetadata?.charts?.map((chart, idx) => (
+            <ChartRenderer
+              key={`meta-chart-${idx}`}
+              type={chart.type}
+              data={chart.data}
+            />
+          ))}
+
+          {messageMetadata?.tables?.map((table, idx) => (
+            <InteractiveTable
+              key={`meta-table-${idx}`}
+              data={table}
+            />
+          ))}
         </div>
+      ) : (
+        <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto">
+          <code className="text-sm">{messageContent}</code>
+        </pre>
       )}
 
       {/* Optional metadata */}
-      {showMetadata && message.metadata && (
+      {showMetadata && messageMetadata && (
         <MetadataPanel
-          metadata={message.metadata}
+          metadata={messageMetadata}
           open={showFullMetadata}
           onToggle={() => setShowFullMetadata((open) => !open)}
         />
