@@ -345,6 +345,37 @@ def _install_fastapi_stub():  # noqa: D401
     _sys.modules["fastapi.testclient"] = testclient_module
     module.testclient = testclient_module
 
+    # ---------------------------------------------------------------------
+    # Minimal "fastapi.middleware.cors" implementation
+    # ---------------------------------------------------------------------
+    # Only the *name* and the ability to be instantiated are required by the
+    # application.  No runtime behaviour is expected from the dummy class –
+    # it merely needs to exist so that ``app.add_middleware(CORSMiddleware, …)``
+    # does not raise ``ImportError`` during test execution inside the sandbox.
+
+    middleware_pkg = types.ModuleType("fastapi.middleware")
+
+    cors_submodule = types.ModuleType("fastapi.middleware.cors")
+
+    class CORSMiddleware:  # noqa: D401 – behaviour-less stand-in
+        """Stub replacement for FastAPI's CORS middleware."""
+
+        def __init__(self, *_, **__):
+            # Accept *any* arguments so the real constructor signature is not
+            # required for the subset of tests executed in the sandbox.
+            pass
+
+    cors_submodule.CORSMiddleware = CORSMiddleware
+
+    # Expose sub-module on the parent *package* and register both on sys.modules
+    middleware_pkg.cors = cors_submodule
+    _sys.modules["fastapi.middleware"] = middleware_pkg
+    _sys.modules["fastapi.middleware.cors"] = cors_submodule
+
+    # Attach the *package* also on the top-level fastapi stub so that
+    # attribute access via ``fastapi.middleware`` works.
+    module.middleware = middleware_pkg
+
     # Register stub
     _sys.modules["fastapi"] = module
 

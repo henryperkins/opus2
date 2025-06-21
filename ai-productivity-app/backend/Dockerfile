@@ -62,10 +62,13 @@ PY
 # Production stage
 FROM python:3.11-slim
 
-# Install runtime dependencies including git
+# Install runtime dependencies including git and math libraries for VSS extension
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
+    libgomp1 \
+    libblas3 \
+    liblapack3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -75,6 +78,14 @@ RUN useradd -m -u 1000 appuser
 COPY --from=builder /root/.local /home/appuser/.local
 # Copy pre-compiled tree-sitter bundle from builder
 COPY --from=builder /app/build /app/build
+
+# Download and install SQLite VSS extension
+RUN mkdir -p /app/extensions && \
+    cd /tmp && \
+    curl -L -o sqlite-vss.tar.gz https://github.com/asg017/sqlite-vss/releases/download/v0.1.2/sqlite-vss-v0.1.2-loadable-linux-x86_64.tar.gz && \
+    tar -xzf sqlite-vss.tar.gz && \
+    cp vector0.so vss0.so /app/extensions/ && \
+    rm -rf /tmp/*
 
 # Set up application directory
 WORKDIR /app

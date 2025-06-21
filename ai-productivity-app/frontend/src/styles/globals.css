@@ -363,8 +363,9 @@
   }
 
   /* Project Overview Page Components */
+  /* Quick action card – add "card" class directly in markup instead of @apply */
   .action-card {
-    @apply card flex items-center justify-center py-4 font-medium;
+    @apply flex items-center justify-center py-4 font-medium;
     @apply hover:ring-2 hover:ring-blue-400 transition-all duration-200;
     @apply hover:shadow-lg hover:-translate-y-0.5;
   }

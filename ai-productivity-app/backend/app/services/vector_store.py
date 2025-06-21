@@ -29,7 +29,8 @@ class VectorStore:
                 try:
                     # Try to load VSS extension
                     conn.enable_load_extension(True)
-                    conn.load_extension("vector0")
+                    conn.load_extension("/app/extensions/vector0")
+                    conn.load_extension("/app/extensions/vss0")
                     conn.enable_load_extension(False)
                     self.vss_available = True
                     logger.info("SQLite VSS extension loaded successfully")
@@ -38,7 +39,8 @@ class VectorStore:
                     self.vss_available = False
             elif self.vss_available:
                 conn.enable_load_extension(True)
-                conn.load_extension("vector0")
+                conn.load_extension("/app/extensions/vector0")
+                conn.load_extension("/app/extensions/vss0")
                 conn.enable_load_extension(False)
             
             yield conn
