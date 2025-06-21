@@ -100,9 +100,19 @@ export default function Layout({ children }) {
       </a>
 
       {/* Sidebar */}
+      {/* Overlay for mobile when sidebar open */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm lg:hidden z-30"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       <Sidebar
         isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        onToggle={() => setSidebarOpen(false)}
+        className="lg:w-72"
       />
 
       {/* Main content area */}

@@ -154,6 +154,18 @@ class SearchAPI {
   }
 
   /**
+   * Fetch global search history (most recent queries)
+   * @param {number} [limit=100]
+   * @returns {Promise<Array<{ id: string, query: string, ts: string }>>}
+   */
+  async getHistory(limit = 100) {
+    const response = await client.get('/api/search/history', {
+      params: { limit },
+    });
+    return response.data;
+  }
+
+  /**
    * Reindex all content for a project
    * @param {string} projectId
    * @returns {Promise<{ status: string, jobId: string }>}

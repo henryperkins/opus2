@@ -18,24 +18,20 @@ class ErrorBoundary extends Component {
     // Categorize error type for better UX
     let errorType = 'generic';
 
-    if (error.message?.includes('WebSocket') || error.message?.includes('connection')) {
+    if (error?.message?.includes('WebSocket') || error?.message?.includes('connection')) {
       errorType = 'websocket';
-    } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+    } else if (error?.message?.includes('network') || error?.message?.includes('fetch')) {
       errorType = 'network';
-    } else if (error.message?.includes('model') || error.message?.includes('AI')) {
+    } else if (error?.message?.includes('model') || error?.message?.includes('AI')) {
       errorType = 'model';
-    } else if (error.message?.includes('stream')) {
+    } else if (error?.message?.includes('stream')) {
       errorType = 'streaming';
-    } else if (error.message?.includes('search') || error.message?.includes('knowledge')) {
+    } else if (error?.message?.includes('search') || error?.message?.includes('knowledge')) {
       errorType = 'search';
     }
 
+    // Update state so the next render shows the fallback UI with categorized error type
     return { hasError: true, errorType };
-  }
-
-  static getDerivedStateFromError(error) {
-    // Update state so the next render shows the fallback UI
-    return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {

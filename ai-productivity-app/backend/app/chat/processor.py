@@ -3,12 +3,14 @@ from sqlalchemy.orm import Session
 from fastapi import WebSocket
 import logging
 import asyncio
+import json
 
 from app.models.chat import ChatSession, ChatMessage
 from app.models.project import Project
 from app.services.chat_service import ChatService
 from app.llm.client import llm_client
 from app.llm.streaming import StreamingHandler
+from app.llm import tools as llm_tools
 from .context_builder import ContextBuilder
 from .commands import command_registry
 from .secret_scanner import secret_scanner
@@ -169,21 +171,47 @@ When referencing code, mention the file path and line numbers."""
         streaming_handler = StreamingHandler(websocket)
 
         try:
-            response_stream = await llm_client.complete(
+            # First non-stream call – we need body to inspect potential tool calls
+            response = await llm_client.complete(
                 messages=messages,
-                stream=True,
-                temperature=0.7
+                temperature=0.7,
+                stream=False,
+                tools=llm_tools.TOOL_SCHEMAS,
+                reasoning=settings.enable_reasoning,
             )
 
-            full_response = await streaming_handler.stream_response(
-                response_stream,
-                ai_message.id
-            )
+            # Loop while model wants to call tools
+            while hasattr(response, "choices") and response.choices[0].finish_reason == "tool_calls":
+                for tool_call in response.choices[0].message.tool_calls:
+                    name = tool_call.name
+                    args_json = json.loads(tool_call.arguments)
 
-            # Update message with full response
+                    result = await llm_tools.call_tool(name, args_json, self.db)
+                    messages.append({
+                        "role": "tool",
+                        "name": name,
+                        "content": json.dumps(result),
+                    })
+
+                # ask LLM to continue with new context
+                response = await llm_client.complete(
+                    messages=messages,
+                    temperature=0.7,
+                    stream=False,
+                )
+
+            # final assistant content
+            final_text = response.choices[0].message.content if hasattr(response, "choices") else str(response)
+
+            # now stream it to client (simulate streaming)
+            async def _generator():  # noqa: D401
+                yield final_text
+
+            full_response = await streaming_handler.stream_response(_generator(), ai_message.id)
+
+            # Update message in DB
             ai_message.content = full_response
 
-            # Extract code snippets from response
             code_snippets = self._extract_code_snippets(full_response)
             if code_snippets:
                 ai_message.code_snippets = code_snippets

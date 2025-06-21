@@ -1,4 +1,6 @@
 """Chat API endpoints."""
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -14,6 +16,12 @@ from app.websocket.handlers import handle_chat_connection
 from app.auth.utils import get_current_user_ws
 from app.chat.commands import command_registry
 
+# ---------------------------------------------------------------------------
+# Module level logger
+# ---------------------------------------------------------------------------
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
@@ -27,6 +35,15 @@ async def list_sessions(
     offset: int = Query(0, ge=0)
 ):
     """List chat sessions with optional filtering."""
+    logger.info(
+        "Listing chat sessions – user_id=%s project_id=%s is_active=%s limit=%s offset=%s",
+        current_user.id,
+        project_id,
+        is_active,
+        limit,
+        offset,
+    )
+
     query = db.query(ChatSession)
 
     if project_id:
@@ -56,11 +73,21 @@ async def create_session(
     db: DatabaseDep
 ):
     """Create a new chat session."""
+    logger.info(
+        "Create chat session – user_id=%s project_id=%s title=%s",
+        current_user.id,
+        session_data.project_id,
+        session_data.title,
+    )
+
     service = ChatService(db)
     session = await service.create_session(
         project_id=session_data.project_id,
         title=session_data.title
     )
+
+    logger.debug("Session created with id=%s", session.id)
+
     return ChatSessionResponse.from_orm(session)
 
 

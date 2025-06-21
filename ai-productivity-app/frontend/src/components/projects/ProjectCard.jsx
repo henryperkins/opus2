@@ -1,6 +1,7 @@
 // ProjectCard.jsx: visual card with status, emoji, tags, and quick actions.
 
 import React from "react";
+import { Link } from 'react-router-dom';
 
 export default function ProjectCard({ project, onClick }) {
   return (
@@ -54,7 +55,28 @@ export default function ProjectCard({ project, onClick }) {
             ? new Date(project.updated_at).toLocaleDateString()
             : "—"}
         </span>
-        <div className="flex items-center space-x-1">
+        {/* Quick links */}
+        <div className="flex items-center space-x-4">
+          <Link
+            to={`/projects/${project.id}/analytics`}
+            onClick={(e) => e.stopPropagation()}
+            title="Analytics"
+            className="text-gray-500 hover:text-blue-600"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3v18M5 12h6m8-6H5m10 6h4" />
+            </svg>
+          </Link>
+          <Link
+            to={`/projects/${project.id}/files`}
+            onClick={(e) => e.stopPropagation()}
+            title="Files"
+            className="text-gray-500 hover:text-blue-600"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16V4a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2H6a2 2 0 01-2-2z" />
+            </svg>
+          </Link>
           <div className={`w-2 h-2 rounded-full ${
             project.status === 'active' ? 'bg-green-400' :
             project.status === 'completed' ? 'bg-blue-400' : 'bg-gray-400'

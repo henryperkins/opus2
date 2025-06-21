@@ -18,7 +18,16 @@ from app.schemas.project import (
 )
 from app.services.project_service import ProjectService
 
+import logging
+
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+# ---------------------------------------------------------------------------
+# Module level logger – INFO by default so that the main application picks it
+# up with the standard Uvicorn/Gunicorn configuration.
+# ---------------------------------------------------------------------------
+
+logger = logging.getLogger(__name__)
 
 
 def get_project_or_404(project_id: int, db: Session) -> Project:
@@ -49,6 +58,17 @@ async def list_projects(
     per_page: int = Query(20, ge=1, le=100)
 ):
     """List all projects with filtering and pagination."""
+    logger.info(
+        "Listing projects – user_id=%s status=%s tags=%s search=%s owner_id=%s page=%s per_page=%s",
+        current_user.id,
+        status,
+        tags,
+        search,
+        owner_id,
+        page,
+        per_page,
+    )
+
     filters = ProjectFilters(
         status=status,
         tags=tags,
@@ -60,6 +80,8 @@ async def list_projects(
 
     service = ProjectService(db)
     projects, total = service.get_projects_with_stats(filters)
+
+    logger.debug("Retrieved %s projects (total=%s)", len(projects), total)
 
     # Serialize projects
     items = []

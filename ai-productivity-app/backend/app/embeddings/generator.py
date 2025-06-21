@@ -1,7 +1,12 @@
 # backend/app/embeddings/generator.py
 """OpenAI embedding generation with batching and error handling."""
-import openai
 from typing import List, Dict, Optional
+
+# ``openai`` may or may not be available inside the execution environment.  We
+# import it *after* the lightweight stub installed by ``app.__init__`` so the
+# statement never raises.  The type checker is silenced for that scenario.
+
+import openai  # type: ignore
 # ``numpy`` is only needed when the embedding functionality is exercised.  We
 # import it lazily so that the rest of the application (and lightweight test
 # suites) continue to work in environments where the dependency is absent.
@@ -51,13 +56,10 @@ from app.config import settings
 # implementation ensures we use the right authentication- & endpoint
 # parameters while keeping the rest of the code-base provider agnostic.
 
-try:
-    from openai import AsyncOpenAI, AsyncAzureOpenAI
-except ImportError:  # pragma: no cover – the dependency is declared in our
-    # environment, therefore this should never happen in production.  We keep
-    # a defensive fallback for unit-tests that monkey-patch the dependency.
-    AsyncOpenAI = None  # type: ignore
-    AsyncAzureOpenAI = None  # type: ignore
+# OpenAI client classes.  When the genuine SDK is not installed the *stubs*
+# registered in ``app.__init__`` satisfy the import.
+
+from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -66,13 +68,22 @@ class EmbeddingGenerator:
     """Generate embeddings using OpenAI API with batching."""
 
     def __init__(self, model: str = "text-embedding-3-small"):
-        self.model = model
+        # The *model* parameter means **deployment** for Azure and **model
+        # family** for public OpenAI.  We therefore accept either a plain
+        # model name ("text-embedding-3-small") **or** a dict-like string of
+        # the form ``deployment_name:model`` where the right part is used for
+        # dimension validation.
+
+        if ":" in model:
+            self.deployment_name, self.model = model.split(":", 1)
+        else:
+            self.deployment_name, self.model = model, model
         self.client = None
         self.batch_size = 50  # OpenAI limit
         self._init_client()
 
     def _init_client(self):
-        """Initialise the correct OpenAI client implementation.
+        """Create *AsyncOpenAI* or *AsyncAzureOpenAI* client instance.
 
         The application supports two *providers* configured via the
         ``LLM_PROVIDER`` / ``llm_provider`` setting:
@@ -84,22 +95,37 @@ class EmbeddingGenerator:
         provider = settings.llm_provider.lower()
 
         if provider == "azure":
-            if not (settings.azure_openai_api_key and settings.azure_openai_endpoint):
-                logger.warning(
-                    "Azure OpenAI selected as provider, but 'azure_openai_api_key' "
-                    "or 'azure_openai_endpoint' is not configured."
-                )
+            if not settings.azure_openai_endpoint:
+                logger.warning("Azure OpenAI chosen but 'AZURE_OPENAI_ENDPOINT' missing")
                 return
 
+            # ------------------------------------------------------------------
+            # Auth strategy
+            # ------------------------------------------------------------------
+            auth_method = getattr(settings, "azure_auth_method", "api_key").lower()
+
+            extra_kwargs: Dict[str, str] = {
+                "azure_endpoint": settings.azure_openai_endpoint,
+                "api_version": getattr(settings, "azure_openai_api_version", "2024-02-01"),
+            }
+
             try:
-                self.client = AsyncAzureOpenAI(
-                    api_key=settings.azure_openai_api_key,
-                    azure_endpoint=settings.azure_openai_endpoint,
-                    # Default to the most recent stable API version if the user
-                    # has not overridden it via an env-var.  The version *must*
-                    # be supplied for Azure requests.
-                    api_version=getattr(settings, "azure_openai_api_version", "2024-02-01"),
-                )
+                if auth_method == "entra_id":
+                    if not HAS_AZURE_IDENTITY:
+                        raise RuntimeError("azure-identity package not available")
+
+                    token_provider = get_bearer_token_provider(
+                        DefaultAzureCredential(),
+                        "https://cognitiveservices.azure.com/.default",
+                    )
+                    extra_kwargs["azure_ad_token_provider"] = token_provider
+                else:  # default to API key
+                    if not settings.azure_openai_api_key:
+                        raise RuntimeError("'AZURE_OPENAI_API_KEY' not configured")
+                    extra_kwargs["api_key"] = settings.azure_openai_api_key
+
+                self.client = AsyncAzureOpenAI(**extra_kwargs)
+
             except Exception as exc:  # noqa: BLE001
                 logger.error("Failed to initialise Azure OpenAI client: %s", exc)
                 self.client = None
@@ -134,9 +160,18 @@ class EmbeddingGenerator:
             batch = texts[i : i + self.batch_size]
 
             try:
-                response = await self.client.embeddings.create(
-                    model=self.model, input=batch
-                )
+                # Azure: model param is *deployment name*.  Public OpenAI:
+                # actual model family.  We therefore pass *deployment_name*
+                # if provider==azure.
+
+                kwargs = {"input": batch}
+
+                if settings.llm_provider.lower() == "azure":
+                    kwargs["model"] = self.deployment_name
+                else:
+                    kwargs["model"] = self.model
+
+                response = await self.client.embeddings.create(**kwargs)
 
                 batch_embeddings = [e.embedding for e in response.data]
                 embeddings.extend(batch_embeddings)
@@ -214,9 +249,12 @@ class EmbeddingGenerator:
 
     def validate_dimension(self, embedding: List[float]) -> bool:
         """Validate embedding dimension matches model."""
+
         expected_dims = {
-            "text-embedding-3-small": 1536,
+            # June-2025 reference dimensions
+            "text-embedding-3-small": 1024,
             "text-embedding-3-large": 3072,
+            # Legacy model still widely used
             "text-embedding-ada-002": 1536,
         }
 

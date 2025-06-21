@@ -1,12 +1,12 @@
-// pages/EnhancedProjectChatPage.tsx
+// pages/ProjectChatPage.jsx
 /* global navigator */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useChatFlows } from '../hooks/useChatFlows';
 import { useProject } from '../hooks/useProjects';
 import { useUser } from '../hooks/useAuth';
-import Header from '../components/common/Header';
+// Note: Link was previously imported but never used – removed to keep linting clean.
 import EnhancedMessageRenderer from '../components/chat/EnhancedMessageRenderer';
 import EnhancedCommandInput from '../components/chat/EnhancedCommandInput';
 import KnowledgeAssistant from '../components/chat/KnowledgeAssistant';
@@ -14,8 +14,9 @@ import MonacoEditor from '@monaco-editor/react';
 import SplitPane from '../components/common/SplitPane';
 import { Brain, Settings, FileText } from 'lucide-react';
 
-export default function EnhancedProjectChatPage() {
-  const { projectId } = useParams();
+// Router imports this default as `ProjectChatPage` so keep the file/component names aligned
+export default function ProjectChatPage() {
+  const { projectId, sessionId } = useParams();
   const navigate = useNavigate();
   const user = useUser();
   const { project, loading: projectLoading } = useProject(projectId);
@@ -26,17 +27,15 @@ export default function EnhancedProjectChatPage() {
     connectionState,
     typingUsers,
     sendMessage,
-    editMessage,
-    deleteMessage,
     sendTypingIndicator
-  } = useChat(projectId);
+  } = useChat(projectId, sessionId ? Number(sessionId) : null);
 
   // Chat flows integration
   const {
     flowState,
-    metrics,
+    metrics: _metrics, // eslint-disable-line camelcase, @typescript-eslint/naming-convention
     executeKnowledgeFlow,
-    executeModelSelectionFlow,
+    executeModelSelectionFlow: _executeModelSelectionFlow, // eslint-disable-line camelcase, @typescript-eslint/naming-convention
     executeRenderingFlow,
     resetFlows
   } = useChatFlows();
@@ -49,46 +48,78 @@ export default function EnhancedProjectChatPage() {
   const [selectedText, setSelectedText] = useState('');
   const [currentFile, setCurrentFile] = useState(undefined);
 
+  // ---------------------------------------------------------------------------
+  // Ref helpers
+  // ---------------------------------------------------------------------------
+
+  // Store selection listener so we can dispose it on unmount to avoid leaks.
+  const selectionListenerRef = useRef(null);
+
   // Enhanced message handling with knowledge context
-  const handleSendMessage = useCallback(async (content, metadata = {}) => {
-    try {
-      // Add editor context if requested
-      if (content.includes('@editor') && editorContent) {
-        metadata.code_snippets = [{
-          language: editorLanguage,
-          code: editorContent,
-          file_path: currentFile || 'editor'
-        }];
+  /**
+   * Sends a user message immediately (optimistic UX) and then processes the
+   * knowledge + rendering flows to deliver the assistant response.
+   */
+  const handleSendMessage = useCallback(
+    async (content, metadata = {}) => {
+      try {
+        // 1.  Optionally enrich metadata with editor context before we do
+        //     anything network-heavy so it is attached to the user message.
+        if (content.includes('@editor') && editorContent) {
+          metadata.code_snippets = [
+            {
+              language: editorLanguage,
+              code: editorContent,
+              file_path: currentFile || 'editor'
+            }
+          ];
+        }
+
+        // 2.  Optimistically echo the user message so the UI feels snappy.
+        //     We intentionally do NOT await here.
+        const userMessagePromise = sendMessage(content, metadata);
+
+        // 3.  Kick off the heavy knowledge/model/rendering pipeline.
+        const knowledgeResponse = await executeKnowledgeFlow(content, projectId);
+
+        const renderedResponse = await executeRenderingFlow(
+          knowledgeResponse,
+          (chunks) => {
+            // TODO: integrate streaming chunks into message state – left for
+            // future work.  For now we simply log.
+            console.debug('Streaming update', chunks);
+          }
+        );
+
+        // Ensure the user message has been persisted before sending AI reply.
+        await userMessagePromise;
+
+        // 4.  Deliver the assistant message back to chat.
+        await sendMessage(renderedResponse.content || knowledgeResponse.content, {
+          role: 'assistant',
+          model: knowledgeResponse.model,
+          citations: knowledgeResponse.citations,
+          interactive_elements: renderedResponse.interactive_elements || [],
+          flow_state: flowState
+        });
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        // Reset flows so the UI doesn’t get stuck in an invalid state.
+        resetFlows();
       }
-
-      // Execute knowledge flow to get contextualized response
-      const knowledgeResponse = await executeKnowledgeFlow(content, projectId);
-
-      // Send the user message first
-      await sendMessage(content, metadata);
-
-      // Process the AI response through rendering flow
-      const renderedResponse = await executeRenderingFlow(knowledgeResponse, (chunks) => {
-        // Update streaming content in real-time
-        // This would integrate with the message state to show streaming
-        console.log('Streaming update:', chunks);
-      });
-
-      // Send the AI response with enhanced rendering
-      await sendMessage(renderedResponse.content || knowledgeResponse.content, {
-        role: 'assistant',
-        model: knowledgeResponse.model,
-        citations: knowledgeResponse.citations,
-        interactive_elements: renderedResponse.interactive_elements || [],
-        flow_state: flowState
-      });
-
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      // Reset flows on error
-      resetFlows();
-    }
-  }, [sendMessage, editorContent, editorLanguage, currentFile, executeKnowledgeFlow, executeRenderingFlow, projectId, flowState, resetFlows]);
+    },
+    [
+      sendMessage,
+      editorContent,
+      editorLanguage,
+      currentFile,
+      executeKnowledgeFlow,
+      executeRenderingFlow,
+      projectId,
+      flowState,
+      resetFlows
+    ]
+  );
 
   // Handle code application from chat
   const handleCodeApply = useCallback((code, language) => {
@@ -98,9 +129,8 @@ export default function EnhancedProjectChatPage() {
 
   // Handle citation clicks
   const handleCitationClick = useCallback((citation) => {
-    // Navigate to the source or open in editor
-    console.log('Citation clicked:', citation);
-    // Implementation depends on your routing/file system
+    // Navigate to the source or open in editor – placeholder for now.
+    console.debug('Citation clicked', citation);
   }, []);
 
   // Handle knowledge suggestions
@@ -121,6 +151,8 @@ export default function EnhancedProjectChatPage() {
   }, []);
 
   // Handle interactive element interactions
+  // TODO: this should be migrated to centralised API helpers to maintain
+  // consistent auth/error logic.
   const handleInteractiveElementAction = useCallback(async (elementId, action, data) => {
     try {
       let response;
@@ -214,6 +246,15 @@ export default function EnhancedProjectChatPage() {
       throw error;
     }
   }, [projectId]);
+
+  // ---------------------------------------------------------------------------
+  // Effect: clean up Monaco selection listener on unmount
+  // ---------------------------------------------------------------------------
+  useEffect(() => () => {
+    if (selectionListenerRef.current) {
+      selectionListenerRef.current.dispose();
+    }
+  }, []);
 
   if (projectLoading) {
     return (
@@ -396,11 +437,19 @@ export default function EnhancedProjectChatPage() {
           language={editorLanguage}
           onChange={(value) => setEditorContent(value || '')}
           onMount={(editor) => {
-            // Set up selection change handler
-            editor.onDidChangeCursorSelection((e) => {
+            // Clean any previous listener (should not happen but safe-guard)
+            if (selectionListenerRef.current) {
+              selectionListenerRef.current.dispose();
+            }
+
+            // Set up selection change handler and keep the disposable so we can
+            // clean it up on unmount.
+            const disposable = editor.onDidChangeCursorSelection((e) => {
               const selection = editor.getModel()?.getValueInRange(e.selection);
               setSelectedText(selection || '');
             });
+
+            selectionListenerRef.current = disposable;
           }}
           theme="vs-dark"
           options={{
@@ -417,8 +466,6 @@ export default function EnhancedProjectChatPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header />
-
       <div className="flex-1 flex overflow-hidden">
         {splitView ? (
           <SplitPane

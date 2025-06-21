@@ -134,6 +134,14 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     max_context_tokens: int = 8000
 
+    # --- Reasoning enrichment ---------------------------------------------
+    # Enable Azure Responses API *reasoning enrichment* (self_check / chain of
+    # thought).  When turned on the backend requests a *summary* of the model
+    # reasoning and forwards it to the frontend over WebSocket so advanced
+    # users can inspect why the model arrived at an answer.
+
+    enable_reasoning: bool = False
+
     # WebSocket settings
     websocket_ping_interval: int = 30
     websocket_ping_timeout: int = 10

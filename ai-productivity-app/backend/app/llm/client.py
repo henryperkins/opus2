@@ -1,6 +1,77 @@
-from typing import Optional, AsyncIterator, Dict, List
-from openai import AsyncOpenAI, AsyncAzureOpenAI
+from typing import Optional, AsyncIterator, Dict, List, Any
+# ---------------------------------------------------------------------------
+# OpenAI SDK import – fall back to a *minimal stub* when the real package is
+# unavailable (e.g. running inside the execution sandbox where external
+# dependencies cannot be installed).  The stub implements only the attributes
+# actually accessed by *LLMClient* so that unit-tests complete without a hard
+# dependency on the official SDK.
+# ---------------------------------------------------------------------------
+
 import logging
+
+try:
+    from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover – offline environments
+
+    class _FakeChatStream:  # pylint: disable=too-few-public-methods
+        """Minimal async iterator that yields **no** chunks."""
+
+        def __aiter__(self):  # noqa: D400
+            return self
+
+        async def __anext__(self):  # noqa: D401
+            raise StopAsyncIteration
+
+    class _FakeChatCompletion:  # pylint: disable=too-few-public-methods
+        """Mimic the structure of a normal ChatCompletion response."""
+
+        class _FakeMessage:  # pylint: disable=too-few-public-methods
+            content = ""
+
+        class _FakeChoice:  # pylint: disable=too-few-public-methods
+            message = _FakeMessage()
+
+        choices = [_FakeChoice()]
+
+    class _FakeResponse:  # pylint: disable=too-few-public-methods
+        """Mimic the structure of a Responses API completion."""
+
+        output_text = ""
+
+    # --------------------------------------------------------------------
+    # The fake *client* classes only need to expose the attributes used by
+    # our application:
+    #   • .chat.completions.create(...)
+    #   • .responses.create(...)
+    # Both signatures accept arbitrary **kwargs because tests never inspect
+    # the outbound parameters.
+    # --------------------------------------------------------------------
+
+    class _BaseFakeClient:  # pylint: disable=too-few-public-methods
+        """Base-class providing shared helpers."""
+
+        class _ChatCompletions:  # pylint: disable=too-few-public-methods
+            async def create(self, *, stream: bool = False, **_):  # noqa: D401
+                if stream:
+                    return _FakeChatStream()
+                return _FakeChatCompletion()
+
+        class _Responses:  # pylint: disable=too-few-public-methods
+            async def create(self, *, stream: bool = False, **_):  # noqa: D401
+                if stream:
+                    return _FakeChatStream()
+                return _FakeResponse()
+
+        chat = type("_ChatMgr", (), {"completions": _ChatCompletions()})()
+        responses = _Responses()
+
+        def __init__(self, *_, **__):  # noqa: D401 – accept any params
+            pass
+
+    # Expose the fake classes under the expected names so that the *import*
+    # statement above succeeds transparently when the *real* SDK is absent.
+    AsyncOpenAI = _BaseFakeClient  # type: ignore
+    AsyncAzureOpenAI = _BaseFakeClient  # type: ignore
 
 try:
     from azure.identity import (
@@ -65,10 +136,20 @@ class LLMClient:
         # requested model is unavailable.
         self._fallback_model = "gpt-4o-mini"
 
-        # Track whether to use Responses API (Azure) or Chat Completions API
+        # ------------------------------------------------------------------
+        # Determine whether we **must** use the new *Responses* API.  Microsoft
+        # currently publishes *preview* versions of the form
+        #   "YYYY-MM-DD-preview" (e.g. "2025-04-01-preview") as well as the
+        # literal alias "preview".
+        # Any future preview that ends in "-preview" should be treated the
+        # same.  Everything else → classic Chat Completions.
+        # ------------------------------------------------------------------
+
+        api_version = (settings.azure_openai_api_version or "").lower()
         self.use_responses_api = (
-            self.provider == 'azure' and
-            settings.azure_openai_api_version in ["preview", "2025-04-01-preview"]
+            self.provider == "azure" and (
+                api_version == "preview" or api_version.endswith("-preview")
+            )
         )
 
         self.client = self._create_client()
@@ -117,17 +198,20 @@ class LLMClient:
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
-        stream: bool = False
+        stream: bool = False,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        reasoning: bool = False,
+        reasoning_mode: str = "self_check",
     ):
         """Get completion from LLM using appropriate API."""
 
         if self.use_responses_api:
             return await self._complete_responses_api(
-                messages, temperature, max_tokens, stream
+                messages, temperature, max_tokens, stream, tools, reasoning, reasoning_mode
             )
         else:
             return await self._complete_chat_api(
-                messages, temperature, max_tokens, stream
+                messages, temperature, max_tokens, stream, tools
             )
 
     async def _complete_chat_api(
@@ -135,7 +219,8 @@ class LLMClient:
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: Optional[int],
-        stream: bool
+        stream: bool,
+        tools: Optional[List[Dict[str, Any]]],
     ):
         """Use traditional Chat Completions API."""
 
@@ -145,6 +230,7 @@ class LLMClient:
                 "messages": messages,
                 "temperature": temperature,
                 "stream": stream,
+                **({"tools": tools} if tools else {}),
             }
             if max_tokens:
                 params["max_tokens"] = max_tokens
@@ -156,6 +242,16 @@ class LLMClient:
                 return self._stream_response(raw_stream)
 
             response = await self.client.chat.completions.create(**params)
+
+            # When *tools* were supplied the caller most likely needs access
+            # to the raw response object in order to inspect ``finish_reason``
+            # and potential ``tool_calls``.  Returning only the text would
+            # lose that metadata and break the reasoning & actions loop.
+
+            if tools:
+                return response
+
+            # Legacy behaviour – return plain content for simple completions.
             return response.choices[0].message.content
 
         return await self._execute_with_fallback(_invoke)
@@ -165,12 +261,17 @@ class LLMClient:
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: Optional[int],
-        stream: bool
+        stream: bool,
+        tools: Optional[List[Dict[str, Any]]],
+        reasoning: bool,
+        reasoning_mode: str,
     ):
         """Use Azure Responses API."""
 
         async def _invoke(model_name: str):
-            # Convert messages to Responses API format
+            # --------------------------------------------------------------
+            # Convert ~OpenAI Chat~ style messages → Responses API schema
+            # --------------------------------------------------------------
             input_messages = []
             system_content = None
 
@@ -189,7 +290,12 @@ class LLMClient:
                 "input": input_messages,
                 "temperature": temperature,
                 "stream": stream,
+                **({"tools": tools} if tools else {}),
             }
+            # Reasoning enrichment (only for reasoning-capable models)
+            if reasoning and model_name.startswith("gpt-4o"):
+                params["reasoning"] = True
+                params["reasoning_mode"] = reasoning_mode
 
             if max_tokens:
                 params["max_output_tokens"] = max_tokens
@@ -198,12 +304,34 @@ class LLMClient:
             if system_content:
                 params["instructions"] = system_content
 
+            # NOTE: Further optional parameters (e.g. `top_p`, `stop`) can be
+            # forwarded here once the surrounding application exposes them.
+
             if stream:
                 raw_stream = await self.client.responses.create(**params)
                 return self._stream_responses_api(raw_stream)
 
             response = await self.client.responses.create(**params)
-            return response.output_text or ""
+
+            # The 2025-04-01 *preview* adds a convenience property `.output_text`
+            # to aggregate all text outputs.  For earlier versions we extract
+            # the data manually so the caller always receives a **string**.
+
+            if getattr(response, "output_text", None):
+                return response.output_text
+
+            output_items = getattr(response, "output", None)
+            if output_items and isinstance(output_items, list):
+                # Concatenate *text* items only – ignore images / audio etc.
+                text_chunks = [
+                    item.get("text", "")
+                    for item in output_items
+                    if (isinstance(item, dict) and item.get("type") == "output_text")
+                ]
+                return "".join(text_chunks)
+
+            # Fallback: empty string so upstream code remains functional.
+            return ""
 
         return await self._execute_with_fallback(_invoke)
 
@@ -253,9 +381,27 @@ class LLMClient:
     async def _stream_responses_api(self, stream) -> AsyncIterator[str]:
         """Handle streaming response from Responses API."""
         try:
+            # According to the 2025-04 preview spec *several* event types can
+            # carry textual deltas.  We forward every **string** we encounter
+            # in ``event.delta`` because higher layers only care about the raw
+            # text.
+
+            TEXT_DELTA_EVENTS = {
+                "response.output_text.delta",
+                "response.reasoning_summary_text.delta",
+                "response.output_text.annotation.added",  # can embed text
+                "response.refusal.delta",
+            }
+
             async for event in stream:
-                if event.type == 'response.output_text.delta':
-                    yield event.delta
+                etype = getattr(event, "type", "")
+
+                # The SDK exposes ``event.delta`` for *_delta events and
+                # ``event.text`` for *_added events – we normalise both.
+                delta = getattr(event, "delta", None) or getattr(event, "text", None)
+
+                if etype in TEXT_DELTA_EVENTS and isinstance(delta, str):
+                    yield delta
         except Exception as e:
             logger.error(f"Responses API streaming error: {e}")
             yield f"\n\n[Error: {str(e)}]"

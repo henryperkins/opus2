@@ -18,6 +18,16 @@ from app.config import settings
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
+# ---------------------------------------------------------------------------
+# Logging – keep verbose debug off by default; INFO is sufficient for
+# production troubleshooting.  The FastAPI / Uvicorn stack will inherit the
+# parent logging configuration (usually *INFO*).
+# ---------------------------------------------------------------------------
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Static provider → models mapping
@@ -69,6 +79,7 @@ _AZURE_CHAT_MODELS = [
 @router.get("", summary="Return supported LLM providers and models")
 async def get_config():  # noqa: D401
     """Return a JSON object with provider → model mapping."""
+    logger.info("/api/config requested – returning model catalogue")
 
     return {
         "providers": {

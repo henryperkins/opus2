@@ -265,6 +265,17 @@ def logout(
 @router.get("/me", response_model=UserResponse)
 def me(current_user: CurrentUserRequired) -> UserResponse:
     """Return the authenticated user's public profile."""
+    # ------------------------------------------------------------------
+    # Debug logging – helps trace *who* is calling the endpoint and verify
+    # that authentication worked as expected.  Keep the log-level *INFO*
+    # so that messages appear in the default Uvicorn configuration.
+    # ------------------------------------------------------------------
+
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info("/api/auth/me – user_id=%s username=%s", current_user.id, current_user.username)
+
     return UserResponse.from_orm(current_user)
 
 

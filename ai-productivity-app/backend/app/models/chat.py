@@ -13,7 +13,12 @@ class ChatSession(Base, TimestampMixin):
     )
 
     id = Column(Integer, primary_key=True)
-    project_id = Column(Integer, ForeignKey('projects.id'), nullable=False)
+    # Ensure that deleting a *Project* removes all its chat sessions at the
+    # **database** level as well – not only when the ORM relationship is used.
+    # This prevents *orphaned* chat sessions that otherwise remain when the
+    # parent project is removed via direct SQL or bulk operations that bypass
+    # SQLAlchemyʼs in-memory cascade handling.
+    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
     title = Column(String(200))
     is_active = Column(Boolean, default=True)
 
@@ -35,7 +40,8 @@ class ChatMessage(Base, TimestampMixin):
     )
 
     id = Column(Integer, primary_key=True)
-    session_id = Column(Integer, ForeignKey('chat_sessions.id'), nullable=False)
+    # A message must be deleted together with its parent chat session.
+    session_id = Column(Integer, ForeignKey('chat_sessions.id', ondelete='CASCADE'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
 
     role = Column(String(20), nullable=False)  # user, assistant, system

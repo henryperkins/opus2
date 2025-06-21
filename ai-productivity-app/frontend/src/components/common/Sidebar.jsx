@@ -23,7 +23,7 @@ import KeyboardShortcutsModal from '../modals/KeyboardShortcutsModal';
 import WhatsNewModal from '../modals/WhatsNewModal';
 import DocumentationModal from '../modals/DocumentationModal';
 
-const Sidebar = ({ onToggle, className = '' }) => {
+const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -124,6 +124,14 @@ const Sidebar = ({ onToggle, className = '' }) => {
     });
   };
 
+  const handleProjectAnalyticsNavigation = (project) => {
+    navigate(`/projects/${project.id}/analytics`);
+  };
+
+  const handleProjectFilesNavigation = (project) => {
+    navigate(`/projects/${project.id}/files`);
+  };
+
   const formatTimestamp = (timestamp) => {
     const now = new Date();
     const diff = now - timestamp;
@@ -138,8 +146,16 @@ const Sidebar = ({ onToggle, className = '' }) => {
 
   const isActive = (path) => location.pathname === path;
 
+  // Combine responsive behaviour:
+  // • Always visible on ≥lg screens (static).  
+  // • Slide-in drawer on sm/md screens controlled via `isOpen`.
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-300">
+    <div
+      className={`flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-300 ease-in-out
+      lg:translate-x-0 lg:static fixed inset-y-0 left-0 w-64 z-40
+      ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+      ${className}`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <Link to="/" className="flex items-center space-x-2 no-underline">
@@ -241,6 +257,20 @@ const Sidebar = ({ onToggle, className = '' }) => {
           </Link>
 
           <Link
+            to="/models"
+            className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+              location.pathname.startsWith('/models')
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
+                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z" />
+            </svg>
+            <span>Models</span>
+          </Link>
+
+          <Link
             to="/timeline"
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
               isActive('/timeline')
@@ -292,9 +322,7 @@ const Sidebar = ({ onToggle, className = '' }) => {
                   key={chat.id}
                   onClick={() => {
                     if (chat.projectId) {
-                      navigate(`/projects/${chat.projectId}/chat`, { 
-                        state: { sessionId: chat.id } 
-                      });
+                      navigate(`/projects/${chat.projectId}/chat/${chat.id}`);
                     } else {
                       navigate(`/chat/${chat.id}`);
                     }

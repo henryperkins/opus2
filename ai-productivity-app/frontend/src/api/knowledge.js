@@ -93,6 +93,16 @@ export const knowledgeAPI = {
             ...options
         });
         return response.data;
+    },
+
+    /**
+     * Get knowledge base summary for a project
+     * @param {string} projectId - Project ID
+     * @returns {Promise<object>} Knowledge base summary
+     */
+    getSummary: async (projectId) => {
+        const response = await client.get(`/api/knowledge/summary/${projectId}`);
+        return response.data;
     }
 };
 

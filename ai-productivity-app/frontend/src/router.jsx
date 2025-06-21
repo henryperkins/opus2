@@ -27,8 +27,14 @@ import SettingsPage from './pages/SettingsPage';
 import TimelinePage from './pages/TimelinePage';
 import SearchPage from './pages/SearchPage';
 import ProjectDashboard from './pages/ProjectDashboard';
+import ProjectPage from './pages/ProjectPage';
 import ProjectChatPage from './pages/ProjectChatPage';
+import AnalyticsPage from './pages/AnalyticsPage';
+import KnowledgeBasePage from './pages/KnowledgeBasePage';
+import ProjectFilesPage from './pages/ProjectFilesPage';
+import ModelSettingsPage from './pages/ModelSettingsPage';
 import Layout from './components/common/Layout';
+import ProjectLayout from './layouts/ProjectLayout';
 import { useRequireAuth } from './hooks/useAuth';
 
 // -----------------------------------------------------------------------------
@@ -94,8 +100,19 @@ export const router = createBrowserRouter(
           element: <ProtectedRoute element={<ProjectDashboard />} />,
         },
         {
-          path: 'projects/:projectId/chat',
-          element: <ProtectedRoute element={<ProjectChatPage />} />,
+          path: 'projects/:projectId',
+          element: <ProtectedRoute element={<ProjectLayout />} />,
+          children: [
+            { index: true, element: <ProjectPage /> },
+            { path: 'chat/:sessionId?', element: <ProjectChatPage /> },
+            { path: 'files', element: <ProjectFilesPage /> },
+            { path: 'analytics', element: <AnalyticsPage /> },
+            { path: 'knowledge', element: <KnowledgeBasePage /> },
+          ]
+        },
+        {
+          path: 'models',
+          element: <ProtectedRoute element={<ModelSettingsPage />} />,
         },
       ],
     },
