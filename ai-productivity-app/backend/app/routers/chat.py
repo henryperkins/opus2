@@ -1,15 +1,23 @@
 """Chat API endpoints."""
 import logging
-
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from app.dependencies import DatabaseDep, CurrentUserRequired
-from app.models.chat import ChatSession, ChatMessage
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
+
+from app.dependencies import CurrentUserRequired, DatabaseDep
+from app.models.chat import ChatMessage, ChatSession
 from app.schemas.chat import (
-    ChatSessionCreate, ChatSessionUpdate, ChatSessionResponse,
-    ChatSessionListResponse, MessageResponse
+    ChatSessionCreate,
+    ChatSessionListResponse,
+    ChatSessionResponse,
+    ChatSessionUpdate,
+    MessageResponse,
 )
 from app.services.chat_service import ChatService
 from app.websocket.handlers import handle_chat_connection
@@ -32,11 +40,12 @@ async def list_sessions(
     project_id: Optional[int] = None,
     is_active: Optional[bool] = None,
     limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
 ):
     """List chat sessions with optional filtering."""
     logger.info(
-        "Listing chat sessions – user_id=%s project_id=%s is_active=%s limit=%s offset=%s",
+        "Listing chat sessions – user_id=%s project_id=%s is_active=%s "
+        "limit=%s offset=%s",
         current_user.id,
         project_id,
         is_active,
@@ -55,12 +64,14 @@ async def list_sessions(
     sessions = query.offset(offset).limit(limit).all()
 
     # Add message count
-    items = []
+    items: List[ChatSessionResponse] = []
     for session in sessions:
         response = ChatSessionResponse.from_orm(session)
-        response.message_count = db.query(ChatMessage).filter_by(
-            session_id=session.id, is_deleted=False
-        ).count()
+        response.message_count = (
+            db.query(ChatMessage)
+            .filter_by(session_id=session.id, is_deleted=False)
+            .count()
+        )
         items.append(response)
 
     return ChatSessionListResponse(items=items, total=total)
@@ -70,7 +81,7 @@ async def list_sessions(
 async def create_session(
     session_data: ChatSessionCreate,
     current_user: CurrentUserRequired,
-    db: DatabaseDep
+    db: DatabaseDep,
 ):
     """Create a new chat session."""
     logger.info(
@@ -82,8 +93,7 @@ async def create_session(
 
     service = ChatService(db)
     session = await service.create_session(
-        project_id=session_data.project_id,
-        title=session_data.title
+        project_id=session_data.project_id, title=session_data.title
     )
 
     logger.debug("Session created with id=%s", session.id)
@@ -94,8 +104,8 @@ async def create_session(
 @router.get("/sessions/{session_id}", response_model=ChatSessionResponse)
 async def get_session(
     session_id: int,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    _current_user: CurrentUserRequired,  # unused – keep for auth dependency
+    db: DatabaseDep,
 ):
     """Get chat session details."""
     session = db.query(ChatSession).filter_by(id=session_id).first()
@@ -103,9 +113,11 @@ async def get_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     response = ChatSessionResponse.from_orm(session)
-    response.message_count = db.query(ChatMessage).filter_by(
-        session_id=session.id, is_deleted=False
-    ).count()
+    response.message_count = (
+        db.query(ChatMessage)
+        .filter_by(session_id=session.id, is_deleted=False)
+        .count()
+    )
 
     return response
 
@@ -114,8 +126,8 @@ async def get_session(
 async def update_session(
     session_id: int,
     update_data: ChatSessionUpdate,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    _current_user: CurrentUserRequired,  # unused – keep for auth dependency
+    db: DatabaseDep,
 ):
     """Update chat session."""
     session = db.query(ChatSession).filter_by(id=session_id).first()
@@ -134,8 +146,8 @@ async def update_session(
 @router.delete("/sessions/{session_id}", status_code=204)
 async def delete_session(
     session_id: int,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    _current_user: CurrentUserRequired,  # unused – keep for auth dependency
+    db: DatabaseDep,
 ):
     """Delete a chat session."""
     session = db.query(ChatSession).filter_by(id=session_id).first()
@@ -146,13 +158,16 @@ async def delete_session(
     db.commit()
 
 
-@router.get("/sessions/{session_id}/messages", response_model=List[MessageResponse])
+@router.get(
+    "/sessions/{session_id}/messages",
+    response_model=List[MessageResponse],
+)
 async def get_messages(
     session_id: int,
-    current_user: CurrentUserRequired,
+    _current_user: CurrentUserRequired,  # unused – keep for auth dependency
     db: DatabaseDep,
     limit: int = Query(50, ge=1, le=100),
-    before_id: Optional[int] = None
+    before_id: Optional[int] = None,
 ):
     """Get messages for a chat session."""
     service = ChatService(db)
@@ -164,7 +179,7 @@ async def get_messages(
 async def websocket_endpoint(
     websocket: WebSocket,
     session_id: int,
-    db: DatabaseDep
+    db: DatabaseDep,
 ):
     """WebSocket endpoint for real-time chat."""
     # Authenticate WebSocket connection
@@ -178,16 +193,14 @@ async def websocket_endpoint(
         # compatibility and automated tests which conveniently inject it.
         # ------------------------------------------------------------------
 
-        token: str | None = None
-
-        # 1. Attempt to read Bearer token from cookies (preferred)
-        token = websocket.cookies.get("access_token")  # type: ignore[attr-defined]
-
-        # 2. Fallback to ?token= query parameter
-        if not token:
-            token = websocket.query_params.get("token")
+        token = websocket.cookies.get("access_token") or websocket.query_params.get(
+            "token"
+        )
 
         if not token:
+            logger.warning(
+                "WebSocket connection rejected: Missing authentication token"
+            )
             await websocket.close(code=1008, reason="Missing token")
             return
 
@@ -201,8 +214,8 @@ async def websocket_endpoint(
 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
-        await websocket.close(code=1011, reason=str(e))
+    except Exception as exc:  # noqa: W0718 – keep broad to ensure WS closes
+        await websocket.close(code=1011, reason=str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -211,14 +224,15 @@ async def websocket_endpoint(
 
 
 @router.get("/suggestions")
-async def get_command_suggestions(q: str = Query("", min_length=0, max_length=100)) -> List[dict]:  # noqa: D401
+async def get_command_suggestions(
+    q: str = Query("", min_length=0, max_length=100),
+) -> List[dict]:  # noqa: D401
     """Return slash-command autocompletion suggestions.
 
     The *frontend* sends the user’s **partial input** via the ``q`` query
     parameter as soon as the first ``/`` is typed.  This handler simply
     delegates to :pyfunc:`app.chat.commands.CommandRegistry.get_suggestions`.
     """
-
     # Quick early-out to avoid unnecessary work for empty queries.
     if not q:
         return []

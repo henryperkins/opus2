@@ -17,7 +17,7 @@ from ..schemas.analytics import (
     AnalyticsResponse
 )
 
-router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
+router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 
 @router.post("/quality")
@@ -76,7 +76,7 @@ async def record_feedback(
 
 @router.get("/quality/{project_id}")
 async def get_quality_metrics(
-    _project_id: str,  # unused, prefixed to silence linter
+    project_id: int,  # Changed from str to int
     _start_date: Optional[datetime] = None,
     _end_date: Optional[datetime] = None,
     _db: Session = Depends(get_db)
@@ -87,13 +87,15 @@ async def get_quality_metrics(
         # This is a mock response
 
         mock_data = {
+            "project_id": project_id,
             "average_accuracy": 0.85,
             "average_relevance": 0.78,
             "average_completeness": 0.82,
             "average_clarity": 0.80,
             "average_user_rating": 4.2,
             "total_responses": 150,
-            "trend_data": [0.82, 0.84, 0.85, 0.83, 0.85]
+            "trend_data": [0.82, 0.84, 0.85, 0.83, 0.85],
+            "last_updated": datetime.utcnow().isoformat()
         }
 
         return AnalyticsResponse(

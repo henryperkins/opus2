@@ -3,8 +3,51 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import client from '../api/client';
 
+// Helper function to get cookie value
+const getCookie = (name) => {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+  return null;
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/api';
+
+// ---------------------------------------------------------------------------
+// Dynamic WebSocket base URL
+// ---------------------------------------------------------------------------
+// Priority order:
+// 1. Explicit *VITE_WS_URL* environment variable (allows docker-compose /
+//    production to point at a dedicated websocket endpoint).
+// 2. Same host that served the current page (covers both local *vite dev*
+//    server **and** production behind NGINX).  We derive the correct scheme
+//    (ws / wss) from `location.protocol` and use **location.host** instead of
+//    `hostname` so that an explicit port (e.g. :5173 during development) is
+//    preserved.
+// 3. Fallback to `ws://localhost:8000` – retained mainly for tests that run
+//    the backend standalone without the frontend dev-server.
+//
+// Using *location.host* avoids hard-coding port 8000 in situations where the
+// frontend is served from a different port or behind a reverse-proxy.  The
+// vite dev-server proxy (see *vite.config.js*) seamlessly forwards WebSocket
+// traffic from the dev port to the backend, so pointing at the dev host is
+// the correct default.
+
+const WS_BASE_URL = (() => {
+  if (import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL;
+  }
+
+  const secure = location.protocol === 'https:';
+  const scheme = secure ? 'wss://' : 'ws://';
+
+  if (location.host) {
+    return `${scheme}${location.host}`; // preserves :port when present
+  }
+
+  // Last-ditch fallback
+  return 'ws://localhost:8000';
+})();
 
 // preferredSessionId (optional): when provided, the hook will connect to that
 // existing chat session instead of creating a fresh one. This is used by the
@@ -28,14 +71,14 @@ export const useChat = (projectId, preferredSessionId = null) => {
       setConnectionState('disconnected');
       return;
     }
-  
+
     let isCancelled = false;
     let currentWs = null;
-  
+
     const connect = async () => {
       setConnectionState('connecting');
       setError(null);
-  
+
       try {
         // ------------------------------------------------------------------
         // 1. Determine which chat session to use
@@ -71,30 +114,31 @@ export const useChat = (projectId, preferredSessionId = null) => {
 
         setSessionId(newSessionId);
         setMessages([]); // Clear messages for new session
-  
-        // 2. Connect to WebSocket
-        const wsUrl = `${WS_BASE_URL.replace('http', 'ws')}/chat/ws/sessions/${newSessionId}`;
+
+        // 2. Connect to WebSocket with authentication
+        const token = localStorage.getItem('token') || getCookie('access_token');
+        const wsUrl = `${WS_BASE_URL}/api/chat/ws/sessions/${newSessionId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
         const ws = new WebSocket(wsUrl);
         currentWs = ws;
         wsRef.current = ws;
-  
+
         ws.onopen = () => {
           if (isCancelled) return;
           console.log('WebSocket connected to session:', newSessionId);
           setConnectionState('connected');
           setReconnectAttempts(0);
         };
-  
+
         ws.onmessage = (event) => {
           if (isCancelled) return;
           try {
             const data = JSON.parse(event.data);
-            
+
             switch (data.type) {
               case 'message':
                 setMessages((prev) => [...prev, data.message]);
                 break;
-                
+
               case 'typing':
                 setTypingUsers((prev) => {
                   const newSet = new Set(prev);
@@ -102,7 +146,7 @@ export const useChat = (projectId, preferredSessionId = null) => {
                   return newSet;
                 });
                 break;
-                
+
               case 'stream_chunk':
                 setStreamingMessages((prev) => {
                   const newMap = new Map(prev);
@@ -112,18 +156,18 @@ export const useChat = (projectId, preferredSessionId = null) => {
                     isStreaming: true,
                     metadata: data.metadata || {}
                   };
-                  
+
                   existingMessage.content += data.chunk;
                   newMap.set(data.message_id, existingMessage);
                   return newMap;
                 });
                 break;
-                
+
               case 'stream_end':
                 setStreamingMessages((prev) => {
                   const newMap = new Map(prev);
                   const streamingMessage = newMap.get(data.message_id);
-                  
+
                   if (streamingMessage) {
                     // Move completed message to main messages array
                     const finalMessage = {
@@ -131,25 +175,25 @@ export const useChat = (projectId, preferredSessionId = null) => {
                       isStreaming: false,
                       completed_at: new Date().toISOString()
                     };
-                    
+
                     setMessages((prevMessages) => [...prevMessages, finalMessage]);
                     newMap.delete(data.message_id);
                   }
-                  
+
                   return newMap;
                 });
                 break;
-                
+
               case 'message_update':
-                setMessages((prev) => 
-                  prev.map(msg => 
-                    msg.id === data.message_id 
+                setMessages((prev) =>
+                  prev.map(msg =>
+                    msg.id === data.message_id
                       ? { ...msg, ...data.updates, edited: true, edited_at: new Date().toISOString() }
                       : msg
                   )
                 );
                 break;
-                
+
               case 'message_delete':
                 setMessages((prev) => prev.filter(msg => msg.id !== data.message_id));
                 // Also remove from streaming messages if it exists
@@ -159,27 +203,27 @@ export const useChat = (projectId, preferredSessionId = null) => {
                   return newMap;
                 });
                 break;
-                
+
               case 'error':
                 console.error('WebSocket error received:', data.error);
                 setError(data.error.message || 'An error occurred');
-                
+
                 // If error is related to a specific message, stop its streaming
                 if (data.message_id) {
                   setStreamingMessages((prev) => {
                     const newMap = new Map(prev);
                     const streamingMessage = newMap.get(data.message_id);
-                    
+
                     if (streamingMessage) {
                       streamingMessage.isStreaming = false;
                       streamingMessage.error = data.error.message;
                     }
-                    
+
                     return newMap;
                   });
                 }
                 break;
-                
+
               default:
                 console.warn('Unknown WebSocket message type:', data.type);
             }
@@ -188,21 +232,32 @@ export const useChat = (projectId, preferredSessionId = null) => {
             setError('Failed to process message from server');
           }
         };
-  
+
         ws.onclose = (event) => {
           if (isCancelled) return;
-          console.log('WebSocket disconnected. Code:', event.code);
+          console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
+
+          // Add specific handling for different close codes
+          if (event.code === 1008) {
+            console.error('WebSocket authentication failed - missing or invalid token');
+            setError('Authentication failed. Please log in again.');
+          } else if (event.code === 1006) {
+            console.error('WebSocket connection closed abnormally - server may be down');
+            setError('Connection failed. Please check if the server is running.');
+          }
+
           setConnectionState('disconnected');
           // Reconnection logic can be added here if needed
         };
-  
+
         ws.onerror = (event) => {
           if (isCancelled) return;
-          console.error('WebSocket error:', event);
-          setError('Connection error');
+          console.error('WebSocket error:', event, 'URL:', wsUrl);
+          console.error('Check if server is running and WebSocket endpoint exists');
+          setError('WebSocket connection failed');
           setConnectionState('error');
         };
-  
+
       } catch (err) {
         if (isCancelled) return;
         console.error('Failed to create session or connect:', err);
@@ -210,9 +265,9 @@ export const useChat = (projectId, preferredSessionId = null) => {
         setConnectionState('error');
       }
     };
-  
+
     connect();
-  
+
     return () => {
       isCancelled = true;
       if (currentWs) {

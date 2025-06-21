@@ -42,12 +42,22 @@ app = FastAPI(
     version=settings.app_version,
     debug=settings.debug,
     lifespan=lifespan,
+    # Add WebSocket origins support for cross-origin connections
+    # This is needed for WebSocket connections from frontend to backend
+    websocket_origins=settings.cors_origins_list + [
+        "ws://localhost:5173",
+        "ws://localhost:8000",
+        "wss://lakefrontdigital.io"
+    ]
 )
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=settings.cors_origins_list + [
+        "http://localhost:5173",
+        "https://lakefrontdigital.io"
+    ],
     allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],

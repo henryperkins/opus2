@@ -56,17 +56,14 @@ export default defineConfig({
       clientPort: 443, // Use HTTPS port for client connections
       protocol: 'wss', // Use secure WebSocket
     },
-    // Disable proxy since NGINX handles API routing
-    // ...(backendTarget.includes('localhost') && {
-    //   proxy: {
-    //     '/api': {
-    //       target: backendTarget,
-    //       changeOrigin: true,
-    //       ws: true,
-    //       rewrite: (p) => p,
-    //     },
-    //   },
-    // }),
+    // Enable proxy for development with WebSocket support
+    proxy: {
+      '/api': {
+        target: backendTarget,
+        changeOrigin: true,
+        ws: true, // Enable WebSocket support for all /api routes including /api/chat/ws
+      }
+    }
   },
 
   // Production build

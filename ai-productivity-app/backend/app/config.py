@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     invite_codes: str = "code1,code2,code3"
 
     # CORS
-    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    cors_origins: str = "http://localhost:5173,http://localhost:3000,https://lakefrontdigital.io"
 
     # API Keys (for future phases)
     openai_api_key: Optional[str] = None

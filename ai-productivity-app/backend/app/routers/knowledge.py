@@ -1,7 +1,7 @@
 """
 Knowledge base API router for search and context building.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
@@ -17,7 +17,7 @@ from ..schemas.knowledge import (
     KnowledgeResponse
 )
 
-router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
+router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
 
 @router.post("/search")
@@ -210,3 +210,65 @@ async def get_knowledge_entry(
     except Exception as e:
         detail = f"Failed to get knowledge entry: {str(e)}"
         raise HTTPException(status_code=500, detail=detail)
+
+
+@router.get("/summary/{project_id}")
+async def get_project_summary(
+    project_id: int,
+    _db: Session = Depends(get_db)  # unused, prefixed to silence linter
+) -> dict:
+    """Get knowledge summary for a specific project."""
+    try:
+        # Mock implementation - in production, this would query your database
+        # and aggregate knowledge base entries for the project
+
+        summary_data = {
+            "project_id": project_id,
+            "total_documents": 45,
+            "total_code_files": 127,
+            "last_updated": datetime.utcnow().isoformat(),
+            "summary": (
+                f"Project {project_id} contains various AI-related "
+                f"documentation and code files covering machine learning "
+                f"models, data processing pipelines, and API integrations."
+            ),
+            "key_topics": [
+                "Machine Learning",
+                "API Development",
+                "Data Processing",
+                "Authentication",
+                "WebSocket Integration"
+            ],
+            "recent_activity": [
+                {
+                    "type": "document_added",
+                    "title": "WebSocket Implementation Guide",
+                    "timestamp": (
+                        datetime.utcnow() - timedelta(hours=2)
+                    ).isoformat()
+                },
+                {
+                    "type": "code_updated",
+                    "title": "Chat Router Updates",
+                    "timestamp": (
+                        datetime.utcnow() - timedelta(hours=5)
+                    ).isoformat()
+                }
+            ],
+            "statistics": {
+                "lines_of_code": 12543,
+                "documentation_coverage": 78.5,
+                "test_coverage": 65.2
+            }
+        }
+
+        return {
+            "success": True,
+            "data": summary_data
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get project summary: {str(e)}"
+        ) from e
