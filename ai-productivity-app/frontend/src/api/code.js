@@ -6,10 +6,13 @@ export const codeAPI = {
         const formData = new FormData();
         files.forEach(file => formData.append('files', file));
 
+        // NOTE: Do NOT set the `Content-Type` header manually here. When a
+        // `FormData` instance is passed, the browser will automatically
+        // append the correct `Content-Type` including the required boundary.
+        // Manually overriding it breaks the request as the boundary is then
+        // missing which results in the backend receiving an empty payload or
+        // raising 422/400 errors.
         const response = await client.post(`/api/code/projects/${projectId}/upload`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            },
             onUploadProgress: (evt) => {
                 if (onProgress && evt.total) {
                     const percent = (evt.loaded / evt.total) * 100;

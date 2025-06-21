@@ -108,6 +108,8 @@ export default function ModelConfiguration() {
     presencePenalty: 0,
     systemPrompt: '',
     responseFormat: 'text'
+    ,
+    useResponsesApi: false
   });
 
   const [selectedPreset, setSelectedPreset] = useState('balanced');
@@ -128,7 +130,8 @@ export default function ModelConfiguration() {
       setModelConfig(prev => ({
         ...prev,
         provider: config.current.provider,
-        model: config.current.chat_model
+        model: config.current.chat_model,
+        useResponsesApi: config.current.useResponsesApi ?? prev.useResponsesApi
       }));
     }
   }, [config]);
@@ -178,7 +181,17 @@ export default function ModelConfiguration() {
 
   const handleSaveConfig = async () => {
     try {
-      await configAPI.updateModelConfig(modelConfig);
+      await configAPI.updateModelConfig({
+        provider: modelConfig.provider,
+        chat_model: modelConfig.model,
+        temperature: modelConfig.temperature,
+        maxTokens: modelConfig.maxTokens,
+        topP: modelConfig.topP,
+        frequencyPenalty: modelConfig.frequencyPenalty,
+        presencePenalty: modelConfig.presencePenalty,
+        systemPrompt: modelConfig.systemPrompt,
+        useResponsesApi: modelConfig.useResponsesApi
+      });
       toast.success('Model configuration saved successfully');
       if (refetch) await refetch();
     } catch (error) {
@@ -386,6 +399,23 @@ export default function ModelConfiguration() {
         </div>
 
         <div className="space-y-4">
+
+          {/* Responses API toggle for Azure */}
+          {modelConfig.provider === 'azure' && (
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <RefreshCw className="w-4 h-4" /> Use Responses API (preview)
+              </label>
+              <input
+                type="checkbox"
+                checked={modelConfig.useResponsesApi}
+                onChange={(e) =>
+                  setModelConfig({ ...modelConfig, useResponsesApi: e.target.checked })
+                }
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+            </div>
+          )}
           {/* Temperature */}
           <div>
             <div className="flex items-center justify-between mb-2">

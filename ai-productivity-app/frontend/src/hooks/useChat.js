@@ -13,41 +13,8 @@ const getCookie = (name) => {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
-// ---------------------------------------------------------------------------
-// Dynamic WebSocket base URL
-// ---------------------------------------------------------------------------
-// Priority order:
-// 1. Explicit *VITE_WS_URL* environment variable (allows docker-compose /
-//    production to point at a dedicated websocket endpoint).
-// 2. Same host that served the current page (covers both local *vite dev*
-//    server **and** production behind NGINX).  We derive the correct scheme
-//    (ws / wss) from `location.protocol` and use **location.host** instead of
-//    `hostname` so that an explicit port (e.g. :5173 during development) is
-//    preserved.
-// 3. Fallback to `ws://localhost:8000` – retained mainly for tests that run
-//    the backend standalone without the frontend dev-server.
-//
-// Using *location.host* avoids hard-coding port 8000 in situations where the
-// frontend is served from a different port or behind a reverse-proxy.  The
-// vite dev-server proxy (see *vite.config.js*) seamlessly forwards WebSocket
-// traffic from the dev port to the backend, so pointing at the dev host is
-// the correct default.
-
-const WS_BASE_URL = (() => {
-  if (import.meta.env.VITE_WS_URL) {
-    return import.meta.env.VITE_WS_URL;
-  }
-
-  const secure = location.protocol === 'https:';
-  const scheme = secure ? 'wss://' : 'ws://';
-
-  if (location.host) {
-    return `${scheme}${location.host}`; // preserves :port when present
-  }
-
-  // Last-ditch fallback
-  return 'ws://localhost:8000';
-})();
+// Note: WebSocket URL is now determined dynamically inside the hook
+// to ensure window.location is available and we always use the correct host
 
 // preferredSessionId (optional): when provided, the hook will connect to that
 // existing chat session instead of creating a fresh one. This is used by the
@@ -115,9 +82,36 @@ export const useChat = (projectId, preferredSessionId = null) => {
         setSessionId(newSessionId);
         setMessages([]); // Clear messages for new session
 
-        // 2. Connect to WebSocket with authentication
-        const token = localStorage.getItem('token') || getCookie('access_token');
-        const wsUrl = `${WS_BASE_URL}/api/chat/ws/sessions/${newSessionId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+        // ------------------------------------------------------------------
+        // 2. Determine WebSocket URL dynamically inside the effect
+        // ------------------------------------------------------------------
+        const getWebSocketBaseUrl = () => {
+          // Priority order:
+          // 1. Explicit VITE_WS_URL environment variable
+          if (import.meta.env.VITE_WS_URL) {
+            return import.meta.env.VITE_WS_URL;
+          }
+
+          // 2. Always use the current page's location for WebSocket connections
+          // This ensures we go through the Vite dev server proxy in development
+          // or through NGINX in production
+          const secure = window.location.protocol === 'https:';
+          const scheme = secure ? 'wss://' : 'ws://';
+
+          // Use window.location.host which includes hostname and port
+          return `${scheme}${window.location.host}`;
+        };
+
+        const wsBaseUrl = getWebSocketBaseUrl();
+        console.log('Using WebSocket base URL:', wsBaseUrl);
+
+        // 3. Connect to WebSocket with authentication
+        // Note: HttpOnly cookies are automatically sent with WebSocket connections
+        // We only need the token parameter as a fallback for testing or localStorage auth
+        const token = localStorage.getItem('token');
+        const wsUrl = `${wsBaseUrl}/api/chat/ws/sessions/${newSessionId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+        console.log('Connecting to WebSocket:', wsUrl);
+
         const ws = new WebSocket(wsUrl);
         currentWs = ws;
         wsRef.current = ws;
@@ -327,53 +321,25 @@ export const useChat = (projectId, preferredSessionId = null) => {
           : msg
       )
     );
+    // TODO: Send edit to server
   }, []);
 
   // Delete message (placeholder)
   const deleteMessage = useCallback((messageId) => {
     setMessages(prev => prev.filter(msg => msg.id !== messageId));
+    // TODO: Send delete to server
   }, []);
-
-  // Stop streaming for a specific message
-  const stopStreaming = useCallback((messageId) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
-    const message = {
-      type: 'stop_stream',
-      message_id: messageId
-    };
-
-    wsRef.current.send(JSON.stringify(message));
-  }, []);
-
-  // Get combined messages (regular + streaming)
-  const getAllMessages = useCallback(() => {
-    const streamingArray = Array.from(streamingMessages.values());
-    return [...messages, ...streamingArray].sort((a, b) => {
-      const timeA = new Date(a.created_at || a.timestamp || 0);
-      const timeB = new Date(b.created_at || b.timestamp || 0);
-      return timeA - timeB;
-    });
-  }, [messages, streamingMessages]);
-
-  // Check if any message is currently streaming
-  const hasStreamingMessages = streamingMessages.size > 0;
 
   return {
     sessionId,
     messages,
-    streamingMessages,
     connectionState,
     typingUsers,
+    error,
     sendMessage,
+    sendTypingIndicator,
     editMessage,
     deleteMessage,
-    sendTypingIndicator,
-    stopStreaming,
-    getAllMessages,
-    hasStreamingMessages,
-    error
+    streamingMessages
   };
 };

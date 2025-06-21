@@ -86,12 +86,43 @@ if docker compose -f docker-compose.prod.yml ps | grep -q "Up"; then
         echo "   Then run this script again"
     fi
 
+    # Switch nginx to production mode
+    echo "🔧 Configuring NGINX for production..."
+    NGINX_CONFIG="/etc/nginx/sites-enabled/lakefrontdigital.io.conf"
+    
+    if [[ -f "$NGINX_CONFIG" ]]; then
+        # Create backup of current nginx config
+        sudo cp "$NGINX_CONFIG" "${NGINX_CONFIG}.backup.$(date +%Y%m%d-%H%M%S)"
+        
+        # Switch from Vite dev server to static files
+        sudo sed -i 's|proxy_pass http://localhost:5173;|try_files $uri $uri/ /index.html;|g' "$NGINX_CONFIG"
+        
+        # Enable static asset caching
+        sudo sed -i 's|# location ~\* \\.\(png\|jpg\|jpeg\|gif\|ico\|svg\|woff\|woff2\|ttf\|eot\)\$ {|location ~* \\.(png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {|g' "$NGINX_CONFIG"
+        sudo sed -i 's|#     expires 1y;|    expires 1y;|g' "$NGINX_CONFIG"
+        sudo sed -i 's|#     add_header Cache-Control "public, immutable";|    add_header Cache-Control "public, immutable";|g' "$NGINX_CONFIG"
+        sudo sed -i 's|#     try_files \$uri =404;|    try_files $uri =404;|g' "$NGINX_CONFIG"
+        sudo sed -i 's|# }|}|g' "$NGINX_CONFIG"
+        
+        # Reload nginx
+        if sudo nginx -t; then
+            sudo systemctl reload nginx
+            echo "✅ NGINX configured for production mode"
+        else
+            echo "❌ NGINX configuration error - restoring backup"
+            sudo cp "${NGINX_CONFIG}.backup.$(date +%Y%m%d-%H%M%S)" "$NGINX_CONFIG"
+            exit 1
+        fi
+    else
+        echo "⚠️  NGINX config not found at $NGINX_CONFIG"
+    fi
+
     echo ""
     echo "🔧 NGINX Configuration Notes:"
     echo "   • Backend API runs on: http://localhost:8000"
-    echo "   • API routes should proxy to: http://localhost:8000"
-    echo "   • Static files served from your web root"
-    echo "   • See nginx-config-template.conf for reference"
+    echo "   • API routes proxy to: http://localhost:8000"
+    echo "   • Static files served from web root"
+    echo "   • Production mode enabled with asset caching"
 
 else
     echo "❌ Backend deployment failed"

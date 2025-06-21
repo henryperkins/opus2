@@ -104,7 +104,11 @@ class CodeDocument(Base, TimestampMixin):
     @validates("language")
     def validate_language(self, key, language):
         """Validate supported languages."""
-        supported = {'python', 'javascript', 'typescript', 'jsx', 'tsx', None}
+        # Supported for *storage* – some languages might not yet be parsed,
+        # but we still want to keep the label so we can enable processing
+        # later.  Only python / javascript / typescript are currently parsed
+        # by the CodeParser; others are ignored during background processing.
+        supported = {'python', 'javascript', 'typescript', 'jsx', 'tsx', 'markdown', 'json', 'yaml', None}
         if language and language not in supported:
             raise ValueError(f"Unsupported language: {language}")
         return language

@@ -46,6 +46,7 @@ function Header() {
           </div>
 
           {/* Navigation */}
+          {/* Full navigation for ≥md screens */}
           <nav className="hidden md:flex space-x-8">
             {user && (
               <>
@@ -70,6 +71,31 @@ function Header() {
               </>
             )}
           </nav>
+
+          {/* Condensed navigation icon(s) for <md screens */}
+          {user && (
+            <nav className="flex md:hidden items-center space-x-2">
+              <Link
+                to="/projects"
+                className="p-2 rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                aria-label="Open projects page"
+              >
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                  />
+                </svg>
+              </Link>
+            </nav>
+          )}
 
           {/* Right side - User menu or login */}
           <div className="flex items-center space-x-4">

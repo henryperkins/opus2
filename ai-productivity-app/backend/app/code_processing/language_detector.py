@@ -68,20 +68,28 @@ class LanguageDetector:
     @classmethod
     def detect(cls, filename: str, content: Optional[str] = None) -> Optional[str]:
         """Detect language using both filename and content."""
-        # Try filename first
+        # ---------------------------------------------------------------
+        # 1. Infer from filename extension
+        # ---------------------------------------------------------------
         language = cls.detect_from_filename(filename)
-        if language:
-            return language
 
-        # Try content if provided
-        if content:
-            return cls.detect_from_content(content)
+        # Non-code formats (markdown, yaml, …) are allowed – they will simply
+        # be skipped by the parser later.  We therefore keep the detected
+        # value so the DB reflects the real file type.
 
-        return None
+        # ---------------------------------------------------------------
+        # 2. Fallback to content-based heuristics when still unknown
+        # ---------------------------------------------------------------
+        if language is None and content:
+            language = cls.detect_from_content(content)
+            if language and not cls.is_supported(language):
+                language = None
+
+        return language
 
     @classmethod
     def is_supported(cls, language: str) -> bool:
-        """Check if language is supported for parsing."""
+        """Check if language is supported for full *parsing/chunking* pass."""
         return language in {"python", "javascript", "typescript"}
 
 

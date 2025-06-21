@@ -7,7 +7,8 @@ export const createConfigData = (data = {}) => ({
   providers: data.providers || {},
   current: {
     provider: data.current?.provider || 'openai',
-    chat_model: data.current?.chat_model || 'gpt-4o-mini'
+    chat_model: data.current?.chat_model || 'gpt-4o-mini',
+    useResponsesApi: data.current?.useResponsesApi ?? false,
   }
 });
 
@@ -34,7 +35,8 @@ export function useConfig() {
     try {
       await configAPI.updateModelConfig({
         provider: updates.provider || config?.current.provider || 'openai',
-        chat_model: updates.chat_model || config?.current.chat_model || 'gpt-4o-mini'
+        chat_model: updates.chat_model || config?.current.chat_model || 'gpt-4o-mini',
+        useResponsesApi: updates.useResponsesApi ?? config?.current.useResponsesApi ?? false,
       });
 
       // Refetch to get updated config
