@@ -317,29 +317,29 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
                 </div>
               )}
 
-              {!loadingRecentChats && !recentChatsError && recentChats.map((chat) => (
-                <button
-                  key={chat.id}
-                  onClick={() => {
-                    if (chat.projectId) {
-                      navigate(`/projects/${chat.projectId}/chat/${chat.id}`);
-                    } else {
-                      navigate(`/chat/${chat.id}`);
-                    }
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
-                >
-                  <div className="flex items-center space-x-2 min-w-0 flex-1">
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    <span className="truncate">{chat.title}</span>
-                  </div>
-                  <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
-                    {formatTimestamp(chat.timestamp)}
-                  </span>
-                </button>
-              ))}
+              {!loadingRecentChats && !recentChatsError && recentChats.map((chat) => {
+                const chatUrl = chat.projectId
+                  ? `/projects/${chat.projectId}/chat/${chat.id}`
+                  : `/chat/${chat.id}`;
+
+                return (
+                  <Link
+                    key={chat.id}
+                    to={chatUrl}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
+                  >
+                    <div className="flex items-center space-x-2 min-w-0 flex-1">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      <span className="truncate">{chat.title}</span>
+                    </div>
+                    <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
+                      {formatTimestamp(chat.timestamp)}
+                    </span>
+                  </Link>
+                );
+              })}
 
               {!loadingRecentChats && !recentChatsError && recentChats.length === 0 && (
                 <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
