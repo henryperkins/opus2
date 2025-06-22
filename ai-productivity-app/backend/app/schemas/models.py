@@ -3,7 +3,7 @@ Models API schemas for model configuration and switching.
 """
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ModelConfig(BaseModel):
@@ -19,6 +19,8 @@ class ModelConfig(BaseModel):
     system_prompt: Optional[str] = None
     custom_params: Optional[Dict[str, Any]] = None
 
+    model_config = ConfigDict(protected_namespaces=())
+
 
 class ModelSwitchRequest(BaseModel):
     """Model switching request."""
@@ -27,6 +29,8 @@ class ModelSwitchRequest(BaseModel):
     context: Optional[str] = None
     preserve_history: Optional[bool] = True
     reason: Optional[str] = None
+
+    model_config = ConfigDict(protected_namespaces=())
 
 
 class ModelInfo(BaseModel):
@@ -54,6 +58,8 @@ class ModelMetrics(BaseModel):
     total_requests: int
     cost_efficiency: Optional[float] = None
     last_updated: datetime
+
+    model_config = ConfigDict(protected_namespaces=())
 
 
 class ModelSwitchResponse(BaseModel):
