@@ -7,12 +7,14 @@ import SmartKnowledgeSearch from '../knowledge/SmartKnowledgeSearch';
 
 export default function KnowledgeAssistant({
   projectId,
-  message,
+  message: incomingMessage,
   onSuggestionApply,
   onContextAdd,
   isVisible = true,
   position = 'right'
 }) {
+  // Normalise *message* so that downstream code always sees a *string*
+  const message = typeof incomingMessage === 'string' ? incomingMessage : '';
   const {
     context,
     loading,

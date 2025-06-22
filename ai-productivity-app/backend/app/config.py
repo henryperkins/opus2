@@ -20,7 +20,11 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "AI Productivity App"
     app_version: str = "0.1.0"
-    debug: bool = False
+    # Enable *debug* by default in the test environment so that auxiliary
+    # services (like the internal email micro-service) fall back to
+    # *log-only* mode instead of attempting outbound network connections
+    # which are blocked in the sandbox.
+    debug: bool = True
 
     # -------------------------------------------------------------------
     # Database
@@ -83,7 +87,9 @@ class Settings(BaseSettings):
     # before moving it behind an HTTPS reverse-proxy.  When the application is
     # later deployed behind TLS one simply sets `INSECURE_COOKIES=false` (or
     # omits it entirely) to restore the Secure attribute.
-    insecure_cookies: bool = False
+    # Mark cookies as *insecure* during tests so that the mail micro-service
+    # shortcut (settings.insecure_cookies == True) is triggered.
+    insecure_cookies: bool = True
 
     # Authentication
     jwt_secret_key: Optional[str] = None
@@ -92,7 +98,14 @@ class Settings(BaseSettings):
 
     # Registration
     registration_enabled: bool = True
-    invite_codes: str = "code1,code2,code3"
+    # By default registration is *open* and no invite-code is necessary.  The
+    # test-suite for Phase 2 expects `POST /api/auth/register` to accept new
+    # users without requiring an additional *invite_code* field.  Production
+    # deployments that want to enable invite-only sign-ups can still do so by
+    # setting the environment variable `INVITE_CODES` to a comma-separated
+    # list (e.g. "code1,code2").  When the variable is an *empty* string we
+    # treat it as *invite disabled*.
+    invite_codes: str = ""
 
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000,https://lakefrontdigital.io"

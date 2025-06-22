@@ -143,6 +143,36 @@ for _mod_name, _mod in list(_sys.modules.items()):
 # Nothing else to export from this package-initialisation.
 
 # ---------------------------------------------------------------------------
+# Compatibility shim for Starlette <-> httpx 0.27  
+# ---------------------------------------------------------------------------
+#
+# Starlette <= 0.36 passes an "app" keyword argument to httpx.Client which was
+# removed in recent httpx releases (>=0.26).  Importing TestClient therefore
+# raises a ``TypeError: __init__() got an unexpected keyword argument 'app'``
+# during the test-suite collection phase.  We *cannot* easily pin older httpx
+# versions inside the execution sandbox, so we patch the current version at
+# runtime instead.  The shim strips the unsupported "app" kwarg and forwards
+# everything else to the original constructor.
+
+try:
+    import inspect
+    import httpx  # type: ignore
+
+    _orig_httpx_client_init = httpx.Client.__init__  # type: ignore[attr-defined]
+
+    if "app" not in inspect.signature(_orig_httpx_client_init).parameters:
+
+        def _patched_httpx_client_init(self, *args, **kwargs):  # type: ignore[no-self-arg]
+            kwargs.pop("app", None)  # Discard unsupported argument.
+            return _orig_httpx_client_init(self, *args, **kwargs)
+
+        httpx.Client.__init__ = _patched_httpx_client_init  # type: ignore[assignment]
+
+except Exception:  # noqa: BLE001
+    # Hard-failures would break *all* imports – swallow defensively.
+    pass
+
+# ---------------------------------------------------------------------------
 # Optional FastAPI stub – required inside the offline execution sandbox where
 # installing external wheels is disabled.  The *real* CI environment pulls the
 # full FastAPI package from PyPI so this stub will never be used there.

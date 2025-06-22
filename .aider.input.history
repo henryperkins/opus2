@@ -127,3 +127,150 @@
 
 # 2025-06-20 22:50:24.134905
 +yes
+
+# 2025-06-22 00:58:58.277787
++no
+
+# 2025-06-22 01:10:34.404778
++{
+
+# 2025-06-22 01:10:35.744337
++ai-productivity-backend   | /home/appuser/.local/lib/python3.11/site-packages/pydantic/_internal/_fields.py:149: UserWarning: Field "model_id" has conflict with protected namespace "model_".
+
+# 2025-06-22 01:10:35.754158
++ai-productivity-backend   | 
+
+# 2025-06-22 01:10:35.766783
++ai-productivity-backend   | You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+
+# 2025-06-22 01:10:35.774195
++ai-productivity-backend   |   warnings.warn(
+
+# 2025-06-22 01:10:35.864782
++ai-productivity-backend   | INFO:     Started server process [1]
+
+# 2025-06-22 01:10:35.872822
++ai-productivity-backend   | INFO:     Waiting for application startup.
+
+# 2025-06-22 01:10:35.880605
++ai-productivity-backend   | INFO:     Application startup complete.
+
+# 2025-06-22 01:10:35.891736
++ai-productivity-backend   | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+
+# 2025-06-22 01:10:35.902816
++ai-productivity-backend   | INFO:     127.0.0.1:44174 - "GET /health/ready HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:35.912854
++ai-productivity-backend   | INFO:     172.18.0.1:38350 - "GET /health/ready HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:35.923618
++ai-productivity-backend   | INFO:     172.18.0.1:52798 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+
+# 2025-06-22 01:10:35.940747
++ai-productivity-backend   | 2025-06-22 01:05:44,822 - passlib.handlers.bcrypt - DEBUG - detected 'bcrypt' backend, version '3.2.0'
+
+# 2025-06-22 01:10:35.984181
++ai-productivity-backend   | 2025-06-22 01:05:44,822 - passlib.handlers.bcrypt - DEBUG - 'bcrypt' backend lacks $2$ support, enabling workaround
+
+# 2025-06-22 01:10:35.995644
++ai-productivity-backend   | INFO:     172.18.0.1:51894 - "POST /api/auth/login HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.007673
++ai-productivity-backend   | 2025-06-22 01:05:45,209 - app.routers.auth - INFO - /api/auth/me – user_id=1 username=admin
+
+# 2025-06-22 01:10:36.018160
++ai-productivity-backend   | INFO:     172.18.0.1:51900 - "GET /api/auth/me HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.030592
++ai-productivity-backend   | 2025-06-22 01:05:45,342 - app.routers.config - INFO - /api/config requested – returning model catalogue
+
+# 2025-06-22 01:10:36.041149
++ai-productivity-backend   | INFO:     172.18.0.1:51912 - "GET /api/config HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.055937
++ai-productivity-backend   | 2025-06-22 01:05:45,347 - app.routers.chat - INFO - Listing chat sessions – user_id=1 project_id=None is_active=None limit=5 offset=0
+
+# 2025-06-22 01:10:36.072584
++ai-productivity-backend   | 2025-06-22 01:05:45,356 - app.routers.projects - INFO - Listing projects – user_id=1 status=None tags=None search= owner_id=None page=1 per_page=20
+
+# 2025-06-22 01:10:36.085713
++ai-productivity-backend   | 2025-06-22 01:05:45,362 - app.routers.projects - DEBUG - Retrieved 1 projects (total=1)
+
+# 2025-06-22 01:10:36.098992
++ai-productivity-backend   | INFO:     172.18.0.1:51924 - "GET /api/chat/sessions?limit=5&sort=updated_at&order=desc HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.110970
++ai-productivity-backend   | INFO:     172.18.0.1:51914 - "GET /api/projects?search=&page=1&per_page=20 HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.125617
++ai-productivity-backend   | 2025-06-22 01:05:45,407 - app.routers.chat - INFO - Listing chat sessions – user_id=1 project_id=None is_active=None limit=5 offset=0
+
+# 2025-06-22 01:10:36.139249
++ai-productivity-backend   | INFO:     172.18.0.1:51940 - "GET /api/chat/sessions?limit=5&sort=updated_at&order=desc HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.152208
++ai-productivity-backend   | 2025-06-22 01:05:49,653 - app.routers.config - INFO - /api/config requested – returning model catalogue
+
+# 2025-06-22 01:10:36.162447
++ai-productivity-backend   | INFO:     172.18.0.1:51948 - "GET /api/config HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.172577
++ai-productivity-backend   | INFO:     172.18.0.1:51950 - "GET /api/projects/1 HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.183166
++ai-productivity-backend   | INFO:     172.18.0.1:51956 - "GET /api/analytics/quality/1 HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.278597
++ai-productivity-backend   | INFO:     172.18.0.1:51954 - "GET /api/knowledge/summary/1 HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.293842
++ai-productivity-backend   | 2025-06-22 01:05:53,587 - app.routers.chat - INFO - Listing chat sessions – user_id=1 project_id=None is_active=None limit=5 offset=0
+
+# 2025-06-22 01:10:36.307725
++ai-productivity-backend   | INFO:     172.18.0.1:51952 - "GET /api/chat/sessions?limit=5&sort=updated_at&order=desc HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.318693
++ai-productivity-backend   | INFO:     172.18.0.1:51964 - "GET /api/projects/1/timeline HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.331274
++ai-productivity-backend   | 2025-06-22 01:05:55,320 - app.routers.chat - INFO - Create chat session – user_id=1 project_id=1 title=None
+
+# 2025-06-22 01:10:36.342717
++ai-productivity-backend   | 2025-06-22 01:05:55,341 - app.routers.chat - DEBUG - Session created with id=109
+
+# 2025-06-22 01:10:36.353372
++ai-productivity-backend   | INFO:     172.18.0.1:45254 - "POST /api/chat/sessions HTTP/1.1" 201 Created
+
+# 2025-06-22 01:10:36.364193
++ai-productivity-backend   | INFO:     172.18.0.1:45258 - "GET /api/projects/1/timeline HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.374044
++ai-productivity-backend   | INFO:     127.0.0.1:46308 - "GET /health/ready HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.383724
++ai-productivity-backend   | INFO:     127.0.0.1:58252 - "GET /health/ready HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:36.393544
++ai-productivity-backend   | INFO:     127.0.0.1:46700 - "GET /health/ready HTTP/1.1" 200 OK
+
+# 2025-06-22 01:10:39.775151
++}
+
+# 2025-06-22 01:10:42.761584
++no
+
+# 2025-06-22 01:11:12.350354
++yes
+
+# 2025-06-22 01:13:07.672405
++chat history in sidebar menu isnt ipening the corresponding chat conversation as it should
+
+# 2025-06-22 01:15:05.022956
++yes
+
+# 2025-06-22 01:17:08.674031
++ yes
+
+# 2025-06-22 01:17:13.123335
++yes

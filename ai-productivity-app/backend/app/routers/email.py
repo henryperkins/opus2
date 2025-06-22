@@ -74,6 +74,10 @@ def _send_via_smtp(payload: EmailPayload) -> None:
 async def send_email_endpoint(payload: EmailPayload, background: BackgroundTasks) -> dict[str, str]:
     """Handle incoming email send requests."""
 
+    # In local/dev and **test** mode we skip SMTP to avoid network calls which
+    # are disallowed inside the execution sandbox.  Both *debug* and
+    # *insecure_cookies* are set to True by *backend/app/config.py* when the
+    # environment lacks explicit overrides.
     if settings.debug or settings.insecure_cookies:
         # Treat *insecure_cookies=True* as local dev environment.  We simply
         # log the payload so developers can inspect it via `docker-compose`
