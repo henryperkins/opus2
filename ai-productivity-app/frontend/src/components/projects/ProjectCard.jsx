@@ -1,7 +1,8 @@
 // ProjectCard.jsx: visual card with status, emoji, tags, and quick actions.
 
-import React from "react";
+import React from 'react';
 import { Link } from 'react-router-dom';
+import Badge from '../common/Badge';
 
 export default function ProjectCard({ project, onClick }) {
   return (
@@ -21,18 +22,9 @@ export default function ProjectCard({ project, onClick }) {
           )}
           <h2 className="font-semibold text-xl truncate">{project.title}</h2>
         </div>
-        <span
-          className={`inline-flex items-center px-3 py-1 rounded-full font-medium text-xs shadow-sm
-            ${project.status === "active"
-              ? "status-active"
-              : project.status === "completed"
-              ? "status-completed"
-              : "status-archived"
-            }
-          `}
-        >
+        <Badge status={project.status}>
           {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
-        </span>
+        </Badge>
       </div>
       <div className="mt-2 text-gray-600 line-clamp-2">
         {project.description}

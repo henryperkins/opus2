@@ -2,6 +2,17 @@
 
 @import "tailwindcss";
 
+/* ----------------------------------------------------------------------
+   Custom component shortcuts (@apply) – kept in *components* layer so that
+   the utilities are emitted after base + before one-off utilities.
+   ------------------------------------------------------------------- */
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 font-medium text-sm text-white px-4 py-2 rounded-md transition-colors duration-200 bg-brand-primary-600 hover:bg-brand-primary-700;
+  }
+}
+
 @theme {
   /* Brand colors */
   --color-brand-primary-50: #eff6ff;
@@ -267,6 +278,9 @@
     @apply hover:shadow-lg hover:shadow-gray-200/50 hover:border-gray-300;
     @apply dark:hover:border-gray-600 dark:hover:shadow-gray-900/50;
     @apply hover:-translate-y-1 hover:scale-[1.02];
+
+    /* Keyboard accessibility – show focus ring when navigated via Tab */
+    @apply focus-visible:ring-2 focus-visible:ring-brand-primary-400 focus-visible:outline-none;
   }
 
   /* Form groups */

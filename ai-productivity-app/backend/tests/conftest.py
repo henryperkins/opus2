@@ -9,6 +9,9 @@ from sqlalchemy.pool import StaticPool
 # Always use file-based sqlite DB for tests (guarantees same DB for app and test code)
 TEST_DB_PATH = "./test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
+# Provide a unique, non-default JWT secret key so that the settings sanity check
+# in `app.config` does not abort the application startup during the test run.
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key")
 from app.main import app
 from app.database import get_db
 from app.models.base import Base
