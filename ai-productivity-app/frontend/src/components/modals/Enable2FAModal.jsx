@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import Modal from '../common/Modal';
 import { authAPI } from '../../api/auth';
 import { toast } from '../common/Toast';
+import { copyToClipboard } from '../../utils/clipboard';
 import { QrCode, Shield, Copy, CheckCircle, AlertCircle } from 'lucide-react';
 
 const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
@@ -59,21 +60,6 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
     }
   };
 
-  const copyToClipboard = (text) => {
-    if (window.navigator?.clipboard) {
-      window.navigator.clipboard.writeText(text);
-      toast.success('Copied to clipboard');
-    } else {
-      // Fallback for browsers without clipboard API
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      toast.success('Copied to clipboard');
-    }
-  };
 
   const downloadBackupCodes = () => {
     const content = backupCodes.join('\n');
