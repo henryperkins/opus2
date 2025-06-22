@@ -189,5 +189,7 @@ LoginSchema = UserLogin
 RegisterSchema = UserRegister
 
 # Ensure all forward references for this model are resolved for FastAPI+Pydantic
-UserRegister.model_rebuild()
+# Pydantic v2 introduces `model_rebuild`; guard for compatibility with v1
+if hasattr(UserRegister, "model_rebuild"):
+    UserRegister.model_rebuild()
 globals()["UserRegister"] = UserRegister

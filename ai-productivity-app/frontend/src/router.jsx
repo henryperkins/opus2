@@ -17,6 +17,7 @@ import {
   Route,
   Navigate,
   Outlet,
+  redirect,
 } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
@@ -93,11 +94,10 @@ export const router = createBrowserRouter(
           path: 'timeline',
           element: <ProtectedRoute element={<TimelinePage />} />,
         },
-        // Deprecated alias – kept temporarily so existing bookmarks to "/dashboard"
-        // still work.  Can be removed once users migrate.
+        // Deprecated route – perform server-style redirect preserving method (307)
         {
           path: 'dashboard',
-          element: <ProtectedRoute element={<ProjectDashboard />} />,
+          loader: () => redirect('/projects', 307),
         },
         {
           path: 'projects/:projectId',

@@ -44,7 +44,8 @@ export const useMediaQuery = () => {
     }, []);
 
     const isMobile = breakpoint === 'mobile';
-    const isTablet = breakpoint === 'tablet' || breakpoint === 'sm';
+    // Consider "sm" (small) as part of tablet range for convenience
+    const isTablet = ['tablet', 'sm'].includes(breakpoint);
     const isDesktop = breakpoint === 'desktop' || breakpoint === 'xl';
     const isTouchDevice = isMobile || isTablet;
 

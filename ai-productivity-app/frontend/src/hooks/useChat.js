@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import client from '../api/client';
+import { nanoid } from 'nanoid';
 
 // Helper function to get cookie value
 const getCookie = (name) => {
@@ -13,12 +14,6 @@ const getCookie = (name) => {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
-// Note: WebSocket URL is now determined dynamically inside the hook
-// to ensure window.location is available and we always use the correct host
-
-// preferredSessionId (optional): when provided, the hook will connect to that
-// existing chat session instead of creating a fresh one. This is used by the
-// sidebar deep-links and direct URLs containing the session id.
 export const useChat = (projectId, preferredSessionId = null) => {
   const [sessionId, setSessionId] = useState(preferredSessionId);
   const [messages, setMessages] = useState([]);
@@ -47,67 +42,37 @@ export const useChat = (projectId, preferredSessionId = null) => {
       setError(null);
 
       try {
-        // ------------------------------------------------------------------
-        // 1. Determine which chat session to use
-        // ------------------------------------------------------------------
-
         let newSessionId = preferredSessionId;
 
         if (newSessionId) {
-          // Validate that the session belongs to the project.
           try {
             const res = await client.get(`/api/chat/sessions/${newSessionId}`);
             if (res.data.project_id !== Number(projectId)) {
               console.warn(
-                `Session ${newSessionId} does not belong to project ${projectId}. Ignoring preferredSessionId.`
+                `Session ${newSessionId} does not belong to project ${projectId}.`
               );
               newSessionId = null;
             }
           } catch (err) {
-            console.warn('Invalid preferredSessionId – falling back to new session', err);
+            console.error(`Failed to validate session ${newSessionId}:`, err);
             newSessionId = null;
           }
         }
 
-        // No preferred/valid session -> create fresh one linked to project
         if (!newSessionId) {
-          const sessionResponse = await client.post(`/api/chat/sessions`, {
-            project_id: projectId,
+          const sessionData = await client.post('/api/chat/sessions', {
+            project_id: Number(projectId),
           });
-          newSessionId = sessionResponse.data.id;
+          newSessionId = sessionData.data.id;
         }
 
-        if (isCancelled) return;
-
+        if (isCancelled || !newSessionId) return;
         setSessionId(newSessionId);
-        setMessages([]); // Clear messages for new session
 
-        // ------------------------------------------------------------------
-        // 2. Determine WebSocket URL dynamically inside the effect
-        // ------------------------------------------------------------------
-        const getWebSocketBaseUrl = () => {
-          // Priority order:
-          // 1. Explicit VITE_WS_URL environment variable
-          if (import.meta.env.VITE_WS_URL) {
-            return import.meta.env.VITE_WS_URL;
-          }
-
-          // 2. Always use the current page's location for WebSocket connections
-          // This ensures we go through the Vite dev server proxy in development
-          // or through NGINX in production
-          const secure = window.location.protocol === 'https:';
-          const scheme = secure ? 'wss://' : 'ws://';
-
-          // Use window.location.host which includes hostname and port
-          return `${scheme}${window.location.host}`;
-        };
-
-        const wsBaseUrl = getWebSocketBaseUrl();
-        console.log('Using WebSocket base URL:', wsBaseUrl);
-
-        // 3. Connect to WebSocket with authentication
-        // Note: HttpOnly cookies are automatically sent with WebSocket connections
-        // We only need the token parameter as a fallback for testing or localStorage auth
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        const wsBaseUrl = API_BASE_URL.replace('http://', `${protocol}//`).replace('https://', `${protocol}//`);
+        
         const token = localStorage.getItem('token');
         const wsUrl = `${wsBaseUrl}/api/chat/ws/sessions/${newSessionId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
         console.log('Connecting to WebSocket:', wsUrl);
@@ -163,7 +128,6 @@ export const useChat = (projectId, preferredSessionId = null) => {
                   const streamingMessage = newMap.get(data.message_id);
 
                   if (streamingMessage) {
-                    // Move completed message to main messages array
                     const finalMessage = {
                       ...streamingMessage,
                       isStreaming: false,
@@ -190,7 +154,6 @@ export const useChat = (projectId, preferredSessionId = null) => {
 
               case 'message_delete':
                 setMessages((prev) => prev.filter(msg => msg.id !== data.message_id));
-                // Also remove from streaming messages if it exists
                 setStreamingMessages((prev) => {
                   const newMap = new Map(prev);
                   newMap.delete(data.message_id);
@@ -202,7 +165,6 @@ export const useChat = (projectId, preferredSessionId = null) => {
                 console.error('WebSocket error received:', data.error);
                 setError(data.error.message || 'An error occurred');
 
-                // If error is related to a specific message, stop its streaming
                 if (data.message_id) {
                   setStreamingMessages((prev) => {
                     const newMap = new Map(prev);
@@ -231,7 +193,6 @@ export const useChat = (projectId, preferredSessionId = null) => {
           if (isCancelled) return;
           console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
 
-          // Add specific handling for different close codes
           if (event.code === 1008) {
             console.error('WebSocket authentication failed - missing or invalid token');
             setError('Authentication failed. Please log in again.');
@@ -241,22 +202,36 @@ export const useChat = (projectId, preferredSessionId = null) => {
           }
 
           setConnectionState('disconnected');
-          // Reconnection logic can be added here if needed
+          wsRef.current = null;
+
+          // Implement reconnection logic
+          if (reconnectAttempts < maxReconnectAttempts && event.code !== 1008) {
+            const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+            console.log(`Reconnecting in ${backoffDelay}ms... (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
+            
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (!isCancelled) {
+                setReconnectAttempts(prev => prev + 1);
+                connect();
+              }
+            }, backoffDelay);
+          } else if (reconnectAttempts >= maxReconnectAttempts) {
+            setError('Max reconnection attempts reached. Please refresh the page.');
+          }
         };
 
-        ws.onerror = (event) => {
+        ws.onerror = (error) => {
           if (isCancelled) return;
-          console.error('WebSocket error:', event, 'URL:', wsUrl);
-          console.error('Check if server is running and WebSocket endpoint exists');
-          setError('WebSocket connection failed');
+          console.error('WebSocket error:', error);
           setConnectionState('error');
+          setError('Connection error occurred');
         };
 
       } catch (err) {
         if (isCancelled) return;
-        console.error('Failed to create session or connect:', err);
-        setError('Failed to initialize chat session');
+        console.error('Failed to establish connection:', err);
         setConnectionState('error');
+        setError(err.response?.data?.detail || err.message || 'Failed to connect');
       }
     };
 
@@ -264,55 +239,100 @@ export const useChat = (projectId, preferredSessionId = null) => {
 
     return () => {
       isCancelled = true;
-      if (currentWs) {
-        console.log('Closing WebSocket for session:', sessionId);
-        currentWs.close();
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
-      wsRef.current = null;
-      setSessionId(null);
-      setMessages([]);
+      if (currentWs && currentWs.readyState === WebSocket.OPEN) {
+        currentWs.close(1000, 'Component unmounting');
+      }
     };
-  }, [projectId, user, authLoading, preferredSessionId]); // Re-run when preferred session changes
+  }, [projectId, preferredSessionId, user, authLoading, reconnectAttempts]);
 
-  // Send message
+  // Send message function that returns a Promise with the message ID
   const sendMessage = useCallback((content, metadata = {}) => {
-    if (!wsRef.current) {
-      console.warn('WebSocket is not connected - wsRef.current is null');
-      return;
-    }
+    return new Promise((resolve, reject) => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket is not connected'));
+        return;
+      }
 
-    console.log('WebSocket readyState:', wsRef.current.readyState, 'Expected OPEN:', WebSocket.OPEN);
+      // Generate temporary ID for optimistic update
+      const tempId = `tmp-${nanoid()}`;
+      
+      // Create optimistic message
+      const optimisticMessage = {
+        id: tempId,
+        role: 'user',
+        content,
+        metadata,
+        created_at: new Date().toISOString(),
+        user_id: user?.id,
+        session_id: sessionId
+      };
 
-    if (wsRef.current.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not connected - readyState:', wsRef.current.readyState);
-      return;
-    }
+      // Add to messages immediately
+      setMessages(prev => [...prev, optimisticMessage]);
 
-    const message = {
-      type: 'message',
-      content,
-      metadata,
-      project_id: projectId
-    };
+      // Create message handler for this specific message
+      const messageHandler = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'message' && data.message.content === content) {
+            // Replace temporary ID with real ID
+            setMessages(prev => 
+              prev.map(msg => 
+                msg.id === tempId 
+                  ? { ...msg, id: data.message.id }
+                  : msg
+              )
+            );
+            
+            // Clean up listener and resolve
+            wsRef.current?.removeEventListener('message', messageHandler);
+            resolve(data.message.id);
+          }
+        } catch (err) {
+          console.error('Error handling message response:', err);
+        }
+      };
 
-    wsRef.current.send(JSON.stringify(message));
-  }, [projectId]);
+      // Add temporary listener for the response
+      wsRef.current.addEventListener('message', messageHandler);
+
+      // Send the message
+      try {
+        wsRef.current.send(JSON.stringify({
+          type: 'message',
+          content,
+          metadata
+        }));
+
+        // Set a timeout to reject if no response
+        setTimeout(() => {
+          wsRef.current?.removeEventListener('message', messageHandler);
+          reject(new Error('Message send timeout'));
+        }, 5000);
+      } catch (err) {
+        wsRef.current?.removeEventListener('message', messageHandler);
+        // Remove optimistic message on error
+        setMessages(prev => prev.filter(msg => msg.id !== tempId));
+        reject(err);
+      }
+    });
+  }, [sessionId, user]);
 
   // Send typing indicator
   const sendTypingIndicator = useCallback((isTyping) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      return;
-    }
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
-    const message = {
+    wsRef.current.send(JSON.stringify({
       type: 'typing',
       typing: isTyping
-    };
-
-    wsRef.current.send(JSON.stringify(message));
+    }));
   }, []);
 
-  // Edit message (placeholder)
+  // Edit message
   const editMessage = useCallback((messageId, newContent) => {
     setMessages(prev =>
       prev.map(msg =>
@@ -324,7 +344,7 @@ export const useChat = (projectId, preferredSessionId = null) => {
     // TODO: Send edit to server
   }, []);
 
-  // Delete message (placeholder)
+  // Delete message
   const deleteMessage = useCallback((messageId) => {
     setMessages(prev => prev.filter(msg => msg.id !== messageId));
     // TODO: Send delete to server

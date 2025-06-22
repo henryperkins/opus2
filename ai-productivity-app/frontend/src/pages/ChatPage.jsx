@@ -1,4 +1,3 @@
-// pages/ChatPage.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
@@ -41,8 +40,18 @@ import ResponseQuality from '../components/analytics/ResponseQuality';
 // Icons
 import { Brain, Settings, Search, FileText, BarChart2, Sparkles } from 'lucide-react';
 
-// Types - Commented out for JSX compatibility
-// import { createCitation } from '../types/knowledge';
+// Utility function to detect task type
+function detectTaskType(content) {
+  const lowerContent = content.toLowerCase();
+  if (lowerContent.includes('explain') || lowerContent.includes('what is')) {
+    return 'knowledge';
+  } else if (lowerContent.includes('generate') || lowerContent.includes('create')) {
+    return 'generation';
+  } else if (lowerContent.includes('fix') || lowerContent.includes('debug')) {
+    return 'debugging';
+  }
+  return 'general';
+}
 
 export default function ChatPage() {
   const { projectId } = useParams();
@@ -62,58 +71,35 @@ export default function ChatPage() {
   const editMessage = chatData.editMessage;
   const deleteMessage = chatData.deleteMessage;
   const sendTypingIndicator = chatData.sendTypingIndicator;
+  const streamingMessages = chatData.streamingMessages;
 
   // Knowledge integration
   const knowledgeChat = useKnowledgeChat(projectId);
 
   // Model configuration
   const modelSelection = useModelSelection();
-  const modelPerformance = useModelPerformance(modelSelection.currentModel);
+  const [currentModel, setCurrentModel] = useState(modelSelection.currentModel);
+  const modelPerformance = useModelPerformance(currentModel);
 
   // Response quality tracking
   const qualityTracking = useResponseQualityTracking(projectId);
 
   // UI State
-  const splitViewState = useState(true);
-  const splitView = splitViewState[0];
-  const setSplitView = splitViewState[1];
-  const showKnowledgeAssistantState = useState(true);
-  const showKnowledgeAssistant = showKnowledgeAssistantState[0];
-  const setShowKnowledgeAssistant = showKnowledgeAssistantState[1];
-  const showKnowledgePanelState = useState(false);
-  const showKnowledgePanel = showKnowledgePanelState[0];
-  const setShowKnowledgePanel = showKnowledgePanelState[1];
-  const showSearchState = useState(false);
-  const showSearch = showSearchState[0];
-  const setShowSearch = showSearchState[1];
-  const showPromptManagerState = useState(false);
-  const showPromptManager = showPromptManagerState[0];
-  const setShowPromptManager = showPromptManagerState[1];
-  const showAnalyticsState = useState(false);
-  const showAnalytics = showAnalyticsState[0];
-  const setShowAnalytics = showAnalyticsState[1];
+  const [splitView, setSplitView] = useState(true);
+  const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(true);
+  const [showKnowledgePanel, setShowKnowledgePanel] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showPromptManager, setShowPromptManager] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   // Editor state
-  const editorContentState = useState('');
-  const editorContent = editorContentState[0];
-  const setEditorContent = editorContentState[1];
-  const editorLanguageState = useState('python');
-  const editorLanguage = editorLanguageState[0];
-  const setEditorLanguage = editorLanguageState[1];
-  const selectedTextState = useState('');
-  const selectedText = selectedTextState[0];
-  const setSelectedText = selectedTextState[1];
-  const currentFileState = useState();
-  const currentFile = currentFileState[0];
-  const setCurrentFile = currentFileState[1];
+  const [editorContent, setEditorContent] = useState('');
+  const [editorLanguage, setEditorLanguage] = useState('python');
+  const [selectedText, setSelectedText] = useState('');
+  const [currentFile, setCurrentFile] = useState();
 
   // Message state
-  const streamingMessagesState = useState(new Map());
-  const streamingMessages = streamingMessagesState[0];
-  const setStreamingMessages = streamingMessagesState[1];
-  const messageQualitiesState = useState(new Map());
-  const messageQualities = messageQualitiesState[0];
-  const setMessageQualities = messageQualitiesState[1];
+  const [messageQualities, setMessageQualities] = useState(new Map());
 
   // Enhanced message sending with all integrations
   const handleSendMessage = useCallback(async function(content, metadata) {
@@ -123,15 +109,14 @@ export default function ChatPage() {
       // Auto-detect task type for model selection
       const taskType = detectTaskType(content);
       const newModel = await modelSelection.autoSelectModel(taskType);
-      if (modelSelection.currentModel !== newModel) {
-        // Model was switched, notify user
+      if (currentModel !== newModel) {
         console.log('Switched to optimal model for ' + taskType);
-        modelSelection.currentModel = newModel;
+        setCurrentModel(newModel);
       }
 
       // Build enhanced metadata
       const enhancedMetadata = {
-        model: modelSelection.currentModel,
+        model: currentModel,
         taskType: taskType,
         timestamp: new Date().toISOString()
       };
@@ -150,7 +135,7 @@ export default function ChatPage() {
         }];
       }
 
-      // Send message
+      // Send message and wait for ID
       const messageId = await sendMessage(content, enhancedMetadata);
 
       // Track performance
@@ -167,35 +152,15 @@ export default function ChatPage() {
       modelPerformance.trackRequest(0, { input: 0, output: 0 }, true);
       throw error;
     }
-  }, [sendMessage, editorContent, editorLanguage, currentFile, modelSelection, modelPerformance]);
-
-  // Handle streaming responses
-  const handleStreamingUpdate = useCallback(function(messageId, chunk, done) {
-    if (done) {
-      setStreamingMessages(function(prev) {
-        const updated = new Map(prev);
-        updated.delete(messageId);
-        return updated;
-      });
-    } else {
-      setStreamingMessages(function(prev) {
-        const updated = new Map(prev);
-        const current = updated.get(messageId) || '';
-        updated.set(messageId, current + chunk);
-        return updated;
-      });
-    }
-  }, []);
+  }, [sendMessage, editorContent, editorLanguage, currentFile, currentModel, modelSelection, modelPerformance]);
 
   // Handle interactive elements
   const handleInteractiveElement = useCallback(async function(element) {
-    // Process interactive element action
     console.log('Interactive element:', element);
   }, []);
 
   // Handle knowledge search result selection
   const handleSearchResultSelect = useCallback((result) => {
-    // Add to citations and inject into context
     const citations = knowledgeChat.addToCitations([result]);
     console.log('Added to context');
     setShowSearch(false);
@@ -204,7 +169,6 @@ export default function ChatPage() {
   // Handle response quality feedback
   const handleQualityFeedback = useCallback((messageId, feedback) => {
     console.log('Quality feedback:', messageId, feedback);
-    // Send feedback to backend
   }, []);
 
   // Render enhanced message with all features
@@ -242,12 +206,12 @@ export default function ChatPage() {
             <StreamingMessage
               messageId={message.id}
               isStreaming={true}
-              content={streamingContent || ''}
-              model={message.metadata && message.metadata.model ? message.metadata.model : ''}
+              content={streamingContent?.content || ''}
+              model={message.metadata?.model || ''}
               onStop={() => console.log('Stop streaming')}
               onRetry={() => console.log('Retry streaming')}
             />
-          ) : message.metadata && message.metadata.citations && message.metadata.citations.length > 0 ? (
+          ) : message.metadata?.citations?.length > 0 ? (
             <CitationRenderer
               text={message.content}
               citations={message.metadata.citations}
@@ -269,7 +233,7 @@ export default function ChatPage() {
           )}
 
           {/* Interactive Elements */}
-          {message.interactiveElements && message.interactiveElements.length > 0 && (
+          {message.interactiveElements?.length > 0 && (
             <div className="mt-4">
               <InteractiveElements
                 elements={message.interactiveElements}
@@ -332,9 +296,8 @@ export default function ChatPage() {
               title="Project not found"
               description="The requested project could not be found or you don't have access to it."
               action={{
-                text: "Back to Projects",
-                onClick: () => navigate('/projects'),
-                variant: 'primary'
+                label: 'Back to Projects',
+                onClick: () => navigate('/projects')
               }}
             />
           </div>
@@ -343,319 +306,157 @@ export default function ChatPage() {
     );
   }
 
-  const chatPanel = (
-    <div className="flex flex-col h-full bg-white">
-      {/* Chat Header with Controls */}
-      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {project.name} - Enhanced AI Chat
-            </h2>
-            {connectionState !== 'connected' && (
-              <span className="text-xs text-orange-600">
-                {connectionState}
-              </span>
-            )}
+  // Main chat interface
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <ErrorBoundary>
+        {/* Header with model switcher */}
+        <Header>
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-semibold">{project.title}</h1>
+              <ModelSwitcher
+                currentModel={currentModel}
+                onModelChange={setCurrentModel}
+                compact={isMobile}
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+                aria-label="Toggle Knowledge Assistant"
+              >
+                <Brain className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setShowSearch(!showSearch)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+                aria-label="Open Knowledge Search"
+              >
+                <Search className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setShowPromptManager(!showPromptManager)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+                aria-label="Open Prompt Manager"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setShowAnalytics(!showAnalytics)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+                aria-label="Toggle Analytics View"
+              >
+                <BarChart2 className="w-5 h-5" />
+              </button>
+            </div>
           </div>
+        </Header>
 
-          <div className="flex items-center space-x-2">
-            {/* Model Switcher - Responsive sizing */}
-            <ModelSwitcher
-              compact={isTouchDevice}
-              className={isTouchDevice ? "touch-target" : ""}
-              onModelChange={(model) => console.log('Model changed:', model)}
-            />
+        {/* Main content area */}
+        <div className="flex-1">
+          {isMobile ? (
+            // Mobile layout with bottom sheet
+            <div className="flex flex-col h-screen">
+              <div className="flex-1 overflow-y-auto">
+                <div className="px-4 py-6">
+                  {messages.map(renderMessage)}
+                </div>
+              </div>
 
-            {/* Feature Toggles - Touch-friendly on mobile */}
-            <button
-              onClick={() => setShowKnowledgePanel(!showKnowledgePanel)}
-              className={`p-2 rounded-lg transition-colors touch-target ${
-                showKnowledgePanel
-                  ? 'bg-blue-100 text-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
-              title="Knowledge Context"
-            >
-              <FileText className="w-5 h-5" />
-            </button>
+              <MobileBottomSheet
+                isOpen={showKnowledgePanel}
+                onClose={() => setShowKnowledgePanel(false)}
+                title="Knowledge Context"
+                initialSnap={0.5}
+              >
+                <KnowledgeContextPanel
+                  projectId={projectId}
+                  onSelect={handleSearchResultSelect}
+                />
+              </MobileBottomSheet>
 
-            <button
-              onClick={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
-              className={`p-2 rounded-lg transition-colors touch-target ${
-                showKnowledgeAssistant
-                  ? 'bg-blue-100 text-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
-              title="AI Assistant"
-            >
-              <Brain className="w-5 h-5" />
-            </button>
-
-            <button
-              onClick={() => setShowSearch(true)}
-              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg touch-target"
-              style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
-              title="Search Knowledge Base"
-            >
-              <Search className="w-5 h-5" />
-            </button>
-
-            <button
-              onClick={() => setShowAnalytics(!showAnalytics)}
-              className={`p-2 rounded-lg transition-colors touch-target ${
-                showAnalytics
-                  ? 'bg-purple-100 text-purple-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
-              title="Analytics"
-            >
-              <BarChart2 className="w-5 h-5" />
-            </button>
-
-            <button
-              onClick={() => setShowPromptManager(true)}
-              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg touch-target"
-              style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
-              title="Prompt Templates"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Knowledge Context Panel */}
-      {showKnowledgePanel && (
-        <div className="border-b border-gray-200 max-h-64 overflow-y-auto">
-          <KnowledgeContextPanel
-            query={knowledgeChat.activeQuery}
-            projectId={projectId}
-            onDocumentSelect={(doc) => knowledgeChat.toggleItemSelection(doc.id)}
-            onCodeSelect={(snippet) => knowledgeChat.toggleItemSelection(snippet.id)}
-          />
-        </div>
-      )}
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6">
-        {messages.map((msg) => renderMessage(msg))}
-
-        {/* Typing indicators */}
-        {typingUsers.size > 0 && (
-          <div className="flex justify-start mb-6">
-            <div className="bg-gray-100 rounded-lg px-4 py-2">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
+              <div className="border-t bg-white">
+                <EnhancedCommandInput
+                  onSend={handleSendMessage}
+                  onTyping={sendTypingIndicator}
+                  projectId={projectId}
+                  editorContent={editorContent}
+                  selectedText={selectedText}
+                  currentFile={currentFile}
+                  userId={user?.id}
+                />
               </div>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Enhanced Command Input */}
-      <EnhancedCommandInput
-        onSend={handleSendMessage}
-        onTyping={sendTypingIndicator}
-        projectId={projectId}
-        editorContent={editorContent}
-        selectedText={selectedText}
-        currentFile={currentFile}
-        userId={user && user.id ? user.id : ''}
-      />
-    </div>
-  );
-
-  const editorPanel = (
-    <div className="flex flex-col h-full bg-white">
-      {/* Editor Header */}
-      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <span className="text-sm font-medium text-gray-700">
-              {currentFile || 'Untitled'}
-            </span>
-            <select
-              value={editorLanguage}
-              onChange={(e) => setEditorLanguage(e.target.value)}
-              className="text-sm border rounded px-2 py-1"
-            >
-              <option value="python">Python</option>
-              <option value="javascript">JavaScript</option>
-              <option value="typescript">TypeScript</option>
-              <option value="java">Java</option>
-              <option value="go">Go</option>
-              <option value="rust">Rust</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Monaco Editor */}
-      <div className="flex-1">
-        <MonacoEditor
-          value={editorContent}
-          language={editorLanguage}
-          onChange={(value) => setEditorContent(value || '')}
-          onMount={(editor) => {
-            editor.onDidChangeCursorSelection((e) => {
-              const selection = editor.getModel() && editor.getModel().getValueInRange ? editor.getModel().getValueInRange(e.selection) : '';
-              setSelectedText(selection || '');
-            });
-          }}
-          theme="vs-dark"
-          options={{
-            minimap: { enabled: false },
-            fontSize: 14,
-            wordWrap: 'on',
-            automaticLayout: true
-          }}
-        />
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header />
-
-      <ErrorBoundary>
-        <div className="flex-1 flex overflow-hidden">
-          {/* Responsive Layout */}
-          {splitView ? (
-            <ResponsiveSplitPane
-              left={chatPanel}
-              right={editorPanel}
-              leftTitle="Chat"
-              rightTitle={currentFile || "Editor"}
-              orientation="horizontal"
-              defaultSize="60%"
-              minSize={isMobile ? 300 : 400}
-              className="h-full"
-            />
           ) : (
-            <div className="h-full">
-              {chatPanel}
-            </div>
+            // Desktop layout with split pane
+            <ResponsiveSplitPane
+              split="vertical"
+              minSize={300}
+              defaultSize="70%"
+              resizerStyle={{
+                background: '#e5e7eb',
+                cursor: 'col-resize',
+                width: '4px'
+              }}
+            >
+              {/* Chat panel */}
+              <div className="flex flex-col h-screen">
+                <div className="flex-1 overflow-y-auto">
+                  <div className="max-w-3xl mx-auto px-4 py-6">
+                    {messages.map(renderMessage)}
+                  </div>
+                </div>
+
+                <div className="border-t bg-white">
+                  <div className="max-w-3xl mx-auto">
+                    <EnhancedCommandInput
+                      onSend={handleSendMessage}
+                      onTyping={sendTypingIndicator}
+                      projectId={projectId}
+                      editorContent={editorContent}
+                      selectedText={selectedText}
+                      currentFile={currentFile}
+                      userId={user?.id}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Knowledge/Editor panel */}
+              {showKnowledgeAssistant && (
+                <KnowledgeAssistant
+                  projectId={projectId}
+                  onSearchSelect={handleSearchResultSelect}
+                  showEditor={true}
+                  editorContent={editorContent}
+                  onEditorChange={setEditorContent}
+                  editorLanguage={editorLanguage}
+                  onLanguageChange={setEditorLanguage}
+                />
+              )}
+            </ResponsiveSplitPane>
           )}
         </div>
 
-        {/* Mobile Knowledge Panel as Bottom Sheet */}
-        {isMobile && (
-          <MobileBottomSheet
-            isOpen={showKnowledgePanel}
-            onClose={() => setShowKnowledgePanel(false)}
-            title="Knowledge Context"
-            snapPoints={[0.3, 0.6, 0.8]}
-            initialSnap={0.6}
-          >
-            <div className="p-4">
-              <KnowledgeContextPanel
-                query={knowledgeChat.activeQuery}
-                projectId={projectId}
-                onDocumentSelect={(doc) => knowledgeChat.toggleItemSelection(doc.id)}
-                onCodeSelect={(snippet) => knowledgeChat.toggleItemSelection(snippet.id)}
-              />
-            </div>
-          </MobileBottomSheet>
-        )}
-
-        {/* Mobile Search as Bottom Sheet */}
-        {isMobile && showSearch && (
-          <MobileBottomSheet
-            isOpen={showSearch}
-            onClose={() => setShowSearch(false)}
-            title="Knowledge Search"
-            snapPoints={[0.4, 0.7, 0.9]}
-            initialSnap={0.7}
-          >
-            <SmartKnowledgeSearch
-              projectId={projectId}
-              onResultSelect={handleSearchResultSelect}
-              onClose={() => setShowSearch(false)}
-              isMobile={true}
-            />
-          </MobileBottomSheet>
-        )}
-
-        {/* Desktop modals remain as overlays */}
-        {!isMobile && showSearch && (
+        {/* Modals */}
+        {showSearch && (
           <SmartKnowledgeSearch
             projectId={projectId}
-            onResultSelect={handleSearchResultSelect}
+            onSelect={handleSearchResultSelect}
             onClose={() => setShowSearch(false)}
           />
         )}
 
-        {/* Prompt Manager Modal */}
         {showPromptManager && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className={`bg-white rounded-lg max-h-[90vh] overflow-y-auto ${
-              isMobile ? 'w-full max-w-full m-4' : 'max-w-6xl w-full'
-            }`}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-2xl font-bold">Prompt Templates</h2>
-                  <button
-                    onClick={() => setShowPromptManager(false)}
-                    className="text-gray-500 hover:text-gray-700 touch-target"
-                    style={isTouchDevice ? { minWidth: '44px', minHeight: '44px' } : {}}
-                  >
-                    ✕
-                  </button>
-                </div>
-                <PromptManager />
-              </div>
-            </div>
-          </div>
+          <PromptManager
+            projectId={projectId}
+            onClose={() => setShowPromptManager(false)}
+          />
         )}
       </ErrorBoundary>
-
-      {/* Knowledge Assistant - Responsive positioning */}
-      <KnowledgeAssistant
-        projectId={projectId}
-        message={messages.length > 0 ? messages[messages.length - 1].content : ''}
-        onSuggestionApply={(suggestion, citations) => {
-          handleSendMessage(suggestion, { citations });
-        }}
-        onContextAdd={(context) => {
-          console.log('Context added:', context);
-        }}
-        isVisible={showKnowledgeAssistant}
-        position={isMobile ? "bottom" : "right"}
-        isMobile={isMobile}
-      />
     </div>
   );
-}
-
-// Helper function to detect task type from message
-function detectTaskType(message) {
-  const lower = message.toLowerCase();
-
-  if (lower.includes('explain') || lower.includes('what is') || lower.includes('how does')) {
-    return 'code-explanation';
-  }
-  if (lower.includes('generate') || lower.includes('create') || lower.includes('write')) {
-    return 'code-generation';
-  }
-  if (lower.includes('debug') || lower.includes('error') || lower.includes('fix')) {
-    return 'debugging';
-  }
-  if (lower.includes('test') || lower.includes('unit test')) {
-    return 'testing';
-  }
-  if (lower.includes('document') || lower.includes('docs')) {
-    return 'documentation';
-  }
-  if (lower.includes('architect') || lower.includes('design')) {
-    return 'architecture';
-  }
-
-  return 'quick-answer';
 }

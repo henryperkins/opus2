@@ -32,7 +32,8 @@ export default function MobileBottomSheet({
   const contentRef = useRef(null);
 
   // Calculate sheet height based on snap point
-  const sheetHeight = windowSize.height * currentSnap;
+  // Calculate height in pixels and round for Safari rendering quirks
+  const sheetHeight = Math.round(windowSize.height * currentSnap);
 
   // Handle drag start
   const handleDragStart = (e) => {

@@ -1,6 +1,6 @@
-// components/chat/EnhancedCommandInput.jsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import MonacoEditor from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import {
   Search,
   Command,
@@ -11,38 +11,32 @@ import {
   Square,
   Send
 } from 'lucide-react';
-
+import { debounce } from 'lodash';
 import { useProjectTimeline } from '../../hooks/useProjects';
 import { KnowledgeCommandRegistry } from '../../utils/commands/knowledge-commands';
 import PropTypes from 'prop-types';
 import { toast } from '../common/Toast';
 
-
-// ────────────────────────────────────────────────────────────
 // Command registry + static commands
-// ────────────────────────────────────────────────────────────
 const commandRegistry = new KnowledgeCommandRegistry();
 
 const standardCommands = [
-  { name: '/explain',       description: 'Explain code functionality' },
-  { name: '/generate-tests',description: 'Generate unit tests' },
-  { name: '/summarize-pr',  description: 'Summarize changes' },
-  { name: '/grep',          description: 'Search codebase' }
+  { name: '/explain', description: 'Explain code functionality' },
+  { name: '/generate-tests', description: 'Generate unit tests' },
+  { name: '/summarize-pr', description: 'Summarize changes' },
+  { name: '/grep', description: 'Search codebase' }
 ];
 
 const allCommands = [
   ...standardCommands,
   ...commandRegistry.getAll().map(c => ({
-    name:        c.name,
+    name: c.name,
     description: c.description,
-    usage:       c.usage,
-    aliases:     c.aliases
+    usage: c.usage,
+    aliases: c.aliases
   }))
 ];
 
-// ────────────────────────────────────────────────────────────
-// Main component
-// ────────────────────────────────────────────────────────────
 export default function EnhancedCommandInput({
   onSend,
   onTyping,
@@ -52,25 +46,33 @@ export default function EnhancedCommandInput({
   currentFile,
   userId
 }) {
-  /* ---------------- state ---------------- */
-  const { addEvent }   = useProjectTimeline(projectId);
-  const [message,          setMessage]          = useState('');
-  const [attachments,      setAttachments]      = useState([]);     // NEW
-  const [suggestions,      setSuggestions]      = useState([]);
-  const [showSuggestions,  setShowSuggestions]  = useState(false);
-  const [selectedIndex,    setSelectedIndex]    = useState(-1);
-  const [inputMode,        setInputMode]        = useState('simple');
-  const [editorHeight,     setEditorHeight]     = useState(200);
-  const [isSending,        setIsSending]        = useState(false);
-  const [commandProcessing,setCommandProcessing]= useState(false);
-  const [citations,        setCitations]        = useState([]);
-  const [showCommandHelp,  setShowCommandHelp]  = useState(false);
-  const [isTyping,         setIsTyping]         = useState(false);
+  const { addEvent } = useProjectTimeline(projectId);
+  const [message, setMessage] = useState('');
+  const [attachments, setAttachments] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [inputMode, setInputMode] = useState('simple');
+  const [editorHeight, setEditorHeight] = useState(200);
+  const [isSending, setIsSending] = useState(false);
+  const [commandProcessing, setCommandProcessing] = useState(false);
+  const [citations, setCitations] = useState([]);
+  const [showCommandHelp, setShowCommandHelp] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
 
-  const inputRef    = useRef(null);
+  const inputRef = useRef(null);
   const textareaRef = useRef(null);
+  const editorRef = useRef(null);
 
-  /* ---------------- slash-command suggestions ---------------- */
+  // Debounced typing indicator
+  const debouncedOnTyping = useCallback(
+    debounce((typing) => {
+      onTyping?.(typing);
+    }, 300),
+    [onTyping]
+  );
+
+  // Slash-command suggestions
   useEffect(() => {
     if (message.startsWith('/')) {
       const partial = message.split(' ')[0].toLowerCase();
@@ -85,21 +87,47 @@ export default function EnhancedCommandInput({
     }
   }, [message]);
 
-  /* ---------------- typing indicator ---------------- */
+  // Typing indicator with debounce
   useEffect(() => {
     const currentlyTyping = Boolean(message.trim());
     if (currentlyTyping !== isTyping) {
       setIsTyping(currentlyTyping);
-      onTyping?.(currentlyTyping);
+      debouncedOnTyping(currentlyTyping);
     }
-  }, [message, isTyping, onTyping]);
+  }, [message, isTyping, debouncedOnTyping]);
 
-  /* ---------------- utils ---------------- */
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      debouncedOnTyping.cancel();
+    };
+  }, [debouncedOnTyping]);
+
+  // Monaco editor setup
+  const handleEditorMount = (editor) => {
+    editorRef.current = editor;
+    
+    // Add keyboard shortcut for send
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+      () => {
+        handleSubmit(new Event('submit'));
+      }
+    );
+  };
+
+  // Utils
   const insertCitation = (citation) =>
     setMessage(prev => `${prev}[${citation.number}] `);
 
+  // Clear citations - also removes citation numbers from message
+  const clearCitations = () => {
+    setCitations([]);
+    // Remove all citation numbers from the message
+    setMessage(prev => prev.replace(/\[\d+\]/g, '').trim());
+  };
 
-  /* ---------------- knowledge command runner ---------------- */
+  // Knowledge command runner
   const runKnowledgeCommand = async (cmdLine) => {
     const context = {
       projectId,
@@ -113,15 +141,13 @@ export default function EnhancedCommandInput({
 
     if (result.citations) setCitations(result.citations);
 
-    // If the command prepares a prompt for the LLM, send that up;
-    // otherwise we are done locally.
     if (result.requiresLLM) {
       return {
         payload: result.prompt ?? cmdLine,
         meta: {
           isCommand: true,
           commandType: 'knowledge',
-          citations : result.citations ?? undefined
+          citations: result.citations ?? undefined
         },
         shouldSend: true
       };
@@ -131,7 +157,7 @@ export default function EnhancedCommandInput({
     return { shouldSend: false };
   };
 
-  /* ---------------- submit ---------------- */
+  // Submit handler
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!message.trim() || isSending) return;
@@ -142,97 +168,100 @@ export default function EnhancedCommandInput({
     try {
       const meta = citations.length ? { citations } : {};
 
+      // Handle slash commands
       if (message.startsWith('/')) {
-        const firstToken   = message.split(' ')[0];
-        const knowledgeCmd = commandRegistry.get(firstToken);
-
-        if (knowledgeCmd) {
-          const { payload, meta: extraMeta, shouldSend } =
-            await runKnowledgeCommand(message);
-
-          if (shouldSend) {
-            await onSend(payload, { ...meta, ...extraMeta });
-          }
-        } else {
-          // standard (non-knowledge) slash command
-          await onSend(message, { ...meta, isCommand: true });
+        const result = await runKnowledgeCommand(message);
+        if (result.shouldSend) {
+          await onSend(result.payload, { ...meta, ...result.meta });
         }
       } else {
-        // plain chat message
-        if (message.includes('@editor') && editorContent) {
-          meta.code_snippets = [{ language: 'auto', code: editorContent }];
-        }
-
-        if (attachments.length) meta.attachments = attachments;
-
         await onSend(message, meta);
       }
 
-      // timeline
-      await addEvent({
-        event_type : 'comment',
-        title      : message.startsWith('/') ? 'Command executed' : 'Message sent',
-        description: message.slice(0, 100),
-        metadata   : { chat: true, has_citations: citations.length > 0 }
-      });
-
-      // reset
+      // Clear state after successful send
       setMessage('');
       setCitations([]);
-      setAttachments([]);
-    } catch (err) {
+      setShowSuggestions(false);
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
+      // Add to timeline
+      addEvent({
+        type: 'chat_message',
+        description: `Sent message: ${message.substring(0, 50)}...`,
+        metadata: { hasAttachments: attachments.length > 0 }
+      });
+    } catch (error) {
+      console.error('Failed to send message:', error);
       toast.error('Failed to send message');
-      console.error(err);
     } finally {
       setIsSending(false);
       setCommandProcessing(false);
     }
   };
 
-  /* ---------------- key handling ---------------- */
+  // Handle file attachments
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    setAttachments(prev => [...prev, ...files]);
+  };
+
+  const removeAttachment = (index) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Auto-resize textarea
+  const handleTextareaChange = (e) => {
+    const textarea = e.target;
+    setMessage(textarea.value);
+    
+    // Auto-resize
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+  };
+
+  // Keyboard navigation for suggestions
   const handleKeyDown = (e) => {
-    // suggestions navigation
-    if (showSuggestions && suggestions.length) {
-      if (['ArrowDown', 'ArrowUp'].includes(e.key)) {
+    if (!showSuggestions) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(idx =>
-          e.key === 'ArrowDown'
-            ? (idx + 1) % suggestions.length
-            : idx <= 0 ? suggestions.length - 1 : idx - 1
+        setSelectedIndex(prev => 
+          prev < suggestions.length - 1 ? prev + 1 : prev
         );
-        return;
-      }
-      if (['Enter', 'Tab'].includes(e.key) && selectedIndex >= 0) {
+        break;
+      case 'ArrowUp':
         e.preventDefault();
-        const cmd = suggestions[selectedIndex];
-        setMessage(cmd.name + ' ');
+        setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
+        break;
+      case 'Enter':
+        if (selectedIndex >= 0) {
+          e.preventDefault();
+          const selected = suggestions[selectedIndex];
+          setMessage(selected.name + ' ');
+          setShowSuggestions(false);
+          setSelectedIndex(-1);
+        }
+        break;
+      case 'Escape':
         setShowSuggestions(false);
         setSelectedIndex(-1);
-        return;
-      }
-    }
-
-    // plain Enter to send (textarea only)
-    if (e.key === 'Enter' && !e.shiftKey && inputMode === 'simple') {
-      e.preventDefault();
-      handleSubmit(e);
+        break;
     }
   };
 
-  /* ---------------- jsx ---------------- */
   return (
-    <div className="border-t border-gray-200 relative bg-white">
-      {/* ─── Suggestions dropdown ────────────────────── */}
+    <div className="relative">
+      {/* Command suggestions */}
       {showSuggestions && (
-        <div className="absolute bottom-full mb-2 w-full max-h-60 overflow-y-auto
-                        bg-white shadow border rounded-lg z-10">
+        <div className="absolute bottom-full mb-2 left-0 right-0 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
           {suggestions.map((cmd, idx) => (
             <div
               key={cmd.name}
-              className={`px-4 py-3 cursor-pointer text-sm
-                         ${idx === selectedIndex ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+              className={`px-4 py-2 cursor-pointer ${
+                idx === selectedIndex ? 'bg-blue-50' : 'hover:bg-gray-50'
+              }`}
               onMouseDown={() => {
-                // onMouseDown so the input does not lose focus
                 setMessage(cmd.name + ' ');
                 setShowSuggestions(false);
               }}
@@ -245,11 +274,11 @@ export default function EnhancedCommandInput({
         </div>
       )}
 
-      {/* ─── Citation bar ────────────────────────────── */}
+      {/* Citation bar */}
       {citations.length > 0 && (
         <div className="px-4 py-2 bg-blue-50 border-b flex justify-between items-center">
           <span className="text-sm text-blue-700">
-            {citations.length} citation{citations.length > 1 && 's'} ready
+            {citations.length} citation{citations.length > 1 ? 's' : ''} ready
           </span>
           <div className="flex gap-1">
             {citations.map(c => (
@@ -263,7 +292,7 @@ export default function EnhancedCommandInput({
             ))}
           </div>
           <button
-            onClick={() => setCitations([])}
+            onClick={clearCitations}
             className="text-sm text-blue-600 hover:text-blue-800"
           >
             Clear
@@ -271,15 +300,16 @@ export default function EnhancedCommandInput({
         </div>
       )}
 
-      {/* ─── Mode / help bar ─────────────────────────── */}
+      {/* Mode / help bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b">
         <div className="flex gap-2">
           {['simple', 'editor'].map(mode => (
             <button
               key={mode}
               onClick={() => setInputMode(mode)}
-              className={`px-2 py-1 rounded text-xs
-                         ${inputMode === mode ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+              className={`px-2 py-1 rounded text-xs ${
+                inputMode === mode ? 'bg-blue-500 text-white' : 'bg-gray-200'
+              }`}
             >
               {mode}
             </button>
@@ -301,139 +331,129 @@ export default function EnhancedCommandInput({
             className="text-xs border rounded px-1"
           >
             {[100, 200, 300].map(h => (
-              <option key={h} value={h}>{h === 100 ? 'Small' : h === 200 ? 'Medium' : 'Large'}</option>
+              <option key={h} value={h}>
+                {h === 100 ? 'Small' : h === 200 ? 'Medium' : 'Large'} ({h}px)
+              </option>
             ))}
           </select>
         )}
       </div>
 
-      {/* ─── Command help dropdown ───────────────────── */}
+      {/* Command help */}
       {showCommandHelp && (
-        <div className="px-4 py-3 bg-gray-50 border-b max-h-48 overflow-y-auto text-xs">
-          {allCommands.map(c => (
-            <div key={c.name} className="mb-1">
-              <span className="font-mono text-blue-600">{c.name}</span>
-              <span className="ml-2 text-gray-600">{c.description}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ─── Processing indicator ───────────────────── */}
-      {commandProcessing && (
-        <div className="px-4 py-2 bg-blue-50 text-blue-700 border-b text-sm">
-          <span className="animate-spin inline-block mr-1">⏳</span>
-          Processing command…
-        </div>
-      )}
-
-      {/* ─── Input form ─────────────────────────────── */}
-      <form onSubmit={handleSubmit} className="p-4 space-y-2">
-        {/* context badges */}
-        {(currentFile || selectedText || editorContent) && (
-          <div className="flex flex-wrap gap-2 text-xs">
-            {currentFile   && <span className="badge-blue">📄 {currentFile}</span>}
-            {selectedText  && <span className="badge-green">✂️ Selected text</span>}
-            {editorContent && <span className="badge-purple">💻 Editor content</span>}
+        <div className="px-4 py-2 bg-gray-50 border-b text-xs">
+          <div className="font-semibold mb-1">Available Commands:</div>
+          <div className="grid grid-cols-2 gap-1">
+            {allCommands.slice(0, 6).map(cmd => (
+              <div key={cmd.name} className="text-gray-600">
+                <span className="font-mono text-blue-600">{cmd.name}</span> - {cmd.description}
+              </div>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* attachments preview */}
+      {/* Input form */}
+      <form onSubmit={handleSubmit} className="p-4">
+        {/* Attachments */}
         {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {attachments.map((a,i) => (
-              <div key={i} className="flex items-center space-x-1 bg-gray-100 px-2 py-1 rounded">
-                <span className="text-sm">{a.name}</span>
+          <div className="mb-2 flex flex-wrap gap-2">
+            {attachments.map((file, idx) => (
+              <div key={idx} className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1 text-sm">
+                <Paperclip className="w-3 h-3" />
+                <span className="truncate max-w-[150px]">{file.name}</span>
                 <button
                   type="button"
-                  onClick={() => setAttachments(prev => prev.filter((_,idx)=>idx!==i))}
-                  className="text-gray-500 hover:text-red-500"
-                >×</button>
+                  onClick={() => removeAttachment(idx)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-3 h-3" />
+                </button>
               </div>
             ))}
           </div>
         )}
 
-        {/* ---------------- input area ---------------- */}
-        {inputMode === 'simple' ? (
-          <div className="flex gap-2">
-            <textarea
-              ref={textareaRef}
-              value={message}
-              onChange={e => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={1}
-              style={{ maxHeight: 120 }}
-              placeholder="Type a message or use / for commands …"
-              className="flex-1 resize-none rounded-lg border px-3 py-2 focus:ring-2
-                         focus:ring-blue-500 focus:border-transparent"
+        <div className="flex items-end gap-2">
+          {/* File attachment button */}
+          <label className="cursor-pointer text-gray-500 hover:text-gray-700">
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleFileSelect}
+              accept=".py,.js,.jsx,.ts,.tsx,.java,.cpp,.c,.h,.md,.txt,.json,.yaml,.yml"
             />
+            <Paperclip className="w-5 h-5" />
+          </label>
 
-            {/* action buttons */}
-            <div className="flex flex-col gap-1">
-              <button
-                type="button"
-                onClick={() => {}}
-                disabled
-                className="icon-btn"
-                title="Attach file (coming soon)"
-              >
-                <Paperclip className="w-5 h-5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {}}
-                disabled
-                className="icon-btn"
-                title="Voice recording (coming soon)"
-              >
-                <Mic className="w-5 h-5" />
-              </button>
-              <button
-                type="submit"
-                disabled={isSending || (!message.trim() && attachments.length === 0)}
-                className="icon-btn text-blue-500 disabled:text-gray-300"
-                title="Send"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </div>
+          {/* Input area */}
+          <div className="flex-1">
+            {inputMode === 'simple' ? (
+              <textarea
+                ref={textareaRef}
+                value={message}
+                onChange={handleTextareaChange}
+                onKeyDown={handleKeyDown}
+                placeholder="Type a message or / for commands..."
+                className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows="1"
+                disabled={isSending}
+              />
+            ) : (
+              <div style={{ height: editorHeight }} className="border rounded-lg overflow-hidden">
+                <MonacoEditor
+                  value={message}
+                  onChange={setMessage}
+                  onMount={handleEditorMount}
+                  language="markdown"
+                  theme="vs-light"
+                  options={{
+                    minimap: { enabled: false },
+                    lineNumbers: 'off',
+                    glyphMargin: false,
+                    folding: false,
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 0,
+                    renderLineHighlight: 'none',
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    wrappingStrategy: 'advanced',
+                    overviewRulerLanes: 0,
+                    hideCursorInOverviewRuler: true,
+                    scrollbar: {
+                      vertical: 'hidden'
+                    }
+                  }}
+                />
+              </div>
+            )}
           </div>
-        ) : (
-          <>
-            <MonacoEditor
-              height={editorHeight}
-              language="markdown"
-              value={message}
-              onChange={(v)=>setMessage(v ?? '')}
-              options={{
-                fontSize: 14,
-                minimap: { enabled: false },
-                wordWrap: 'on',
-                automaticLayout: true
-              }}
-            />
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={!message.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg
-                           hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSending ? 'Sending…' : 'Send'}
-              </button>
-            </div>
-          </>
-        )}
 
+          {/* Send button */}
+          <button
+            type="submit"
+            disabled={isSending || !message.trim()}
+            className={`p-2 rounded-lg ${
+              isSending || !message.trim()
+                ? 'bg-gray-200 text-gray-400'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        </div>
       </form>
     </div>
   );
 }
 
-/* ════════════════ tiny badge css helpers (tailwind) ════════════════
-.badge-blue   { @apply px-2 py-1 rounded bg-blue-100  text-blue-700;  }
-.badge-green  { @apply px-2 py-1 rounded bg-green-100 text-green-700; }
-.badge-purple { @apply px-2 py-1 rounded bg-purple-100 text-purple-700; }
-.icon-btn     { @apply p-2 rounded-lg hover:bg-gray-100 text-gray-500; }
-*/
+EnhancedCommandInput.propTypes = {
+  onSend: PropTypes.func.isRequired,
+  onTyping: PropTypes.func,
+  projectId: PropTypes.string.isRequired,
+  editorContent: PropTypes.string,
+  selectedText: PropTypes.string,
+  currentFile: PropTypes.string,
+  userId: PropTypes.string
+};

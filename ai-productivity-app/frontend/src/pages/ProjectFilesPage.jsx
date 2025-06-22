@@ -69,10 +69,17 @@ export default function ProjectFilesPage() {
 
         {!loading && files.length > 0 && (
           <ul className="divide-y divide-gray-200 bg-white shadow-sm rounded-md">
-            {files.map((f) => (
-              <li key={f.id} className="px-4 py-3 text-sm flex justify-between">
-                <span className="font-medium text-gray-800 truncate mr-4">{f.path || f.filename}</span>
-                <span className="text-gray-500">{(f.language || '').toUpperCase()}</span>
+            {files.map((f, index) => (
+              <li
+                key={f.id || `${f.path || f.filename}-${index}`}
+                className="px-4 py-3 text-sm flex justify-between"
+              >
+                <span className="font-medium text-gray-800 truncate mr-4">
+                  {f.path || f.filename}
+                </span>
+                <span className="text-gray-500">
+                  {(f.language || '').toUpperCase()}
+                </span>
               </li>
             ))}
           </ul>
