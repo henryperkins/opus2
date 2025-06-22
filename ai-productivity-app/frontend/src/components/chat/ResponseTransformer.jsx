@@ -5,6 +5,7 @@ import {
   FileJson, Type, Zap, Download, Copy, Check
 } from 'lucide-react';
 import { toast } from '../common/Toast';
+import { copyToClipboard } from '../../utils/clipboard';
 
 const transformOptions = [
   {
@@ -205,10 +206,14 @@ export default function ResponseTransformer({
   const handleCopy = async (option) => {
     try {
       const transformed = await option.transform(content);
-      await navigator.clipboard.writeText(transformed);
-      setCopiedFormat(option.id);
-      setTimeout(() => setCopiedFormat(null), 2000);
-      toast.success(`Copied as ${option.name}`);
+      const success = await copyToClipboard(transformed);
+      if (success) {
+        setCopiedFormat(option.id);
+        setTimeout(() => setCopiedFormat(null), 2000);
+        toast.success(`Copied as ${option.name}`);
+      } else {
+        toast.error('Failed to copy');
+      }
     } catch (error) {
       toast.error('Failed to copy');
     }

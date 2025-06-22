@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { copyToClipboard } from '../../utils/clipboard';
 // eslint-disable-next-line no-unused-vars
 import { FileText, ExternalLink, ChevronDown, Check, Copy, Bookmark } from 'lucide-react';
 import PropTypes from 'prop-types';
@@ -135,20 +136,6 @@ function parseTextWithCitations(text, citations, onCitationClick) {
   return parts;
 }
 
-// Copy utilities
-async function copyToClipboard(text) {
-  try {
-    // eslint-disable-next-line no-undef
-    if (typeof window !== 'undefined' && navigator?.clipboard?.writeText) {
-      // eslint-disable-next-line no-undef
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch (error) {
-    console.warn('Failed to copy to clipboard:', error);
-  }
-  return false;
-}
 
 function formatCitation(citation) {
   return `[${citation.number}] ${citation.source.title}. ${citation.source.path}`;
