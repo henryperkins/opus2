@@ -477,7 +477,7 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
         </div>
 
         {/* Help & Tips */}
-        <div className="pt-4">
+        <div className="pt-2">
           <button
             onClick={() => toggleSection('help')}
             className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
