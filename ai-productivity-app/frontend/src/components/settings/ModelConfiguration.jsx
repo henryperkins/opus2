@@ -1,7 +1,7 @@
 /* eslint-disable */
 // components/settings/ModelConfiguration.jsx
-import { useState, useEffect } from 'react';
-import { Settings, Zap, DollarSign, Brain, AlertCircle, Check, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings, AlertCircle, Check, RefreshCw } from 'lucide-react';
 import { useConfig } from '../../hooks/useConfig';
 import { configAPI } from '../../api/config';
 import { toast } from '../common/Toast';
@@ -292,7 +292,7 @@ export default function ModelConfiguration() {
               }`}
             >
               <div className="flex items-center justify-center mb-2 text-gray-600">
-                {preset.icon}
+                {React.createElement(preset.icon, { className: 'w-4 h-4' })}
               </div>
               <div className="text-sm font-medium text-gray-900">{preset.name}</div>
               <div className="text-xs text-gray-500 mt-1">{preset.description}</div>

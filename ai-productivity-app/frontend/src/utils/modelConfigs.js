@@ -4,7 +4,6 @@
  * keeps React components slim and makes the data reusable
  * across the application (e.g. other settings pages, tests).
  */
-import React from 'react';
 import { Brain, Zap, Settings, DollarSign } from 'lucide-react';
 
 /* ------------------------------------------------------------------
@@ -22,7 +21,7 @@ export const modelPresets = [
       frequencyPenalty: 0,
       presencePenalty: 0
     },
-    icon: <Brain className="w-4 h-4" />
+    icon: Brain
   },
   {
     id: 'creative',
@@ -35,7 +34,7 @@ export const modelPresets = [
       frequencyPenalty: 0.2,
       presencePenalty: 0.2
     },
-    icon: <Zap className="w-4 h-4" />
+    icon: Zap
   },
   {
     id: 'precise',
@@ -48,7 +47,7 @@ export const modelPresets = [
       frequencyPenalty: 0,
       presencePenalty: 0
     },
-    icon: <Settings className="w-4 h-4" />
+    icon: Settings
   },
   {
     id: 'cost-efficient',
@@ -61,7 +60,7 @@ export const modelPresets = [
       frequencyPenalty: 0,
       presencePenalty: 0
     },
-    icon: <DollarSign className="w-4 h-4" />
+    icon: DollarSign
   }
 ];
 
