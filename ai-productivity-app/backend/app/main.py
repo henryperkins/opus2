@@ -9,11 +9,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Local packages
-from app.config import settings
-from app.database import init_db
-from app.utils.redis_client import close_redis
-from app.middleware.correlation_id import CorrelationIdMiddleware
-from app.middleware.security import register_security_middleware
+from .config import settings
+from .database import init_db
+from .utils.redis_client import close_redis
+from .middleware.correlation_id import CorrelationIdMiddleware
+from .middleware.security import register_security_middleware
 from .routers import auth, projects, monitoring, config as config_router
 from .routers import code as code_router
 from .routers import email as email_router
