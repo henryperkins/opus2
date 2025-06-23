@@ -66,11 +66,13 @@ def _install_fastapi_stub():
     module.Request = Request
 
     class HTTPException(Exception):
-        """Stub FastAPI HTTPException."""
-        def __init__(self, status_code, detail=""):
+        """Stub FastAPI HTTPException with optional headers field."""
+
+        def __init__(self, status_code, detail: str = "", headers: dict | None = None):
             super().__init__(detail)
             self.status_code = status_code
             self.detail = detail
+            self.headers = headers or {}
 
     module.HTTPException = HTTPException
 

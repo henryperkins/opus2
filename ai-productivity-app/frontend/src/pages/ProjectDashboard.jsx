@@ -303,9 +303,11 @@ export default function ProjectDashboard() {
       </div>
 
       {/* Create Project Modal */}
-      {showCreateModal && (
-        <CreateProjectModal onClose={() => setShowCreateModal(false)} onCreated={handleProjectCreated} />
-      )}
+      <CreateProjectModal 
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)} 
+        onSuccess={handleProjectCreated} 
+      />
     </div>
   );
 }

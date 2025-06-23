@@ -117,14 +117,14 @@ export default function Layout({ children }) {
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top header with mobile menu button */}
-        <header className="glass border-b border-white/20 dark:border-gray-700/20 transition-all duration-200 backdrop-blur-md lg:hidden">
+        {/* Top header - now visible on all screen sizes */}
+        <header className="glass border-b border-white/20 dark:border-gray-700/20 transition-all duration-200 backdrop-blur-md">
           <div className="px-4 sm:px-6">
             <div className="flex justify-between items-center h-16">
-              {/* Mobile menu button */}
+              {/* Mobile menu button - only on small screens */}
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
+                className="lg:hidden p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
                 aria-expanded={sidebarOpen}
                 aria-label="Toggle sidebar"
                 type="button"
@@ -135,7 +135,12 @@ export default function Layout({ children }) {
                 </svg>
               </button>
 
-              {/* User menu for mobile */}
+              {/* Desktop: Empty space for potential breadcrumb/title */}
+              <div className="hidden lg:block flex-1">
+                {/* Space for future page title or breadcrumb */}
+              </div>
+
+              {/* User menu - visible on all screen sizes */}
               <UserMenu />
             </div>
           </div>

@@ -57,6 +57,52 @@ def verify_credentials(
     return user
 
 
+def create_user(
+    db: DBSession,
+    username: str,
+    email: str,
+    password: str,
+) -> User:
+    """
+    Create a new user with hashed password.
+
+    Args:
+        db: Database session
+        username: Username for the new user
+        email: Email address for the new user
+        password: Plain text password (will be hashed)
+
+    Returns:
+        User: The created user instance
+    """
+    password_hash = security.hash_password(password)
+    user = User(
+        username=username.lower(),
+        email=email.lower(),
+        password_hash=password_hash,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def send_welcome_email(email: str, username: str) -> None:
+    """
+    Send welcome email to new user.
+    
+    This is a placeholder implementation that logs the welcome message.
+    In production, this should integrate with an email service.
+    
+    Args:
+        email: User's email address
+        username: User's username
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Welcome email sent to %s (username: %s)", email, username)
+
+
 ###############################################################################
 # Session management (placeholder; full table arrives via migration)
 ###############################################################################

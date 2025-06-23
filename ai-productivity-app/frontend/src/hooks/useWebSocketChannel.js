@@ -14,7 +14,13 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 function buildWsUrl(path) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = window.location.host;
+  let host = window.location.host;
+  
+  // Handle development environment where frontend runs on 5173 but backend on 8000
+  if (host.includes(':5173')) {
+    host = host.replace(':5173', ':8000');
+  }
+  
   // Ensure leading slash
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return `${protocol}//${host}${cleanPath}`;

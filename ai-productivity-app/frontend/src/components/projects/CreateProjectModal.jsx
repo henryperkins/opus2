@@ -7,36 +7,38 @@
 import React, { useState } from 'react';
 import Modal from '../common/Modal';
 import ProjectForm from './ProjectForm';
-import useProjectStore from '../../stores/projectStore';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { projectAPI } from '../../api/projects';
 
 export default function CreateProjectModal({ isOpen, onClose, onSuccess }) {
-  const { createProject, loading, error, clearError } = useProjectStore();
+  const queryClient = useQueryClient();
   const [localError, setLocalError] = useState(null);
-
-  const handleSubmit = async (formData) => {
-    try {
-      setLocalError(null);
-      clearError();
-      
-      const project = await createProject(formData);
-      
+  
+  const createProjectMutation = useMutation({
+    mutationFn: (formData) => projectAPI.create(formData),
+    onSuccess: (project) => {
+      queryClient.invalidateQueries(['projects']);
       if (onSuccess) {
         onSuccess(project);
       }
-      
       onClose();
-    } catch (err) {
-      setLocalError(err.message || 'Failed to create project');
+    },
+    onError: (error) => {
+      setLocalError(error.message || 'Failed to create project');
     }
+  });
+
+  const handleSubmit = async (formData) => {
+    setLocalError(null);
+    createProjectMutation.mutate(formData);
   };
 
   const handleClose = () => {
     setLocalError(null);
-    clearError();
     onClose();
   };
 
-  const displayError = localError || error;
+  const displayError = localError || createProjectMutation.error?.message;
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Create New Project">
@@ -50,7 +52,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }) {
         <ProjectForm
           onSubmit={handleSubmit}
           onCancel={handleClose}
-          loading={loading}
+          loading={createProjectMutation.isLoading}
           submitText="Create Project"
         />
       </div>

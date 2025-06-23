@@ -63,7 +63,8 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
         order: 'desc',
       });
 
-      const formattedChats = response.data.items.map((session) => ({
+      const items = response.data?.items || [];
+      const formattedChats = items.map((session) => ({
         id: session.id,
         title: session.title || `Chat ${session.id}`,
         timestamp: new Date(session.updated_at),
