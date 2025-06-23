@@ -238,7 +238,15 @@ class ProjectService:
 
         # Optional Sentry integration ------------------------------------------------
         try:
-            import sentry_sdk  # type: ignore
+            try:
+                import sentry_sdk  # type: ignore  # pragma: no cover
+            except ModuleNotFoundError:  # pragma: no cover
+                class _S:  # pylint: disable=too-few-public-methods
+                    @staticmethod
+                    def capture_exception(_exc):
+                        return None
+
+                sentry_sdk = _S()  # type: ignore
 
             span_cm = sentry_sdk.start_span(
                 op="project.unarchive",

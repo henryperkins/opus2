@@ -23,6 +23,17 @@ from typing import Annotated
 from datetime import timedelta
 import logging
 
+# ---------------------------------------------------------------------------
+# Rate limiting via SlowAPI – use the shared *limiter* instance defined in
+# app.auth.security.  When SlowAPI is unavailable or explicitly disabled via
+# the ``DISABLE_RATE_LIMITER`` environment variable the decorator becomes a
+# no-op so that the routes continue to work inside unit-tests and restricted
+# CI sandboxes.
+# ---------------------------------------------------------------------------
+
+from app.auth.security import limiter
+
+# FastAPI & dependencies
 from fastapi import (
     APIRouter,
     Request,
@@ -66,6 +77,13 @@ AUTH_RATE_LIMIT = 5                     # attempts
 AUTH_RATE_WINDOW = 60                   # seconds
 ACCESS_TOKEN_TTL_MINUTES = 60 * 24      # 24 h
 
+# Rate-limiting spec string understood by SlowAPI (@limiter.limit decorator)
+# Example: "5/minute" (matches AUTH_RATE_LIMIT/AUTH_RATE_WINDOW above).
+# Keeping the string here avoids accidental drift if the numeric constants
+# change.
+
+_LIMIT_DECORATOR_SPEC = "5/minute"
+
 ###############################################################################
 # Utility helpers
 ###############################################################################
@@ -98,6 +116,7 @@ def _issue_token_and_cookie(
     status_code=status.HTTP_201_CREATED,
     response_model=TokenResponse,
 )
+@limiter.limit(_LIMIT_DECORATOR_SPEC)
 async def register(
     request: Request,
     response: Response,
@@ -183,6 +202,7 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit(_LIMIT_DECORATOR_SPEC)
 async def login(
     request: Request,
     response: Response,
@@ -253,6 +273,7 @@ async def login(
 ###############################################################################
 
 @router.post("/logout", dependencies=[Depends(enforce_csrf)])
+@limiter.limit("10/minute")  # less restrictive – session clearing
 def logout(
     request: Request,
     response: Response,
@@ -400,6 +421,9 @@ def _send_reset_email(email: str, token: str) -> None:  # placeholder
     dependencies=[Depends(enforce_csrf)],
     include_in_schema=False,  # deprecated but kept for backward-compat
 )
+# Note: password reset is unauthenticated but still needs brute-force
+# protection.  We set a per-IP limit separate from the global auth bucket.
+@limiter.limit(_LIMIT_DECORATOR_SPEC)
 # NOTE: Alias kept for the public API that the new frontend consumes.
 #       This adheres to the requirements spec naming – `/reset-request`.
 #       Both routes execute the same handler to simplify maintenance.
@@ -411,6 +435,7 @@ def _send_reset_email(email: str, token: str) -> None:  # placeholder
     dependencies=[Depends(enforce_csrf)]
 )
 async def request_password_reset(
+    request: Request,
     payload: Annotated[PasswordResetRequest, Body()],
     background: BackgroundTasks,
     response: Response,

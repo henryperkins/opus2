@@ -94,7 +94,16 @@ class TokenResponse(BaseModel):
 
     @classmethod
     def from_ttl(cls, token: str, ttl_minutes: int) -> "TokenResponse":
-        return cls(access_token=token, expires_in=ttl_minutes * 60)
+        # Explicitly set *token_type* because our lightweight Pydantic stub
+        # used inside the sandbox does **not** automatically include default
+        # values when serialising the model via ``dict()``.  Supplying the
+        # value explicitly keeps the response payload identical between the
+        # real and the stubbed runtime.
+        return cls(
+            access_token=token,
+            token_type="bearer",
+            expires_in=ttl_minutes * 60,
+        )
 
 
 class UserResponse(BaseModel):

@@ -16,15 +16,20 @@ import hashlib
 import logging
 from typing import List
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    UploadFile,
+)
 from sqlalchemy.orm import Session
 
+from app.code_processing.chunker import SemanticChunker
 from app.code_processing.language_detector import detect_language
 from app.code_processing.parser import CodeParser
-from app.code_processing.chunker import SemanticChunker
-
 from app.database import get_db
-from sqlalchemy.orm import Session
 from app.models.code import CodeDocument, CodeEmbedding
 from app.models.project import Project
 
@@ -39,11 +44,13 @@ _CHUNKER = SemanticChunker()
 
 
 ###############################################################################
-# Helper – background processing                                                   
+# Helper – background processing
 ###############################################################################
 
 
-def _process_code_file(db: Session, doc_id: int, content: str, language: str) -> None:  # noqa: D401
+def _process_code_file(
+    db: Session, doc_id: int, content: str, language: str
+) -> None:  # noqa: D401
     """Parse, chunk and persist a single code file.
 
     This function is **synchronous** and meant to run inside a background
@@ -57,9 +64,13 @@ def _process_code_file(db: Session, doc_id: int, content: str, language: str) ->
 
     session = SessionLocal()
     try:
-        doc: CodeDocument | None = session.query(CodeDocument).filter_by(id=doc_id).first()
+        doc: CodeDocument | None = (
+            session.query(CodeDocument).filter_by(id=doc_id).first()
+        )
         if not doc:
-            logger.warning("CodeDocument %s vanished before processing", doc_id)
+            logger.warning(
+                "CodeDocument %s vanished before processing", doc_id
+            )
             return
 
         # ── Parse ────────────────────────────────────────────────────────────
@@ -69,7 +80,9 @@ def _process_code_file(db: Session, doc_id: int, content: str, language: str) ->
         doc.imports = parse_result.get("imports", [])
 
         # ── Chunk ────────────────────────────────────────────────────────────
-        chunks = _CHUNKER.create_chunks(content, doc.symbols or [], language, file_path=doc.file_path)
+        chunks = _CHUNKER.create_chunks(
+            content, doc.symbols or [], language, file_path=doc.file_path
+        )
 
         for chunk in chunks:
             session.add(
@@ -83,10 +96,13 @@ def _process_code_file(db: Session, doc_id: int, content: str, language: str) ->
                 )
             )
 
-        doc.is_indexed = False  # embeddings still missing – separate worker will generate
+        # embeddings still missing – separate worker will generate
+        doc.is_indexed = False
         session.commit()
 
-        logger.info("Processed file %s (%d chunks)", doc.file_path, len(chunks))
+        logger.info(
+            "Processed file %s (%d chunks)", doc.file_path, len(chunks)
+        )
     except Exception:  # pragma: no cover – log unexpected errors
         logger.exception("Failed to process code file (doc_id=%s)", doc_id)
         session.rollback()
@@ -95,7 +111,7 @@ def _process_code_file(db: Session, doc_id: int, content: str, language: str) ->
 
 
 ###############################################################################
-# Public API                                                                     
+# Public API
 ###############################################################################
 
 
@@ -117,8 +133,6 @@ async def upload_code_files(  # noqa: D401, WPS211
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-
-
     results: list[dict[str, str]] = []
 
     for upload in files:
@@ -127,7 +141,11 @@ async def upload_code_files(  # noqa: D401, WPS211
 
         existing: CodeDocument | None = (
             db.query(CodeDocument)
-            .filter_by(project_id=project_id, file_path=upload.filename, content_hash=content_hash)
+            .filter_by(
+                project_id=project_id,
+                file_path=upload.filename,
+                content_hash=content_hash,
+            )
             .first()
         )
 
@@ -135,7 +153,8 @@ async def upload_code_files(  # noqa: D401, WPS211
             results.append({"file": upload.filename, "status": "duplicate"})
             continue
 
-        language = detect_language(upload.filename, raw.decode("utf-8", errors="ignore"))
+        content_decoded = raw.decode("utf-8", errors="ignore")
+        language = detect_language(upload.filename, content_decoded)
 
         doc = CodeDocument(
             project_id=project_id,
@@ -147,9 +166,12 @@ async def upload_code_files(  # noqa: D401, WPS211
         db.add(doc)
         db.commit()
 
-        # Kick background processing – ensure tasks parameter exists in unit tests
+        # Kick background processing – ensure tasks parameter exists in
+        # unit tests
         if background_tasks is not None:
-            background_tasks.add_task(_process_code_file, db, doc.id, raw.decode("utf-8", errors="ignore"), language)
+            background_tasks.add_task(
+                _process_code_file, db, doc.id, content_decoded, language
+            )
 
         results.append({"file": upload.filename, "status": "queued"})
 
@@ -215,7 +237,9 @@ def list_project_files(
 def delete_file(file_id: int, db: Session = Depends(get_db)):
     """Delete a single CodeDocument (and cascade embeddings)."""
 
-    doc: CodeDocument | None = db.query(CodeDocument).filter_by(id=file_id).first()
+    doc: CodeDocument | None = (
+        db.query(CodeDocument).filter_by(id=file_id).first()
+    )
     if not doc:
         raise HTTPException(status_code=404, detail="File not found")
 

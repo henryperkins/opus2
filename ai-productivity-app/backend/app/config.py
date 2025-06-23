@@ -27,6 +27,21 @@ class Settings(BaseSettings):
     debug: bool = True
 
     # -------------------------------------------------------------------
+    # Vector Store Configuration
+    # -------------------------------------------------------------------
+    vector_store_type: str = Field(default="sqlite_vss", description="Vector store type: sqlite_vss or qdrant")
+
+    # Qdrant settings
+    qdrant_host: str = Field(default="localhost", description="Qdrant server host")
+    qdrant_port: int = Field(default=6333, description="Qdrant server port")
+    qdrant_collection: str = Field(default="kb_entries", description="Qdrant collection name")
+    qdrant_timeout: int = Field(default=30, description="Qdrant client timeout in seconds")
+
+    # Vector search settings
+    vector_search_limit: int = Field(default=10, description="Default vector search result limit")
+    vector_score_threshold: float = Field(default=0.7, description="Minimum similarity score threshold")
+
+    # -------------------------------------------------------------------
     # Database
     # -------------------------------------------------------------------
     #
@@ -215,6 +230,13 @@ class Settings(BaseSettings):
     max_upload_size: int = Field(
         default=10 * 1024 * 1024,  # 10MB
         description="Maximum file upload size in bytes"
+    )
+
+    # Rendering service configuration
+    render_service_url: Optional[str] = Field(
+        default=None,
+        alias="RENDER_SERVICE_URL",
+        description="External rendering service endpoint URL"
     )
 
 

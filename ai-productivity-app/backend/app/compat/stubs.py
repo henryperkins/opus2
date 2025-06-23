@@ -143,29 +143,50 @@ def _install_fastapi_stub():
             self.prefix = prefix.rstrip("/")
             self.routes = {}
 
-        def _add(self, method, path, handler):
-            self.routes[(method, self.prefix + path)] = handler
+        def _add(self, method, path, handler, status_code=200):
+            self.routes[(method, self.prefix + path)] = (handler, status_code)
             return handler
 
-        def get(self, p, **_):
+        # --------------------------------------------------------------
+        # FastAPI uses the *on_event* decorator on an *APIRouter* (and the
+        # application instance) to register startup/shutdown callbacks like
+        # ``@router.on_event("startup")``.  The handler is *not* supposed to
+        # be executed immediately – FastAPI just stores the reference.
+        #
+        # For unit-tests that import the module we simply need to *accept*
+        # the decorator and return the original function unchanged so the
+        # import machinery can proceed.
+        # --------------------------------------------------------------
+
+        def on_event(self, _event_name):  # noqa: D401, WPS110 – keep API
+            """No-op decorator for startup/shutdown events."""
+
+            def decorator(fn):
+                # Record for introspection if needed by tests
+                self.routes[("event", _event_name, fn.__name__)] = (fn, 200)
+                return fn
+
+            return decorator
+
+        def get(self, p, **kw):
             """Stub GET route."""
-            return lambda fn: self._add("GET", p, fn)
+            return lambda fn: self._add("GET", p, fn, kw.get("status_code", 200))
 
-        def post(self, p, **_):
+        def post(self, p, **kw):
             """Stub POST route."""
-            return lambda fn: self._add("POST", p, fn)
+            return lambda fn: self._add("POST", p, fn, kw.get("status_code", 200))
 
-        def put(self, p, **_):
+        def put(self, p, **kw):
             """Stub PUT route."""
-            return lambda fn: self._add("PUT", p, fn)
+            return lambda fn: self._add("PUT", p, fn, kw.get("status_code", 200))
 
-        def patch(self, p, **_):
+        def patch(self, p, **kw):
             """Stub PATCH route."""
-            return lambda fn: self._add("PATCH", p, fn)
+            return lambda fn: self._add("PATCH", p, fn, kw.get("status_code", 200))
 
-        def delete(self, p, **_):
+        def delete(self, p, **kw):
             """Stub DELETE route."""
-            return lambda fn: self._add("DELETE", p, fn)
+            return lambda fn: self._add("DELETE", p, fn, kw.get("status_code", 200))
 
         def websocket(self, p, **_):
             """Stub WebSocket route."""
@@ -204,7 +225,11 @@ def _install_fastapi_stub():
             self.cookies = {}
 
         def _call(self, method, path, **req_kwargs):
-            handler = self.app.routes.get((method, path))
+            route_info = self.app.routes.get((method, path))
+            if isinstance(route_info, tuple):
+                handler, default_status = route_info
+            else:
+                handler, default_status = route_info if route_info else (None, 404)
             if not handler:
                 return types.SimpleNamespace(
                     status_code=404,
@@ -263,19 +288,43 @@ def _install_fastapi_stub():
                     kwargs[name] = req_obj
                 else:
                     kwargs[name] = None
-            if inspect.iscoroutinefunction(handler):
-                import asyncio as _asyncio
-                response_val = _asyncio.run(handler(**kwargs))
-            else:
-                response_val = handler(**kwargs)
+            import types as _types
+            HTTPException = module.HTTPException  # type: ignore
+
+            try:
+                if inspect.iscoroutinefunction(handler):
+                    import asyncio as _asyncio
+                    response_val = _asyncio.run(handler(**kwargs))
+                else:
+                    response_val = handler(**kwargs)
+            except HTTPException as exc:
+                detail_text = exc.detail
+                hdrs = exc.headers
+                return _types.SimpleNamespace(
+                    status_code=exc.status_code,
+                    json=lambda: {"detail": detail_text},
+                    headers=hdrs,
+                    cookies={},
+                )
             if isinstance(response_val, tuple):
                 payload, status_code = response_val
             elif hasattr(response_val, "dict"):
-                payload, status_code = response_val.dict(), 200
+                try:
+                    payload_dict = response_val.dict()
+                except AttributeError:
+                    payload_dict = response_val.__dict__.copy()
+                payload, status_code = payload_dict, default_status
             elif isinstance(response_val, dict):
-                payload, status_code = response_val, 200
+                payload, status_code = response_val, default_status
             else:
                 payload, status_code = {}, 204
+            # Use status code from Response object if explicitly set
+            if status_code == default_status and resp_obj.status_code != default_status:
+                status_code = resp_obj.status_code
+
+            if status_code == 200:
+                status_code = default_status
+
             return types.SimpleNamespace(
                 status_code=status_code,
                 json=lambda: payload,
@@ -348,6 +397,16 @@ def _install_pydantic_stub():
         def dict(self, *_, **__):
             """Return model as dict."""
             return self.__dict__.copy()
+
+        # FastAPI code-paths and tests frequently rely on the original
+        # Pydantic ``from_orm`` helper which builds a model from an arbitrary
+        # object exposing attribute access (e.g. SQLAlchemy instance).  The
+        # minimal stub implements it by delegating to the plain constructor
+        # after converting ``obj.__dict__`` into a regular *dict*.
+
+        @classmethod
+        def from_orm(cls, obj):  # noqa: D401 – keep signature minimal
+            return cls(**getattr(obj, "__dict__", {}))
 
         model_dump = dict
 
@@ -624,8 +683,30 @@ def _install_openai_stub():
 
     openai_mod = _types.ModuleType("openai")
 
+    # ------------------------------------------------------------------
+    # Exception hierarchy – we only add the symbols referenced by the code
+    # base.  All stub classes inherit directly from *Exception* and carry no
+    # additional logic.  They exist purely so that ``from openai import
+    # AuthenticationError`` etc. succeeds when the real SDK is absent.
+    # ------------------------------------------------------------------
+
+    class AuthenticationError(Exception):
+        """Stub AuthenticationError."""
+
     class RateLimitError(Exception):
         """Stub RateLimitError."""
+
+    class BadRequestError(Exception):
+        """Stub BadRequestError."""
+
+    class APITimeoutError(Exception):
+        """Stub APITimeoutError."""
+
+    class APIConnectionError(Exception):
+        """Stub APIConnectionError."""
+
+    class InternalServerError(Exception):
+        """Stub InternalServerError."""
 
     class _EmptyStream:
         """Stub streaming async object."""
@@ -670,11 +751,22 @@ def _install_openai_stub():
             self.responses = self._Responses()
             self.embeddings = self._Embeddings()
 
+    # client classes – same structure as before
     openai_mod.AsyncOpenAI = _BaseClient
     openai_mod.AsyncAzureOpenAI = _BaseClient
     error_mod = _types.ModuleType("openai.error")
-    error_mod.RateLimitError = RateLimitError
-    openai_mod.RateLimitError = RateLimitError
+    # expose identical symbols under the nested module path that the real SDK
+    # uses so that ``import openai.error as err`` keeps working.
+    for _name, _cls in {
+        "AuthenticationError": AuthenticationError,
+        "RateLimitError": RateLimitError,
+        "BadRequestError": BadRequestError,
+        "APITimeoutError": APITimeoutError,
+        "APIConnectionError": APIConnectionError,
+        "InternalServerError": InternalServerError,
+    }.items():
+        setattr(error_mod, _name, _cls)
+        setattr(openai_mod, _name, _cls)
     openai_mod.error = error_mod
     _sys.modules["openai"] = openai_mod
     _sys.modules["openai.error"] = error_mod

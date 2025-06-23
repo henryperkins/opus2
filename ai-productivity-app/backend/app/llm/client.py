@@ -8,6 +8,76 @@ from typing import Optional, AsyncIterator, Dict, List, Any
 # ---------------------------------------------------------------------------
 
 import logging
+import httpx
+# ---------------------------------------------------------------------------
+# Sentry is optional in local/dev environments.  Attempt to import the real
+# SDK but fall back to a lightweight stub that exposes only the methods we
+# actually call (currently *capture_exception*).
+# ---------------------------------------------------------------------------
+
+try:
+    import sentry_sdk  # type: ignore  # pragma: no cover
+except ModuleNotFoundError:  # pragma: no cover – stub for CI/sandbox
+
+    class _StubSentry:  # pylint: disable=too-few-public-methods
+        @staticmethod
+        def capture_exception(_exc: Exception):  # noqa: D401
+            return None
+
+    sentry_sdk = _StubSentry()  # type: ignore
+# ---------------------------------------------------------------------------
+# Optional OpenAI dependency
+# ---------------------------------------------------------------------------
+# The test-runner inside the execution sandbox does *not* install the official
+# ``openai`` SDK. Importing the real package therefore fails with
+# ``ModuleNotFoundError`` which aborts collection long before the optional
+# stub-creation code further down has a chance to run.
+#
+# To keep the public API identical regardless of whether the real SDK is
+# present we first attempt to import the required symbols.  When that fails we
+# create *placeholder* exception classes matching the attribute names that the
+# rest of the code expects.  They simply inherit from ``Exception`` so normal
+# ``except`` handling still works.
+# ---------------------------------------------------------------------------
+
+try:
+    from openai import (  # type: ignore
+        AuthenticationError,
+        RateLimitError,
+        BadRequestError,
+        APITimeoutError,
+        APIConnectionError,
+        InternalServerError,
+    )
+except (ModuleNotFoundError, ImportError):  # pragma: no cover – sandbox / minimal envs
+
+    class _OpenAIBaseError(Exception):
+        """Fallback base-class that mimics the real OpenAI SDK errors."""
+
+    class AuthenticationError(_OpenAIBaseError):
+        pass
+
+    class RateLimitError(_OpenAIBaseError):
+        pass
+
+    class BadRequestError(_OpenAIBaseError):
+        pass
+
+    class APITimeoutError(_OpenAIBaseError):
+        pass
+
+    class APIConnectionError(_OpenAIBaseError):
+        pass
+
+    class InternalServerError(_OpenAIBaseError):
+        pass
+
+from app.exceptions import (
+    ModelNotFoundException,
+    LLMRateLimitException,
+    LLMTimeoutException,
+    LLMException
+)
 
 try:
     from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore
@@ -143,7 +213,7 @@ class LLMClient:
         #   "YYYY-MM-DD-preview" (e.g. "2025-04-01-preview") as well as the
         # literal alias "preview".
         # Any future preview that ends in "-preview" should be treated the
-        # same.  Everything else → classic Chat Completions.
+        # same.  Everything else -> classic Chat Completions.
         # ------------------------------------------------------------------
 
         api_version = (settings.azure_openai_api_version or "").lower()
@@ -337,47 +407,116 @@ class LLMClient:
         return await self._execute_with_fallback(_invoke)
 
     async def _execute_with_fallback(self, invoke_func):
-        """Execute LLM call with fallback logic."""
+        """Execute LLM call with specific exception handling."""
         try:
             return await invoke_func(self.active_model)
 
-        except Exception as exc:  # pylint: disable=broad-except
-            # Detect *model not found* condition – provider libs differ in
-            # exact exception classes, therefore we fall back to string
-            # inspection which is still deterministic enough.
-            error_text = str(exc).lower()
-            is_not_found = ("model_not_found" in error_text or
-                            "model not found" in error_text or
-                            "does not have access to model" in error_text)
+        except AuthenticationError as exc:
+            # Authentication errors should not be retried
+            logger.error("LLM authentication failed: %s", exc)
+            sentry_sdk.capture_exception(exc)
+            raise LLMException(
+                "Authentication failed. Please check API credentials.",
+                error_code="AUTH_FAILED"
+            ) from exc
 
-            if is_not_found and self.active_model != self._fallback_model:
-                logger.warning(
-                    "Model '%s' unavailable, falling back to '%s'",
-                    self.active_model, self._fallback_model
-                )
-                self.active_model = self._fallback_model
-                try:
-                    return await invoke_func(self.active_model)
-                except Exception as second_exc:  # pylint: disable=broad-except
-                    logger.error(
-                        "Fallback model request failed: %s",
-                        second_exc, exc_info=True
+        except RateLimitError as exc:
+            # Extract retry-after if available
+            retry_after = getattr(exc, 'retry_after', None)
+            logger.warning("LLM rate limit hit: %s", exc)
+            raise LLMRateLimitException(retry_after) from exc
+
+        except BadRequestError as exc:
+            # Check if it's a model not found error
+            error_message = str(exc).lower()
+            if any(phrase in error_message for phrase in [
+                "model_not_found", "model not found",
+                "does not exist", "no such model",
+                "does not have access to model"
+            ]):
+                if self.active_model != self._fallback_model:
+                    logger.warning(
+                        "Model '%s' unavailable, falling back to '%s'",
+                        self.active_model, self._fallback_model
                     )
-                    raise second_exc from None
+                    self.active_model = self._fallback_model
+                    try:
+                        return await invoke_func(self.active_model)
+                    except Exception as fallback_exc:
+                        logger.error("Fallback model also failed: %s", fallback_exc)
+                        sentry_sdk.capture_exception(fallback_exc)
+                        raise LLMException(
+                            "Both primary and fallback models failed",
+                            error_code="ALL_MODELS_FAILED"
+                        ) from fallback_exc
+                else:
+                    raise ModelNotFoundException(
+                        self.active_model, self.provider
+                    ) from exc
+            else:
+                # Other bad request errors
+                logger.error("LLM bad request: %s", exc)
+                raise LLMException(
+                    f"Invalid request: {exc}",
+                    error_code="BAD_REQUEST"
+                ) from exc
 
-            # Non-recoverable or already retried – propagate.
-            logger.error("LLM client error: %s", exc, exc_info=True)
-            raise
+        except APITimeoutError as exc:
+            logger.error("LLM request timed out: %s", exc)
+            raise LLMTimeoutException(30) from exc  # Default 30s timeout
+
+        except APIConnectionError as exc:
+            logger.error("LLM connection failed: %s", exc)
+            sentry_sdk.capture_exception(exc)
+            raise LLMException(
+                "Failed to connect to LLM provider",
+                error_code="CONNECTION_FAILED"
+            ) from exc
+
+        except InternalServerError as exc:
+            # Provider's internal error - log and report
+            logger.error("LLM provider internal error: %s", exc)
+            sentry_sdk.capture_exception(exc)
+            raise LLMException(
+                "LLM provider experiencing issues",
+                error_code="PROVIDER_ERROR"
+            ) from exc
+
+        except httpx.HTTPError as exc:
+            # Network-level errors
+            logger.error("HTTP error calling LLM: %s", exc)
+            sentry_sdk.capture_exception(exc)
+            raise LLMException(
+                f"Network error: {exc}",
+                error_code="NETWORK_ERROR"
+            ) from exc
+
+        except Exception as exc:
+            # Truly unexpected errors - capture for debugging
+            logger.error("Unexpected LLM error: %s", exc, exc_info=True)
+            sentry_sdk.capture_exception(exc)
+            raise LLMException(
+                "Unexpected error occurred",
+                error_code="UNKNOWN_ERROR"
+            ) from exc
 
     async def _stream_response(self, stream) -> AsyncIterator[str]:
-        """Handle streaming response from Chat Completions API."""
+        """Handle streaming with specific error handling."""
         try:
             async for chunk in stream:
-                if chunk.choices[0].delta.content:
+                if chunk.choices and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
+
+        except APITimeoutError as e:
+            logger.error("Stream timeout: %s", e)
+            yield "\n\n[Error: Response timed out]"
+        except APIConnectionError as e:
+            logger.error("Stream connection lost: %s", e)
+            yield "\n\n[Error: Connection lost]"
         except Exception as e:
-            logger.error(f"Streaming error: {e}")
-            yield f"\n\n[Error: {str(e)}]"
+            logger.error("Stream error: %s", e, exc_info=True)
+            sentry_sdk.capture_exception(e)
+            yield f"\n\n[Error: {type(e).__name__}]"
 
     async def _stream_responses_api(self, stream) -> AsyncIterator[str]:
         """Handle streaming response from Responses API."""

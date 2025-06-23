@@ -8,6 +8,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..config import settings
+from ..services.rendering_service import RenderingServiceClient
 from ..schemas.rendering import (
     FormatDetectionResult,
     ChunkRenderRequest,
@@ -24,6 +26,24 @@ from ..schemas.rendering import (
 )
 
 router = APIRouter(prefix="/api/v1/rendering", tags=["rendering"])
+
+# Global rendering client
+rendering_client = None
+
+
+@router.on_event("startup")
+async def startup_rendering_client():
+    """Initialize rendering client on startup."""
+    global rendering_client
+    rendering_client = RenderingServiceClient(settings.render_service_url)
+
+
+@router.on_event("shutdown")
+async def shutdown_rendering_client():
+    """Clean up rendering client."""
+    global rendering_client
+    if rendering_client:
+        await rendering_client.__aexit__(None, None, None)
 
 
 @router.post("/detect-formats")
@@ -89,35 +109,50 @@ async def render_chunk(
     try:
         start_time = datetime.utcnow()
 
-        # Mock rendering logic
-        rendered_content = request.chunk
-
-        # Apply syntax highlighting for code
+        # Use real rendering service
         if request.format_info and request.format_info.has_code:
-            # In production, this would apply actual syntax highlighting
-            rendered_content = f"<pre><code>{request.chunk}</code></pre>"
-
-        # Process math expressions
-        if request.format_info and request.format_info.has_math:
-            # In production, this would render with KaTeX or MathJax
-            rendered_content = rendered_content.replace(
-                '$', '<span class="math">$'
-            ).replace('$', '$</span>')
+            # Extract code blocks and render them
+            result = await rendering_client.render_markdown(
+                request.chunk,
+                {
+                    "syntax_theme": request.syntax_theme,
+                    "enable_tables": True,
+                    "enable_math": request.format_info.has_math
+                }
+            )
+        else:
+            # Plain text rendering
+            result = {
+                "html": request.chunk,
+                "fallback": False
+            }
 
         render_time = (datetime.utcnow() - start_time).total_seconds()
 
-        result = RenderedChunk(
-            content=rendered_content,
+        rendered = RenderedChunk(
+            content=result["html"],
             formatted=True,
             render_time=render_time,
-            format_used=request.format_info.primary_format if request.format_info else "text",
-            metadata={"theme": request.syntax_theme}
+            format_used=(request.format_info.primary_format
+                        if request.format_info else "text"),
+            metadata={
+                "theme": request.syntax_theme,
+                "fallback": result.get("fallback", False)
+            }
         )
 
-        return RenderingResponse(success=True, data=result.dict())
+        return RenderingResponse(success=True, data=rendered.dict())
+
     except Exception as e:
-        detail = f"Chunk rendering failed: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+        # Return plain text as ultimate fallback
+        return RenderingResponse(
+            success=False,
+            data={
+                "content": request.chunk,
+                "formatted": False,
+                "error": str(e)
+            }
+        )
 
 
 @router.post("/inject-interactive")

@@ -58,6 +58,56 @@ except ModuleNotFoundError:  # pragma: no cover – sandbox only
 
     httpx = types.ModuleType("httpx")  # type: ignore
     httpx.Client = _StubClient  # type: ignore[attr-defined]
+
+    # ------------------------------------------------------------------
+    # The production code catches *httpx.TransportError* / *HTTPError*.
+    # Provide thin placeholder implementations so ``isinstance(...,\n+    # httpx.TransportError)`` keeps working when the real library is
+    # unavailable.
+    # ------------------------------------------------------------------
+
+    class _StubHTTPError(Exception):
+        """Fallback for httpx.HTTPError hierarchy."""
+
+    class _StubTransportError(_StubHTTPError):
+        """Fallback for httpx.TransportError."""
+
+    httpx.HTTPError = _StubHTTPError  # type: ignore[attr-defined]
+    httpx.TransportError = _StubTransportError  # type: ignore[attr-defined]
+
+    # Lightweight *Response* replacement mimicking the public attributes used
+    # inside the code-base (``status_code``, ``json()``, ``raise_for_status``).
+
+    class _StubResponse:  # pylint: disable=too-few-public-methods
+        def __init__(self, status_code: int = 200, payload: dict | None = None):
+            self.status_code = status_code
+            self._payload = payload or {}
+
+        def json(self):  # noqa: D401 – match httpx API
+            return self._payload
+
+        def raise_for_status(self):  # noqa: D401 – no-op for 2xx codes
+            if self.status_code >= 400:
+                raise _StubHTTPError(f"HTTP {self.status_code}")
+
+    httpx.Response = _StubResponse  # type: ignore[attr-defined]
+
+    # Async client required by *RenderingServiceClient*
+
+    class _StubAsyncClient:  # pylint: disable=too-few-public-methods
+        def __init__(self, *_, **__):  # noqa: D401 – accept all params
+            pass
+
+        async def request(self, method, url, **_):  # noqa: D401
+            # Always succeed with empty payload in the stubbed environment.
+            return _StubResponse(200, {})
+
+        async def aclose(self):  # noqa: D401
+            return None
+
+    httpx.AsyncClient = _StubAsyncClient  # type: ignore[attr-defined]
+
+    # Misc top-level helpers referenced by production code
+    httpx.Limits = lambda *_, **__: None  # type: ignore[attr-defined]
     httpx._patch_applied = True  # type: ignore[attr-defined]
     sys.modules["httpx"] = httpx  # type: ignore
 

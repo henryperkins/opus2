@@ -37,13 +37,20 @@ from typing import Any, Dict, Optional
 # when the optional dependency is absent.
 # -----------------------------------------------------------------------------
 
+# -----------------------------------------------------------------------------
+# SlowAPI import & dynamic enable/disable flag
+# -----------------------------------------------------------------------------
+import os
+
+
 try:
     from slowapi import Limiter  # type: ignore
     from slowapi.util import get_remote_address  # type: ignore
 
-    _HAS_SLOWAPI = True
+    # Honour global opt-out (tests/dev) via DISABLE_RATE_LIMITER.
+    _HAS_SLOWAPI = os.getenv("DISABLE_RATE_LIMITER", "false").lower() != "true"
 
-except ModuleNotFoundError:  # pragma: no cover – CI/stub fallback
+except ModuleNotFoundError:  # pragma: no cover – fallback stubs
 
     _HAS_SLOWAPI = False
 
@@ -65,7 +72,13 @@ except ModuleNotFoundError:  # pragma: no cover – CI/stub fallback
 
 
 from fastapi import HTTPException, status
+# SlowAPI limiter will use Redis so that limits are shared across gunicorn
+# workers.  We dynamically derive the connection URL from the same helper that
+# the rest of the application uses to talk to Redis to avoid configuration
+# drift.
+
 from app.config import settings  # type: ignore  # pylint: disable=import-error
+from app.utils.redis_client import _redis_url  # type: ignore
 
 __all__ = [
     "hash_password",
@@ -130,10 +143,19 @@ except ModuleNotFoundError:  # pragma: no cover
             segments.append(_FakeJWTModule._b64url_encode(signature))
             return ".".join(segments)
 
+
+        # Accept *algorithms* kwarg for compatibility with python-jose API
         @staticmethod
-        def decode(token: str, secret: str, _algorithms: Optional[list[str]] = None):  # noqa: D401,W0613
+        def decode(
+            token: str,
+            secret: str,
+            _algorithms: Optional[list[str]] = None,
+            algorithms: Optional[list[str]] = None,  # type: ignore[override]
+            **__kwargs,
+        ):
             try:
                 header_b64, payload_b64, signature_b64 = token.split(".")
+
             except ValueError as exc:
                 raise JWTError("Invalid token structure") from exc
 
@@ -178,9 +200,16 @@ def enforce_rate_limit(key: str, *, limit: int = _RATE_MAX_ATTEMPTS, window: flo
 # SlowAPI Limiter instance (used by middleware/security.py)
 # -----------------------------------------------------------------------------
 
+# A single Limiter instance is attached to the FastAPI application in
+# ``middleware/security.register_security_middleware``.  When SlowAPI is
+# available we back it with Redis so that counters are shared across multiple
+# processes / pods.  When either SlowAPI or the Redis client is missing the
+# stub Limiter defined above becomes a no-op keeping the import graph intact.
+
 limiter: "Limiter" = Limiter(  # type: ignore[name-defined]
     enabled=_HAS_SLOWAPI,
     key_func=get_remote_address,
+    storage_uri=_redis_url() if _HAS_SLOWAPI else None,
 )
 
 

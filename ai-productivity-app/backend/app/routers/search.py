@@ -1,10 +1,11 @@
 # backend/app/routers/search.py
 """Enhanced search API with hybrid capabilities."""
-from fastapi import APIRouter, Query, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Query, HTTPException, BackgroundTasks, Depends
 import logging
 
 from app.dependencies import DatabaseDep, CurrentUserRequired
-from app.services.vector_store import VectorStore
+from app.services.vector_service import get_vector_service, VectorService
+# canonical implementation
 from app.services.hybrid_search import HybridSearch
 from app.services.embedding_service import EmbeddingService
 from app.embeddings.generator import EmbeddingGenerator
@@ -21,7 +22,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 # Initialize services
-vector_store = VectorStore()
 embedding_generator = EmbeddingGenerator()
 
 
@@ -29,10 +29,15 @@ embedding_generator = EmbeddingGenerator()
 async def search(
     request: SearchRequest,
     current_user: CurrentUserRequired,
-    db: DatabaseDep
+    db: DatabaseDep,
+    vector_service: VectorService = Depends(get_vector_service)
 ):
     """Execute hybrid search across code and documents."""
-    # Initialize hybrid search
+    # Initialize hybrid search with the existing VectorStore while the
+    # VectorService migration is still ongoing.
+    from app.services.vector_store import VectorStore
+    vector_store = VectorStore()
+
     hybrid_search = HybridSearch(db, vector_store, embedding_generator)
 
     # Get user's accessible projects
@@ -91,7 +96,9 @@ async def search(
         db.commit()
     except Exception as exc:  # noqa: BLE001 – don't fail request
         db.rollback()
-        logger.warning("Failed to persist search history: %s", exc, exc_info=False)
+        logger.warning(
+            "Failed to persist search history: %s", exc, exc_info=False
+        )
 
     return response_payload
 
@@ -139,7 +146,9 @@ async def get_suggestions(
         recent_queries = [row[0] for row in history_rows]
 
         for h_query in recent_queries:
-            if h_query.lower().startswith(q.lower()) and h_query not in suggestions:
+            condition1 = h_query.lower().startswith(q.lower())
+            condition2 = h_query not in suggestions
+            if condition1 and condition2:
                 suggestions.append(h_query)
 
     return {"suggestions": suggestions[:10]}
@@ -205,6 +214,8 @@ async def index_document(
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Initialize embedding service
+    from app.services.vector_store import VectorStore
+    vector_store = VectorStore()
     embedding_service = EmbeddingService(db, vector_store, embedding_generator)
 
     if request.async_mode:
@@ -247,6 +258,8 @@ async def delete_index(
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Initialize embedding service
+    from app.services.vector_store import VectorStore
+    vector_store = VectorStore()
     embedding_service = EmbeddingService(db, vector_store, embedding_generator)
 
     # Delete embeddings

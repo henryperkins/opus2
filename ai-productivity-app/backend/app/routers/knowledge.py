@@ -1,6 +1,7 @@
 """
 Knowledge base API router for search and context building.
 """
+import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -16,8 +17,35 @@ from ..schemas.knowledge import (
     KnowledgeSearchResponse,
     KnowledgeResponse
 )
+from ..vector_store.qdrant_client import QdrantVectorStore
+from ..services.knowledge_service import KnowledgeService
+from ..embeddings.generator import EmbeddingGenerator
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
+
+# Global service instances
+vector_store = None
+knowledge_service = None
+
+
+@router.on_event("startup")
+async def startup_knowledge_service():
+    """Initialize knowledge service on startup."""
+    global vector_store, knowledge_service
+
+    try:
+        vector_store = QdrantVectorStore()
+        await vector_store.init_collections()
+
+        embedding_generator = EmbeddingGenerator()
+        knowledge_service = KnowledgeService(vector_store, embedding_generator)
+
+        logger.info("Knowledge service initialized with Qdrant")
+    except Exception as e:
+        logger.error(f"Failed to initialize knowledge service: {e}")
+        # Continue with mock service for development
+        knowledge_service = None
 
 
 @router.post("/search")
@@ -27,9 +55,43 @@ async def search_knowledge(
 ) -> KnowledgeResponse:
     """Search knowledge base for relevant entries."""
     try:
-        # Mock knowledge search implementation
-        # In production, this would query your vector database or search index
+        # Use real knowledge service if available
+        if knowledge_service:
+            results = await knowledge_service.search_knowledge(
+                query=request.query,
+                project_ids=request.project_ids,
+                limit=request.limit,
+                filters=request.filters.dict() if request.filters else None
+            )
 
+            # Convert to response format
+            entries = [
+                KnowledgeEntry(
+                    id=r["id"],
+                    content=r["content"],
+                    title=r["title"],
+                    source=r["source"],
+                    category=r["category"],
+                    tags=r["tags"],
+                    similarity_score=r["score"]
+                )
+                for r in results
+            ]
+
+            response_data = KnowledgeSearchResponse(
+                results=entries,
+                total_count=len(entries),
+                query_time=0.1,
+                has_more=len(entries) == request.limit,
+                suggestions=[]
+            )
+
+            return KnowledgeResponse(
+                success=True,
+                data=response_data.dict()
+            )
+
+        # Fallback to mock implementation
         mock_entries = [
             KnowledgeEntry(
                 id="kb_001",
@@ -39,19 +101,9 @@ async def search_knowledge(
                 category="technical",
                 tags=["ai", "models", "configuration"],
                 similarity_score=0.85
-            ),
-            KnowledgeEntry(
-                id="kb_002",
-                content="Best practices for prompt engineering.",
-                title="Prompt Engineering Guide",
-                source="guidelines",
-                category="best-practices",
-                tags=["prompts", "engineering", "guidelines"],
-                similarity_score=0.72
             )
         ]
 
-        # Filter based on similarity threshold
         filtered_entries = [
             entry for entry in mock_entries
             if entry.similarity_score >= request.similarity_threshold
@@ -61,8 +113,8 @@ async def search_knowledge(
             results=filtered_entries,
             total_count=len(filtered_entries),
             query_time=0.15,
-            has_more=len(mock_entries) > request.limit,
-            suggestions=["AI configuration", "model setup", "prompt design"]
+            has_more=False,
+            suggestions=["AI configuration", "model setup"]
         )
 
         return KnowledgeResponse(
@@ -70,8 +122,11 @@ async def search_knowledge(
             data=response_data.dict()
         )
     except Exception as e:
-        detail = f"Knowledge search failed: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+        logger.error(f"Knowledge search failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Knowledge search failed: {str(e)}"
+        )
 
 
 @router.post("/context")
@@ -81,10 +136,37 @@ async def build_context(
 ) -> KnowledgeResponse:
     """Build optimized context from knowledge entries."""
     try:
-        # Mock context building implementation
-        # In production, this would intelligently combine and optimize content
+        # Use real knowledge service if available
+        if knowledge_service:
+            context_data = await knowledge_service.build_context(
+                entry_ids=request.knowledge_entries,
+                max_length=request.max_context_length
+            )
 
-        # Simulate retrieving knowledge entries
+            # Mock sources for now - in production would fetch real entries
+            mock_sources = [
+                KnowledgeEntry(
+                    id=entry_id,
+                    content=f"Content for entry {entry_id}",
+                    title=f"Knowledge Entry {entry_id}",
+                    similarity_score=0.8
+                )
+                for entry_id in context_data["sources"][:3]
+            ]
+
+            context_result = ContextResult(
+                context=context_data["context"],
+                sources=mock_sources,
+                context_length=context_data["context_length"],
+                relevance_score=0.82
+            )
+
+            return KnowledgeResponse(
+                success=True,
+                data=context_result.dict()
+            )
+
+        # Fallback mock implementation
         mock_sources = [
             KnowledgeEntry(
                 id=entry_id,
@@ -92,16 +174,14 @@ async def build_context(
                 title=f"Knowledge Entry {entry_id}",
                 similarity_score=0.8
             )
-            for entry_id in request.knowledge_entries[:3]  # Limit for demo
+            for entry_id in request.knowledge_entries[:3]
         ]
 
-        # Build combined context
         combined_content = "\n\n".join([
             f"[{source.title}]\n{source.content}"
             for source in mock_sources
         ])
 
-        # Truncate if needed
         if len(combined_content) > request.max_context_length:
             combined_content = combined_content[:request.max_context_length]
             combined_content += "... [truncated]"
@@ -118,8 +198,11 @@ async def build_context(
             data=context_result.dict()
         )
     except Exception as e:
-        detail = f"Context building failed: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+        logger.error(f"Context building failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Context building failed: {str(e)}"
+        )
 
 
 @router.get("/stats/{project_id}")
@@ -167,23 +250,39 @@ async def add_knowledge_entry(
 ) -> KnowledgeResponse:
     """Add a new knowledge base entry."""
     try:
-        # Mock entry creation
-        # In production, this would store in your database and update
-        # search index
+        # Use real knowledge service if available
+        if knowledge_service:
+            entry_id = await knowledge_service.add_knowledge_entry(
+                content=entry.content,
+                title=entry.title,
+                source=entry.source,
+                category=entry.category,
+                tags=entry.tags,
+                project_id=1  # Default project for now
+            )
 
-        # Generate ID if not provided
+            return KnowledgeResponse(
+                success=True,
+                message="Knowledge entry added successfully",
+                data={"entry_id": entry_id}
+            )
+
+        # Mock fallback
         if not entry.id:
             import uuid
             entry.id = f"kb_{uuid.uuid4().hex[:8]}"
 
         return KnowledgeResponse(
             success=True,
-            message="Knowledge entry added successfully",
+            message="Knowledge entry added successfully (mock)",
             data={"entry_id": entry.id}
         )
     except Exception as e:
-        detail = f"Failed to add knowledge entry: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+        logger.error(f"Failed to add knowledge entry: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to add knowledge entry: {str(e)}"
+        )
 
 
 @router.get("/entries/{entry_id}")

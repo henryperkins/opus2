@@ -8,7 +8,7 @@ from app.models.code import CodeDocument, CodeEmbedding
 from app.models.project import Project
 # Optional integrations (import guarded to avoid hard dependency during testing)
 try:
-    from app.search.hybrid import HybridSearch  # noqa: F401
+    from app.services.hybrid_search import HybridSearch  # noqa: F401
 except ImportError:  # pragma: no cover
     HybridSearch = None  # type: ignore
 
