@@ -8,10 +8,16 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/tests:/app/tests
+      - ./backend/data:/app/data
+      - ./backend/requirements.txt:/app/requirements.txt
+      - ./backend/alembic.ini:/app/alembic.ini
     environment:
       - DEBUG=true
       - SECRET_KEY=dev-secret-key-change-in-production
+      - OPENAI_API_KEY=dummy-key-for-testing
       # Allow auth cookies to be sent over HTTP during local development.
       # In production this variable should be omitted so the cookie is marked
       # as Secure.  See backend app.config.Settings.insecure_cookies.

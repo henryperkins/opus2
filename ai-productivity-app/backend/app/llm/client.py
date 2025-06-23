@@ -25,13 +25,14 @@ except ModuleNotFoundError:  # pragma: no cover – offline environments
     class _FakeChatCompletion:  # pylint: disable=too-few-public-methods
         """Mimic the structure of a normal ChatCompletion response."""
 
-        class _FakeMessage:  # pylint: disable=too-few-public-methods
-            content = ""
+        def __init__(self):
+            class _FakeMessage:  # pylint: disable=too-few-public-methods, WPS431
+                content = ""
 
-        class _FakeChoice:  # pylint: disable=too-few-public-methods
-            message = _FakeMessage()
+            class _FakeChoice:  # pylint: disable=too-few-public-methods, WPS431
+                message = _FakeMessage()
 
-        choices = [_FakeChoice()]
+            self.choices = [_FakeChoice()]
 
     class _FakeResponse:  # pylint: disable=too-few-public-methods
         """Mimic the structure of a Responses API completion."""

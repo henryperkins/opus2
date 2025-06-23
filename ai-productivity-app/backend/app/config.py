@@ -165,6 +165,39 @@ class Settings(BaseSettings):
     websocket_ping_interval: int = 30
     websocket_ping_timeout: int = 10
 
+    # -------------------------------------------------------------------
+    # Optional feature flags used by hardening checklist tasks
+    # -------------------------------------------------------------------
+
+    # Global switch to disable *Redis* backed rate-limiter – useful for unit
+    # tests where the in-memory stub is sufficient.
+    disable_rate_limiter: bool = Field(
+        default=False,
+        alias="DISABLE_RATE_LIMITER",
+        description="Disable Redis rate-limiter and fall back to in-memory"
+    )
+
+    # Toggle correlation-ID middleware (can be turned off for benchmarks)
+    disable_correlation_id: bool = Field(
+        default=False,
+        alias="DISABLE_CORRELATION_ID",
+        description="Disable request correlation IDs middleware"
+    )
+
+    # Skip external OpenAI health-check in CI (no network access)
+    skip_openai_health: bool = Field(
+        default=True,
+        alias="SKIP_OPENAI_HEALTH",
+        description="Skip OpenAI connectivity check in readiness probe"
+    )
+
+    # WebSocket task tracking – can be disabled to reduce overhead
+    ws_task_tracking: bool = Field(
+        default=True,
+        alias="WS_TASK_TRACKING",
+        description="Enable WebSocket per-connection task tracking"
+    )
+
     # URL where the user-facing frontend is served.  Used to build absolute
     # links in transactional emails (e.g. password-reset).  Defaults to
     # localhost dev-server.

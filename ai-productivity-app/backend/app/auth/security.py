@@ -23,6 +23,47 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+# -----------------------------------------------------------------------------
+# Optional dependency: SlowAPI rate-limiter (wrapper around limits)
+# -----------------------------------------------------------------------------
+# The real *slowapi* package is preferred but may be missing in the restricted
+# execution environment.  We therefore attempt to import it and fall back to a
+# minimal shim that exposes the subset used by the application:
+#     • Limiter – constructor accepts *enabled* / *key_func*
+#     • decorator limit() returning identity wrapper
+#     • util.get_remote_address – returns "127.0.0.1" for stubs
+#
+# This keeps FastAPI router definitions importable and unit-tests runnable even
+# when the optional dependency is absent.
+# -----------------------------------------------------------------------------
+
+try:
+    from slowapi import Limiter  # type: ignore
+    from slowapi.util import get_remote_address  # type: ignore
+
+    _HAS_SLOWAPI = True
+
+except ModuleNotFoundError:  # pragma: no cover – CI/stub fallback
+
+    _HAS_SLOWAPI = False
+
+    class Limiter:  # type: ignore  # pylint: disable=too-few-public-methods
+        """Stub Limiter replicating public API used by this app."""
+
+        def __init__(self, *_, **__):  # noqa: D401 – any signature
+            self.enabled = False
+
+        # Decorator `.limit("5/minute")`
+        def limit(self, *_d_args, **_d_kwargs):  # noqa: D401
+            def _decorator(func):  # noqa: D401
+                return func
+
+            return _decorator
+
+    def get_remote_address(request):  # noqa: D401, W0613
+        return "127.0.0.1"
+
+
 from fastapi import HTTPException, status
 from app.config import settings  # type: ignore  # pylint: disable=import-error
 
@@ -37,6 +78,7 @@ __all__ = [
     "build_csrf_cookie",
     "validate_csrf",
     "enforce_rate_limit",
+    "limiter",
 ]
 
 # -----------------------------------------------------------------------------
@@ -131,6 +173,16 @@ def enforce_rate_limit(key: str, *, limit: int = _RATE_MAX_ATTEMPTS, window: flo
             detail=f"Too many attempts. Please wait {int(window/60)} minute(s) before trying again.",
         )
     bucket.append(now)
+
+# -----------------------------------------------------------------------------
+# SlowAPI Limiter instance (used by middleware/security.py)
+# -----------------------------------------------------------------------------
+
+limiter: "Limiter" = Limiter(  # type: ignore[name-defined]
+    enabled=_HAS_SLOWAPI,
+    key_func=get_remote_address,
+)
+
 
 
 # -----------------------------------------------------------------------------

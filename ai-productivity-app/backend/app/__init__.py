@@ -262,8 +262,20 @@ def _install_fastapi_stub():  # noqa: D401
         "Path",
         "Cookie",
         "Depends",
+        "File",
     ]:
         setattr(module, _name, _identity)
+
+    # Minimal UploadFile used by router handlers when FastAPI real class missing
+    class UploadFile:  # noqa: D401 – simplified variant
+        def __init__(self, filename: str, content: bytes | None = None):
+            self.filename = filename
+            self._content = content or b""
+
+        async def read(self) -> bytes:  # noqa: D401
+            return self._content
+
+    module.UploadFile = UploadFile
 
     # BackgroundTasks placeholder
     class BackgroundTasks(list):  # type: ignore
@@ -287,6 +299,11 @@ def _install_fastapi_stub():  # noqa: D401
             pass
 
     module.WebSocket = WebSocket
+
+    class WebSocketDisconnect(Exception):  # noqa: D401 – stub exception
+        pass
+
+    module.WebSocketDisconnect = WebSocketDisconnect
 
     # Router & App implementation ----------------------------------------
     class _Router:  # noqa: D401 – extremely simplified
@@ -323,13 +340,26 @@ def _install_fastapi_stub():  # noqa: D401
             super().__init__(prefix="")
             self.middleware = []
             self.state = types.SimpleNamespace()
+            # Real FastAPI exposes a dict that allows tests to override dependency
+            # injection.  Initialise it here so the test-suite can interact with
+            # the stub the same way.
+            self.dependency_overrides: dict[object, object] = {}
 
         def add_middleware(self, mw_cls, **kw):  # noqa: D401
             self.middleware.append((mw_cls, kw))
 
+        # Expose *add_exception_handler* alias to parent implementation so the
+        # earlier stubbed method is visible on instances, too.
+        add_exception_handler = _Router._add  # type: ignore[assignment]
+
         def include_router(self, router):  # noqa: D401
             # Merge routes dicts
             self.routes.update(router.routes)
+
+        # FastAPI exposes .add_exception_handler for global error mapping.
+        def add_exception_handler(self, _exc_cls, _handler):  # noqa: D401
+            # Stub – no-op, sufficient for unit-tests that never trigger path
+            return None
 
     module.FastAPI = _FastAPI
 
@@ -362,16 +392,46 @@ def _install_fastapi_stub():  # noqa: D401
             kwargs: dict[str, object] = {}
             for name, _param in sig.parameters.items():
                 if name in ("payload", "data", "json_body"):
-                    kwargs[name] = body
+                    # Attempt to instantiate Pydantic model when available
+                    param = sig.parameters[name]
+                    anno = param.annotation
+                    created = None
+                    try:
+                        # Pydantic v1 & v2 expose *BaseModel*.
+                        from pydantic import BaseModel as _BM  # type: ignore
+
+                        if isinstance(anno, type) and issubclass(anno, _BM):
+                            created = anno(**body)  # type: ignore[arg-type]
+                    except Exception:  # pragma: no cover
+                        created = None
+
+                    kwargs[name] = created if created is not None else body
                 elif name == "background_tasks":
                     kwargs[name] = module.BackgroundTasks()
                 elif name in ("current_user", "current_user_required"):
                     dummy = types.SimpleNamespace(id=1, username="stub")
                     kwargs[name] = dummy
                 elif name == "db":
-                    from app.database import SessionLocal  # lazy import
+                    # Check dependency overrides like the real FastAPI TestClient
+                    override_dep = None
+                    for dep_fn, override_fn in self.app.dependency_overrides.items():
+                        if getattr(dep_fn, "__name__", "") == "get_db":
+                            override_dep = override_fn
+                            break
 
-                    kwargs[name] = SessionLocal()
+                    if override_dep is not None:
+                        override_gen = override_dep()
+                        if hasattr(override_gen, "__next__"):
+                            try:
+                                kwargs[name] = next(override_gen)
+                            except StopIteration:
+                                kwargs[name] = None
+                        else:
+                            kwargs[name] = override_gen
+                    else:
+                        from app.database import SessionLocal  # lazy import
+
+                        kwargs[name] = SessionLocal()
                 elif name == "response":
                     kwargs[name] = resp_obj
                 elif name == "request":
@@ -598,6 +658,33 @@ def _install_pydantic_stub() -> None:  # noqa: D401
     _pydantic_mod.validator = _validator
     _pydantic_mod.EmailStr = _EmailStr
 
+    # ------------------------------------------------------------------
+    # Additional helper *type* / *factory* aliases required by application
+    # ------------------------------------------------------------------
+    # The codebase imports these symbols from *pydantic* directly.  Provide
+    # minimal stand-ins so that the import succeeds.  Runtime validation is
+    # intentionally **not** implemented because the unit-tests rely only on
+    # the presence of the attributes, not on strict type checks.
+
+    # Numeric constrained types – alias to builtin types (no range check)
+    _pydantic_mod.NonNegativeInt = int  # type: ignore[attr-defined]
+
+    # Factory helpers such as ``confloat`` normally return a new constrained
+    # *type*.  For our purposes returning the underlying builtin is
+    # sufficient so that annotations do not break runtime execution.
+
+    def _identity_factory(return_type):  # noqa: D401
+        def _factory(*_args, **_kwargs):  # noqa: D401
+            return return_type
+
+        return _factory
+
+    _pydantic_mod.confloat = _identity_factory(float)  # type: ignore[attr-defined]
+    _pydantic_mod.conint = _identity_factory(int)  # type: ignore[attr-defined]
+
+    # Pydantic v2 adds *field_validator* alternative to v1 *validator*.
+    _pydantic_mod.field_validator = _validator  # type: ignore[attr-defined]
+
     # pydantic.dataclasses sub-module – only used for the decorator symbol
     _pydantic_dataclasses = _types.ModuleType("pydantic.dataclasses")
     _pydantic_dataclasses.dataclass = lambda cls=None, **__: cls  # type: ignore
@@ -665,4 +752,256 @@ try:
     from passlib.context import CryptContext  # noqa: F401  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover – offline sandbox
     _install_passlib_stub()
+
+# ---------------------------------------------------------------------------
+# Optional *GitPython* stub – avoids heavy dependency + system install
+# ---------------------------------------------------------------------------
+
+
+def _install_gitpython_stub() -> None:  # noqa: D401
+    """Provide minimal stub for the *git* package used by GitManager."""
+
+    import sys as _sys, types as _types
+
+    git_mod = _types.ModuleType("git")
+
+    class _GitCommandError(Exception):  # noqa: D401
+        pass
+
+    exc_mod = _types.ModuleType("git.exc")
+    exc_mod.GitCommandError = _GitCommandError
+
+    class _DummyRemote:  # noqa: D401 – no-op remote placeholder
+        def fetch(self):
+            return []
+
+        def pull(self):
+            return []
+
+    class _DummyGit:  # noqa: D401 – helper exposing *checkout* & *diff*
+        def checkout(self, _branch):  # noqa: D401
+            return None
+
+        def diff(self, *_args, **_kwargs):  # noqa: D401
+            return ""
+
+    class _DummyCommit:  # noqa: D401
+        def __init__(self):
+            self.hexsha = "0" * 40
+            self.tree = []
+
+    class _DummyActiveBranch:  # noqa: D401
+        name = "main"
+
+    class _Repo:  # noqa: D401 – simplified stand-in
+        def __init__(self, *_args, **_kwargs):
+            self.remote_obj = _DummyRemote()
+            self.git = _DummyGit()
+            self.head = _types.SimpleNamespace(commit=_DummyCommit())
+            self.active_branch = _DummyActiveBranch()
+
+        def remote(self, *_a):  # noqa: D401
+            return self.remote_obj
+
+        @staticmethod
+        def clone_from(*_a, **_kw):  # noqa: D401
+            return _Repo()
+
+    git_mod.Repo = _Repo  # type: ignore[attr-defined]
+    git_mod.exc = exc_mod  # type: ignore[attr-defined]
+
+    # Register submodule as well so "import git.exc" works
+    _sys.modules["git"] = git_mod
+    _sys.modules["git.exc"] = exc_mod
+
+
+try:
+    import git  # type: ignore  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover – offline sandbox
+    _install_gitpython_stub()
+
+# ---------------------------------------------------------------------------
+# Optional *aiofiles* stub – avoids extra dependency for async file IO
+# ---------------------------------------------------------------------------
+
+
+def _install_aiofiles_stub() -> None:  # noqa: D401
+    """Install a very small stub for the *aiofiles* module."""
+
+    import sys as _sys, types as _types, asyncio as _asyncio
+
+    aiofiles_mod = _types.ModuleType("aiofiles")
+    aiofiles_open_mod = _types.ModuleType("aiofiles.open")
+
+    class _AsyncFile:  # noqa: D401
+        def __init__(self, filename: str, mode: str, encoding: str | None = None):
+            self._filename = filename
+            self._mode = mode
+            self._encoding = encoding or "utf-8"
+            self._fp = open(filename, mode, encoding=self._encoding)  # noqa: PTH123
+
+        async def __aenter__(self):  # noqa: D401
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # noqa: D401
+            self._fp.close()
+            return False
+
+        async def read(self):  # noqa: D401
+            loop = _asyncio.get_running_loop()
+            return await loop.run_in_executor(None, self._fp.read)
+
+    def _open(file, mode="r", *, encoding=None):  # noqa: D401
+        return _AsyncFile(file, mode, encoding)
+
+    aiofiles_mod.open = _open  # type: ignore[attr-defined]
+
+    _sys.modules["aiofiles"] = aiofiles_mod
+
+
+try:
+    import aiofiles  # type: ignore  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover – offline sandbox
+    _install_aiofiles_stub()
+
+# ---------------------------------------------------------------------------
+# Optional *numpy* stub – handful of operations for VectorStore fallback mode
+# ---------------------------------------------------------------------------
+
+
+def _install_numpy_stub() -> None:  # noqa: D401
+    """Install a *very* lightweight numpy replacement for tests."""
+
+    import sys as _sys, types as _types, math as _math, array as _array, json as _json
+
+    np = _types.ModuleType("numpy")
+
+    # dtype placeholders
+    class _float32(float):  # noqa: D401
+        pass
+
+    np.float32 = _float32  # type: ignore[attr-defined]
+
+    # ndarray replacement – we use Python list internally
+    class _ndarray(list):  # type: ignore
+        def astype(self, *_args, **_kwargs):  # noqa: D401
+            return self
+
+    np.ndarray = _ndarray  # type: ignore[attr-defined]
+
+    def _array(obj, dtype=None):  # noqa: D401
+        if isinstance(obj, _ndarray):
+            return obj
+        return _ndarray(obj)
+
+    np.array = _array  # type: ignore[attr-defined]
+
+    # vector functions ---------------------------------------------------
+    def _dot(a, b):  # noqa: D401
+        return sum(x * y for x, y in zip(a, b))
+
+    def _norm(vec):  # noqa: D401
+        return _math.sqrt(sum(x * x for x in vec))
+
+    np.dot = _dot  # type: ignore[attr-defined]
+
+    class _linalg_mod(_types.ModuleType):
+        pass
+
+    _linalg_mod.norm = _norm  # type: ignore
+    np.linalg = _linalg_mod("numpy.linalg")  # type: ignore[attr-defined]
+    np.linalg.norm = _norm  # type: ignore[attr-defined]
+
+    # expose json dumps to mimic tobytes() conversion for vector0 but simplify
+    def _tobytes(self):  # noqa: D401
+        # Represent float list as bytes string naive – sufficient placeholder
+        return _array.array("f", self).tobytes()
+
+    _ndarray.tobytes = _tobytes  # type: ignore[attr-defined]
+
+    _sys.modules["numpy"] = np
+
+
+try:
+    import numpy  # type: ignore  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover – offline sandbox
+    _install_numpy_stub()
+
+# ---------------------------------------------------------------------------
+# Optional *openai* stub – provides AsyncOpenAI/AsyncAzureOpenAI & error class
+# ---------------------------------------------------------------------------
+
+
+def _install_openai_stub() -> None:  # noqa: D401
+    """Register a minimalist stand-in for the *openai* Python SDK."""
+
+    import sys as _sys, types as _types, asyncio as _asyncio
+
+    openai_mod = _types.ModuleType("openai")
+
+    class RateLimitError(Exception):  # noqa: D401 – mimic SDK exception
+        pass
+
+    # Dummy async stream iterator ------------------------------------------------
+    class _EmptyStream:  # noqa: D401 – yields nothing
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):  # noqa: D401
+            raise StopAsyncIteration
+
+    class _FakeEmbedding:  # noqa: D401 – container for embedding list
+        def __init__(self):
+            self.embedding = []
+
+    class _FakeEmbeddingsResp:  # noqa: D401
+        def __init__(self):
+            self.data = [_FakeEmbedding()]
+
+    # Generic base client with sub managers ------------------------------------
+    class _BaseClient:  # noqa: D401 – minimal async interface
+        class _ChatMgr:  # noqa: D401
+            class _Completions:  # noqa: D401
+                async def create(self, *, stream: bool = False, **_):  # noqa: D401
+                    if stream:
+                        return _EmptyStream()
+                    return _types.SimpleNamespace(choices=[])
+
+            completions = _Completions()
+
+        class _Responses:  # noqa: D401
+            async def create(self, *, stream: bool = False, **_):  # noqa: D401
+                if stream:
+                    return _EmptyStream()
+                return _types.SimpleNamespace(output_text="")
+
+        class _Embeddings:  # noqa: D401
+            async def create(self, **_):  # noqa: D401
+                return _FakeEmbeddingsResp()
+
+        def __init__(self, *_, **__):  # noqa: D401
+            self.chat = self._ChatMgr()
+            self.responses = self._Responses()
+            self.embeddings = self._Embeddings()
+
+    AsyncOpenAI = _BaseClient  # type: ignore[attr-defined]
+    AsyncAzureOpenAI = _BaseClient  # type: ignore[attr-defined]
+
+    # Expose common sub-module *error* with RateLimitError inside
+    error_mod = _types.ModuleType("openai.error")
+    error_mod.RateLimitError = RateLimitError
+
+    openai_mod.AsyncOpenAI = AsyncOpenAI  # type: ignore[attr-defined]
+    openai_mod.AsyncAzureOpenAI = AsyncAzureOpenAI  # type: ignore[attr-defined]
+    openai_mod.RateLimitError = RateLimitError  # type: ignore[attr-defined]
+    openai_mod.error = error_mod  # type: ignore[attr-defined]
+
+    _sys.modules["openai"] = openai_mod
+    _sys.modules["openai.error"] = error_mod
+
+
+try:
+    import openai  # type: ignore  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover – offline sandbox
+    _install_openai_stub()
 

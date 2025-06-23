@@ -3,7 +3,18 @@
 Provides request/response models for project CRUD operations,
 timeline events, and filtering.
 """
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
+
+# ---------------------------------------------------------------------------
+# Compatibility shim – *pydantic* v1.x does not provide ``field_validator``
+# which was introduced in v2.  Older versions only have ``validator``.
+# Create an alias so that the same decorator name works in both versions.
+# ---------------------------------------------------------------------------
+
+try:
+    from pydantic import field_validator  # type: ignore
+except ImportError:  # pragma: no cover – running on Pydantic < 2
+    from pydantic import validator as field_validator  # type: ignore
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum

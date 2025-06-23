@@ -1,14 +1,19 @@
 """
 FastAPI application entry point with middleware and lifespan management.
 """
+# Standard library
 from contextlib import asynccontextmanager
 
+# Third-party
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import settings
-from .database import init_db
-from .utils.redis_client import close_redis
+# Local packages
+from app.config import settings
+from app.database import init_db
+from app.utils.redis_client import close_redis
+from app.middleware.correlation_id import CorrelationIdMiddleware
+from app.middleware.security import register_security_middleware
 from .routers import auth, projects, monitoring, config as config_router
 from .routers import code as code_router
 from .routers import email as email_router
@@ -52,7 +57,14 @@ app = FastAPI(
     ]
 )
 
-# Add CORS middleware
+# ---------------------------------------------------------------------------
+# Middleware stack
+#   1. CORS – must run first so that OPTIONS pre-flights are answered quickly.
+#   2. Correlation ID – attaches X-Request-ID header and contextvar.
+#   3. Security / SlowAPI – rate-limiting, security headers, CSRF.
+# ---------------------------------------------------------------------------
+
+# 1. CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list + [
@@ -64,6 +76,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 2. Correlation IDs (skip when explicitly disabled)
+if not settings.disable_correlation_id:
+    app.add_middleware(CorrelationIdMiddleware)
+
+# 3. Security headers & SlowAPI rate-limiter
+register_security_middleware(app)
 
 # Include routers
 app.include_router(auth.router)

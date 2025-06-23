@@ -77,7 +77,7 @@ RUN useradd -m -u 1000 appuser
 # Copy dependencies from builder
 COPY --from=builder /root/.local /home/appuser/.local
 # Copy pre-compiled tree-sitter bundle from builder
-COPY --from=builder /app/build /app/build
+COPY --from=builder --chown=appuser:appuser /app/build /app/build
 
 # Download and install SQLite VSS extension
 RUN mkdir -p /app/extensions && \

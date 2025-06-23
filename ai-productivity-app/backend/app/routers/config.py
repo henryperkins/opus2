@@ -67,7 +67,7 @@ class ModelConfigPayload(BaseModel):
     useResponsesApi: bool | None = Field(default=None, alias="useResponsesApi")
 
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
 
     @validator("provider")
     def _normalise_provider(cls, v):  # noqa: N805 – Pydantic validator name
