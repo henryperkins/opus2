@@ -231,9 +231,9 @@ async def rate_limit(
 
         count: int = await redis_client.eval(
             _LUA_SLIDING_WINDOW,
-            numkeys=1,
-            keys=[key],
-            args=[limit, window],
+            1,  # numkeys
+            key,  # keys
+            limit, window,  # args
         )
 
         if count > limit:

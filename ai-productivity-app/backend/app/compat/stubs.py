@@ -278,7 +278,7 @@ def _install_fastapi_stub():
                 status_code=status_code,
                 json=lambda: payload,
                 headers=resp_obj.headers,
-                cookies=resp_obj._cookies,
+                cookies=resp_obj.cookies,
             )
 
         def get(self, p, **kw):
