@@ -33,6 +33,22 @@ export default defineConfig({
     }),
   ],
 
+  // Ensure heavyweight libraries needed at runtime are eagerly pre-bundled so
+  // Vite’s dev server doesn’t need to stream them on-demand (which caused
+  // intermittent `ERR_CONNECTION_CLOSED` errors when the remote reverse proxy
+  // reset long-running connections).
+  optimizeDeps: {
+    include: [
+      'react-syntax-highlighter',
+      'react-syntax-highlighter/dist/esm/languages/prism/javascript',
+      'react-syntax-highlighter/dist/esm/languages/prism/typescript',
+      'react-syntax-highlighter/dist/esm/languages/prism/python',
+      'react-syntax-highlighter/dist/esm/languages/prism/markup',
+      'react-syntax-highlighter/dist/esm/languages/prism/json',
+      'react-syntax-highlighter/dist/esm/languages/prism/bash',
+    ],
+  },
+
   /**
    * Provide a stub for the optional `@sentry/react` dependency so that
    * production builds succeed even when the package is not installed.
@@ -76,6 +92,7 @@ export default defineConfig({
         target: backendTarget,
         changeOrigin: true,
         ws: true, // Enable WebSocket support for all /api routes including /api/chat/ws
+        // Don't rewrite path - backend expects /api prefix
       }
     }
   },

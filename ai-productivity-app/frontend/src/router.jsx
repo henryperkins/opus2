@@ -44,8 +44,22 @@ import { useRequireAuth } from './hooks/useAuth';
 
 function ProtectedRoute({ element }) {
   const { user, loading } = useRequireAuth();
-  if (loading) return null; // Could render a spinner
-  return user ? element : <Navigate to="/login" replace />;
+
+  // Handle loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Handle authentication
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return element;
 }
 
 // -----------------------------------------------------------------------------
@@ -118,9 +132,14 @@ export const router = createBrowserRouter(
     },
   ],
   {
+    basename: '/',
     future: {
       v7_startTransition: true,
       v7_normalizeFormMethod: true,
+      v7_fetcherPersist: true,
+      v7_relativeSplatPath: true,
+      v7_partialHydration: true,
+      v7_skipActionErrorRevalidation: true,
     },
   }
 );
@@ -132,6 +151,11 @@ export default function AppRouter() {
       router={router}
       future={{
         v7_startTransition: true,
+        v7_relativeSplatPath: true,
+        v7_fetcherPersist: true,
+        v7_normalizeFormMethod: true,
+        v7_partialHydration: true,
+        v7_skipActionErrorRevalidation: true,
       }}
     />
   );

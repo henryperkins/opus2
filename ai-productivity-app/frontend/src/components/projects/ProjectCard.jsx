@@ -1,10 +1,11 @@
 // ProjectCard.jsx: visual card with status, emoji, tags, and quick actions.
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Badge from '../common/Badge';
 
 export default function ProjectCard({ project, onClick }) {
+  const navigate = useNavigate();
   return (
     <div
       className="project-card card card-hover p-6 flex flex-col cursor-pointer animate-scale-in"
@@ -49,26 +50,30 @@ export default function ProjectCard({ project, onClick }) {
         </span>
         {/* Quick links */}
         <div className="flex items-center space-x-4">
-          <Link
-            to={`/projects/${project.id}/analytics`}
-            onClick={(e) => e.stopPropagation()}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/projects/${project.id}/analytics`);
+            }}
             title="Analytics"
             className="text-gray-500 hover:text-blue-600"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3v18M5 12h6m8-6H5m10 6h4" />
             </svg>
-          </Link>
-          <Link
-            to={`/projects/${project.id}/files`}
-            onClick={(e) => e.stopPropagation()}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/projects/${project.id}/files`);
+            }}
             title="Files"
             className="text-gray-500 hover:text-blue-600"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16V4a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2H6a2 2 0 01-2-2z" />
             </svg>
-          </Link>
+          </button>
           <div className={`w-2 h-2 rounded-full ${
             project.status === 'active' ? 'bg-green-400' :
             project.status === 'completed' ? 'bg-blue-400' : 'bg-gray-400'

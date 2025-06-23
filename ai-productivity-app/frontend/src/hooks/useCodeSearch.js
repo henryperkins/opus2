@@ -32,11 +32,13 @@ export function useCodeSearch(initialQuery = '', initialFilters = {}) {
   const debouncedQuery = useDebounce(query, 300);
   const enabled = debouncedQuery && debouncedQuery.length >= MIN_QUERY_LENGTH;
 
-  const { data, isFetching: loading, error } = useQuery(
-    ['codeSearch', { q: debouncedQuery, filters }],
-    searchCode,
-    { enabled, keepPreviousData: true, staleTime: 60 * 1000 }
-  );
+  const { data, isFetching: loading, error } = useQuery({
+    queryKey: ['codeSearch', { q: debouncedQuery, filters }],
+    queryFn: searchCode,
+    enabled,
+    keepPreviousData: true,
+    staleTime: 60 * 1000,
+  });
 
   const results = data?.results ?? [];
   const totalResults = data?.total ?? 0;

@@ -1,5 +1,5 @@
 // Code snippet display with syntax highlighting and line numbers
-import React, { memo, Suspense } from 'react';
+import React, { memo } from 'react';
 import PropTypes from 'prop-types';
 
 // Use a simple dark theme object instead of importing
@@ -38,11 +38,8 @@ const codeTheme = {
   },
 };
 
-const LazySyntaxHighlighter = React.lazy(() =>
-  import('react-syntax-highlighter').then(module => ({
-    default: module.Prism
-  }))
-);
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter/dist/cjs/prism';
+import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 
 const CodeSnippet = memo(({ content, language, startLine, highlightLines = [] }) => {
   // Limit preview to first 15 lines
@@ -60,33 +57,31 @@ const CodeSnippet = memo(({ content, language, startLine, highlightLines = [] })
           </span>
         </div>
 
-        <Suspense fallback={<pre className="p-4 text-sm bg-gray-800 text-white">{previewContent}</pre>}>
-          <LazySyntaxHighlighter
-            language={language}
-            style={prism}
-            showLineNumbers
-            startingLineNumber={startLine || 1}
-            wrapLines
-            lineProps={lineNumber => {
-              const isHighlighted = highlightLines.includes(lineNumber);
-              return {
-                style: {
-                  backgroundColor: isHighlighted ? '#364152' : 'transparent',
-                  display: 'block',
-                  width: '100%'
-                }
-              };
-            }}
-            customStyle={{
-              margin: 0,
-              padding: '1rem',
-              fontSize: '0.875rem',
-              lineHeight: '1.5'
-            }}
-          >
-            {previewContent}
-          </LazySyntaxHighlighter>
-        </Suspense>
+        <SyntaxHighlighter
+          language={language}
+          style={oneDark}
+          showLineNumbers
+          startingLineNumber={startLine || 1}
+          wrapLines
+          lineProps={lineNumber => {
+            const isHighlighted = highlightLines.includes(lineNumber);
+            return {
+              style: {
+                backgroundColor: isHighlighted ? '#364152' : 'transparent',
+                display: 'block',
+                width: '100%'
+              }
+            };
+          }}
+          customStyle={{
+            margin: 0,
+            padding: '1rem',
+            fontSize: '0.875rem',
+            lineHeight: '1.5'
+          }}
+        >
+          {previewContent}
+        </SyntaxHighlighter>
 
         {hasMore && (
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-gray-900 to-transparent h-8 flex items-end justify-center pb-1">

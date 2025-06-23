@@ -1,7 +1,6 @@
 /* global fetch, setInterval, clearInterval */
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import Header from '../components/common/Header';
 import { Link } from 'react-router-dom';
 
 function Dashboard() {
@@ -16,8 +15,8 @@ function Dashboard() {
         // Use absolute backend URL so that local development (without Vite
         // proxy) and Docker both work.  We fall back to localhost when the
         // VITE env variable is absent.
-        const base = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${base}/health/ready`, {
+        const base = import.meta.env.VITE_API_URL || (window.location.protocol === 'https:' ? '' : 'http://localhost:8000');
+        const response = await fetch(`${base}/api/health/ready`, {
           credentials: 'include',
         });
         if (!response.ok) throw new Error('API not responding');
@@ -45,7 +44,6 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen gradient-bg">
-      <Header />
 
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-8 animate-fade-in">

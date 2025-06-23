@@ -8,7 +8,6 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 // Components & hooks
-import Header from '../components/common/Header';
 import ProjectCard from '../components/projects/ProjectCard';
 import CreateProjectModal from '../components/projects/CreateProjectModal';
 import Timeline from '../components/projects/Timeline';
@@ -201,7 +200,6 @@ export default function ProjectDashboard() {
   // ---------------------------------------------------------------------------
   return (
     <div className="min-h-screen gradient-bg">
-      <Header />
 
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Page header with quick stats */}

@@ -39,15 +39,13 @@ export function useSearch(initialQuery = '', initialFilters = {}) {
     data,
     isFetching: loading,
     error,
-  } = useQuery(
-    ['search', { q: debouncedQuery, filters, types: searchTypes }],
-    searchFn,
-    {
-      enabled,
-      keepPreviousData: true,
-      staleTime: 60 * 1000,
-    }
-  );
+  } = useQuery({
+    queryKey: ['search', { q: debouncedQuery, filters, types: searchTypes }],
+    queryFn: searchFn,
+    enabled,
+    keepPreviousData: true,
+    staleTime: 60 * 1000,
+  });
 
   const results = data?.results ?? [];
   const totalResults = data?.total ?? 0;

@@ -18,6 +18,7 @@
     },
     "dependencies": {
         "@monaco-editor/react": "^4.7.0",
+        "@tanstack/react-query": "^5.81.2",
         "allotment": "^1.20.4",
         "axios": "^1.6.5",
         "d3": "^7.8.5",
@@ -32,23 +33,23 @@
         "react-dom": "^19.1.0",
         "react-hook-form": "^7.48.2",
         "react-markdown": "^10.1.0",
-        "react-router-dom": "^6.21.1",
+        "react-router-dom": "^7.6.2",
         "react-syntax-highlighter": "^15.6.1",
         "recharts": "^2.15.3",
         "rehype-katex": "^7.0.1",
         "remark-gfm": "^4.0.1",
         "remark-math": "^6.0.0",
         "swr": "^2.3.0",
-        "zustand": "^4.4.7",
-        "@tanstack/react-query": "^5.29.32"
+        "zustand": "^4.4.7"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.1.0",
+        "@tanstack/react-query-devtools": "^5.81.2",
         "@testing-library/jest-dom": "^6.6.3",
         "@testing-library/react": "^16.0.0",
         "@testing-library/user-event": "^14.5.2",
-        "@types/react": "^18.3.3",
-        "@types/react-dom": "^18.3.0",
+        "@types/react": "^19.1.8",
+        "@types/react-dom": "^19.1.6",
         "@vitejs/plugin-react": "^4.3.1",
         "eslint": "^8.56.0",
         "eslint-plugin-react": "^7.33.2",
@@ -56,15 +57,14 @@
         "eslint-plugin-react-refresh": "^0.4.5",
         "jsdom": "^24.1.0",
         "kill-port": "^2.0.1",
+        "mock-socket": "^9.1.7",
+        "msw": "^2.5.1",
         "rollup-plugin-visualizer": "^6.0.3",
         "tailwindcss": "^4.1.0",
         "vite": "^6.3.5",
         "vite-plugin-checker": "^0.7.2",
         "vite-plugin-svgr": "^4.2.0",
         "vite-tsconfig-paths": "^4.3.2",
-        "vitest": "^3.2.4",
-        "@tanstack/react-query-devtools": "^5.29.32",
-        "msw": "^2.5.1",
-        "mock-socket": "^9.1.7"
+        "vitest": "^3.2.4"
     }
 }

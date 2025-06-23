@@ -75,19 +75,17 @@ export function AuthProvider({ children }) {
     isError,
     error,
     refetch: refetchMe,
-  } = useQuery(
-    ['me'],
-    fetchMe,
-    {
-      // 5-minute cache, no retry on 4xx
-      staleTime: 5 * 60 * 1000,
-      retry: (attempt, error) => {
-        const status = error?.response?.status;
-        if (status && status >= 400 && status < 500) return false;
-        return attempt < 2;
-      },
-    }
-  );
+  } = useQuery({
+    queryKey: ['me'],
+    queryFn: fetchMe,
+    // 5-minute cache, no retry on 4xx
+    staleTime: 5 * 60 * 1000,
+    retry: (attempt, error) => {
+      const status = error?.response?.status;
+      if (status && status >= 400 && status < 500) return false;
+      return attempt < 2;
+    },
+  });
 
   // Listen for global logout events triggered by Axios interceptor
   React.useEffect(() => {

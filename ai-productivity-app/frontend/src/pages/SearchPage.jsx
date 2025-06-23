@@ -6,7 +6,6 @@ import SearchResults from '../components/search/SearchResults';
 import SearchFilters from '../components/search/SearchFilters';
 import DependencyGraph from '../components/knowledge/DependencyGraph';
 import useProjectStore from '../stores/projectStore';
-import Header from '../components/common/Header';
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -68,7 +67,6 @@ export default function SearchPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
 
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-8">

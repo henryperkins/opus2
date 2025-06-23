@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { timelineAPI } from "../api/timeline";
-import Header from "../components/common/Header";
 import TimelineEvent from "../components/projects/TimelineEvent";
 import { useAuth } from "../hooks/useAuth";
 
@@ -32,7 +31,6 @@ export default function TimelinePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
 
       <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Breadcrumb */}

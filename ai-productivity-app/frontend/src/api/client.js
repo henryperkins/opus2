@@ -38,7 +38,10 @@ import { queryClient } from '../queryClient.js';
 // NOTE: The baseURL is set to '/' (root) because:
 // 1. API calls will be made to relative paths like '/api/...'
 // 2. NGINX reverse proxy will route these to the backend
-// 3. This ensures consistent URL handling across dev/prod environments
+// 3. This ensures consistent URL handling across dev/prod environments.
+// Use the domain-relative root. Requests that specify an absolute path like
+// "/api/auth/me" inherit the current scheme and host (avoiding mixed-content)
+// without duplicating the prefix ("/api/api/…").
 const BASE_URL = '/';
 
 const client = axios.create({

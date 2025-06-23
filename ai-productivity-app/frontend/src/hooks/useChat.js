@@ -67,11 +67,12 @@ export function useChat(projectId, preferredSessionId = null) {
   const {
     data: messages = [],
     isFetching: historyLoading,
-  } = useQuery(
-    messagesKey(sessionId),
-    () => client.get(`/api/chat/sessions/${sessionId}/messages`).then((r) => r.data),
-    { enabled: !!sessionId, staleTime: 0 }
-  );
+  } = useQuery({
+    queryKey: messagesKey(sessionId),
+    queryFn: () => client.get(`/api/chat/sessions/${sessionId}/messages`).then((r) => r.data),
+    enabled: !!sessionId,
+    staleTime: 0,
+  });
 
   // ---------------------------------------------------
   // 3. Live WebSocket connection

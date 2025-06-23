@@ -6,7 +6,7 @@
 // as current filters & pagination because those are not remote-authoritative
 // data.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectAPI } from '../api/projects';
 
@@ -25,7 +25,9 @@ export function useProjects(filters) {
     data,
     isLoading: loading,
     error,
-  } = useQuery(projectsKey(filters), () => projectAPI.list(filters), {
+  } = useQuery({
+    queryKey: projectsKey(filters),
+    queryFn: () => projectAPI.list(filters),
     keepPreviousData: true,
     staleTime: 60 * 1000,
   });
@@ -49,7 +51,11 @@ export function useProject(id) {
     data: project,
     isLoading: loading,
     error,
-  } = useQuery(projectKey(id), () => projectAPI.get(id), { enabled: !!id });
+  } = useQuery({
+    queryKey: projectKey(id),
+    queryFn: () => projectAPI.get(id),
+    enabled: !!id,
+  });
 
   // Update
   const updateMutation = useMutation(
@@ -105,13 +111,16 @@ export function useProjectSearch(initialFilters = {}) {
     error,
   } = useProjects(filters);
 
-  // Imperative search function expected by Sidebar
-  const search = (updatedFilters = {}) => {
-    const merged = { ...filters, ...updatedFilters };
-    setFilters(merged);
-    // Force refetch with the newest filters
-    qc.invalidateQueries(projectsKey(merged));
-  };
+  // Imperative search function expected by Sidebar – memoised so that its
+  // reference stays *stable* across renders and does not inadvertently cause
+  // effects in consuming components to re-run.
+  const search = useCallback((updatedFilters = {}) => {
+    setFilters((prev) => {
+      const merged = { ...prev, ...updatedFilters };
+      qc.invalidateQueries(projectsKey(merged));
+      return merged;
+    });
+  }, [qc]);
 
   return {
     projects,
@@ -134,7 +143,9 @@ export function useProjectTimeline(projectId) {
     data: timeline = [],
     isFetching: loading,
     error,
-  } = useQuery(timelineKey(projectId), () => projectAPI.getTimeline(projectId), {
+  } = useQuery({
+    queryKey: timelineKey(projectId),
+    queryFn: () => projectAPI.getTimeline(projectId),
     enabled: !!projectId,
     staleTime: 30 * 1000,
   });

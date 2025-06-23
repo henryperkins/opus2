@@ -11,7 +11,7 @@
  *  • Collapsible sections
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { useAuth } from '../../hooks/useAuth';
@@ -45,58 +45,64 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
   const [isWhatsNewModalOpen, setWhatsNewModalOpen] = useState(false);
   const [isDocumentationModalOpen, setDocumentationModalOpen] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      // Search hook automatically fetches projects when needed
-      // Only manually trigger if no projects and not loading
-      if (projects.length === 0 && !projectsLoading) {
-        search();
-      }
-      loadRecentChats();
-      loadStarredItems();
-    }
-  }, [user, projects.length, projectsLoading, search]);
+  // ---------------------------------------------------------------------------
+  // Data loaders – wrapped in useCallback to keep references stable and avoid
+  // infinite re-render loops when they are used inside useEffect.
+  // ---------------------------------------------------------------------------
 
-  const loadRecentChats = async () => {
+  const loadRecentChats = useCallback(async () => {
     if (!user) return;
-    
+
     setLoadingRecentChats(true);
     setRecentChatsError(null);
-    
+
     try {
-      const response = await chatAPI.getSessionHistory({ 
-        limit: 5, 
+      const response = await chatAPI.getSessionHistory({
+        limit: 5,
         sort: 'updated_at',
-        order: 'desc' 
+        order: 'desc',
       });
-      
-      // Transform API response to match expected format
-      const formattedChats = response.data.items.map(session => ({
+
+      const formattedChats = response.data.items.map((session) => ({
         id: session.id,
         title: session.title || `Chat ${session.id}`,
         timestamp: new Date(session.updated_at),
         type: 'chat',
-        projectId: session.project_id
+        projectId: session.project_id,
       }));
-      
+
       setRecentChats(formattedChats);
     } catch (error) {
       console.error('Failed to load recent chats:', error);
       setRecentChatsError('Failed to load recent chats');
-      // Fallback to empty array instead of mock data
       setRecentChats([]);
     } finally {
       setLoadingRecentChats(false);
     }
-  };
+  }, [user]);
 
-  const loadStarredItems = () => {
-    // Mock starred items - in real app, fetch from API
+  const loadStarredItems = useCallback(() => {
     setStarredItems([
       { id: 1, title: 'React Best Practices', type: 'chat', url: '/chat/1' },
       { id: 2, title: 'AI Productivity App', type: 'project', url: '/projects/1' },
     ]);
-  };
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Initial data fetch (runs once when component mounts or when user changes)
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Trigger project search only if not already loaded
+    if (projects.length === 0 && !projectsLoading) {
+      search();
+    }
+
+    loadRecentChats();
+    loadStarredItems();
+  }, [user, projects.length, projectsLoading, search, loadRecentChats, loadStarredItems]);
 
   const toggleSection = (section) => {
     setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -576,9 +582,15 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
 };
 
 // PropTypes validation
+// Prop Types & Defaults
+Sidebar.defaultProps = {
+  onToggle: () => {},
+  className: '',
+};
+
 Sidebar.propTypes = {
-  onToggle: PropTypes.func.isRequired,
-  className: PropTypes.string
+  onToggle: PropTypes.func,
+  className: PropTypes.string,
 };
 
 

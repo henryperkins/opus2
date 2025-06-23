@@ -1,5 +1,4 @@
 import { Component } from 'react';
-import { Link } from 'react-router-dom';
 
 /**
  * A comprehensive error boundary that catches runtime errors and provides
@@ -243,12 +242,13 @@ class ErrorBoundary extends Component {
               </p>
             )}
 
-            <Link
-              to="/"
+            {/* Use a plain anchor tag because Router context may be unavailable */}
+            <a
+              href="/"
               className="inline-block mt-4 text-sm text-blue-600 hover:text-blue-800"
             >
               ← Back to Home
-            </Link>
+            </a>
 
             {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
               <details className="mt-6 text-left">
