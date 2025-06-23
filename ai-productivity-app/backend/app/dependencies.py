@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth.utils import get_current_user
 from app.models.user import User
+from app.config import settings
 
 ###############################################################################
 # Database session dependency
@@ -65,3 +66,42 @@ CurrentUserRequired = Annotated[User, Depends(_current_user_required)]
 def verify_api_key() -> None:  # noqa: D401
     """No-op for now – will check request headers for X-API-Key in future."""
     return None
+
+
+###############################################################################
+# CSRF protection (Phase 2 feature)
+###############################################################################
+
+# TODO: Uncomment and configure the following lines once CSRF protection is implemented.
+
+# from fastapi_csrf_protect import CsrfProtect
+#
+# csrf_protect = CsrfProtect()
+#
+# def verify_csrf_token(x_csrf_token: str = Header(...)):
+#     if not csrf_protect.validate_csrf_token(x_csrf_token):
+#         raise HTTPException(
+#             status_code=status.HTTP_403_FORBIDDEN,
+#             detail="Invalid or missing CSRF token",
+#         )
+
+
+###############################################################################
+# CSRF protection dependency
+###############################################################################
+
+
+def enforce_csrf(
+    csrf_token: str | None = Header(None, alias="X-CSRF-Token")
+) -> None:
+    """Enforce CSRF protection for state-changing endpoints."""
+    # For now, we'll implement a simple CSRF check
+    # In production, you'd want to implement proper CSRF token validation
+    if hasattr(settings, 'csrf_protection') and settings.csrf_protection:
+        csrf_secret = getattr(settings, 'csrf_secret', None)
+        if csrf_secret and csrf_token != csrf_secret:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="CSRF token missing or invalid",
+                headers={"X-Error-Code": "CSRF_FAILED"},
+            )

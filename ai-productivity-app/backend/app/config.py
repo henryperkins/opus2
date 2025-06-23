@@ -98,6 +98,8 @@ class Settings(BaseSettings):
 
     # Registration
     registration_enabled: bool = True
+    # Toggle invite-only mode
+    registration_invite_only: bool = False
     # By default registration is *open* and no invite-code is necessary.  The
     # test-suite for Phase 2 expects `POST /api/auth/register` to accept new
     # users without requiring an additional *invite_code* field.  Production
@@ -106,6 +108,10 @@ class Settings(BaseSettings):
     # list (e.g. "code1,code2").  When the variable is an *empty* string we
     # treat it as *invite disabled*.
     invite_codes: str = ""
+
+    # CSRF Protection
+    csrf_protection: bool = True
+    csrf_secret: Optional[str] = None
 
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000,https://lakefrontdigital.io"
@@ -163,6 +169,20 @@ class Settings(BaseSettings):
     # links in transactional emails (e.g. password-reset).  Defaults to
     # localhost dev-server.
     frontend_base_url: str = "http://localhost:5173"
+
+    # Upload configuration
+    upload_root: str = Field(
+        default="./data/uploads",
+        description="Root directory for file uploads"
+    )
+    upload_path_validation: str = Field(
+        default="strict",
+        description="Path validation mode: strict, warn, or disabled"
+    )
+    max_upload_size: int = Field(
+        default=10 * 1024 * 1024,  # 10MB
+        description="Maximum file upload size in bytes"
+    )
 
 
     @property

@@ -1,5 +1,5 @@
 """
-Authentication API router.
+Authentication API router with Redis-based rate limiting.
 
 Endpoints
 ---------
@@ -21,20 +21,25 @@ All endpoints follow guardrails defined in Phase 2:
 
 from typing import Annotated
 from datetime import timedelta
+import logging
 
 from fastapi import (
     APIRouter,
     Request,
     BackgroundTasks,
     Body,
+    Cookie,
     Depends,
     HTTPException,
-    Request,
     Response,
     status,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from app.utils.redis_client import rate_limit
+from app.utils.request_helpers import real_ip
+from app.dependencies import enforce_csrf
 
 from app.auth import security, utils
 from app.auth.schemas import (
@@ -53,6 +58,13 @@ from app.models.user import User
 # Re-use shared helpers to avoid duplication
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# ---------------------------------------------------------------------------
+# Configuration constants
+# ---------------------------------------------------------------------------
+AUTH_RATE_LIMIT = 5                     # attempts
+AUTH_RATE_WINDOW = 60                   # seconds
+ACCESS_TOKEN_TTL_MINUTES = 60 * 24      # 24 h
 
 ###############################################################################
 # Utility helpers
@@ -73,7 +85,7 @@ def _issue_token_and_cookie(
     # Configure cookie
     name, value, opts = security.build_auth_cookie(token)
     response.set_cookie(name, value, **opts)
-    return TokenResponse.from_ttl(token, settings.access_token_expire_minutes)
+    return TokenResponse.from_ttl(token, ACCESS_TOKEN_TTL_MINUTES)
 
 
 ###############################################################################
@@ -82,72 +94,87 @@ def _issue_token_and_cookie(
 
 
 @router.post(
-     "/register",
-     status_code=status.HTTP_201_CREATED,
-     response_model=TokenResponse,
+    "/register",
+    status_code=status.HTTP_201_CREATED,
+    response_model=TokenResponse,
 )
-# @security.limiter.limit(security.AUTH_ATTEMPT_LIMIT)  # Temporarily disabled for testing
-# The test-suite expects the registration endpoint to enforce a simple
-# *5 requests / minute* limit.  Instead of relying on the heavyweight *SlowAPI*
-# middleware (which pulls in `limits` and *Redis* dependencies) we piggy-back
-# on the lightweight helper inside ``app.auth.security``.
-
-
-def register(
+async def register(
     request: Request,
-    payload: Annotated[UserRegister, Body()],
     response: Response,
+    payload: UserRegister,
+    background_tasks: BackgroundTasks,
     db: DatabaseDep,
 ) -> TokenResponse:
-    """User registration. Returns token and sets cookie."""
-    # Rate-limit **per IP** to stay in line with the original SlowAPI behaviour.
-    client_ip = request.client.host if request.client else "unknown"
-    security.enforce_rate_limit(f"register:{client_ip}", limit=5, window=60)
-
-    # Enforce invite code if enabled
-    invite_codes = settings.invite_codes_list
-    invite_required = bool(invite_codes)
-    if invite_required:
-        provided_code = (payload.invite_code or "").strip()
-        if not provided_code:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invite code is required for registration."
-            )
-        if provided_code not in invite_codes:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid invite code."
-            )
-
-    user = User(
-        username=payload.username.lower(),
-        email=payload.email.lower(),
-        password_hash=security.hash_password(payload.password),
+    """User registration with distributed rate limiting."""
+    # Rate limit by IP address
+    client_ip = real_ip(request)
+    headers = await rate_limit(
+        key=f"register:{client_ip}",
+        limit=AUTH_RATE_LIMIT,
+        window=AUTH_RATE_WINDOW,
+        error_detail="Too many registration attempts. Please try again later."
     )
-    db.add(user)
-    try:
-        db.commit()
-    except IntegrityError as e:
-        db.rollback()
-        error_msg = str(e.orig) if hasattr(e, "orig") else str(e)
-        lower_msg = error_msg.lower()
-        # Tests assert that the error message contains the phrase "already
-        # exists" irrespective of whether the conflict is on the *username*
-        # or *email* field.
-        if "username" in lower_msg:
-            detail = "Username already exists"
-        elif "email" in lower_msg:
-            detail = "Email already exists"
-        else:
-            detail = "User already exists"
+    response.headers.update(headers)
 
+    # Validate invite code if required
+    invite_code = (payload.invite_code or "").strip()
+    if settings.registration_invite_only and not invite_code:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration requires an invite code",
+            headers={"X-Error-Code": "INVITE_REQUIRED"}
+        )
+
+    # Check username/email uniqueness
+    existing = db.query(User).filter(
+        or_(
+            User.username == payload.username.lower(),
+            User.email == payload.email.lower()
+        )
+    ).first()
+
+    if existing:
+        if existing.username == payload.username.lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username already taken",
+                headers={"X-Error-Code": "USERNAME_EXISTS"}
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already registered",
+                headers={"X-Error-Code": "EMAIL_EXISTS"}
+            )
+
+    try:
+        # Create user
+        user = utils.create_user(
+            db,
+            username=payload.username,
+            email=payload.email,
+            password=payload.password
+        )
+
+        # Send welcome email asynchronously
+        if not settings.debug:
+            background_tasks.add_task(
+                utils.send_welcome_email,
+                user.email,
+                user.username
+            )
+
+        # Issue token and set cookie
+        return _issue_token_and_cookie(response, db, user)
+
+    except IntegrityError:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"{detail}.",
-        ) from None
+            detail="Registration failed due to conflict",
+            headers={"X-Error-Code": "REGISTRATION_CONFLICT"}
+        )
 
-    return _issue_token_and_cookie(response, db, user)
 
 
 ###############################################################################
@@ -155,31 +182,40 @@ def register(
 ###############################################################################
 
 
-@router.post(
-     "/login",
-     response_model=TokenResponse,
-)
-# @security.limiter.limit(security.AUTH_ATTEMPT_LIMIT)  # Temporarily disabled for testing
-# noqa: D401,E501
-
-
-def login(
+@router.post("/login", response_model=TokenResponse)
+async def login(
     request: Request,
-    payload: Annotated[UserLogin, Body()],
     response: Response,
+    payload: UserLogin,
     db: DatabaseDep,
 ) -> TokenResponse:
-    """Authenticate user credentials, return JWT cookie."""
-    # Rate-limit failed **and** successful attempts to curb brute-force.
-    client_ip = request.client.host if request.client else "unknown"
-    security.enforce_rate_limit(f"login:{client_ip}", limit=5, window=60)
+    """User login with enhanced error codes and rate limiting."""
+    # Distributed rate limiting by IP
+    client_ip = real_ip(request)
+    headers = await rate_limit(
+        key=f"login:{client_ip}",
+        limit=AUTH_RATE_LIMIT,
+        window=AUTH_RATE_WINDOW,
+        error_detail="Too many login attempts. Please try again later."
+    )
+    response.headers.update(headers)
 
+    # Also rate limit by username/email to prevent targeted attacks
+    account_headers = await rate_limit(
+        key=f"login:account:{payload.username_or_email.lower()}",
+        limit=AUTH_RATE_LIMIT * 2,  # Slightly more lenient per-account
+        window=AUTH_RATE_WINDOW * 5,  # Longer window for account-specific
+        error_detail="Too many login attempts for this account."
+    )
+    response.headers.update(account_headers)
+
+    # Verify credentials
     user = utils.verify_credentials(
         db, payload.username_or_email.lower(), payload.password
     )
+
     if not user:
-        # Check if user exists to give more specific feedback
-        from sqlalchemy import or_
+        # Check if user exists to provide better error codes
         existing_user = db.query(User).filter(
             or_(
                 User.username == payload.username_or_email.lower(),
@@ -191,24 +227,24 @@ def login(
             if not existing_user.is_active:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Account is inactive. Please contact support."
+                    detail="Account is inactive. Please contact support.",
+                    headers={"X-Error-Code": "INACTIVE_ACCOUNT"}
                 )
             else:
-                # Keep error generic to prevent account enumeration and to
-                # satisfy the automated test-suite which expects the phrase
-                # "Invalid credentials" for *any* credential failure.
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid credentials",
+                    headers={"X-Error-Code": "BAD_CREDENTIALS"}
                 )
         else:
-            # Same generic message for non-existent accounts to avoid
-            # revealing whether a user exists.
+            # Same error as bad password to prevent enumeration
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
+                headers={"X-Error-Code": "BAD_CREDENTIALS"}
             )
 
+    # Issue token and cookie
     return _issue_token_and_cookie(response, db, user)
 
 
@@ -216,12 +252,12 @@ def login(
 # Logout
 ###############################################################################
 
-@router.post("/logout")
+@router.post("/logout", dependencies=[Depends(enforce_csrf)])
 def logout(
     request: Request,
     response: Response,
     db: DatabaseDep,
-    access_cookie: str = None,
+    access_cookie: Annotated[str | None, Cookie(alias="access_token")] = None,
 ) -> None:
     """Revoke session (DB) and clear auth cookie."""
     # Extract token from cookie or header (same as get_current_user)
@@ -254,7 +290,7 @@ def logout(
         expires=0,
         path="/",
         httponly=True,
-        samesite="lax",
+        samesite="strict",
     )
     # Workaround for httpx TestClient: ensure empty cookie visible in response.cookies
     response.headers.append("Set-Cookie", "access_token=; Path=/")
@@ -275,8 +311,6 @@ def me(current_user: CurrentUserRequired) -> UserResponse:
     # that authentication worked as expected.  Keep the log-level *INFO*
     # so that messages appear in the default Uvicorn configuration.
     # ------------------------------------------------------------------
-
-    import logging
 
     logger = logging.getLogger(__name__)
     logger.info("/api/auth/me – user_id=%s username=%s", current_user.id, current_user.username)
@@ -355,8 +389,6 @@ def _send_reset_email(email: str, token: str) -> None:  # placeholder
     lightweight logger statement.  Production deployments should replace this
     stub with the real integration (SendGrid, SES, Mailgun…).
     """
-    import logging
-
     logger = logging.getLogger(__name__)
     reset_url = f"{settings.frontend_base_url or 'http://localhost:5173'}/reset/{token}"
     logger.info("Password reset requested for %s – link: %s", email, reset_url)
@@ -365,6 +397,7 @@ def _send_reset_email(email: str, token: str) -> None:  # placeholder
 @router.post(
     "/reset-password",
     status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(enforce_csrf)],
     include_in_schema=False,  # deprecated but kept for backward-compat
 )
 # NOTE: Alias kept for the public API that the new frontend consumes.
@@ -372,15 +405,27 @@ def _send_reset_email(email: str, token: str) -> None:  # placeholder
 #       Both routes execute the same handler to simplify maintenance.
 
 # Public route preferred going forward
-@router.post("/reset-request", status_code=status.HTTP_202_ACCEPTED)
-def request_password_reset(
+@router.post(
+    "/reset-request",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(enforce_csrf)]
+)
+async def request_password_reset(
     payload: Annotated[PasswordResetRequest, Body()],
     background: BackgroundTasks,
+    response: Response,
 ) -> dict[str, str]:
     """
     Step 1: User requests a reset link/token.
     For our small-team scenario, we simply log the token rather than emailing.
     """
+    headers = await rate_limit(
+        key=f"pwreset:{payload.email.lower()}",
+        limit=AUTH_RATE_LIMIT,
+        window=AUTH_RATE_WINDOW * 10,  # 10-minute window
+    )
+    response.headers.update(headers)
+
     # Stateless token: JWT with purpose=reset
     token = security.create_access_token(
         {"sub": payload.email.lower(), "purpose": "reset"},
@@ -388,13 +433,17 @@ def request_password_reset(
         expires_delta=timedelta(minutes=30),
     )
     background.add_task(_send_reset_email, payload.email, token)
-    return {"detail": "Password-reset instructions sent if the address exists."}
+    return {"detail": "Password-reset instructions sent if address exists."}
 
 
 # Legacy path (hidden in docs)
-@router.post("/reset-password/submit", include_in_schema=False)
+@router.post(
+    "/reset-password/submit",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)]
+)
 # New spec-compliant path consumed by the frontend
-@router.post("/reset")
+@router.post("/reset", dependencies=[Depends(enforce_csrf)])
 def submit_password_reset(
     payload: Annotated[PasswordResetSubmit, Body()],
     db: DatabaseDep,

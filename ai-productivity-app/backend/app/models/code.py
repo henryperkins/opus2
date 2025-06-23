@@ -4,12 +4,24 @@
 Tracks code files, their parsed AST symbols, and embedding chunks for
 semantic search capabilities.
 """
-from sqlalchemy import Column, Integer, String, Text, JSON, ForeignKey, Boolean, DateTime, Float, Index
+from pathlib import Path, PurePosixPath
+import re
+from sqlalchemy import (
+    Column, Integer, String, Text, JSON, ForeignKey, Boolean, DateTime
+)
 from sqlalchemy.orm import relationship, validates
 from sqlalchemy.ext.mutable import MutableList
+
+from app.config import settings
+from app.schemas.errors import ValidationErrorCode, validation_error_response
 from .base import Base, TimestampMixin
-import hashlib
-from datetime import datetime
+from .project import Project
+
+# Define upload root from settings
+UPLOAD_ROOT = Path(
+    settings.upload_root if hasattr(settings, 'upload_root')
+    else './data/uploads'
+).resolve()
 
 
 class CodeDocument(Base, TimestampMixin):
@@ -88,18 +100,79 @@ class CodeDocument(Base, TimestampMixin):
     embeddings = relationship(
         "CodeEmbedding",
         back_populates="document",
-    cascade="all, delete-orphan",
+        cascade="all, delete-orphan",
     )
 
     @validates("file_path")
     def validate_file_path(self, key, file_path):
-        """Validate file path."""
+        """Validate file path against directory traversal and other attacks."""
         if not file_path or len(file_path.strip()) == 0:
-            raise ValueError("File path cannot be empty")
+            raise validation_error_response(
+                code=ValidationErrorCode.FIELD_REQUIRED,
+                field="file_path",
+                message="File path cannot be empty."
+            )
+
         if len(file_path) > 500:
-            raise ValueError("File path cannot exceed 500 characters")
-        # Normalize path separators
-        return file_path.replace('\\', '/')
+            raise validation_error_response(
+                code=ValidationErrorCode.FIELD_TOO_LONG,
+                field="file_path",
+                message="File path cannot exceed 500 characters."
+            )
+
+        # Block Windows drive letters
+        if re.match(r'^[A-Za-z]:', file_path):
+            raise validation_error_response(
+                code=ValidationErrorCode.PATH_NOT_ALLOWED,
+                field="file_path",
+                message="Windows drive letters are not permitted."
+            )
+
+        # Normalize to POSIX path
+        normalized_path = PurePosixPath(file_path).as_posix()
+
+        # Check for any parent directory references
+        if '..' in normalized_path:
+            raise validation_error_response(
+                code=ValidationErrorCode.PATH_NOT_ALLOWED,
+                field="file_path",
+                message="Parent directory references ('..') are not allowed."
+            )
+
+        # Additional checks for encoded traversal attempts
+        dangerous_patterns = [
+            '..%2F', '..%2f',  # URL encoded forward slash
+            '..%5C', '..%5c',  # URL encoded backslash
+            '%2e%2e',          # URL encoded dots
+            '..\\',            # Windows style
+            '\\..',            # Reverse Windows style
+            '.../',            # Triple dot attempts
+        ]
+
+        for pattern in dangerous_patterns:
+            if pattern in file_path:
+                raise validation_error_response(
+                    code=ValidationErrorCode.PATH_NOT_ALLOWED,
+                    field="file_path",
+                    message=f"Encoded traversal pattern ('{pattern}') detected.",
+                )
+
+        # Resolve full path and ensure it's within upload root
+        try:
+            full_path = (UPLOAD_ROOT / normalized_path).resolve()
+            if not str(full_path).startswith(str(UPLOAD_ROOT)):
+                raise validation_error_response(
+                    code=ValidationErrorCode.PATH_NOT_ALLOWED,
+                    field="file_path",
+                    message="Path escapes the upload directory."
+                )
+        except Exception:
+            raise validation_error_response(
+                code=ValidationErrorCode.PATH_NOT_ALLOWED,
+                field="file_path",
+                message="Invalid path resolution."
+            )
+        return normalized_path
 
     @validates("language")
     def validate_language(self, key, language):
@@ -108,13 +181,19 @@ class CodeDocument(Base, TimestampMixin):
         # but we still want to keep the label so we can enable processing
         # later.  Only python / javascript / typescript are currently parsed
         # by the CodeParser; others are ignored during background processing.
-        supported = {'python', 'javascript', 'typescript', 'jsx', 'tsx', 'markdown', 'json', 'yaml', None}
+        supported = {
+            'python', 'javascript', 'typescript', 'jsx', 'tsx',
+            'markdown', 'json', 'yaml', None
+        }
         if language and language not in supported:
             raise ValueError(f"Unsupported language: {language}")
         return language
 
     def __repr__(self):
-        return f"<CodeDocument(id={self.id}, path='{self.file_path}', language={self.language})>"
+        return (
+            f"<CodeDocument(id={self.id}, path='{self.file_path}', "
+            f"language={self.language})>"
+        )
 
 
 class CodeEmbedding(Base, TimestampMixin):
@@ -197,11 +276,13 @@ class CodeEmbedding(Base, TimestampMixin):
         return content
 
     def __repr__(self):
-        return f"<CodeEmbedding(id={self.id}, symbol='{self.symbol_name}', lines={self.start_line}-{self.end_line})>"
+        return (
+            f"<CodeEmbedding(id={self.id}, symbol='{self.symbol_name}', "
+            f"lines={self.start_line}-{self.end_line})>"
+        )
 
 
 # Update Project model relationship
-from .project import Project
 Project.code_documents = relationship(
     "CodeDocument",
     back_populates="project",

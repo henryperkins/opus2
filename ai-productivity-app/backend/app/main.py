@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .database import init_db
+from .utils.redis_client import close_redis
 from .routers import auth, projects, monitoring, config as config_router
 from .routers import code as code_router
 from .routers import email as email_router
@@ -33,7 +34,7 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
     init_db()
     yield
     # Shutdown
-    # Perform any necessary cleanup here
+    await close_redis()  # Close Redis connection pool
 
 
 # Create FastAPI application
