@@ -27,6 +27,24 @@ export default [
     },
     rules: {
       ...js.configs.recommended.rules,
+      // Disallow raw axios usage in components to enforce API layer and hooks
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'axios',
+              message: 'Use frontend/src/api/client.js or React-query hooks instead of importing axios directly.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['../api/*', './api/*'],
+              message: 'Components should call hooks, not API modules directly.',
+            },
+          ],
+        },
+      ],
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'warn',
       'react-hooks/rules-of-hooks': 'error',

@@ -37,6 +37,13 @@ The following are implementation-verified single sources of truth. All contribut
 
 ### Frontend SSOTs
 
+- **Global Data Fetching & Caching (NEW)**
+  - **React-Query `QueryClient` singleton** in [`frontend/src/queryClient.js`](frontend/src/queryClient.js):
+    - Central source of truth for *all* remote data the browser knows about.
+    - Provides caching, optimistic updates, de-duplication and refetch orchestration.
+    - Components and hooks **must** obtain server data through
+      `useQuery / useMutation` bound to this client – never via ad-hoc `axios` calls.
+
 - **Project State Management**
   - [`useProjectStore`](frontend/src/stores/projectStore.js) in [`frontend/src/stores/projectStore.js`](frontend/src/stores/projectStore.js):
     - Manages all canonical project data, filters, pagination, and state updates using Zustand.
@@ -45,17 +52,22 @@ The following are implementation-verified single sources of truth. All contribut
 
 - **Authentication & User Preferences**
   - Dual-layer auth management:
-    - [`AuthContext`](frontend/src/contexts/AuthContext.jsx): Runtime user session state, login/logout operations
-    - [`useAuthStore`](frontend/src/stores/authStore.js): Persistent user preferences using Zustand with persistence middleware
-  - All auth state changes must flow through these mechanisms.
+    - [`AuthContext`](frontend/src/contexts/AuthContext.jsx): Runtime user session state, login/logout operations **powered by React-Query** (`useQuery(['me'])`).
+    - [`useAuthStore`](frontend/src/stores/authStore.js): Persists lightweight user preferences (theme, last-login etc.) using Zustand.
+  - `AuthContext` must mutate the `['me']` cache key on login/logout so that every open tab receives up-to-date user state.  Do **not** bypass this path.
 
 - **Project Interaction Hooks**
   - Custom hooks in [`frontend/src/hooks/useProjects.js`](frontend/src/hooks/useProjects.js):
     - `useProject()`: Single project management
     - `useProjectSearch()`: Search and filtering
     - `useProjectTimeline()`: Timeline event management
-  - Chat interaction hooks in [`frontend/src/hooks/useChat.js`](frontend/src/hooks/useChat.js)
+  - Chat interaction hooks in [`frontend/src/hooks/useChat.js`](frontend/src/hooks/useChat.js) – built on
+    [`useWebSocketChannel`](frontend/src/hooks/useWebSocketChannel.js) for resilient real-time updates.
+  - Search / Knowledge hooks [`useSearch`](frontend/src/hooks/useSearch.js), [`useCodeSearch`](frontend/src/hooks/useCodeSearch.js),
+    [`useKnowledgeContext`](frontend/src/hooks/useKnowledgeContext.js) all fetch via React-Query.
   - Auth hooks in [`frontend/src/hooks/useAuth.js`](frontend/src/hooks/useAuth.js): `useAuth()`, `useUser()`, `useRequireAuth()`
+
+_Legacy SWR has been fully removed as of 2025-W22._
 
 ### Global/Platform SSOTs
 

@@ -1,4 +1,5 @@
 // React application entry point
+import './sentry';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AuthProvider } from './contexts/AuthContext';
@@ -8,16 +9,24 @@ import { ToastContainer } from './components/common/Toast';
 import './styles/globals.css';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
+// React-Query
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './queryClient';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+
 // Mount React app
 ReactDOM.createRoot(document.getElementById('root')).render(
   // <React.StrictMode>
     <ErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <AppRouter />
-          <ToastContainer />
-        </AuthProvider>
-      </ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <AuthProvider>
+            <AppRouter />
+            <ToastContainer />
+          </AuthProvider>
+          {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+        </ThemeProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   // </React.StrictMode>
 );

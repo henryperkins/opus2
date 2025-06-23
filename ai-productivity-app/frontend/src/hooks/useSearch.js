@@ -1,111 +1,98 @@
-// frontend/src/hooks/useSearch.js
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { searchAPI } from '../api/search';
+// useSearch.js – React-Query powered global search hook
+// -----------------------------------------------------
+// Provides debounced, cached search results with support for query + filter
+// parameters.  Replaces the previous SWR/axios implementation.
+
+import { useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDebounce } from './useDebounce';
+import { searchAPI } from '../api/search';
+
+const MIN_QUERY_LENGTH = 2;
+
+function searchFn({ queryKey }) {
+  const [_key, { q, filters, types }] = queryKey;
+  return searchAPI.search({
+    query: q,
+    project_ids: filters.projectIds,
+    filters: {
+      language: filters.language,
+      file_type: filters.fileType,
+      symbol_type: filters.symbolType,
+      tags: filters.tags,
+    },
+    limit: filters.limit || 20,
+    search_types: types,
+  });
+}
 
 export function useSearch(initialQuery = '', initialFilters = {}) {
-    const [query, setQuery] = useState(initialQuery);
-    const [filters, setFilters] = useState(initialFilters);
-    const [results, setResults] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [totalResults, setTotalResults] = useState(0);
-    const [searchTypes, setSearchTypes] = useState(['hybrid']);
+  const [query, setQuery] = useState(initialQuery);
+  const [filters, setFilters] = useState(initialFilters);
+  const [searchTypes, setSearchTypes] = useState(['hybrid']);
 
-    const debouncedQuery = useDebounce(query, 300);
-    const abortControllerRef = useRef();
+  const debouncedQuery = useDebounce(query, 300);
 
-    const search = useCallback(async (searchQuery, searchFilters, types) => {
-        // Abort previous request
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-        }
+  const enabled = debouncedQuery && debouncedQuery.length >= MIN_QUERY_LENGTH;
 
-        if (!searchQuery || searchQuery.length < 2) {
-            setResults([]);
-            setTotalResults(0);
-            return;
-        }
+  const {
+    data,
+    isFetching: loading,
+    error,
+  } = useQuery(
+    ['search', { q: debouncedQuery, filters, types: searchTypes }],
+    searchFn,
+    {
+      enabled,
+      keepPreviousData: true,
+      staleTime: 60 * 1000,
+    }
+  );
 
-        setLoading(true);
-        setError(null);
+  const results = data?.results ?? [];
+  const totalResults = data?.total ?? 0;
 
-        // Create new abort controller
-        abortControllerRef.current = new AbortController();
+  // Helpers
+  const updateQuery = (q) => setQuery(q);
+  const updateFilters = (f) => setFilters((prev) => ({ ...prev, ...f }));
+  const updateSearchTypes = (types) => setSearchTypes(types);
 
-        try {
-            const response = await searchAPI.search({
-                query: searchQuery,
-                project_ids: searchFilters.projectIds,
-                filters: {
-                    language: searchFilters.language,
-                    file_type: searchFilters.fileType,
-                    symbol_type: searchFilters.symbolType,
-                    tags: searchFilters.tags
-                },
-                limit: searchFilters.limit || 20,
-                search_types: types
-            });
+  const clearSearch = () => {
+    setQuery('');
+    setFilters({});
+    const qc = useQueryClient();
+    qc.removeQueries({ queryKey: ['search'] });
+  };
 
-            setResults(response.results);
-            setTotalResults(response.total);
-            setSearchTypes(response.search_types);
-        } catch (err) {
-            if (err.name !== 'AbortError') {
-                setError(err.response?.data?.detail || 'Search failed');
-                setResults([]);
-            }
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+  const indexDocument = async (documentId, options) => {
+    const res = await searchAPI.indexDocument(documentId, options);
+    return res;
+  };
 
-    useEffect(() => {
-        search(debouncedQuery, filters, searchTypes);
-    }, [debouncedQuery, filters, searchTypes, search]);
-
-    const updateQuery = useCallback((newQuery) => {
-        setQuery(newQuery);
-    }, []);
-
-    const updateFilters = useCallback((newFilters) => {
-        setFilters(prev => ({ ...prev, ...newFilters }));
-    }, []);
-
-    const updateSearchTypes = useCallback((types) => {
-        setSearchTypes(types);
-    }, []);
-
-    const clearSearch = useCallback(() => {
-        setQuery('');
-        setFilters({});
-        setResults([]);
-        setTotalResults(0);
-        setError(null);
-    }, []);
-
-    const indexDocument = useCallback(async (documentId, options) => {
-        try {
-            const response = await searchAPI.indexDocument(documentId, options);
-            return response;
-        } catch (err) {
-            throw new Error(err.response?.data?.detail || 'Indexing failed');
-        }
-    }, []);
-
-    return {
-        query,
-        filters,
-        results,
-        loading,
-        error,
-        totalResults,
-        searchTypes,
-        updateQuery,
-        updateFilters,
-        updateSearchTypes,
-        clearSearch,
-        search: () => search(query, filters, searchTypes),
-        indexDocument
-    };
+  return useMemo(
+    () => ({
+      query,
+      filters,
+      results,
+      loading,
+      error,
+      totalResults,
+      searchTypes,
+      updateQuery,
+      updateFilters,
+      updateSearchTypes,
+      clearSearch,
+      search: () => {}, // no-op; React-Query handles automatic fetch
+      indexDocument,
+    }),
+    [
+      query,
+      filters,
+      results,
+      loading,
+      error,
+      totalResults,
+      searchTypes,
+    ]
+  );
 }

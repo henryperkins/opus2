@@ -25,13 +25,27 @@ export default defineConfig({
     tailwindcss(),
     tsconfigPaths(),
     svgr(),
-    splitVendorChunkPlugin(),                // automatic vendor splitter
+    splitVendorChunkPlugin(), // automatic vendor splitter
     visualizer({
       filename: 'stats.html',
       template: 'treemap',
       gzipSize: true,
     }),
   ],
+
+  /**
+   * Provide a stub for the optional `@sentry/react` dependency so that
+   * production builds succeed even when the package is not installed.
+   *
+   * The real SDK is only required when a Sentry DSN is supplied; for all other
+   * environments we alias it to a tiny no-op implementation (see
+   * `src/sentryStub.js`).
+   */
+  resolve: {
+    alias: {
+      '@sentry/react': '/src/sentryStub.js',
+    },
+  },
 
   // Base URL for production
   base: '/',

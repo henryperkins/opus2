@@ -1,80 +1,66 @@
-// Custom hook for code search functionality with caching and state management
-import { useState, useEffect, useCallback } from 'react';
+// useCodeSearch.js – Code-aware search hook built on React-Query
+// -------------------------------------------------------------
+// Very similar to generic `useSearch`, but enforces a longer minimum query
+// length (3) and omits hybrid/semantic toggling.
+
+import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { searchAPI } from '../api/search';
 import { useDebounce } from './useDebounce';
 
+const MIN_QUERY_LENGTH = 3;
+
+function searchCode({ queryKey }) {
+  const [_key, { q, filters }] = queryKey;
+  return searchAPI.search({
+    query: q,
+    project_ids: filters.projectIds,
+    filters: {
+      language: filters.language,
+      file_type: filters.fileType,
+      symbol_type: filters.symbolType,
+    },
+    limit: filters.limit || 20,
+    search_types: ['code'],
+  });
+}
+
 export function useCodeSearch(initialQuery = '', initialFilters = {}) {
-    const [query, setQuery] = useState(initialQuery);
-    const [filters, setFilters] = useState(initialFilters);
-    const [results, setResults] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [totalResults, setTotalResults] = useState(0);
+  const [query, setQuery] = useState(initialQuery);
+  const [filters, setFilters] = useState(initialFilters);
 
-    const debouncedQuery = useDebounce(query, 300);
+  const debouncedQuery = useDebounce(query, 300);
+  const enabled = debouncedQuery && debouncedQuery.length >= MIN_QUERY_LENGTH;
 
-    const search = useCallback(async (searchQuery, searchFilters) => {
-        if (!searchQuery || searchQuery.length < 3) {
-            setResults([]);
-            setTotalResults(0);
-            return;
-        }
+  const { data, isFetching: loading, error } = useQuery(
+    ['codeSearch', { q: debouncedQuery, filters }],
+    searchCode,
+    { enabled, keepPreviousData: true, staleTime: 60 * 1000 }
+  );
 
-        setLoading(true);
-        setError(null);
+  const results = data?.results ?? [];
+  const totalResults = data?.total ?? 0;
 
-        try {
-            const response = await searchAPI.search({
-                query: searchQuery,
-                project_ids: searchFilters.projectIds,
-                filters: {
-                    language: searchFilters.language,
-                    file_type: searchFilters.fileType,
-                    symbol_type: searchFilters.symbolType
-                },
-                limit: searchFilters.limit || 20
-            });
+  const updateQuery = (q) => setQuery(q);
+  const updateFilters = (f) => setFilters((prev) => ({ ...prev, ...f }));
 
-            setResults(response.results);
-            setTotalResults(response.total);
-        } catch (err) {
-            setError(err.response?.data?.detail || 'Search failed');
-            setResults([]);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+  const clearSearch = () => {
+    setQuery('');
+    setFilters({});
+  };
 
-    useEffect(() => {
-        search(debouncedQuery, filters);
-    }, [debouncedQuery, filters, search]);
-
-    const updateQuery = useCallback((newQuery) => {
-        setQuery(newQuery);
-    }, []);
-
-    const updateFilters = useCallback((newFilters) => {
-        setFilters(prev => ({ ...prev, ...newFilters }));
-    }, []);
-
-    const clearSearch = useCallback(() => {
-        setQuery('');
-        setFilters({});
-        setResults([]);
-        setTotalResults(0);
-        setError(null);
-    }, []);
-
-    return {
-        query,
-        filters,
-        results,
-        loading,
-        error,
-        totalResults,
-        updateQuery,
-        updateFilters,
-        clearSearch,
-        search: () => search(query, filters)
-    };
+  return useMemo(
+    () => ({
+      query,
+      filters,
+      results,
+      loading,
+      error,
+      totalResults,
+      updateQuery,
+      updateFilters,
+      clearSearch,
+    }),
+    [query, filters, results, loading, error, totalResults]
+  );
 }

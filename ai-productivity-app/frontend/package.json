@@ -13,7 +13,7 @@
         "test:run": "vitest run",
         "test:coverage": "vitest run --coverage",
         "lint": "eslint src --max-warnings 0",
-        "test:ci": "npm run lint && vitest run --coverage",
+        "test:ci": "npm run lint && vitest run --coverage --coverage.v8 --coverage.threshold=60",
         "serve": "vite preview --port 4173 --host"
     },
     "dependencies": {
@@ -38,7 +38,9 @@
         "rehype-katex": "^7.0.1",
         "remark-gfm": "^4.0.1",
         "remark-math": "^6.0.0",
-        "zustand": "^4.4.7"
+        "swr": "^2.3.0",
+        "zustand": "^4.4.7",
+        "@tanstack/react-query": "^5.29.32"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.1.0",
@@ -60,6 +62,9 @@
         "vite-plugin-checker": "^0.7.2",
         "vite-plugin-svgr": "^4.2.0",
         "vite-tsconfig-paths": "^4.3.2",
-        "vitest": "^3.2.4"
+        "vitest": "^3.2.4",
+        "@tanstack/react-query-devtools": "^5.29.32",
+        "msw": "^2.5.1",
+        "mock-socket": "^9.1.7"
     }
 }

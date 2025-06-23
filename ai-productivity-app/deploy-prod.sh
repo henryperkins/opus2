@@ -4,19 +4,109 @@
 # Frontend: Built static files for server NGINX
 # Backend: Docker container
 
-set -e
+set -euo pipefail
 
-# Configuration - adjust these paths for your server setup
-WEB_ROOT="${WEB_ROOT:-/var/www/html}"
+# ------------------------------------------------------------
+# Determine repository root and change into it so relative
+# paths (frontend/, docker-compose.prod.yml, etc.) work no
+# matter where the script is invoked from.
+# ------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+
+# ------------------------------------------------------------
+# Load environment variables from .env if present so that
+# deployment-specific settings can live alongside application
+# configuration.  We export everything to make sure the rest
+# of the script (and docker compose) can reference them.
+# ------------------------------------------------------------
+if [[ -f .env ]]; then
+  echo "🔑 Loading variables from .env"
+  # shellcheck disable=SC1091
+  set -o allexport
+  source .env
+  set +o allexport
+fi
+
+# ------------------------------------------------------------
+# Configuration with sane defaults that can be overriden via
+# environment variables or the .env file loaded above.
+# ------------------------------------------------------------
+
+# Destination directory for the built SPA (static files).  Must be
+# writable by the current user when DEPLOY_TO_WEB_ROOT=true.
+WEB_ROOT="${WEB_ROOT:-${DEPLOY_WEB_ROOT:-/var/www/html}}"
+
+# Flag – when "true" the built artefacts are copied into $WEB_ROOT.
+DEPLOY_TO_WEB_ROOT="${DEPLOY_TO_WEB_ROOT:-false}"
+
+# Nginx server-block path that should be patched + reloaded.
+# Try to auto-detect a vhost that contains our server_name when the user
+# hasn't configured one via env vars.
+
+detect_nginx_config() {
+  local search_dir="$1"
+  local host="$2"
+  # The grep may return no matches which exits with status 1; that's fine –
+  # we ignore the exit code and return an empty string so that the caller can
+  # decide how to proceed.
+  grep -Rsl "server_name[[:space:]].*${host}" "$search_dir" 2>/dev/null || true |\
+    head -n 1 || true
+}
+
+# 1) honour explicit env var, 2) auto-detect, 3) fallback default path
+
+if [[ -n "${NGINX_CONFIG:-}" ]]; then
+  : # use value from env / .env
+else
+  CANDIDATE=$(detect_nginx_config /etc/nginx/sites-enabled "lakefrontdigital.io")
+  [[ -z "$CANDIDATE" ]] && CANDIDATE=$(detect_nginx_config /etc/nginx/sites-available "lakefrontdigital.io")
+  NGINX_CONFIG="${CANDIDATE:-/etc/nginx/sites-enabled/lakefrontdigital.io.conf}"
+fi
+
+# ------------------------------------------------------------
+# Determine WEB_ROOT automatically when still set to default
+# ------------------------------------------------------------
+
+if [[ "$WEB_ROOT" == "/var/www/html" && -f "$NGINX_CONFIG" ]]; then
+  # try to read the first 'root' directive inside the matching server block
+  DETECTED_ROOT=$(awk '/server_name[[:space:]].*lakefrontdigital.io/{f=1} f && /root[[:space:]].*;/{print $2; exit}' "$NGINX_CONFIG" | tr -d ';')
+  if [[ -n "$DETECTED_ROOT" ]]; then
+    WEB_ROOT="$DETECTED_ROOT"
+  fi
+fi
+
+# Backup directory for previous web-root contents (optional).
 BACKUP_DIR="${BACKUP_DIR:-/tmp/ai-app-backup-$(date +%Y%m%d-%H%M%S)}"
 
 echo "🚀 Building production version..."
 
 # Build frontend static files
 echo "📦 Building frontend static files..."
-cd frontend
-npm run build
-cd ..
+# Attempt to build locally first because it's quicker when the environment
+# supports child_process spawn.  If that fails (e.g. EPERM in restricted
+# sandboxes) we fall back to a disposable Docker container so the build still
+# succeeds automatically.
+
+build_frontend() {
+  echo "🔧 Running local npm build (frontend/)"
+  (cd frontend && npm ci --silent && npm run build)
+}
+
+if build_frontend; then
+  echo "✅ Frontend built locally"
+else
+  echo "⚠️  Local build failed – falling back to Dockerised node builder"
+  docker run --rm \
+    -v "$(pwd)/frontend":/app \
+    -w /app \
+    node:20-alpine \
+    sh -ec "npm ci --silent && npm run build" || {
+      echo "❌ Frontend build failed inside Docker as well. Aborting deployment" >&2
+      exit 1
+    }
+  echo "✅ Frontend built inside Docker"
+fi
 echo "✅ Frontend built successfully"
 
 # Stop any running backend containers
@@ -88,8 +178,6 @@ if docker compose -f docker-compose.prod.yml ps | grep -q "Up"; then
 
     # Switch nginx to production mode
     echo "🔧 Configuring NGINX for production..."
-    NGINX_CONFIG="/etc/nginx/sites-enabled/lakefrontdigital.io.conf"
-    
     if [[ -f "$NGINX_CONFIG" ]]; then
         # Create backup of current nginx config
         sudo cp "$NGINX_CONFIG" "${NGINX_CONFIG}.backup.$(date +%Y%m%d-%H%M%S)"

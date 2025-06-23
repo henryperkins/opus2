@@ -7,7 +7,7 @@ import { configAPI } from '../../api/config';
 import { toast } from '../common/Toast';
 import client from '../../api/client';
 import { defaultChatSettings, validateChatSettings } from '../../config/chat-settings';
-import { modelPresets, modelInfo } from '../../utils/modelConfigs';
+import { modelPresets, modelInfo } from '../../utils/modelConfigs.jsx';
 
 
 

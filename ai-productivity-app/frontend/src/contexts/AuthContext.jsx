@@ -11,16 +11,14 @@
 import React, {
   createContext,
   useContext,
-  useEffect,
   useState,
   useCallback,
 } from 'react';
 import PropTypes from 'prop-types';
 import client from '../api/client';
 import useAuthStore from '../stores/authStore';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-// Suppress duplicate /api/auth/me during StrictMode double-mount
-let didFetchMeOnce = false;
 
 // -----------------------------------------------------------------------------
 // Types
@@ -50,162 +48,119 @@ export const AuthContext = AuthContextInstance;
 // -----------------------------------------------------------------------------
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [initialCheckDone, setInitialCheckDone] = useState(false);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-
   const { startSession, endSession } = useAuthStore();
+  const queryClient = useQueryClient();
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Fetch the currently authenticated user from the backend.
-   *
-   * The `force` flag bypasses the single-run guard that avoids the duplicate
-   * request caused by React 18 Strict-Mode double mounting.  This allows us to
-   * re-fetch the user *after* a successful login / registration while still
-   * skipping the unnecessary extra request that happens on the initial mount.
-   */
-  const fetchMe = useCallback(async (force = false) => {
-    // Prevent duplicate requests across Strict-Mode double mounting by relying
-    // on a module-level flag that survives unmounts.  Skip only when we have
-    // already fetched once *and* the caller didn't explicitly request a fresh
-    // fetch (e.g. right after login / registration).
-    if (didFetchMeOnce && !force) {
-      // Restore settled state without hitting the network.
-      setLoading(false);
-      setInitialCheckDone(true);
-      return;
-    }
-
+  // -----------------------------------------------------------
+  // Query: fetch current user ("me")
+  // -----------------------------------------------------------
+  const fetchMe = React.useCallback(async () => {
     try {
       const { data } = await client.get('/api/auth/me');
-      setUser(data);
-    } catch (error) {
-      // Non-auth failures deserve logging; 401/403 are expected when not logged in
-      if (error.response?.status !== 401 && error.response?.status !== 403) {
-        // eslint-disable-next-line no-console
-        console.warn('Auth check failed:', error);
+      return data;
+    } catch (e) {
+      const status = e?.response?.status;
+      if (status === 401 || status === 403) {
+        // Guest user – treat as non-fatal, just return null so downstream code
+        // can decide whether to redirect to /login.
+        return null;
       }
-      setUser(null);
-    } finally {
-      setLoading(false);
-      setInitialCheckDone(true);
-      didFetchMeOnce = true;
+      throw e;
     }
   }, []);
 
-  // Run exactly once on mount
-  useEffect(() => {
-    if (!initialCheckDone) {
-      fetchMe();
+  const {
+    data: user,
+    isInitialLoading,
+    isError,
+    error,
+    refetch: refetchMe,
+  } = useQuery(
+    ['me'],
+    fetchMe,
+    {
+      // 5-minute cache, no retry on 4xx
+      staleTime: 5 * 60 * 1000,
+      retry: (attempt, error) => {
+        const status = error?.response?.status;
+        if (status && status >= 400 && status < 500) return false;
+        return attempt < 2;
+      },
     }
-  }, [fetchMe, initialCheckDone]);
+  );
 
-  // Listen for global logout events triggered by axios interceptor
-  useEffect(() => {
+  // Listen for global logout events triggered by Axios interceptor
+  React.useEffect(() => {
     const handler = () => {
-      setUser(null);
-      setLoading(false);
-      // Keep initialCheckDone = true so we do not automatically refetch
+      queryClient.setQueryData(['me'], null);
     };
     window.addEventListener('auth:logout', handler);
     return () => window.removeEventListener('auth:logout', handler);
-  }, []);
+  }, [queryClient]);
 
-  // ---------------------------------------------------------------------------
-  // Auth API
-  // ---------------------------------------------------------------------------
+  // -----------------------------------------------------------
+  // Auth actions
+  // -----------------------------------------------------------
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const login = useCallback(
     async (username_or_email, password) => {
       if (isAuthenticating) {
-        // Prevent spamming login endpoint (e.g. double-click)
         throw new Error('Authentication already in progress');
       }
-
       setIsAuthenticating(true);
-      setLoading(true);
-
       try {
-        await client.post('/api/auth/login', {
-          username_or_email,
-          password,
-        });
+        await client.post('/api/auth/login', { username_or_email, password });
 
-      // Slight delay to ensure the HttpOnly cookie is set before /me request
-      // Declare the delay as a named constant to satisfy strict lint rules
-      const AUTH_COOKIE_DELAY_MS = 100;
-      await new Promise((resolve) => setTimeout(resolve, AUTH_COOKIE_DELAY_MS));
+        // ensure cookie persisted before /me
+        await new Promise((r) => setTimeout(r, 120));
 
-        await fetchMe(true);
-
-        // Persist last-login metadata in zustand store
+        await refetchMe();
         startSession(username_or_email);
       } finally {
         setIsAuthenticating(false);
-        setLoading(false);
       }
     },
-    [fetchMe, startSession, isAuthenticating]
+    [isAuthenticating, refetchMe, startSession]
   );
 
   const logout = useCallback(async () => {
-    setLoading(true);
     try {
       await client.post('/api/auth/logout');
     } finally {
-      setUser(null);
       endSession();
-      setLoading(false);
-      // Keep initialCheckDone = true so we do not refetch automatically
+      queryClient.setQueryData(['me'], null);
     }
-  }, [endSession]);
+  }, [endSession, queryClient]);
 
-  const refresh = (force = false) => fetchMe(force);
+  const refresh = useCallback(() => refetchMe(), [refetchMe]);
 
-  /**
-   * Update the authenticated user's profile (username / email / password).
-   * Performs an **optimistic UI** update by immediately merging the changes
-   * into the `user` state while the request is in-flight.  If the backend
-   * rejects the update we roll back to the previous state so the UI remains
-   * consistent.
-   *
-   * @param {Partial<User>} changes
-   * @returns {Promise<void>}
-   */
   const updateProfile = useCallback(
     async (changes) => {
-      if (!user) {
-        throw new Error('Not authenticated');
-      }
-
-      // Store previous snapshot for rollback in case of failure
-      const prev = { ...user };
-
-      // Apply optimistic update – only merge provided keys
-      const optimisticallyUpdated = { ...user, ...changes };
-      setUser(optimisticallyUpdated);
+      const prev = user;
+      queryClient.setQueryData(['me'], { ...user, ...changes });
 
       try {
         const { data } = await client.patch('/api/auth/me', changes);
-        setUser(data);
+        queryClient.setQueryData(['me'], data);
       } catch (err) {
-        // Rollback and re-throw so callers can display the error
-        setUser(prev);
+        queryClient.setQueryData(['me'], prev);
         throw err;
       }
     },
-    [user]
+    [user, queryClient]
   );
 
-  const value = { user, loading, login, logout, refresh, updateProfile };
+  const value = {
+    user,
+    loading: isInitialLoading,
+    login,
+    logout,
+    refresh,
+    updateProfile,
+  };
 
-  // Prevent app from rendering until initial auth check is complete. You can replace this spinner with your preferred loading global UI.
-  if (!initialCheckDone || loading) {
+  if (isInitialLoading) {
     return (
       <div
         style={{
@@ -213,13 +168,21 @@ export function AuthProvider({ children }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#f8fafc'
+          background: '#f8fafc',
         }}
       >
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mr-3"></div>
-        <span style={{ fontSize: 24, color: '#3b82f6', letterSpacing: 2 }}>Checking authentication…</span>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mr-3" />
+        <span style={{ fontSize: 24, color: '#3b82f6', letterSpacing: 2 }}>
+          Checking authentication…
+        </span>
       </div>
     );
+  }
+
+  // Surface severe backend errors (non-401) early – still render app so
+  // ErrorBoundary higher up can handle.
+  if (isError && error?.response?.status >= 500) {
+    throw error;
   }
 
   return (

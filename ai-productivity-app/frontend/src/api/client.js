@@ -12,6 +12,7 @@
 // Subsequent commits will add AuthContext, hooks, components, tests.
 
 import axios from 'axios';
+import { queryClient } from '../queryClient.js';
 
 // -----------------------------------------------------------------------------
 // Configuration
@@ -127,7 +128,10 @@ client.interceptors.response.use(
 
     // Handle auth errors globally
     if (response && response.status === 401) {
-      // Clear local user state and redirect to login (AuthContext will listen)
+      // Clear React-Query cache for user immediately (race-free) and emit event
+      if (queryClient) {
+        queryClient.setQueryData(['me'], null);
+      }
       window.dispatchEvent(new CustomEvent('auth:logout'));
     }
 
