@@ -29,16 +29,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Dynamic in-memory runtime configuration
+# Persistent runtime configuration
 # ---------------------------------------------------------------------------
-# We keep a **single** global dict that represents the *current* chat model
-# configuration.  This is sufficient for development and unit-tests because
-# the application usually runs as a single Python process.  Production
-# deployments that run multiple gunicorn / uvicorn workers should replace this
-# with a persistent store (PostgreSQL, Redis, …).  The implementation is kept
-# deliberately simple so that we do not introduce additional dependencies.
+# Configuration is now stored persistently in the database via RuntimeConfig model
+# and managed through ConfigService. This replaces the in-memory _RUNTIME_CONFIG
+# approach for production deployments.
 
+from typing import Any
 from pydantic import BaseModel, Field, NonNegativeInt, confloat, validator
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.services.config_service import ConfigService
 
 
 class ModelConfigPayload(BaseModel):
@@ -79,14 +81,34 @@ class ModelConfigPayload(BaseModel):
         return v
 
 
-# Default configuration – bootstrapped from environment variables so the
-# behaviour is identical to the previous *static* implementation.
-
-_RUNTIME_CONFIG: dict[str, str] = {
+# Legacy in-memory config for backward compatibility and fallback
+# This will be gradually phased out in favor of database storage
+_RUNTIME_CONFIG: dict[str, Any] = {
     "provider": settings.llm_provider,
     "chat_model": settings.llm_default_model or settings.llm_model,
     "useResponsesApi": False,
 }
+
+def get_config_service(db: Session = Depends(get_db)) -> ConfigService:
+    """Dependency to get ConfigService instance."""
+    return ConfigService(db)
+
+def get_current_config(config_service: ConfigService) -> dict[str, Any]:
+    """Get current configuration from database, falling back to in-memory config."""
+    try:
+        db_config = config_service.get_all_config()
+        if db_config:
+            # Merge database config with fallback values
+            current_config = _RUNTIME_CONFIG.copy()
+            current_config.update(db_config)
+            return current_config
+        else:
+            # Initialize database with current in-memory config if empty
+            config_service.initialize_default_config()
+            return config_service.get_all_config()
+    except Exception as e:
+        logger.warning(f"Failed to load config from database, using in-memory fallback: {e}")
+        return _RUNTIME_CONFIG
 
 
 # ---------------------------------------------------------------------------
@@ -137,9 +159,12 @@ _AZURE_CHAT_MODELS = [
 
 
 @router.get("", summary="Return supported LLM providers and models")
-async def get_config():  # noqa: D401
+async def get_config(config_service: ConfigService = Depends(get_config_service)):  # noqa: D401
     """Return a JSON object with provider → model mapping."""
     logger.info("/api/config requested – returning model catalogue")
+    
+    # Get current configuration from database
+    current_config = get_current_config(config_service)
 
     return {
         "providers": {
@@ -177,9 +202,15 @@ async def get_config():  # noqa: D401
         # Expose the **currently** configured defaults so the UI can mark
         # them as selected.
         "current": {
-            "provider": _RUNTIME_CONFIG["provider"],
-            "chat_model": _RUNTIME_CONFIG["chat_model"],
-            "useResponsesApi": _RUNTIME_CONFIG.get("useResponsesApi", False),
+            "provider": current_config.get("provider"),
+            "chat_model": current_config.get("chat_model"),
+            "useResponsesApi": current_config.get("useResponsesApi", False),
+            "temperature": current_config.get("temperature", 0.7),
+            "maxTokens": current_config.get("maxTokens"),
+            "topP": current_config.get("topP"),
+            "frequencyPenalty": current_config.get("frequencyPenalty"),
+            "presencePenalty": current_config.get("presencePenalty"),
+            "systemPrompt": current_config.get("systemPrompt"),
         },
     }
 
@@ -190,8 +221,11 @@ async def get_config():  # noqa: D401
 
 
 @router.put("/model", summary="Update *current* chat model configuration")
-async def update_model_config(payload: ModelConfigPayload):  # noqa: D401
-    """Persist the provided configuration in memory and return the full config."""
+async def update_model_config(
+    payload: ModelConfigPayload, 
+    config_service: ConfigService = Depends(get_config_service)
+):  # noqa: D401
+    """Persist the provided configuration to database and return the full config."""
 
     # Update only the provided fields to keep previously configured values.
     # We want *internal* field names here (``chat_model`` instead of ``model``)
@@ -199,29 +233,160 @@ async def update_model_config(payload: ModelConfigPayload):  # noqa: D401
     if not update_data:
         raise HTTPException(status_code=400, detail="No configuration provided")
 
-    _RUNTIME_CONFIG.update(update_data)
+    try:
+        # Update database configuration
+        config_service.set_multiple_config(update_data, updated_by="api_user")
+        
+        # Also update in-memory config for backward compatibility
+        _RUNTIME_CONFIG.update(update_data)
 
-    logger.info("/api/config/model – runtime configuration updated: %s", update_data)
+        # Trigger LLM client reconfiguration if provider or model changed
+        if "provider" in update_data or "chat_model" in update_data or "useResponsesApi" in update_data:
+            try:
+                from app.llm.client import llm_client
+                await llm_client.reconfigure(
+                    provider=update_data.get("provider"),
+                    model=update_data.get("chat_model"),
+                    use_responses_api=update_data.get("useResponsesApi")
+                )
+                logger.info("LLM client reconfigured successfully")
+            except Exception as e:
+                logger.warning("Failed to reconfigure LLM client: %s", e)
+                # Don't fail the config update if reconfiguration fails
 
-    return {
-        "success": True,
-        "message": "Model configuration updated",
-        "current": _RUNTIME_CONFIG,
-    }
+        logger.info("/api/config/model – runtime configuration updated: %s", update_data)
+
+        # Get updated configuration to return
+        current_config = get_current_config(config_service)
+        
+        # Broadcast configuration update to all WebSocket connections
+        try:
+            from app.websocket.manager import connection_manager
+            await connection_manager.broadcast_config_update(current_config)
+            logger.info("Configuration update broadcasted to WebSocket clients")
+        except Exception as e:
+            logger.warning("Failed to broadcast config update via WebSocket: %s", e)
+        
+        return {
+            "success": True,
+            "message": "Model configuration updated",
+            "current": current_config,
+        }
+        
+    except Exception as e:
+        logger.error("Failed to update model configuration: %s", e)
+        raise HTTPException(status_code=500, detail=f"Configuration update failed: {str(e)}")
 
 
 @router.post("/test", summary="Validate that the supplied configuration works")
-async def test_model_config(payload: ModelConfigPayload):  # noqa: D401
-    """Trivial test endpoint – would call the LLM provider in production."""
-
-    # The *test* simply echos back the payload and returns success=True so the
-    # frontend perceives the configuration as valid.  Extend this with a real
-    # provider API call once credentials are available in the environment.
-
-    _ = payload  # silence linter – variable kept for future use
-
-    return {
-        "success": True,
-        "message": "Configuration is syntactically valid",
-        "latency": 0.0,
-    }
+async def test_model_config(
+    payload: ModelConfigPayload,
+    config_service: ConfigService = Depends(get_config_service)
+):  # noqa: D401
+    """Test the provided configuration by making an actual API call."""
+    
+    import time
+    import asyncio
+    from app.llm.client import LLMClient
+    
+    start_time = time.time()
+    
+    try:
+        # Create a temporary LLM client with the test configuration
+        test_client = LLMClient()
+        
+        # Configure the test client with provided parameters
+        test_provider = payload.provider or "openai"
+        test_model = payload.chat_model or "gpt-3.5-turbo"
+        test_temperature = payload.temperature or 0.7
+        test_max_tokens = payload.maxTokens or 50  # Small limit for testing
+        
+        # Reconfigure for testing
+        await test_client.reconfigure(
+            provider=test_provider,
+            model=test_model,
+            use_responses_api=payload.useResponsesApi or False
+        )
+        
+        # Test with a simple prompt
+        test_messages = [
+            {"role": "system", "content": "You are a helpful assistant. Respond briefly."},
+            {"role": "user", "content": "Say 'test successful' if you can read this."}
+        ]
+        
+        # Make the API call with timeout
+        try:
+            response = await asyncio.wait_for(
+                test_client.complete(
+                    messages=test_messages,
+                    temperature=test_temperature,
+                    max_tokens=test_max_tokens,
+                    stream=False
+                ),
+                timeout=30.0  # 30 second timeout
+            )
+            
+            # Extract response content
+            if hasattr(response, "choices") and response.choices:
+                response_text = response.choices[0].message.content.strip()
+                success = "test" in response_text.lower()
+            else:
+                # Fallback for stub/mock responses
+                response_text = str(response)
+                success = True
+            
+            latency = time.time() - start_time
+            
+            return {
+                "success": success,
+                "message": "Model configuration test completed successfully" if success else "Model responded but test phrase not found",
+                "latency": round(latency, 3),
+                "response_preview": response_text[:100] + ("..." if len(response_text) > 100 else ""),
+                "provider": test_provider,
+                "model": test_model,
+                "configuration": {
+                    "temperature": test_temperature,
+                    "max_tokens": test_max_tokens,
+                    "use_responses_api": payload.useResponsesApi or False
+                }
+            }
+            
+        except asyncio.TimeoutError:
+            return {
+                "success": False,
+                "message": "Model test timed out after 30 seconds",
+                "latency": 30.0,
+                "error_type": "timeout",
+                "provider": test_provider,
+                "model": test_model
+            }
+            
+    except Exception as e:
+        latency = time.time() - start_time
+        error_message = str(e)
+        
+        # Categorize common errors
+        if "api_key" in error_message.lower() or "unauthorized" in error_message.lower():
+            error_type = "authentication"
+            friendly_message = "Authentication failed - check your API key configuration"
+        elif "not found" in error_message.lower() or "invalid" in error_message.lower():
+            error_type = "invalid_model"
+            friendly_message = f"Invalid model or configuration: {test_model}"
+        elif "timeout" in error_message.lower() or "connection" in error_message.lower():
+            error_type = "connection"
+            friendly_message = "Connection failed - check network and endpoint configuration"
+        else:
+            error_type = "unknown"
+            friendly_message = f"Test failed: {error_message}"
+        
+        logger.warning("Model configuration test failed: %s", error_message)
+        
+        return {
+            "success": False,
+            "message": friendly_message,
+            "latency": round(latency, 3),
+            "error_type": error_type,
+            "error_details": error_message,
+            "provider": payload.provider or "unknown",
+            "model": payload.chat_model or "unknown"
+        }

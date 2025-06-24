@@ -60,9 +60,15 @@ export function ThemeProvider({ children }) {
   );
 
   // Convenience toggle ---------------------------------------------------------
+  // Note: our `setTheme` helper expects the **next theme value**, not a
+  // function updater.  Passing a function previously resulted in the guard
+  // clause (`newTheme !== 'light' && newTheme !== 'dark'`) short-circuiting
+  // the update, so the toggle never actually changed the theme.  Compute the
+  // next theme explicitly instead.
   const toggleTheme = useCallback(() => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
-  }, [setTheme]);
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+  }, [theme, setTheme]);
 
   // Apply theme at mount & whenever it changes --------------------------------
   useEffect(() => {

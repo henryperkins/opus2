@@ -10,6 +10,7 @@ from .search_history import SearchHistory
 from .import_job import ImportJob, ImportStatus
 from .chat import ChatSession, ChatMessage
 from .timeline import TimelineEvent
+from .config import RuntimeConfig, ConfigHistory
 
 __all__ = [
     "Base",
@@ -26,6 +27,8 @@ __all__ = [
     "ChatSession",
     "ChatMessage",
     "TimelineEvent",
+    "RuntimeConfig",
+    "ConfigHistory",
 ]
 
 # ---------------------------------------------------------------------------

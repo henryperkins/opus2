@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import client from '../api/client';
 import { useAuth } from './useAuth';
 import { useWebSocketChannel } from './useWebSocketChannel';
+import { useConfig } from './useConfig';
 
 // -----------------------
 // Helpers & keys
@@ -21,6 +22,7 @@ const messagesKey = (sessionId) => ['messages', sessionId];
 // -----------------------
 export function useChat(projectId, preferredSessionId = null) {
   const { user, loading: authLoading } = useAuth();
+  const { config } = useConfig();
   const qc = useQueryClient();
 
   const [typingUsers, setTypingUsers] = useState(new Set());
@@ -128,6 +130,9 @@ export function useChat(projectId, preferredSessionId = null) {
           case 'message_delete':
             qc.setQueryData(messagesKey(sessionId), (prev = []) => prev.filter((m) => m.id !== data.message_id));
             break;
+          case 'config_update':
+            window.dispatchEvent(new CustomEvent('configUpdate', { detail: data }));
+            break;
           default:
         }
       } catch (e) {
@@ -220,6 +225,7 @@ export function useChat(projectId, preferredSessionId = null) {
       editMutation.mutateAsync,
       deleteMutation.mutateAsync,
       sendTypingIndicator,
+      config,
     ]
   );
 }

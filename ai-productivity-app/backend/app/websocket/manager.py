@@ -86,6 +86,20 @@ class ConnectionManager:
     def get_session_users(self, session_id: int) -> int:
         """Get count of users in session."""
         return len(self.active_connections.get(session_id, []))
+    
+    async def broadcast_config_update(self, config_data: dict):
+        """Broadcast configuration updates to all active connections."""
+        message = {
+            'type': 'config_update',
+            'config': config_data,
+            'timestamp': asyncio.get_event_loop().time()
+        }
+        
+        logger.info("Broadcasting config update to all sessions: %s", config_data)
+        
+        # Send to all active sessions
+        for session_id in list(self.active_connections.keys()):
+            await self.send_message(message, session_id)
 
 
 # Global instance

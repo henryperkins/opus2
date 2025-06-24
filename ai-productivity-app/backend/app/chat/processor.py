@@ -173,13 +173,17 @@ When referencing code, mention the file path and line numbers."""
         streaming_handler = StreamingHandler(websocket)
 
         try:
+            # Get runtime configuration for parameters
+            runtime_config = llm_client._get_runtime_config()
+            
             # First non-stream call – we need body to inspect potential tool calls
             response = await llm_client.complete(
                 messages=messages,
-                temperature=0.7,
+                temperature=runtime_config.get("temperature"),  # Use runtime config
                 stream=False,
                 tools=llm_tools.TOOL_SCHEMAS,
                 reasoning=settings.enable_reasoning,
+                max_tokens=runtime_config.get("maxTokens"),  # Use runtime config
             )
 
             # Loop while model wants to call tools – guard against empty
@@ -204,8 +208,9 @@ When referencing code, mention the file path and line numbers."""
                 # ask LLM to continue with new context
                 response = await llm_client.complete(
                     messages=messages,
-                    temperature=0.7,
+                    temperature=runtime_config.get("temperature"),  # Use runtime config
                     stream=False,
+                    max_tokens=runtime_config.get("maxTokens"),  # Use runtime config
                 )
 
             # final assistant content
@@ -290,13 +295,16 @@ When referencing code, mention the file path and line numbers."""
 
 Focus on the main topics discussed and any key outcomes."""
 
+        # Get runtime configuration for summary generation
+        runtime_config = llm_client._get_runtime_config()
+        
         response = await llm_client.complete(
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.5,
-            max_tokens=100
+            temperature=0.5,  # Keep lower temperature for summaries
+            max_tokens=100  # Keep specific limit for summaries
         )
 
         return response

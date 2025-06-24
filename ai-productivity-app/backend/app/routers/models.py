@@ -1,10 +1,14 @@
 """
 Models API router for model configuration and switching.
+
+NOTE: This router is being phased out in favor of the unified config system.
+The endpoints here redirect to or integrate with /api/config endpoints to
+avoid duplication and ensure consistency.
 """
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -18,8 +22,20 @@ from ..schemas.models import (
     ModelConfigResponse,
     ModelResponse
 )
+from ..services.config_service import ConfigService
 
 router = APIRouter(prefix="/api/v1/models", tags=["models"])
+
+# Deprecation warning for old endpoints
+DEPRECATION_WARNING = {
+    "warning": "This endpoint is deprecated. Please use /api/config endpoints instead.",
+    "migration_guide": {
+        "GET /api/v1/models/available": "GET /api/config",
+        "POST /api/v1/models/switch": "PUT /api/config/model",
+        "GET /api/v1/models/config/{model_id}": "GET /api/config",
+        "PUT /api/v1/models/config/{model_id}": "PUT /api/config/model"
+    }
+}
 
 
 @router.get("/available")
@@ -28,67 +44,19 @@ async def get_available_models(
     performance_tier: Optional[str] = None,
     db: Session = Depends(get_db)
 ) -> ModelResponse:
-    """Get list of available models."""
-    try:
-        # Mock available models
-        mock_models = [
-            ModelInfo(
-                id="gpt-4",
-                name="GPT-4",
-                provider="openai",
-                description="Most capable GPT model",
-                max_tokens=4096,
-                context_window=8192,
-                cost_per_token=0.03,
-                capabilities=["text", "code", "reasoning"],
-                performance_tier="powerful"
-            ),
-            ModelInfo(
-                id="gpt-3.5-turbo",
-                name="GPT-3.5 Turbo",
-                provider="openai",
-                description="Fast and efficient model",
-                max_tokens=4096,
-                context_window=4096,
-                cost_per_token=0.002,
-                capabilities=["text", "code"],
-                performance_tier="fast"
-            ),
-            ModelInfo(
-                id="claude-3",
-                name="Claude 3",
-                provider="anthropic",
-                description="Anthropic's latest model",
-                max_tokens=4096,
-                context_window=100000,
-                cost_per_token=0.025,
-                capabilities=["text", "code", "analysis"],
-                performance_tier="balanced"
-            )
-        ]
-
-        # Apply filters
-        filtered_models = mock_models
-        if provider:
-            filtered_models = [
-                m for m in filtered_models if m.provider == provider
-            ]
-        if performance_tier:
-            filtered_models = [
-                m for m in filtered_models
-                if m.performance_tier == performance_tier
-            ]
-
-        response_data = ModelListResponse(
-            models=filtered_models,
-            total_count=len(filtered_models),
-            recommended=["gpt-4", "claude-3"]
-        )
-
-        return ModelResponse(success=True, data=response_data.dict())
-    except Exception as e:
-        detail = f"Failed to get available models: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+    """Get list of available models.
+    
+    DEPRECATED: Please use GET /api/config instead.
+    """
+    # Return deprecation warning with redirect info
+    return ModelResponse(
+        success=True,
+        data={
+            **DEPRECATION_WARNING,
+            "redirect_to": "/api/config",
+            "status": "deprecated"
+        }
+    )
 
 
 @router.post("/switch")
@@ -96,34 +64,45 @@ async def switch_model(
     request: ModelSwitchRequest,
     db: Session = Depends(get_db)
 ) -> ModelResponse:
-    """Switch to a different model configuration."""
+    """Switch to a different model configuration.
+    
+    DEPRECATED: Please use PUT /api/config/model instead.
+    """
     try:
-        # Mock model switching logic
-        start_time = datetime.utcnow()
-
-        # Simulate model configuration
-        new_config = ModelConfig(
-            model_id=request.model_id,
-            provider="openai" if "gpt" in request.model_id else "anthropic",
-            temperature=0.7,
-            max_tokens=2000,
-            top_p=1.0,
-            frequency_penalty=0.0,
-            presence_penalty=0.0
-        )
-
-        switch_time = (datetime.utcnow() - start_time).total_seconds()
-
-        response_data = ModelSwitchResponse(
+        # Integrate with real config system
+        config_service = ConfigService(db)
+        
+        # Update configuration using the real system
+        update_data = {
+            "chat_model": request.model_id,
+            "provider": "openai" if "gpt" in request.model_id.lower() else "azure"
+        }
+        
+        config_service.set_multiple_config(update_data, updated_by="models_api_deprecated")
+        
+        # Trigger LLM client reconfiguration
+        try:
+            from app.llm.client import llm_client
+            await llm_client.reconfigure(
+                provider=update_data.get("provider"),
+                model=update_data.get("chat_model")
+            )
+        except Exception as e:
+            # Log but don't fail the response
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to reconfigure LLM client in deprecated endpoint: %s", e)
+        
+        return ModelResponse(
             success=True,
-            new_model_id=request.model_id,
-            config=new_config,
-            switch_time=switch_time,
-            preserved_context=request.preserve_history,
-            message=f"Successfully switched to {request.model_id}"
+            data={
+                **DEPRECATION_WARNING,
+                "redirect_to": "/api/config/model",
+                "status": "deprecated",
+                "action_completed": True,
+                "message": f"Model switched to {request.model_id} via deprecated endpoint"
+            }
         )
-
-        return ModelResponse(success=True, data=response_data.dict())
     except Exception as e:
         detail = f"Failed to switch model: {str(e)}"
         raise HTTPException(status_code=500, detail=detail)
@@ -134,45 +113,19 @@ async def get_model_config(
     model_id: str,
     db: Session = Depends(get_db)
 ) -> ModelResponse:
-    """Get configuration for a specific model."""
-    try:
-        # Mock model configuration
-        config = ModelConfig(
-            model_id=model_id,
-            provider="openai" if "gpt" in model_id else "anthropic",
-            temperature=0.7,
-            max_tokens=2000,
-            top_p=1.0,
-            frequency_penalty=0.0,
-            presence_penalty=0.0,
-            system_prompt="You are a helpful AI assistant."
-        )
-
-        # Mock metrics
-        metrics = ModelMetrics(
-            model_id=model_id,
-            average_response_time=1.2,
-            success_rate=0.95,
-            user_satisfaction=4.3,
-            total_requests=542,
-            cost_efficiency=0.85,
-            last_updated=datetime.utcnow()
-        )
-
-        response_data = ModelConfigResponse(
-            config=config,
-            metrics=metrics,
-            recommendations=[
-                "Consider lowering temperature for more consistent outputs",
-                "Increase max_tokens for longer responses"
-            ],
-            last_modified=datetime.utcnow()
-        )
-
-        return ModelResponse(success=True, data=response_data.dict())
-    except Exception as e:
-        detail = f"Failed to get model config: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+    """Get configuration for a specific model.
+    
+    DEPRECATED: Please use GET /api/config instead.
+    """
+    return ModelResponse(
+        success=True,
+        data={
+            **DEPRECATION_WARNING,
+            "redirect_to": "/api/config",
+            "status": "deprecated",
+            "requested_model": model_id
+        }
+    )
 
 
 @router.put("/config/{model_id}")
@@ -181,23 +134,19 @@ async def update_model_config(
     config: ModelConfig,
     db: Session = Depends(get_db)
 ) -> ModelResponse:
-    """Update configuration for a specific model."""
-    try:
-        # Mock configuration update
-        # In production, this would validate and store the configuration
-
-        # Ensure model_id matches
-        if config.model_id != model_id:
-            config.model_id = model_id
-
-        return ModelResponse(
-            success=True,
-            message=f"Configuration updated for {model_id}",
-            data={"config": config.dict(), "updated_at": datetime.utcnow()}
-        )
-    except Exception as e:
-        detail = f"Failed to update model config: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+    """Update configuration for a specific model.
+    
+    DEPRECATED: Please use PUT /api/config/model instead.
+    """
+    return ModelResponse(
+        success=True,
+        data={
+            **DEPRECATION_WARNING,
+            "redirect_to": "/api/config/model",
+            "status": "deprecated",
+            "requested_model": model_id
+        }
+    )
 
 
 @router.get("/metrics/{model_id}")
@@ -206,33 +155,17 @@ async def get_model_metrics(
     days: Optional[int] = 7,
     db: Session = Depends(get_db)
 ) -> ModelResponse:
-    """Get performance metrics for a specific model."""
-    try:
-        # Mock metrics data
-        metrics = ModelMetrics(
-            model_id=model_id,
-            average_response_time=1.2,
-            success_rate=0.95,
-            user_satisfaction=4.3,
-            total_requests=542,
-            cost_efficiency=0.85,
-            last_updated=datetime.utcnow()
-        )
-
-        # Mock trend data
-        trend_data = {
-            "response_times": [1.1, 1.3, 1.2, 1.0, 1.2, 1.1, 1.2],
-            "success_rates": [0.94, 0.96, 0.95, 0.97, 0.95, 0.94, 0.95],
-            "satisfaction_scores": [4.2, 4.4, 4.3, 4.5, 4.3, 4.2, 4.3]
+    """Get performance metrics for a specific model.
+    
+    NOTE: Metrics functionality not yet implemented in the new config system.
+    """
+    return ModelResponse(
+        success=True,
+        data={
+            **DEPRECATION_WARNING,
+            "status": "not_implemented",
+            "message": "Metrics functionality will be added to the new config system in a future update",
+            "requested_model": model_id,
+            "requested_days": days
         }
-
-        response_data = {
-            "metrics": metrics.dict(),
-            "trends": trend_data,
-            "period_days": days
-        }
-
-        return ModelResponse(success=True, data=response_data)
-    except Exception as e:
-        detail = f"Failed to get model metrics: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+    )

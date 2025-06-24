@@ -89,6 +89,25 @@ async def handle_chat_connection(
                     # Accept both new ``is_typing`` and legacy ``typing`` keys
                     'is_typing': data.get('is_typing', data.get('typing', False))
                 }, session_id)
+                
+            elif data['type'] == 'request_config':
+                # Send current configuration to requesting client
+                try:
+                    from app.services.config_service import ConfigService
+                    config_service = ConfigService(db)
+                    current_config = config_service.get_all_config()
+                    
+                    await websocket.send_json({
+                        'type': 'config_update', 
+                        'config': current_config,
+                        'requested': True
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to send config to client: {e}")
+                    await websocket.send_json({
+                        'type': 'error',
+                        'message': 'Failed to retrieve configuration'
+                    })
 
     except WebSocketDisconnect:
         logger.info(f"User {current_user.id} disconnected from session {session_id}")

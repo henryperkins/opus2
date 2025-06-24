@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 # are unavailable, so we poly-fill them with no-op implementations.
 
 try:
-    from pydantic import model_validator, ConfigDict  # type: ignore
+    from pydantic import model_validator, field_validator, ConfigDict  # type: ignore
 
 except ImportError:  # Older Pydantic version *or* stubbed implementation
 
@@ -47,6 +47,14 @@ except ImportError:  # Older Pydantic version *or* stubbed implementation
         def decorator(fn):  # noqa: D401 – keep signature identical
             return fn
 
+        return decorator
+
+    def field_validator(*args, **kwargs):  # type: ignore
+        """Replacement decorator that returns the original function unchanged."""
+        
+        def decorator(fn):  # noqa: D401 – keep signature identical
+            return fn
+        
         return decorator
 
     class ConfigDict(dict):  # type: ignore
@@ -108,13 +116,15 @@ class MessageCreate(BaseModel):
     # consistent Enum instance and safely access ``.value``.
     # ---------------------------------------------------------------------
     @model_validator(mode="before")
-    def _ensure_enum_role(self):
-        if isinstance(self.role, str):
-            try:
-                self.role = MessageRole(self.role)
-            except ValueError as exc:
-                raise ValueError(f"Invalid role '{self.role}'") from exc
-        return self
+    def _ensure_enum_role(cls, values):
+        if isinstance(values, dict) and "role" in values:
+            role = values["role"]
+            if isinstance(role, str):
+                try:
+                    values["role"] = MessageRole(role)
+                except ValueError as exc:
+                    raise ValueError(f"Invalid role '{role}'") from exc
+        return values
 
 
 class MessageUpdate(BaseModel):
@@ -139,9 +149,14 @@ class MessageResponse(BaseModel):
     referenced_chunks: List[int] = Field(default_factory=list)
     applied_commands: Dict[str, Any] = Field(default_factory=dict)
 
-    is_edited: bool = False
+    is_edited: bool = Field(default=False)
     edited_at: Optional[datetime] = None
     created_at: datetime
+
+    @field_validator('is_edited', mode='before')
+    def validate_is_edited(cls, v):
+        """Convert None to False for is_edited field."""
+        return False if v is None else v
 
     # --- Pydantic v2 config ---
     model_config = ConfigDict(from_attributes=True)

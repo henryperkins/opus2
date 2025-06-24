@@ -132,6 +132,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
     suite:
 
     • automatic provider / model selection based on :pydataattr:`app.config.Settings`
+    • dynamic runtime configuration support via runtime config system
     • a unified :pyasyncmeth:`complete` coroutine wrapping *chat.completions*
       (or *responses* for the Azure preview API)
     • small helpers like :pyasyncmeth:`generate_response` and
@@ -166,6 +167,67 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         except Exception as exc:  # noqa: BLE001 – propagate but record in Sentry
             logger.error("Failed to initialise LLM client: %s", exc, exc_info=True)
             sentry_sdk.capture_exception(exc)
+
+    def _get_runtime_config(self) -> Dict[str, Any]:
+        """Get current runtime configuration, falling back to static settings."""
+        try:
+            # Try to get configuration from database first
+            from app.database import SessionLocal
+            from app.services.config_service import ConfigService
+            
+            with SessionLocal() as db:
+                config_service = ConfigService(db)
+                db_config = config_service.get_all_config()
+                
+                if db_config:
+                    return db_config
+                    
+        except Exception as e:
+            logger.debug(f"Failed to load config from database: {e}")
+        
+        try:
+            # Fallback to in-memory config
+            from app.routers.config import _RUNTIME_CONFIG
+            return _RUNTIME_CONFIG
+        except ImportError:
+            # Final fallback to static settings
+            return {
+                "provider": settings.llm_provider,
+                "chat_model": settings.llm_default_model or settings.llm_model,
+                "useResponsesApi": False,
+            }
+
+    def _should_reinitialize(self, new_provider: str) -> bool:
+        """Check if client needs reinitialization due to provider change."""
+        return self.provider != new_provider.lower()
+
+    async def reconfigure(self, 
+                         provider: str | None = None, 
+                         model: str | None = None, 
+                         use_responses_api: bool | None = None) -> None:
+        """Dynamically reconfigure the client with new provider/model settings."""
+        runtime_config = self._get_runtime_config()
+        
+        # Use runtime config values or provided parameters
+        new_provider = (provider or runtime_config.get("provider", self.provider)).lower()
+        new_model = model or runtime_config.get("chat_model") or self.active_model
+        new_responses_api = use_responses_api if use_responses_api is not None else runtime_config.get("useResponsesApi", False)
+
+        # Reinitialize client if provider changed
+        if self._should_reinitialize(new_provider):
+            self.provider = new_provider
+            if new_provider == "azure":
+                self._init_azure_client()
+            else:
+                self._init_openai_client()
+            logger.info("LLM client reinitialized for provider: %s", new_provider)
+
+        # Update model and responses API settings
+        self.active_model = new_model
+        self.use_responses_api = new_responses_api and new_provider == "azure"
+        
+        logger.info("LLM client reconfigured - Provider: %s, Model: %s, ResponsesAPI: %s", 
+                   self.provider, self.active_model, self.use_responses_api)
 
     # ---------------------------------------------------------------------
     # Provider-specific initialisation helpers
@@ -222,11 +284,12 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         self,
         messages: Sequence[Dict[str, Any]] | None = None,
         *,
-        temperature: float | int = 0.7,
+        temperature: float | int | None = None,
         stream: bool = False,
         tools: Any | None = None,
         reasoning: bool | None = None,  # noqa: D401 – kept for forward compat
         max_tokens: int | None = None,
+        model: str | None = None,  # Allow per-request model override
     ) -> Any:  # noqa: ANN401 – OpenAI return type is *dynamic*
         """Wrapper around the underlying Chat Completions / Responses API.
 
@@ -234,10 +297,28 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         of the available parameters.  In addition we accept arbitrary
         ``**kwargs`` via the explicit keyword arguments to stay compatible
         with future changes.
+        
+        Parameters can be overridden at runtime from the configuration system.
         """
 
         if self.client is None:
             raise RuntimeError("LLM client not initialised – missing credentials?")
+
+        # Get runtime configuration and merge with provided parameters
+        runtime_config = self._get_runtime_config()
+        
+        # Apply runtime configuration with parameter precedence
+        active_model = model or runtime_config.get("chat_model") or self.active_model
+        active_temperature = temperature if temperature is not None else runtime_config.get("temperature", 0.7)
+        active_max_tokens = max_tokens or runtime_config.get("maxTokens")
+        
+        # Auto-reconfigure if model/provider changed
+        if active_model != self.active_model or runtime_config.get("provider", self.provider).lower() != self.provider:
+            await self.reconfigure(
+                provider=runtime_config.get("provider"),
+                model=active_model,
+                use_responses_api=runtime_config.get("useResponsesApi")
+            )
 
         # Convert messages into canonical list – some callers might pass
         # tuples / generators.
@@ -261,12 +342,12 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                         input_messages.append(msg)
 
                 return await self.client.responses.create(
-                    model=self.active_model,
+                    model=active_model,
                     input=input_messages,
                     instructions=system_instructions,
-                    temperature=temperature,
+                    temperature=active_temperature,
                     stream=stream,
-                    max_tokens=max_tokens,
+                    max_tokens=active_max_tokens,
                 )
 
             # -----------------------------------------------------------------
@@ -283,11 +364,11 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # -----------------------------------------------------------------
 
             call_kwargs: Dict[str, Any] = {
-                "model": self.active_model,
+                "model": active_model,
                 "messages": messages,
-                "temperature": temperature,
+                "temperature": active_temperature,
                 "stream": stream,
-                "max_tokens": max_tokens,
+                "max_tokens": active_max_tokens,
             }
 
             if tools:
