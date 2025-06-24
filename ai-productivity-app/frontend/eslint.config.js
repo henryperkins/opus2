@@ -14,8 +14,7 @@ export default [
         ecmaFeatures: {
           jsx: true
         }
-      },
-      globals: {
+      }, globals: {
         window: 'readonly',
         document: 'readonly',
         console: 'readonly',
@@ -37,7 +36,9 @@ export default [
         location: 'readonly',
         history: 'readonly',
         btoa: 'readonly',
-        atob: 'readonly'
+        atob: 'readonly',
+        WebSocket: 'readonly',
+        performance: 'readonly'
       }
     },
     plugins: {
@@ -76,6 +77,14 @@ export default [
       react: {
         version: 'detect'
       }
+    }
+  },
+  {
+    // Allow hooks to import from the API layer – they are part of the data-access
+    // abstraction, unlike UI components that should depend on hooks only.
+    files: ['**/hooks/**/*.{js,jsx}'],
+    rules: {
+      'no-restricted-imports': 'off'
     }
   },
   {

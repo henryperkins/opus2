@@ -8,8 +8,7 @@
 //    (KnowledgeAssistant, KnowledgeContextPanel, ChatPage) stay in sync.
 
 import { useState, useCallback, useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { knowledgeAPI } from '../api/knowledge';
+import { useMutation } from '@tanstack/react-query';
 
 const DEFAULT_SETTINGS = {
   autoContext: true,
@@ -18,24 +17,33 @@ const DEFAULT_SETTINGS = {
   citationStyle: 'inline', // or 'footnote'
 };
 
-export function useKnowledgeChat(projectId, userSettings = {}) {
-  const settings = { ...DEFAULT_SETTINGS, ...userSettings };
+export function useKnowledgeChat(projectId, userSettings = {}, knowledgeAPI = null) {
+  const settings = useMemo(() => ({ ...DEFAULT_SETTINGS, ...userSettings }), [userSettings]);
 
   const [citations, setCitations] = useState([]);
   const [currentContext, setCurrentContext] = useState([]);
 
-  const queryClient = useQueryClient();
+  // Ensure knowledgeAPI is provided
+  if (!knowledgeAPI) {
+    console.warn('useKnowledgeChat: knowledgeAPI not provided, hook will have limited functionality');
+  }
 
   // -----------------------------
   // Mutations
   // -----------------------------
 
   const analyzeMutation = useMutation({
-    mutationFn: ({ query }) => knowledgeAPI.analyzeQuery(query, projectId),
+    mutationFn: ({ query }) => {
+      if (!knowledgeAPI) throw new Error('Knowledge API not available');
+      return knowledgeAPI.analyzeQuery(query, projectId);
+    },
   });
 
   const retrieveMutation = useMutation({
-    mutationFn: ({ analysis }) => knowledgeAPI.retrieveKnowledge(analysis, projectId, settings),
+    mutationFn: ({ analysis }) => {
+      if (!knowledgeAPI) throw new Error('Knowledge API not available');
+      return knowledgeAPI.retrieveKnowledge(analysis, projectId, settings);
+    },
   });
 
   // -----------------------------
@@ -57,6 +65,11 @@ export function useKnowledgeChat(projectId, userSettings = {}) {
 
   const buildContextForQuery = useCallback(
     async (query) => {
+      if (!knowledgeAPI) {
+        console.warn('Knowledge API not available');
+        return { contextualisedQuery: query, documents: [] };
+      }
+
       // 1) Analyse intent
       const analysis = await analyzeMutation.mutateAsync({ query });
 
@@ -79,7 +92,7 @@ export function useKnowledgeChat(projectId, userSettings = {}) {
 
       return { contextualisedQuery: query, documents: docs };
     },
-    [projectId, settings, analyzeMutation, retrieveMutation, addToCitations]
+    [settings, analyzeMutation, retrieveMutation, addToCitations, knowledgeAPI]
   );
 
   const value = useMemo(

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 import SkeletonLoader from '../components/common/SkeletonLoader';
-import { analyticsAPI } from '../api/analytics';
+import { useAnalytics } from '../hooks/useAnalytics';
 import { knowledgeAPI } from '../api/knowledge';
 import useProjectStore from '../stores/projectStore';
 import ProjectHeader from '../components/projects/ProjectHeader';
@@ -12,6 +12,7 @@ import ActivityTimeline from '../components/projects/ActivityTimeline';
 
 export default function ProjectPage() {
   const { projectId } = useParams();
+  const { getQualityMetrics } = useAnalytics();
   const {
     currentProject: project,
     loading,
@@ -30,14 +31,14 @@ export default function ProjectPage() {
     (async () => {
       try {
         const [metricsResponse, kbResponse] = await Promise.allSettled([
-          analyticsAPI.getQualityMetrics(projectId),
+          getQualityMetrics(projectId),
           knowledgeAPI.getSummary(projectId)
         ]);
 
         if (metricsResponse.status === 'fulfilled') {
-          setMetrics(metricsResponse.value.data || metricsResponse.value);
+          setMetrics(metricsResponse.value);
         }
-        
+
         if (kbResponse.status === 'fulfilled') {
           setKbStats(kbResponse.value);
         }
@@ -45,12 +46,12 @@ export default function ProjectPage() {
         console.warn('Error loading metrics or knowledge stats:', e);
       }
     })();
-  }, [projectId]);
+  }, [projectId, getQualityMetrics]);
 
   if (loading) {
     return <SkeletonLoader type="card" count={3} />;
   }
-  
+
   if (error || !project) {
     return (
       <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">

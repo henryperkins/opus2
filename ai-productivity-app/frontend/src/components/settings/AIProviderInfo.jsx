@@ -76,7 +76,6 @@ const AIProviderInfo = () => {
       setSelectedModel(currentModel);
     }
     setIsEditing(!isEditing);
-    setSaveMessage('');
   };
 
   const validateConfiguration = async () => {
@@ -104,13 +103,13 @@ const AIProviderInfo = () => {
   const handleSave = async () => {
     setSaving(true);
     toast.info('Saving configuration...');
-    
+
     try {
       await configAPI.updateModelConfig({
         provider: selectedProvider,
         chat_model: selectedModel
       });
-      
+
       if (refetch) await refetch();
       setIsEditing(false);
       toast.success('Configuration updated successfully!');

@@ -1,6 +1,7 @@
 // contexts/ModelContext.jsx
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import PropTypes from 'prop-types';
 import { useConfig } from '../hooks/useConfig';
 
 // Model context for unified state management
@@ -30,15 +31,15 @@ const initialState = {
     presencePenalty: 0,
     frequencyPenalty: 0
   },
-  
+
   // Model performance tracking
   modelStats: new Map(),
   modelHistory: [],
-  
+
   // UI state
   loading: false,
   error: null,
-  
+
   // Available models and providers
   availableModels: [],
   availableProviders: []
@@ -53,14 +54,14 @@ function modelReducer(state, action) {
         currentModel: action.payload,
         error: null
       };
-      
+
     case MODEL_ACTIONS.SET_PROVIDER:
       return {
         ...state,
         currentProvider: action.payload,
         error: null
       };
-      
+
     case MODEL_ACTIONS.SET_CONFIG:
       return {
         ...state,
@@ -74,21 +75,21 @@ function modelReducer(state, action) {
         availableProviders: action.payload.available_providers || state.availableProviders,
         error: null
       };
-      
+
     case MODEL_ACTIONS.SET_LOADING:
       return {
         ...state,
         loading: action.payload
       };
-      
+
     case MODEL_ACTIONS.SET_ERROR:
       return {
         ...state,
         error: action.payload,
         loading: false
       };
-      
-    case MODEL_ACTIONS.UPDATE_PERFORMANCE:
+
+    case MODEL_ACTIONS.UPDATE_PERFORMANCE: {
       const newStats = new Map(state.modelStats);
       newStats.set(action.payload.model, {
         ...newStats.get(action.payload.model),
@@ -98,7 +99,8 @@ function modelReducer(state, action) {
         ...state,
         modelStats: newStats
       };
-      
+    }
+
     case MODEL_ACTIONS.ADD_TO_HISTORY:
       return {
         ...state,
@@ -112,13 +114,13 @@ function modelReducer(state, action) {
           ...state.modelHistory.slice(0, 49) // Keep last 50 entries
         ]
       };
-      
+
     case MODEL_ACTIONS.RESET_ERROR:
       return {
         ...state,
         error: null
       };
-      
+
     default:
       return state;
   }
@@ -151,10 +153,10 @@ export function ModelProvider({ children }) {
   const setModel = useCallback(async (model, options = {}) => {
     try {
       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: true });
-      
+
       // Update local state immediately for UI responsiveness
       dispatch({ type: MODEL_ACTIONS.SET_MODEL, payload: model });
-      
+
       // Add to history
       dispatch({
         type: MODEL_ACTIONS.ADD_TO_HISTORY,
@@ -164,21 +166,21 @@ export function ModelProvider({ children }) {
           context: options.context || 'manual_selection'
         }
       });
-      
+
       // Update global config
       await updateConfig({
         chat_model: model,
         provider: options.provider || state.currentProvider,
         ...options.config
       });
-      
+
       // Invalidate relevant queries
       queryClient.invalidateQueries(['config']);
-      
+
     } catch (error) {
       console.error('Failed to update model:', error);
       dispatch({ type: MODEL_ACTIONS.SET_ERROR, payload: error.message });
-      
+
       // Revert optimistic update on error
       if (config?.current?.chat_model) {
         dispatch({ type: MODEL_ACTIONS.SET_MODEL, payload: config.current.chat_model });
@@ -192,24 +194,24 @@ export function ModelProvider({ children }) {
   const setProvider = useCallback(async (provider, options = {}) => {
     try {
       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: true });
-      
+
       // Update local state immediately
       dispatch({ type: MODEL_ACTIONS.SET_PROVIDER, payload: provider });
-      
+
       // Update global config
       await updateConfig({
         provider,
         chat_model: options.model || state.currentModel,
         ...options.config
       });
-      
+
       // Invalidate relevant queries
       queryClient.invalidateQueries(['config']);
-      
+
     } catch (error) {
       console.error('Failed to update provider:', error);
       dispatch({ type: MODEL_ACTIONS.SET_ERROR, payload: error.message });
-      
+
       // Revert optimistic update on error
       if (config?.current?.provider) {
         dispatch({ type: MODEL_ACTIONS.SET_PROVIDER, payload: config.current.provider });
@@ -223,13 +225,13 @@ export function ModelProvider({ children }) {
   const updateModelConfig = useCallback(async (configUpdates) => {
     try {
       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: true });
-      
+
       // Update global config with new model configuration
       await updateConfig(configUpdates);
-      
+
       // Invalidate relevant queries
       queryClient.invalidateQueries(['config']);
-      
+
     } catch (error) {
       console.error('Failed to update model config:', error);
       dispatch({ type: MODEL_ACTIONS.SET_ERROR, payload: error.message });
@@ -243,7 +245,7 @@ export function ModelProvider({ children }) {
     try {
       // Simple auto-selection logic (can be enhanced)
       let recommendedModel = state.currentModel;
-      
+
       if (taskType === 'code_generation' || taskType === 'code_analysis') {
         recommendedModel = 'gpt-4o'; // Better for code tasks
       } else if (taskType === 'chat' || taskType === 'general') {
@@ -251,7 +253,7 @@ export function ModelProvider({ children }) {
       } else if (taskType === 'complex_reasoning') {
         recommendedModel = 'gpt-4o'; // Best for complex tasks
       }
-      
+
       // Only switch if different from current model
       if (recommendedModel !== state.currentModel) {
         await setModel(recommendedModel, {
@@ -260,7 +262,7 @@ export function ModelProvider({ children }) {
         });
         return recommendedModel;
       }
-      
+
       return state.currentModel;
     } catch (error) {
       console.error('Auto-selection failed:', error);
@@ -300,7 +302,7 @@ export function ModelProvider({ children }) {
     error: state.error,
     availableModels: state.availableModels,
     availableProviders: state.availableProviders,
-    
+
     // Actions
     setModel,
     setProvider,
@@ -317,7 +319,13 @@ export function ModelProvider({ children }) {
   );
 }
 
+// PropTypes validation
+ModelProvider.propTypes = {
+  children: PropTypes.node.isRequired
+};
+
 // Hook to use model context
+// eslint-disable-next-line react-refresh/only-export-components
 export function useModelContext() {
   const context = useContext(ModelContext);
   if (!context) {
@@ -327,4 +335,5 @@ export function useModelContext() {
 }
 
 // Export for easier imports
+// eslint-disable-next-line react-refresh/only-export-components
 export { ModelContext, MODEL_ACTIONS };

@@ -1,6 +1,6 @@
 // contexts/KnowledgeContext.jsx
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+import PropTypes from 'prop-types';
 
 // Knowledge context for unified state management
 const KnowledgeContext = createContext();
@@ -29,23 +29,23 @@ const initialState = {
   // Citations and context
   citations: [],
   currentContext: [],
-  
+
   // Search state
   activeQuery: '',
   searchResults: [],
   searchHistory: [],
-  
+
   // Selection state
   selectedItems: new Set(),
-  
+
   // AI suggestions
   suggestions: [],
   suggestionContext: null,
-  
+
   // UI state
   loading: false,
   error: null,
-  
+
   // Panel state
   isVisible: true,
   isMinimized: false
@@ -60,8 +60,8 @@ function knowledgeReducer(state, action) {
         citations: action.payload,
         error: null
       };
-      
-    case KNOWLEDGE_ACTIONS.ADD_CITATION:
+
+    case KNOWLEDGE_ACTIONS.ADD_CITATION: {
       const newCitations = [...state.citations];
       const existingIndex = newCitations.findIndex(c => c.id === action.payload.id);
       if (existingIndex >= 0) {
@@ -74,14 +74,15 @@ function knowledgeReducer(state, action) {
         citations: newCitations,
         error: null
       };
-      
+    }
+
     case KNOWLEDGE_ACTIONS.REMOVE_CITATION:
       return {
         ...state,
         citations: state.citations.filter(c => c.id !== action.payload),
         error: null
       };
-      
+
     case KNOWLEDGE_ACTIONS.CLEAR_CITATIONS:
       return {
         ...state,
@@ -90,39 +91,39 @@ function knowledgeReducer(state, action) {
         selectedItems: new Set(),
         error: null
       };
-      
+
     case KNOWLEDGE_ACTIONS.SET_ACTIVE_QUERY:
       return {
         ...state,
         activeQuery: action.payload,
-        searchHistory: action.payload && !state.searchHistory.includes(action.payload) 
+        searchHistory: action.payload && !state.searchHistory.includes(action.payload)
           ? [action.payload, ...state.searchHistory.slice(0, 9)] // Keep last 10
           : state.searchHistory,
         error: null
       };
-      
+
     case KNOWLEDGE_ACTIONS.SET_SEARCH_RESULTS:
       return {
         ...state,
         searchResults: action.payload,
         error: null
       };
-      
+
     case KNOWLEDGE_ACTIONS.SET_CONTEXT:
       return {
         ...state,
         currentContext: action.payload,
         error: null
       };
-      
+
     case KNOWLEDGE_ACTIONS.SET_SELECTED_ITEMS:
       return {
         ...state,
         selectedItems: new Set(action.payload),
         error: null
       };
-      
-    case KNOWLEDGE_ACTIONS.ADD_SELECTED_ITEM:
+
+    case KNOWLEDGE_ACTIONS.ADD_SELECTED_ITEM: {
       const newSelected = new Set(state.selectedItems);
       newSelected.add(action.payload);
       return {
@@ -130,8 +131,9 @@ function knowledgeReducer(state, action) {
         selectedItems: newSelected,
         error: null
       };
-      
-    case KNOWLEDGE_ACTIONS.REMOVE_SELECTED_ITEM:
+    }
+
+    case KNOWLEDGE_ACTIONS.REMOVE_SELECTED_ITEM: {
       const filteredSelected = new Set(state.selectedItems);
       filteredSelected.delete(action.payload);
       return {
@@ -139,20 +141,21 @@ function knowledgeReducer(state, action) {
         selectedItems: filteredSelected,
         error: null
       };
-      
+    }
+
     case KNOWLEDGE_ACTIONS.SET_LOADING:
       return {
         ...state,
         loading: action.payload
       };
-      
+
     case KNOWLEDGE_ACTIONS.SET_ERROR:
       return {
         ...state,
         error: action.payload,
         loading: false
       };
-      
+
     case KNOWLEDGE_ACTIONS.SET_SUGGESTIONS:
       return {
         ...state,
@@ -160,20 +163,20 @@ function knowledgeReducer(state, action) {
         suggestionContext: action.payload.context || null,
         error: null
       };
-      
+
     case KNOWLEDGE_ACTIONS.CLEAR_SUGGESTIONS:
       return {
         ...state,
         suggestions: [],
         suggestionContext: null
       };
-      
+
     case KNOWLEDGE_ACTIONS.RESET_ERROR:
       return {
         ...state,
         error: null
       };
-      
+
     default:
       return state;
   }
@@ -182,7 +185,6 @@ function knowledgeReducer(state, action) {
 // KnowledgeProvider component
 export function KnowledgeProvider({ children }) {
   const [state, dispatch] = useReducer(knowledgeReducer, initialState);
-  const queryClient = useQueryClient();
 
   // Add citation to knowledge context
   const addToCitations = useCallback((citations) => {
@@ -231,7 +233,7 @@ export function KnowledgeProvider({ children }) {
   const buildContext = useCallback(() => {
     try {
       const context = [];
-      
+
       // Add citations
       state.citations.forEach(citation => {
         if (citation.type === 'document') {
@@ -251,7 +253,7 @@ export function KnowledgeProvider({ children }) {
           });
         }
       });
-      
+
       // Add selected items
       state.selectedItems.forEach(itemId => {
         const item = state.searchResults.find(r => r.id === itemId);
@@ -264,7 +266,7 @@ export function KnowledgeProvider({ children }) {
           });
         }
       });
-      
+
       dispatch({ type: KNOWLEDGE_ACTIONS.SET_CONTEXT, payload: context });
       return context;
     } catch (error) {
@@ -278,21 +280,21 @@ export function KnowledgeProvider({ children }) {
   const analyzeMessage = useCallback(async (message, projectId) => {
     try {
       dispatch({ type: KNOWLEDGE_ACTIONS.SET_LOADING, payload: true });
-      
+
       // This would typically call an API endpoint
       // For now, we'll simulate the analysis
       const mockSuggestions = [];
-      
+
       if (message.toLowerCase().includes('error') || message.toLowerCase().includes('bug')) {
         mockSuggestions.push('Check error logs and stack traces');
         mockSuggestions.push('Review recent code changes');
       }
-      
+
       if (message.toLowerCase().includes('implement') || message.toLowerCase().includes('add')) {
         mockSuggestions.push('Search for similar implementations');
         mockSuggestions.push('Review architectural patterns');
       }
-      
+
       dispatch({
         type: KNOWLEDGE_ACTIONS.SET_SUGGESTIONS,
         payload: {
@@ -300,7 +302,7 @@ export function KnowledgeProvider({ children }) {
           context: { message, projectId, timestamp: new Date().toISOString() }
         }
       });
-      
+
     } catch (error) {
       console.error('Failed to analyze message:', error);
       dispatch({ type: KNOWLEDGE_ACTIONS.SET_ERROR, payload: error.message });
@@ -353,7 +355,7 @@ export function KnowledgeProvider({ children }) {
     error: state.error,
     isVisible: state.isVisible,
     isMinimized: state.isMinimized,
-    
+
     // Actions
     addToCitations,
     removeCitation,
@@ -375,7 +377,13 @@ export function KnowledgeProvider({ children }) {
   );
 }
 
+// PropTypes validation
+KnowledgeProvider.propTypes = {
+  children: PropTypes.node.isRequired
+};
+
 // Hook to use knowledge context
+// eslint-disable-next-line react-refresh/only-export-components
 export function useKnowledgeContext() {
   const context = useContext(KnowledgeContext);
   if (!context) {
@@ -385,4 +393,5 @@ export function useKnowledgeContext() {
 }
 
 // Export for easier imports
+// eslint-disable-next-line react-refresh/only-export-components
 export { KnowledgeContext, KNOWLEDGE_ACTIONS };

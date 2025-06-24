@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { codeAPI } from '../api/code';
+import { toast } from '../components/common/Toast';
 
 export default function ProjectFilesPage() {
   const { projectId } = useParams();
@@ -35,8 +36,9 @@ export default function ProjectFilesPage() {
     try {
       await codeAPI.uploadFiles(projectId, selected);
       await refresh();
+      toast.success('Files uploaded successfully');
     } catch (err) {
-      alert(err.response?.data?.detail || err.message);
+      toast.error(err.response?.data?.detail || err.message);
     } finally {
       setUploading(false);
       e.target.value = '';

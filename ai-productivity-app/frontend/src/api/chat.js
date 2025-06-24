@@ -29,6 +29,24 @@ const chatAPI = {
   // Delete a session
   deleteSession: (sessionId) => {
     return client.delete(`/api/chat/sessions/${sessionId}`);
+  },
+
+  // -------------------------
+  // Message-level operations
+  // -------------------------
+  // Send a new message to a session
+  sendMessage: (sessionId, data) => {
+    return client.post(`/api/chat/sessions/${sessionId}/messages`, data);
+  },
+
+  // Edit an existing message
+  editMessage: (id, content) => {
+    return client.patch(`/api/chat/messages/${id}`, { content });
+  },
+
+  // Delete a message
+  deleteMessage: (id) => {
+    return client.delete(`/api/chat/messages/${id}`);
   }
 };
 

@@ -162,6 +162,7 @@ export function useProjectTimeline(projectId) {
       addEvent: addEventMutation.mutateAsync,
       refresh: () => qc.invalidateQueries({ queryKey: timelineKey(projectId) }),
     }),
-    [timeline, loading, error, addEventMutation.mutateAsync, projectId]
+    // Include qc to satisfy exhaustive-deps; invalidateQueries reference stable for same qc
+    [timeline, loading, error, addEventMutation.mutateAsync, projectId, qc]
   );
 }

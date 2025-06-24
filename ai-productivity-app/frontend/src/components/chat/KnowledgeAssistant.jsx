@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Brain, Search, X, ChevronRight, Sparkles } from 'lucide-react';
 import { useKnowledgeChat } from '../../hooks/useKnowledgeContext';
+import { knowledgeAPI } from '../../api/knowledge';
 import KnowledgeContextPanel from '../knowledge/KnowledgeContextPanel';
 import SmartKnowledgeSearch from '../knowledge/SmartKnowledgeSearch';
 
@@ -24,7 +25,7 @@ export default function KnowledgeAssistant({
     clearCitations,
     citations,
     currentContext,
-  } = useKnowledgeChat(projectId);
+  } = useKnowledgeChat(projectId, {}, knowledgeAPI);
 
   // Initialize missing state locally since the hook doesn't provide them
   const [selectedItems, setSelectedItems] = useState(new Set());
@@ -138,7 +139,7 @@ export default function KnowledgeAssistant({
   if (!isVisible) return null;
 
   // Determine container styles based on mode
-  const containerClass = containerMode === 'overlay' 
+  const containerClass = containerMode === 'overlay'
     ? `fixed ${position === 'right' ? 'right-4' : 'left-4'} top-20 w-96 z-40`
     : 'w-full h-full flex flex-col';
 

@@ -7,14 +7,14 @@ import { toast } from '../common/Toast';
 import TimelineErrorBoundary from '../common/TimelineErrorBoundary';
 
 export default function Timeline({ projectId }) {
-  const { timeline, loading: timelineLoading, error: timelineError, fetch: fetchTimeline, clearError } = useProjectTimeline(projectId);
+  const { timeline, loading: timelineLoading, error: timelineError, refresh: refreshTimeline } = useProjectTimeline(projectId);
   const [error, setError] = useState(null);
   const [filterType, setFilterType] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (projectId) {
-      clearError(); // Clear previous errors
+      setError(null); // Reset local error state when project changes
       // useProjectTimeline hook automatically fetches timeline
       // We don't need to manually call fetchTimeline here
     }
@@ -24,9 +24,8 @@ export default function Timeline({ projectId }) {
   const handleRefresh = async () => {
     setRefreshing(true);
     setError(null);
-    clearError();
     try {
-      await fetchTimeline();
+      await refreshTimeline();
       toast.success('Timeline refreshed');
     } catch (e) {
       setError(e.message);

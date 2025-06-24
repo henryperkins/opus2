@@ -5,9 +5,9 @@
 //   • useWebSocketChannel for live streaming / updates
 //   • Optimistic mutations for edit / delete
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import client from '../api/client';
+import chatAPI from '../api/chat';
 import { useAuth } from './useAuth';
 import { useWebSocketChannel } from './useWebSocketChannel';
 import { useConfig } from './useConfig';
@@ -40,7 +40,7 @@ export function useChat(projectId, preferredSessionId = null) {
       try {
         // First try to validate the preferred session
         if (sid) {
-          const { data } = await client.get(`/api/chat/sessions/${sid}`);
+          const { data } = await chatAPI.getSession(sid);
           if (data.project_id === Number(projectId)) {
             return { id: sid, ...data };
           }
@@ -49,7 +49,7 @@ export function useChat(projectId, preferredSessionId = null) {
 
         // Create new session if needed
         if (!sid) {
-          const { data } = await client.post('/api/chat/sessions', {
+          const { data } = await chatAPI.createSession({
             project_id: Number(projectId),
           });
           return data;
@@ -74,7 +74,7 @@ export function useChat(projectId, preferredSessionId = null) {
     isFetching: historyLoading,
   } = useQuery({
     queryKey: messagesKey(sessionId),
-    queryFn: () => client.get(`/api/chat/sessions/${sessionId}/messages`).then((r) => r.data),
+    queryFn: () => chatAPI.getMessages(sessionId).then((r) => r.data),
     enabled: !!sessionId && !sessionLoading,
     staleTime: 30 * 1000, // 30 seconds - messages can change frequently
   });
@@ -158,7 +158,7 @@ export function useChat(projectId, preferredSessionId = null) {
         ...(metadata.knowledge_context && { knowledge_context: metadata.knowledge_context }),
       };
 
-      const { data } = await client.post(`/api/chat/sessions/${sessionId}/messages`, payload);
+      const { data } = await chatAPI.sendMessage(sessionId, payload);
       return data;
     },
     onSuccess: (newMsg) => {
@@ -167,7 +167,7 @@ export function useChat(projectId, preferredSessionId = null) {
   });
 
   const editMutation = useMutation({
-    mutationFn: ({ id, content }) => client.patch(`/api/chat/messages/${id}`, { content }).then((r) => r.data),
+    mutationFn: ({ id, content }) => chatAPI.editMessage(id, content).then((r) => r.data),
     onMutate: async ({ id, content }) => {
       await qc.cancelQueries({ queryKey: messagesKey(sessionId) });
       const prev = qc.getQueryData(messagesKey(sessionId));
@@ -181,7 +181,7 @@ export function useChat(projectId, preferredSessionId = null) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => client.delete(`/api/chat/messages/${id}`),
+    mutationFn: (id) => chatAPI.deleteMessage(id),
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: messagesKey(sessionId) });
       const prev = qc.getQueryData(messagesKey(sessionId));
@@ -221,9 +221,9 @@ export function useChat(projectId, preferredSessionId = null) {
       typingUsers,
       historyLoading,
       sessionLoading,
-      sendMutation.mutateAsync,
-      editMutation.mutateAsync,
-      deleteMutation.mutateAsync,
+      sendMutation,
+      editMutation,
+      deleteMutation,
       sendTypingIndicator,
       config,
     ]

@@ -1,6 +1,7 @@
-/* global AbortController, setTimeout, clearTimeout */
+/* eslint-env browser */
+/* global AbortController */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { searchAPI } from '../../api/search';
 import { ChevronRight, ChevronDown, FileText, Code, Link, AlertCircle } from 'lucide-react';

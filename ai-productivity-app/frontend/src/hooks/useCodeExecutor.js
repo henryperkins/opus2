@@ -19,6 +19,35 @@ import { useCallback, useRef, useSyncExternalStore } from 'react';
 import { nanoid } from 'nanoid';
 import client from '../api/client';
 
+// Polyfill AbortController for older environments
+if (typeof globalThis.AbortController === 'undefined') {
+  globalThis.AbortController = class AbortController {
+    constructor() {
+      this.signal = {
+        aborted: false,
+        addEventListener: (type, listener) => {
+          if (type === 'abort' && !this._abortListener) {
+            this._abortListener = listener;
+          }
+        },
+        removeEventListener: (type, listener) => {
+          if (type === 'abort' && this._abortListener === listener) {
+            this._abortListener = null;
+          }
+        }
+      };
+    }
+    abort() {
+      if (!this.signal.aborted) {
+        this.signal.aborted = true;
+        if (this.signal._abortListener) {
+          this.signal._abortListener();
+        }
+      }
+    }
+  };
+}
+
 // ----------------------------------------------------------------------------
 // Global singleton store – lightweight replacement for context
 // ----------------------------------------------------------------------------
@@ -70,7 +99,7 @@ export function useCodeExecutor(defaultProjectId = null) {
         return existing.promise; // return the in-flight promise
       }
 
-      const controller = new AbortController();
+      const controller = new globalThis.AbortController();
       abortControllers.set(correlationId, controller);
 
       const payload = { code, language };

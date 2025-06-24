@@ -159,7 +159,7 @@ export function useWebSocketChannel({
       console.log(`🔌 WebSocket useEffect cleanup: closing connection to ${path}`);
       close();
     };
-  }, [path, protocols, retry]); // Remove onMessage, close, send from deps to prevent unnecessary reconnections
+  }, [path, protocols, retry, close, send]); // Include close and send in dependencies
 
   return { state, send, close, socket: wsRef.current };
 }

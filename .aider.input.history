@@ -988,3 +988,210 @@
 
 # 2025-06-24 17:01:01.384728
 +/run git commit .
+
+# 2025-06-24 17:01:10.881528
++no
+
+# 2025-06-24 17:01:17.170410
++/run git push
+
+# 2025-06-24 17:01:20.146278
++no
+
+# 2025-06-24 17:01:23.791533
++/map-refresh
+
+# 2025-06-24 17:01:33.303352
++/add ai-productivity-app/frontend/src/components/layout/ResponsiveContainer.jsx
+
+# 2025-06-24 17:01:43.073931
++/add ai-productivity-app/frontend/src/components/common/Layout.jsx
+
+# 2025-06-24 17:01:50.450746
++/add ai-productivity-app/frontend/src/hooks/useMediaQuery.js
+
+# 2025-06-24 17:02:02.571148
++/add ai-productivity-app/frontend/src/pages/ProjectChatPage.jsx
+
+# 2025-06-24 17:02:14.862183
++/add ai-productivity-app/frontend/src/pages/ProjectDashboard.jsx
+
+# 2025-06-24 17:02:21.138394
++/add ai-productivity-app/frontend/src/pages/Dashboard.jsx
+
+# 2025-06-24 17:03:13.901745
++/add ai-productivity-app/frontend/src/contexts/KnowledgeContext.jsx
+
+# 2025-06-24 17:03:21.258139
++/add ai-productivity-app/frontend/src/contexts/ModelContext.jsx
+
+# 2025-06-24 17:03:35.101687
++Analyze and identify UI issues
+
+# 2025-06-24 17:04:59.120931
++/add ai-productivity-app/frontend/src/contexts/ModelContext.jsx
+
+# 2025-06-24 17:05:02.123803
++/add ai-productivity-app/frontend/src/contexts/KnowledgeContext.jsx
+
+# 2025-06-24 17:05:04.760369
++/add ai-productivity-app/frontend/src/pages/Dashboard.jsx
+
+# 2025-06-24 17:05:08.430190
++/add ai-productivity-app/frontend/src/pages/ProjectDashboard.jsx
+
+# 2025-06-24 17:05:13.216344
++/add ai-productivity-app/frontend/src/pages/ProjectChatPage.jsx
+
+# 2025-06-24 17:05:19.154855
++/add ai-productivity-app/frontend/src/hooks/useMediaQuery.js
+
+# 2025-06-24 17:05:25.093479
++/add ai-productivity-app/frontend/src/components/common/Layout.jsx
+
+# 2025-06-24 17:05:34.948318
++/add ai-productivity-app/frontend/src/components/layout/ResponsiveContainer.jsx
+
+# 2025-06-24 17:05:59.341191
++/add ai-productivity-app/frontend/src/components/common/Sidebar.jsx
+
+# 2025-06-24 17:06:04.784391
++identify issues
+
+# 2025-06-24 17:06:21.377244
++yes
+
+# 2025-06-24 17:11:48.397042
++/add ai-productivity-app/frontend/src/components/common/Sidebar.jsx
+
+# 2025-06-24 17:11:50.476664
++/add ai-productivity-app/frontend/src/components/layout/ResponsiveContainer.jsx
+
+# 2025-06-24 17:11:54.278454
++/add ai-productivity-app/frontend/src/components/common/Layout.jsx
+
+# 2025-06-24 17:11:57.043629
++/add ai-productivity-app/frontend/src/hooks/useMediaQuery.js
+
+# 2025-06-24 17:12:00.813301
++/add ai-productivity-app/frontend/src/components/common/Layout.jsx
+
+# 2025-06-24 17:12:04.204180
++/add ai-productivity-app/frontend/src/pages/ProjectChatPage.jsx
+
+# 2025-06-24 17:12:14.117843
++/add ai-productivity-app/frontend/src/pages/ProjectDashboard.jsx
+
+# 2025-06-24 17:12:18.490212
++/add ai-productivity-app/frontend/src/contexts/KnowledgeContext.jsx
+
+# 2025-06-24 17:12:29.041817
++/add ai-productivity-app/frontend/src/pages/Dashboard.jsx
+
+# 2025-06-24 17:12:41.095421
++identify issues with the sidebar
+
+# 2025-06-24 17:14:41.623854
++yes
+
+# 2025-06-24 17:15:27.507543
++/add ai-productivity-app/frontend/src/styles/globals.css
+
+# 2025-06-24 17:15:37.604185
++/add ai-productivity-app/frontend/src/components/common/Header.jsx
+
+# 2025-06-24 17:15:56.633226
++/add ai-productivity-app/frontend/src/hooks/useChat.js
+
+# 2025-06-24 17:16:10.934076
++/add ai-productivity-app/frontend/src/hooks/useConfig.js
+
+# 2025-06-24 17:16:18.156386
++/add ai-productivity-app/frontend/src/components/settings/ModelConfiguration.jsx
+
+# 2025-06-24 17:16:24.595928
++identify issues with the sidebar
+
+# 2025-06-24 17:18:34.677281
++yes
+
+# 2025-06-24 17:21:58.828486
++{
+
+# 2025-06-24 17:21:59.597684
++Unexpected Application Error!
+
+# 2025-06-24 17:21:59.607353
++Rendered more hooks than during the previous render.
+
+# 2025-06-24 17:21:59.620131
++updateWorkInProgressHook@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:4344:24
+
+# 2025-06-24 17:21:59.631029
++updateCallback@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:5041:44
+
+# 2025-06-24 17:21:59.640289
++ProjectChatPage@https://lakefrontdigital.io/src/pages/ProjectChatPage.jsx:338:44
+
+# 2025-06-24 17:21:59.650967
++react-stack-bottom-frame@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:17424:29
+
+# 2025-06-24 17:21:59.661401
++renderWithHooks@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:4206:42
+
+# 2025-06-24 17:21:59.671936
++updateFunctionComponent@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:6619:36
+
+# 2025-06-24 17:21:59.682476
++runWithFiberInDEV@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:1487:23
+
+# 2025-06-24 17:21:59.692744
++performUnitOfWork@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:10868:115
+
+# 2025-06-24 17:21:59.703283
++workLoopSync@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:10728:60
+
+# 2025-06-24 17:21:59.717131
++renderRootSync@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:10711:25
+
+# 2025-06-24 17:21:59.754967
++performWorkOnRoot@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:10359:60
+
+# 2025-06-24 17:21:59.766024
++performSyncWorkOnRoot@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:11635:26
+
+# 2025-06-24 17:21:59.776932
++flushSyncWorkAcrossRoots_impl@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:11536:143
+
+# 2025-06-24 17:21:59.788372
++processRootScheduleInMicrotask@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:11558:38
+
+# 2025-06-24 17:22:00.356557
++@https://lakefrontdigital.io/node_modules/.vite/deps/react-dom_client.js:11649:45
+
+# 2025-06-24 17:22:02.477016
++}
+
+# 2025-06-24 17:22:06.663058
++no
+
+# 2025-06-24 17:22:24.219629
++yes
+
+# 2025-06-24 17:23:02.715637
++no
+
+# 2025-06-24 17:25:07.227079
++yes
+
+# 2025-06-24 17:25:46.107865
++/drop ai-productivity-app/frontend/src/pages/Dashboard.jsx
+
+# 2025-06-24 17:25:57.550933
++/drop ai-productivity-app/frontend/src/hooks/useConfig.js
+
+# 2025-06-24 17:26:31.379582
++/add ai-productivity-app/frontend/src/components/common/ConnectionIndicator.jsx
+
+# 2025-06-24 17:26:49.023953
++why isnt sidebar being displayed on mobile

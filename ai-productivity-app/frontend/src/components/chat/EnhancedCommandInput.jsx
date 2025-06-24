@@ -106,12 +106,12 @@ export default function EnhancedCommandInput({
   // Monaco editor setup
   const handleEditorMount = (editor) => {
     editorRef.current = editor;
-    
+
     // Add keyboard shortcut for send
     editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
       () => {
-        handleSubmit(new Event('submit'));
+        handleSubmit({ preventDefault: () => {} });
       }
     );
   };
@@ -214,7 +214,7 @@ export default function EnhancedCommandInput({
   const handleTextareaChange = (e) => {
     const textarea = e.target;
     setMessage(textarea.value);
-    
+
     // Auto-resize
     textarea.style.height = 'auto';
     textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
@@ -227,7 +227,7 @@ export default function EnhancedCommandInput({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(prev => 
+        setSelectedIndex(prev =>
           prev < suggestions.length - 1 ? prev + 1 : prev
         );
         break;
@@ -402,7 +402,7 @@ export default function EnhancedCommandInput({
                 disabled={isSending}
               />
             ) : (
-              <div 
+              <div
                 className="border rounded-lg overflow-hidden dynamic-height"
                 style={{ '--dynamic-height': editorHeight }}
               >

@@ -176,7 +176,7 @@ export default function CodeChat({ sessionId, projectId }) {
             onApply={applyCodeSuggestion}
           />
         )}
-      </div>
+      </section>
   );
 
   const canvasPanel = (

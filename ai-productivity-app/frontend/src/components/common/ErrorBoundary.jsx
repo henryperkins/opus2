@@ -5,13 +5,20 @@ import { Component } from 'react';
  * contextual error handling for different app scenarios
  */
 class ErrorBoundary extends Component {
-  state = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-    errorType: 'generic',
-    retryCount: 0
-  };
+  constructor(props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+      errorType: 'generic',
+      retryCount: 0
+    };
+
+    // Bind methods to ensure proper 'this' context
+    this.handleRetry = this.handleRetry.bind(this);
+    this.getErrorContent = this.getErrorContent.bind(this);
+  }
 
   static getDerivedStateFromError(error) {
     // Categorize error type for better UX
@@ -52,7 +59,7 @@ class ErrorBoundary extends Component {
     }
   }
 
-  handleRetry = () => {
+  handleRetry() {
     this.setState(prevState => ({
       hasError: false,
       error: null,
@@ -60,9 +67,9 @@ class ErrorBoundary extends Component {
       retryCount: prevState.retryCount + 1
     }));
     this.props.onRetry?.();
-  };
+  }
 
-  getErrorContent = () => {
+  getErrorContent() {
     const { errorType, error, retryCount } = this.state;
     const maxRetries = 3;
 
@@ -185,7 +192,7 @@ class ErrorBoundary extends Component {
           ]
         };
     }
-  };
+  }
 
   render() {
     if (this.state.hasError) {
