@@ -6,6 +6,7 @@ import UserMenu from '../auth/UserMenu';
 import ThemeToggle from './ThemeToggle';
 import Sidebar from './Sidebar';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import useAuthStore from '../../stores/authStore';              // NEW
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { ResponsivePage, ShowOnDesktop, HideOnDesktop } from '../layout/ResponsiveContainer';
 import { Menu } from 'lucide-react';
@@ -17,7 +18,10 @@ import { Menu } from 'lucide-react';
 export default function Layout({ children }) {
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { preferences } = useAuthStore();                         // NEW
+  const [sidebarOpen, setSidebarOpen] = useState(
+    preferences?.sidebarPinned ?? false                           // NEW
+  );
   const { isMobile, isTablet } = useMediaQuery();
   const layout = useResponsiveLayout();
   const isDesktop = !isMobile && !isTablet;
@@ -108,7 +112,7 @@ export default function Layout({ children }) {
 
       {/* Sidebar - adaptable based on screen size */}
       <Sidebar
-        isOpen={isDesktop || sidebarOpen}
+        isOpen={isDesktop || sidebarOpen || preferences?.sidebarPinned}  // NEW
         onToggle={() => setSidebarOpen(false)}
         className="lg:w-72"
       />
