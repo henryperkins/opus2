@@ -782,7 +782,6 @@ def install_stubs():
         ("git", _install_gitpython_stub),
         ("aiofiles", _install_aiofiles_stub),
         ("numpy", _install_numpy_stub),
-        ("openai", _install_openai_stub),
     ]
     for pkg, fn in installers:
         try:

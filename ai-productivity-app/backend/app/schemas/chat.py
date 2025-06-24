@@ -93,7 +93,7 @@ class CodeSnippet(BaseModel):
 
 class MessageCreate(BaseModel):
     """Payload when posting a new chat message."""
-    role: MessageRole = Field(..., description="sender role")
+    role: MessageRole | str = Field(..., description="sender role")
     content: str = Field(..., min_length=1, max_length=10_000)
 
     # Optional annotation / RAG metadata
@@ -101,6 +101,20 @@ class MessageCreate(BaseModel):
     referenced_files: List[str] = Field(default_factory=list)
     referenced_chunks: List[int] = Field(default_factory=list)
     applied_commands: Dict[str, Any] = Field(default_factory=dict)
+
+    # ---------------------------------------------------------------------
+    # Accept both the raw Enum *and* plain strings coming from legacy /
+    # external clients.  Convert early so downstream code can rely on a
+    # consistent Enum instance and safely access ``.value``.
+    # ---------------------------------------------------------------------
+    @model_validator(mode="before")
+    def _ensure_enum_role(self):
+        if isinstance(self.role, str):
+            try:
+                self.role = MessageRole(self.role)
+            except ValueError as exc:
+                raise ValueError(f"Invalid role '{self.role}'") from exc
+        return self
 
 
 class MessageUpdate(BaseModel):

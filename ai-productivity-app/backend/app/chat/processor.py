@@ -11,6 +11,8 @@ from app.services.chat_service import ChatService
 from app.llm.client import llm_client
 from app.llm.streaming import StreamingHandler
 from app.llm import tools as llm_tools
+# Local
+from app.config import settings  # Required for ``settings.enable_reasoning`` in _generate_ai_response
 from .context_builder import ContextBuilder
 from .commands import command_registry
 from .secret_scanner import secret_scanner
@@ -180,8 +182,14 @@ When referencing code, mention the file path and line numbers."""
                 reasoning=settings.enable_reasoning,
             )
 
-            # Loop while model wants to call tools
-            while hasattr(response, "choices") and response.choices[0].finish_reason == "tool_calls":
+            # Loop while model wants to call tools – guard against empty
+            # *choices* which can happen when running with the local stub
+            # client in development / test environments.
+            while (
+                hasattr(response, "choices")
+                and response.choices  # non-empty list
+                and response.choices[0].finish_reason == "tool_calls"
+            ):
                 for tool_call in response.choices[0].message.tool_calls:
                     name = tool_call.name
                     args_json = json.loads(tool_call.arguments)
@@ -201,7 +209,14 @@ When referencing code, mention the file path and line numbers."""
                 )
 
             # final assistant content
-            final_text = response.choices[0].message.content if hasattr(response, "choices") else str(response)
+            if hasattr(response, "choices") and response.choices:
+                final_text = response.choices[0].message.content
+            else:
+                # Fallback – the local *openai* stub or unexpected provider
+                # response.  Convert to string so the user receives *some*
+                # feedback instead of a silent failure that triggers the
+                # generic "LLM unavailable" error path below.
+                final_text = str(response)
 
             # now stream it to client (simulate streaming)
             async def _generator():  # noqa: D401

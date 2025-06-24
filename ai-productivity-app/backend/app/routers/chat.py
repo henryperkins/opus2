@@ -206,7 +206,8 @@ async def create_message(
     msg = await service.create_message(
         session_id=session_id,
         content=message.content,
-        role=message.role.value,  # Use the role from the request
+        # Handle raw Enum instance *or* pre-coerced string safely
+        role=message.role.value if hasattr(message.role, "value") else message.role,
         user_id=current_user.id,
         metadata=metadata,
     )

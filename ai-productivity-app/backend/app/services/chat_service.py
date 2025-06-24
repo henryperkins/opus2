@@ -60,7 +60,7 @@ class ChatService:
             code_snippets=metadata.get("code_snippets", []) if metadata else [],
             referenced_files=metadata.get("referenced_files", []) if metadata else [],
             referenced_chunks=metadata.get("referenced_chunks", []) if metadata else [],
-            applied_commands=metadata.get("commands", {}) if metadata else {},
+            applied_commands=metadata.get("applied_commands", {}) if metadata else {},
         )
         self.db.add(message)
         self.db.commit()

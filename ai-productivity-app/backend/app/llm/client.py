@@ -28,13 +28,44 @@ from typing import Any, Dict, List, Sequence
 # ``app.compat.stubs`` when the real *openai* SDK is not available.
 # ---------------------------------------------------------------------------
 
+import sys
+
+# ---------------------------------------------------------------------------
+# Mandatory dependency check -------------------------------------------------
+# ---------------------------------------------------------------------------
+#
+# The production build **requires** the official OpenAI (or Azure OpenAI)
+# SDK.  Inside the restricted CI sandbox the lightweight replacements are
+# injected by ``app.compat.stubs`` *before* this file is imported which means
+# the following import succeeds even when the real package is absent.  When
+# the code runs **outside** the sandbox, however, silently falling back to an
+# inert stub would hide mis-configuration from the operator and inevitably
+# lead to confusing runtime behaviour ("why does the model never answer?").
+#
+# Therefore we attempt to import the SDK **exactly once**.  When it fails and
+# we are *not* in sandbox mode we raise a *clear, actionable* error message
+# instructing the user to install the missing dependency instead of
+# continuing with a fake implementation.
+# ---------------------------------------------------------------------------
+
+_IN_SANDBOX = (
+    os.getenv("APP_CI_SANDBOX") == "1" or "pytest" in sys.modules
+)
+
 try:
     from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover – handled by compat.stubs
-    # ``compat.stubs.install_stubs`` already inserted a synthetic *openai*
-    # module that exposes *AsyncOpenAI* / *AsyncAzureOpenAI* so we can import
-    # it after the fact without additional work.
-    from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore  # noqa: E501 pylint: disable=ungrouped-imports
+except ModuleNotFoundError as exc:
+    if _IN_SANDBOX:
+        # ``app.compat`` installed a stubbed *openai* module – try again.  The
+        # second import succeeds because the placeholder now exists.
+        from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore  # noqa: E501 pylint: disable=ungrouped-imports
+    else:  # production / dev environment → fail fast with helpful message
+        raise ImportError(
+            "OpenAI SDK not found.  Install the official package via "
+            "`pip install openai` or configure Azure OpenAI credentials.  "
+            "The backend refuses to start with the stubbed compatibility "
+            "layer to avoid silent mis-configuration."
+        ) from exc
 
 # Sentry is entirely optional for tests – use a fallback when not present.
 try:
@@ -242,14 +273,53 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # Regular Chat Completions (OpenAI or non-preview Azure)
             # -----------------------------------------------------------------
 
-            return await self.client.chat.completions.create(
-                model=self.active_model,
-                messages=messages,
-                temperature=temperature,
-                stream=stream,
-                tools=tools,
-                max_tokens=max_tokens,
-            )
+            # -----------------------------------------------------------------
+            # Compatibility shim – the *tools* parameter replaced the older
+            # *functions* field.  When the runtime OpenAI SDK (or upstream
+            # HTTP API) rejects the *tools* argument with a *TypeError* or
+            # *OpenAI* error code we transparently retry with *functions* so
+            # that users running older versions continue to get responses
+            # instead of a cryptic 400.
+            # -----------------------------------------------------------------
+
+            call_kwargs: Dict[str, Any] = {
+                "model": self.active_model,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": stream,
+                "max_tokens": max_tokens,
+            }
+
+            if tools:
+                call_kwargs["tools"] = tools
+
+            try:
+                return await self.client.chat.completions.create(**call_kwargs)
+            except Exception as exc:  # noqa: BLE001 – capture BadRequest / TypeError alike
+                # 1. The newest SDK raises *TypeError* when an unexpected
+                #    keyword parameter is supplied.
+                # 2. The HTTP backend (or older SDK versions) raise
+                #    *BadRequestError* for the same situation.  We therefore
+                #    broaden the except clause and inspect the message only
+                #    when we added *tools* – to avoid masking unrelated
+                #    failures (network, invalid key, …).
+
+                has_tools = "tools" in call_kwargs
+
+                if has_tools and (
+                    isinstance(exc, TypeError)
+                    or exc.__class__.__name__ in {  # guard against stub types
+                        "BadRequestError",
+                        "InvalidRequestError",
+                    }
+                ):
+                    legacy_kwargs = dict(call_kwargs)
+                    legacy_kwargs.pop("tools")
+                    legacy_kwargs["functions"] = tools  # type: ignore[arg-type]
+                    return await self.client.chat.completions.create(**legacy_kwargs)
+
+                # Re-raise unchanged – caller handles logging / user feedback.
+                raise
 
         except Exception as exc:  # noqa: BLE001 – broad for logging / Sentry
             # Forward exception after capturing telemetry so calling code can
