@@ -131,6 +131,25 @@ export default function ProjectChatPage() {
   const [editorLanguage, setEditorLanguage] = useState('python');
   const [currentFile, setCurrentFile] = useState();
 
+  // -------------------------------------------------------------
+  // Knowledge-assistant helpers – must run every render to keep
+  // hook order stable (fixes “Rendered more hooks…” error)
+  // -------------------------------------------------------------
+  const handleSuggestionApply = useCallback(
+    (suggestion, citations) => {
+      setEditorContent(suggestion);
+      if (citations?.length) addToCitations(citations);
+    },
+    [addToCitations]
+  );
+
+  const handleContextAdd = useCallback(
+    (context) => {
+      addToCitations([context]);
+    },
+    [addToCitations]
+  );
+
   // ---------------------------------------------------------------------------
   // Callbacks
   // ---------------------------------------------------------------------------
@@ -362,20 +381,6 @@ export default function ProjectChatPage() {
   // Main render
   // ----------------------------------------------------------------------------------
 
-  // Helper function to handle knowledge suggestions using unified context
-  const handleSuggestionApply = useCallback((suggestion, citations) => {
-    // Apply the suggestion to the editor or input
-    setEditorContent(suggestion);
-    // Add citations to unified knowledge context
-    if (citations && citations.length > 0) {
-      addToCitations(citations);
-    }
-  }, [setEditorContent, addToCitations]);
-
-  const handleContextAdd = useCallback((context) => {
-    // Add context to unified knowledge context
-    addToCitations([context]);
-  }, [addToCitations]);
 
   // Create assistant panels for different contexts
   const desktopAssistantPanel = (
@@ -406,7 +411,7 @@ export default function ProjectChatPage() {
               {project.title}
             </h1>
             <ConnectionIndicator state={connectionState} />
-            <ModelSwitcher compact={isMobile} currentModel={currentModel} onModelChange={setCurrentModel} />
+            <ModelSwitcher compact={isMobile} currentModel={currentModel} onModelChange={setModel} />
           </div>
 
           <div className="flex items-center space-x-2">
