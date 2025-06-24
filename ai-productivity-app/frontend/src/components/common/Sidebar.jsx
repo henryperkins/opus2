@@ -22,9 +22,11 @@ import ThemeToggle from './ThemeToggle';
 import KeyboardShortcutsModal from '../modals/KeyboardShortcutsModal';
 import WhatsNewModal from '../modals/WhatsNewModal';
 import DocumentationModal from '../modals/DocumentationModal';
+import { useMediaQuery } from '../../hooks/useMediaQuery';   // NEW
 
 const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
   const { user } = useAuth();
+  const { isDesktop } = useMediaQuery();            // NEW
   const navigate = useNavigate();
   const location = useLocation();
   const { projects, loading: projectsLoading, search } = useProjectSearch();
@@ -44,6 +46,9 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
   const [isKeyboardShortcutsModalOpen, setKeyboardShortcutsModalOpen] = useState(false);
   const [isWhatsNewModalOpen, setWhatsNewModalOpen] = useState(false);
   const [isDocumentationModalOpen, setDocumentationModalOpen] = useState(false);
+
+  // Helper to close sidebar on mobile/tablet after navigation
+  const closeOnMobile = () => { if (!isDesktop) onToggle(); };
 
   // ---------------------------------------------------------------------------
   // Data loaders – wrapped in useCallback to keep references stable and avoid
@@ -112,10 +117,12 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
   const handleNewChat = () => {
     // Navigate to projects page for new chat creation
     navigate('/projects', { state: { action: 'new-chat' } });
+    closeOnMobile();          // NEW
   };
 
   const handleNewProject = () => {
     navigate('/projects?action=create');
+    closeOnMobile();          // NEW
   };
 
   const handleProjectChatNavigation = (project) => {
@@ -129,14 +136,17 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
     navigate(`/projects/${project.id}/chat`, { 
       state: { project } 
     });
+    closeOnMobile();          // NEW
   };
 
   const handleProjectAnalyticsNavigation = (project) => {
     navigate(`/projects/${project.id}/analytics`);
+    closeOnMobile();          // NEW
   };
 
   const handleProjectFilesNavigation = (project) => {
     navigate(`/projects/${project.id}/files`);
+    closeOnMobile();          // NEW
   };
 
   const formatTimestamp = (timestamp) => {
@@ -176,7 +186,14 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
 
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => setIsPinned(!isPinned)}
+            onClick={() => {
+              setIsPinned(prev => {
+                const next = !prev;
+                // persist preference – requires tiny helper already available in the store
+                useAuthStore.getState().setPreference?.('sidebarPinned', next);
+                return next;
+              });
+            }}
             className="p-1.5 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             title={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
           >
@@ -236,6 +253,7 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
         <div className="space-y-1">
           <Link
             to="/"
+            onClick={closeOnMobile}
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
               isActive('/')
                 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
@@ -251,6 +269,7 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
 
           <Link
             to="/search"
+            onClick={closeOnMobile}
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
               isActive('/search')
                 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
@@ -265,6 +284,7 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
 
           <Link
             to="/models"
+            onClick={closeOnMobile}
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
               location.pathname.startsWith('/models')
                 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
@@ -279,6 +299,7 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
 
           <Link
             to="/timeline"
+            onClick={closeOnMobile}
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
               isActive('/timeline')
                 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
@@ -425,6 +446,7 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
             <div className="mt-2 space-y-1">
               <Link
                 to="/projects"
+                onClick={closeOnMobile}
                 className={`flex items-center space-x-2 px-3 py-2 text-sm rounded-lg transition-colors ${
                   isActive('/projects')
                     ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
@@ -443,7 +465,7 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
               {projects.slice(0, 5).map((project) => (
                 <button
                   key={project.id}
-                  onClick={() => handleProjectChatNavigation(project)}
+                  onClick={() => { handleProjectChatNavigation(project); }}
                   className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
                   disabled={projectsLoading}
                 >
@@ -602,6 +624,7 @@ Sidebar.defaultProps = {
 Sidebar.propTypes = {
   onToggle: PropTypes.func,
   className: PropTypes.string,
+  isOpen: PropTypes.bool,          // NEW
 };
 
 
