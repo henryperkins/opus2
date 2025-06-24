@@ -168,22 +168,116 @@ class ContextBuilder:
     def build_conversation_context(
         self,
         session_id: int,
-        max_messages: int = 10
+        max_messages: int = 20,
+        max_tokens: int = 8000
     ) -> List[Dict]:
-        """Build context from recent conversation."""
+        """Build context from recent conversation with token management."""
         messages = self.db.query(ChatMessage).filter_by(
             session_id=session_id,
             is_deleted=False
-        ).order_by(ChatMessage.id.desc()).limit(max_messages).all()
+        ).order_by(ChatMessage.created_at.desc()).limit(max_messages).all()
 
-        return [
-            {
+        # Build context with token counting
+        context_messages = []
+        total_tokens = 0
+        
+        for msg in reversed(messages):  # Process in chronological order
+            # Estimate tokens (rough: 4 chars per token)
+            msg_tokens = len(msg.content) // 4
+            
+            # Include code snippets in token count
+            if msg.code_snippets:
+                for snippet in msg.code_snippets:
+                    if isinstance(snippet, dict) and 'code' in snippet:
+                        msg_tokens += len(snippet['code']) // 4
+            
+            # Check if adding this message would exceed token limit
+            if total_tokens + msg_tokens > max_tokens and context_messages:
+                break
+                
+            context_msg = {
                 'role': msg.role,
                 'content': msg.content,
-                'code_snippets': msg.code_snippets
+                'id': msg.id,
+                'created_at': msg.created_at.isoformat(),
+                'tokens': msg_tokens
             }
-            for msg in reversed(messages)
-        ]
+            
+            # Include code snippets if available
+            if msg.code_snippets:
+                context_msg['code_snippets'] = msg.code_snippets
+                
+            # Include referenced files for context continuity
+            if msg.referenced_files:
+                context_msg['referenced_files'] = msg.referenced_files
+                
+            context_messages.append(context_msg)
+            total_tokens += msg_tokens
+
+        logger.debug(f"Built conversation context: {len(context_messages)} messages, ~{total_tokens} tokens")
+        return context_messages
+
+    def get_conversation_summary(self, session_id: int, up_to_message_id: int = None) -> Optional[str]:
+        """Get a summary of earlier conversation context."""
+        query = self.db.query(ChatMessage).filter_by(
+            session_id=session_id,
+            is_deleted=False
+        ).order_by(ChatMessage.created_at)
+        
+        if up_to_message_id:
+            query = query.filter(ChatMessage.id < up_to_message_id)
+            
+        older_messages = query.limit(50).all()  # Summarize up to 50 older messages
+        
+        if len(older_messages) < 5:  # Not worth summarizing
+            return None
+            
+        # Build summary of key topics and decisions
+        topics = []
+        for msg in older_messages[-10:]:  # Focus on more recent of the older messages
+            if msg.role == 'user' and len(msg.content) > 50:
+                topics.append(f"User asked about: {msg.content[:100]}...")
+            elif msg.role == 'assistant' and msg.referenced_files:
+                topics.append(f"Discussed files: {', '.join(msg.referenced_files[:3])}")
+                
+        if topics:
+            return f"Earlier conversation context: {'; '.join(topics[:5])}"
+        return None
+
+    def create_timeline_event(self, session_id: int, message_content: str, referenced_files: List[str] = None):
+        """Create timeline event for analytics tracking - integrates with existing timeline system."""
+        try:
+            from app.models.timeline import TimelineEvent
+            from app.models.chat import ChatSession
+            
+            # Get the session to find the project_id
+            session = self.db.query(ChatSession).filter_by(id=session_id).first()
+            if not session:
+                return
+                
+            # Create timeline event using existing EVENT_CHAT_MESSAGE
+            event_data = {
+                'message_preview': message_content[:100] + '...' if len(message_content) > 100 else message_content,
+                'referenced_files_count': len(referenced_files) if referenced_files else 0,
+                'has_code_context': bool(referenced_files)
+            }
+            
+            if referenced_files:
+                event_data['referenced_files'] = referenced_files[:5]  # Limit for storage
+                
+            timeline_event = TimelineEvent(
+                project_id=session.project_id,
+                event_type='EVENT_CHAT_MESSAGE',
+                event_data=event_data
+            )
+            
+            self.db.add(timeline_event)
+            self.db.commit()
+            logger.debug(f"Created timeline event for chat message in session {session_id}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to create timeline event: {e}")
+            # Don't fail the main conversation flow due to analytics issues
 
     def _format_chunk(self, chunk: CodeEmbedding) -> Dict:
         """Format chunk for context."""

@@ -68,6 +68,13 @@ class ChatProcessor:
             message.referenced_files = [ref['path'] for ref in context['file_references']]
             message.referenced_chunks = [c['document_id'] for c in context['chunks']]
             self.db.commit()
+            
+            # Create timeline event for analytics (integrates with existing timeline system)
+            self.context_builder.create_timeline_event(
+                session_id=session_id,
+                message_content=message.content,
+                referenced_files=message.referenced_files
+            )
 
             # Execute slash commands
             commands = await command_registry.execute_commands(
@@ -127,33 +134,71 @@ class ChatProcessor:
         websocket: WebSocket
     ):
         """Generate and stream AI response."""
-        # Build conversation history
-        conversation = self.context_builder.build_conversation_context(session_id)
+        # Get runtime configuration for context management
+        runtime_config = llm_client._get_runtime_config()
+        max_context_tokens = runtime_config.get("maxTokens", settings.max_context_tokens)
+        
+        # Reserve tokens for response generation (typically 30-40% of max)
+        available_context_tokens = int(max_context_tokens * 0.6)
+        
+        # Build conversation history with token management
+        conversation = self.context_builder.build_conversation_context(
+            session_id=session_id,
+            max_tokens=available_context_tokens // 2  # Reserve half for code context
+        )
 
         # Prepare messages for LLM
-        messages = [
-            {
-                "role": "system",
-                "content": """You are an AI coding assistant with access to the project codebase.
+        system_prompt = """You are an AI coding assistant with access to the project codebase.
 You can analyze code, explain functionality, generate tests, and help with development tasks.
 Always provide clear, concise, and accurate responses.
-When referencing code, mention the file path and line numbers."""
-            }
-        ]
+When referencing code, mention the file path and line numbers.
+Maintain conversation context and refer to previous discussions when relevant."""
+
+        messages = [{"role": "system", "content": system_prompt}]
+
+        # Add conversation summary if we have older context
+        if conversation and len(conversation) >= 15:  # If we have substantial history
+            oldest_message_id = conversation[0]['id']
+            summary = self.context_builder.get_conversation_summary(
+                session_id=session_id,
+                up_to_message_id=oldest_message_id
+            )
+            if summary:
+                messages.append({
+                    "role": "system",
+                    "content": f"Previous conversation summary: {summary}"
+                })
 
         # Add code context if available
         if context['chunks']:
             code_context = llm_client.prepare_code_context(context['chunks'])
             messages.append({
                 "role": "system",
-                "content": code_context
+                "content": f"Relevant code context:\n{code_context}"
             })
 
-        # Add conversation history
-        for msg in conversation[-5:]:  # Last 5 messages
+        # Add conversation history (all messages within token limit)
+        for msg in conversation:
+            msg_content = msg['content']
+            
+            # Enhance message with code context if available
+            if msg.get('code_snippets'):
+                code_refs = []
+                for snippet in msg['code_snippets']:
+                    if isinstance(snippet, dict):
+                        lang = snippet.get('language', 'text')
+                        code_refs.append(f"[{lang} code included]")
+                if code_refs:
+                    msg_content += f" {' '.join(code_refs)}"
+                    
+            # Include file references for context continuity
+            if msg.get('referenced_files'):
+                file_refs = ', '.join(msg['referenced_files'][:3])
+                msg_content += f" [Referenced files: {file_refs}]"
+            
             messages.append({
                 "role": msg['role'],
-                "content": msg['content']
+                "content": msg_content
             })
 
         # Add current prompt
@@ -161,11 +206,14 @@ When referencing code, mention the file path and line numbers."""
             "role": "user",
             "content": prompt
         })
+        
+        # Log context information for debugging
+        logger.debug(f"Built LLM context: {len(messages)} messages, {len(conversation)} conversation history, {len(context.get('chunks', []))} code chunks")
 
         # Create placeholder message
         ai_message = await self.chat_service.create_message(
             session_id=session_id,
-            content="",
+            content="Generating response...",
             role='assistant'
         )
 
@@ -237,6 +285,9 @@ When referencing code, mention the file path and line numbers."""
                 ai_message.code_snippets = code_snippets
 
             self.db.commit()
+            
+            # Track response quality metrics for analytics
+            await self._track_response_quality(ai_message, context, full_response)
 
         except Exception as e:
             logger.error("AI generation error", exc_info=True)
@@ -272,6 +323,40 @@ When referencing code, mention the file path and line numbers."""
             })
 
         return snippets
+
+    async def _track_response_quality(self, ai_message, context: Dict, response_content: str):
+        """Track response quality metrics - integrates with existing analytics."""
+        try:
+            # Calculate basic quality metrics similar to frontend ResponseQuality component
+            has_code = bool(self._extract_code_snippets(response_content))
+            has_structure = any(marker in response_content for marker in ['•', '1.', '##', '-'])
+            has_citations = bool(context.get('chunks', []))
+            
+            # Simple quality scoring
+            relevance = 0.9 if has_citations else 0.7
+            helpfulness = (0.3 if has_structure else 0) + (0.3 if has_code else 0) + (0.4 if len(response_content) > 200 else 0)
+            completeness = min(len(response_content) / 500, 1) * 0.7 + (0.3 if has_structure else 0)
+            
+            # This could be sent to the analytics API or stored directly
+            quality_data = {
+                'message_id': ai_message.id,
+                'session_id': ai_message.session_id,
+                'relevance': relevance,
+                'helpfulness': helpfulness,
+                'completeness': completeness,
+                'has_code': has_code,
+                'has_structure': has_structure,
+                'has_citations': has_citations,
+                'response_length': len(response_content),
+                'context_chunks': len(context.get('chunks', [])),
+                'referenced_files': len(context.get('file_references', []))
+            }
+            
+            logger.debug(f"Response quality metrics: {quality_data}")
+            # TODO: Integrate with analytics API when ready for persistent storage
+            
+        except Exception as e:
+            logger.warning(f"Failed to track response quality: {e}")
 
     async def generate_summary(self, session_id: int) -> str:
         """Generate chat session summary."""
