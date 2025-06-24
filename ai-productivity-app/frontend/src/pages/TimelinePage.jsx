@@ -30,7 +30,7 @@ export default function TimelinePage() {
   }, [authLoading, user]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
 
       <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Breadcrumb */}
@@ -39,7 +39,7 @@ export default function TimelinePage() {
             <li className="inline-flex items-center">
               <Link
                 to="/"
-                className="inline-flex items-center text-gray-500 hover:text-gray-700"
+                className="inline-flex items-center text-gray-500 hover:text-gray-300 dark:hover:text-gray-300"
               >
                 <svg
                   className="w-4 h-4 mr-1"
@@ -55,13 +55,13 @@ export default function TimelinePage() {
             <li>
               <div className="flex items-center">
                 <svg
-                  className="w-4 h-4 text-gray-400 mx-1"
+                  className="w-4 h-4 text-gray-400 dark:text-gray-500 mx-1"
                   fill="currentColor"
                   viewBox="0 0 20 20"
                 >
                   <path d="M7.05 4.05a7 7 0 019.9 9.9l-6.364 6.364a.75.75 0 01-1.06 0L2.343 14.05a7 7 0 014.707-9.999Z" />
                 </svg>
-                <span className="ml-1 text-gray-700 font-medium">Timeline</span>
+                <span className="ml-1 text-gray-700 dark:text-gray-300 font-medium">Timeline</span>
               </div>
             </li>
           </ol>

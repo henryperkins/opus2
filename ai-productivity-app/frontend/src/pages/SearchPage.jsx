@@ -66,7 +66,7 @@ export default function SearchPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
 
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
@@ -77,7 +77,7 @@ export default function SearchPage() {
         </div>
 
         {/* Search Bar */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
           <SearchBar
             value={query}
             onChange={updateQuery}
@@ -122,7 +122,7 @@ export default function SearchPage() {
         <div className="flex gap-6">
           {/* Filters Sidebar */}
           <div className="w-64 flex-shrink-0">
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <SearchFilters
                 filters={filters}
                 onChange={updateFilters}
@@ -164,12 +164,12 @@ export default function SearchPage() {
           {/* Search Results */}
           <div className="flex-1">
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+              <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-700 rounded-md p-4 mb-6">
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
 
-            <div className="bg-white rounded-lg shadow">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
               <div className="p-6">
                 {totalResults > 0 && (
                   <div className="mb-4 flex items-center justify-between">
@@ -203,8 +203,8 @@ export default function SearchPage() {
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={() => setShowGraph(false)} />
 
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full">
+              <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-medium text-gray-900">
                     Dependency Graph

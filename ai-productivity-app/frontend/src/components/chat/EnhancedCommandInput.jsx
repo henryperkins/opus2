@@ -184,9 +184,10 @@ export default function EnhancedCommandInput({
       setShowSuggestions(false);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-      // Add to timeline
+      // Add to project timeline for activity tracking
       addEvent({
-        type: 'chat_message',
+        event_type: 'chat_message',
+        title: 'Chat message sent',
         description: `Sent message: ${message.substring(0, 50)}...`,
         metadata: { hasAttachments: attachments.length > 0 }
       });
@@ -354,10 +355,10 @@ export default function EnhancedCommandInput({
       )}
 
       {/* Input form */}
-      <form onSubmit={handleSubmit} className="p-4">
+      <form onSubmit={handleSubmit} className="p-2 sm:p-4">
         {/* Attachments */}
         {attachments.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
+          <div className="mb-2 flex flex-nowrap sm:flex-wrap gap-2 overflow-x-auto pb-1">
             {attachments.map((file, idx) => (
               <div key={idx} className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1 text-sm">
                 <Paperclip className="w-3 h-3" />
@@ -376,7 +377,7 @@ export default function EnhancedCommandInput({
 
         <div className="flex items-end gap-2">
           {/* File attachment button */}
-          <label className="cursor-pointer text-gray-500 hover:text-gray-700">
+          <label className="cursor-pointer text-gray-500 hover:text-gray-700 flex-shrink-0">
             <input
               type="file"
               multiple
@@ -388,7 +389,7 @@ export default function EnhancedCommandInput({
           </label>
 
           {/* Input area */}
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {inputMode === 'simple' ? (
               <textarea
                 ref={textareaRef}
@@ -396,7 +397,7 @@ export default function EnhancedCommandInput({
                 onChange={handleTextareaChange}
                 onKeyDown={handleKeyDown}
                 placeholder="Type a message or / for commands..."
-                className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                 rows="1"
                 disabled={isSending}
               />
@@ -437,7 +438,7 @@ export default function EnhancedCommandInput({
           <button
             type="submit"
             disabled={isSending || !message.trim()}
-            className={`p-2 rounded-lg ${
+                className={`p-2 sm:p-3 rounded-lg flex-shrink-0 ${
               isSending || !message.trim()
                 ? 'bg-gray-200 text-gray-400'
                 : 'bg-blue-600 text-white hover:bg-blue-700'

@@ -113,15 +113,15 @@ export default function TimelineEvent({ event }) {
     <div className="timeline-event relative mb-6 pl-8">
       <div className="absolute left-0 top-1 flex flex-col items-center">
         <span className="text-lg">{eventIcon(event.event_type)}</span>
-        <span className="w-1 h-full bg-gray-300 absolute top-6" />
+        <span className="w-1 h-full bg-gray-300 dark:bg-gray-700 absolute top-6" />
       </div>
       <div className="ml-2">
         <div className="flex items-center gap-2">
           <span className="font-semibold">{event.title}</span>
-          <span className="text-gray-400 text-xs">{formatRelative(event.created_at)}</span>
+          <span className="text-gray-400 dark:text-gray-500 text-xs">{formatRelative(event.created_at)}</span>
         </div>
         {event.description && (
-          <div className="mt-1 text-sm text-gray-600">{event.description}</div>
+          <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">{event.description}</div>
         )}
         {renderEventDetails()}
       </div>

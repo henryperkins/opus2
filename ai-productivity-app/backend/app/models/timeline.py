@@ -77,6 +77,8 @@ class TimelineEvent(Base, TimestampMixin):
     EVENT_COMMENT = "comment"
     # Chat specific events (Phase-5)
     EVENT_CHAT_CREATED = "chat_created"
+    # Individual chat message logged in timeline
+    EVENT_CHAT_MESSAGE = "chat_message"
 
     @validates("event_type")
     def validate_event_type(self, key, event_type):
@@ -91,6 +93,7 @@ class TimelineEvent(Base, TimestampMixin):
             self.EVENT_MILESTONE,
             self.EVENT_COMMENT,
             self.EVENT_CHAT_CREATED,
+            self.EVENT_CHAT_MESSAGE,
         ]
         if event_type not in valid_types:
             raise ValueError(

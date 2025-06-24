@@ -308,10 +308,10 @@ export default function ChatPage() {
 
   // Main chat interface
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
       <ErrorBoundary>
         {/* Header with model switcher */}
-        <Header>
+        <Header className="sticky top-0 z-20 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur flex-shrink-0">
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center space-x-4">
               <h1 className="text-xl font-semibold">{project.title}</h1>
@@ -358,9 +358,10 @@ export default function ChatPage() {
         {/* Main content area */}
         <div className="flex-1">
           {isMobile ? (
-            // Mobile layout with bottom sheet
-            <div className="flex flex-col h-screen">
-              <div className="flex-1 overflow-y-auto">
+            {/* Mobile layout */}
+            <div className="flex flex-col flex-1 overflow-hidden">
+              {/* Messages list */}
+              <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
                 <div className="px-4 py-6">
                   {messages.map(renderMessage)}
                 </div>
@@ -378,7 +379,11 @@ export default function ChatPage() {
                 />
               </MobileBottomSheet>
 
-              <div className="border-t bg-white dark:bg-gray-900 dark:border-gray-700">
+              {/* Input bar */}
+              <div
+                className="border-t bg-white dark:bg-gray-900 dark:border-gray-700 px-2 pt-1 pb-2"
+                style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+              >
                 <EnhancedCommandInput
                   onSend={handleSendMessage}
                   onTyping={sendTypingIndicator}

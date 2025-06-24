@@ -120,6 +120,7 @@ class TimelineEventType(str, Enum):
     MILESTONE = "milestone"
     COMMENT = "comment"
     CHAT_CREATED = "chat_created"
+    CHAT_MESSAGE = "chat_message"
 
 
 class TimelineEventCreate(BaseModel):

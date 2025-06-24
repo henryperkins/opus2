@@ -31,8 +31,7 @@ export default function MobileBottomSheet({
   const sheetRef = useRef(null);
   const contentRef = useRef(null);
 
-  // Calculate sheet height based on snap point
-  // Calculate height in pixels and round for Safari rendering quirks
+  // Calculate sheet height based on snap point (pixels, rounded to avoid Safari quirks)
   const sheetHeight = Math.round(windowSize.height * currentSnap);
 
   // Handle drag start
@@ -135,10 +134,11 @@ export default function MobileBottomSheet({
       {/* Bottom Sheet */}
       <div
         ref={sheetRef}
-        className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 flex flex-col dynamic-height dynamic-transform ${className}`}
+        className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl z-50 flex flex-col transition-transform duration-300 transform-gpu md:hidden ${className}`}
         style={{
-          '--dynamic-height': `${sheetHeight}px`,
-          '--dynamic-transform': isOpen ? 'translateY(0)' : 'translateY(100%)',
+          height: `${sheetHeight}px`,
+          transform: `translateY(${isOpen ? '0' : '100%'})`,
+          maxHeight: '90vh',
         }}
         {...props}
       >

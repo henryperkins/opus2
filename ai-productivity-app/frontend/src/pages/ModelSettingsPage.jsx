@@ -5,7 +5,7 @@ import ModelConfiguration from '../components/settings/ModelConfiguration';
 
 export default function ModelSettingsPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
 
       <main className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Model Configuration</h1>
