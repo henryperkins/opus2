@@ -11,7 +11,8 @@ export default function KnowledgeAssistant({
   onSuggestionApply,
   onContextAdd,
   isVisible = true,
-  position = 'right'
+  position = 'right',
+  containerMode = 'overlay' // 'overlay' for desktop, 'inline' for mobile
 }) {
   // Normalise *message* so that downstream code always sees a *string*
   const message = typeof incomingMessage === 'string' ? incomingMessage : '';
@@ -136,12 +137,23 @@ export default function KnowledgeAssistant({
 
   if (!isVisible) return null;
 
-  return (
-    <div className={`fixed ${position === 'right' ? 'right-4' : 'left-4'} top-20 w-96 z-40`}>
-      {/* Main Assistant Panel */}
-      <div className={`bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden transition-all ${
+  // Determine container styles based on mode
+  const containerClass = containerMode === 'overlay' 
+    ? `fixed ${position === 'right' ? 'right-4' : 'left-4'} top-20 w-96 z-40`
+    : 'w-full h-full flex flex-col';
+
+  const panelClass = containerMode === 'overlay'
+    ? `bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden transition-all ${
         isMinimized ? 'h-12' : 'max-h-[70vh]'
-      }`}>
+      }`
+    : `bg-white border-t border-gray-200 overflow-hidden transition-all flex-1 ${
+        isMinimized ? 'h-12 flex-none' : 'flex flex-col'
+      }`;
+
+  return (
+    <div className={containerClass}>
+      {/* Main Assistant Panel */}
+      <div className={panelClass}>
         {/* Header */}
         <div
           className="px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white cursor-pointer"
@@ -213,8 +225,8 @@ export default function KnowledgeAssistant({
               projectId={projectId}
               onDocumentSelect={handleDocumentSelect}
               onCodeSelect={handleCodeSelect}
-              className="scrollable-content"
-              maxHeight="400px"
+              className={containerMode === 'overlay' ? "scrollable-content" : "flex-1 overflow-auto"}
+              maxHeight={containerMode === 'overlay' ? "400px" : undefined}
             />
 
             {/* Actions */}

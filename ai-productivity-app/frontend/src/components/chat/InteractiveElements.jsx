@@ -381,41 +381,134 @@ const ActionButtons = ({ element, onComplete }) => {
   );
 };
 
-export default function InteractiveElements({ elements, onElementComplete }) {
+export default function InteractiveElements({ elements, onElementComplete, codeExecutor }) {
+  // Create interaction handler for elements
+  const createInteractionHandler = (elementId) => async (action, data) => {
+    try {
+      // Handle different interaction types
+      switch (action) {
+        case 'run':
+          // For code execution, use the real code executor if provided
+          if (data.code && data.language && codeExecutor) {
+            try {
+              const result = await codeExecutor(data.code, data.language, elementId);
+              return {
+                output: result.output || '',
+                error: result.error || null,
+                execution_time: result.execution_time || 0,
+                type: 'code_execution'
+              };
+            } catch (error) {
+              return {
+                output: '',
+                error: error.message || 'Code execution failed',
+                execution_time: 0,
+                type: 'code_execution'
+              };
+            }
+          } else if (data.code && data.language) {
+            // Fallback for when no executor is provided
+            return {
+              output: `// Code execution not configured\n// Code: ${data.code.substring(0, 100)}...`,
+              error: null,
+              execution_time: 0.1,
+              type: 'code_execution'
+            };
+          }
+          break;
+          
+        case 'submit':
+          // For form submissions
+          return {
+            success: true,
+            message: 'Form submitted successfully',
+            type: 'form_submission',
+            data: data
+          };
+          
+        case 'select':
+          // For decision tree selections
+          return {
+            success: true,
+            selection: data.selectedOption,
+            type: 'decision_made',
+            data: data
+          };
+          
+        case 'build':
+          // For query builder
+          return {
+            success: true,
+            query: data.query,
+            type: 'query_built',
+            data: data
+          };
+          
+        case 'action':
+          // For action buttons
+          return {
+            success: true,
+            actionId: data.actionId,
+            type: 'action_triggered',
+            data: data
+          };
+          
+        default:
+          return {
+            success: true,
+            message: `Action ${action} completed`,
+            type: 'generic_interaction',
+            action: action,
+            data: data
+          };
+      }
+    } catch (error) {
+      return {
+        error: error.message || 'Interaction failed'
+      };
+    }
+  };
+
   const renderElement = (element) => {
+    // Inject the interaction handler into the element
+    const elementWithInteraction = {
+      ...element,
+      onInteraction: createInteractionHandler(element.id)
+    };
+
     switch (element.type) {
       case 'code':
         return (
           <ExecutableCode
-            element={element}
+            element={elementWithInteraction}
             onComplete={(result) => onElementComplete?.(element.id, result)}
           />
         );
       case 'query':
         return (
           <QueryBuilder
-            element={element}
+            element={elementWithInteraction}
             onComplete={(result) => onElementComplete?.(element.id, result)}
           />
         );
       case 'decision':
         return (
           <DecisionTree
-            element={element}
+            element={elementWithInteraction}
             onComplete={(result) => onElementComplete?.(element.id, result)}
           />
         );
       case 'form':
         return (
           <DynamicForm
-            element={element}
+            element={elementWithInteraction}
             onComplete={(result) => onElementComplete?.(element.id, result)}
           />
         );
       case 'action':
         return (
           <ActionButtons
-            element={element}
+            element={elementWithInteraction}
             onComplete={(result) => onElementComplete?.(element.id, result)}
           />
         );

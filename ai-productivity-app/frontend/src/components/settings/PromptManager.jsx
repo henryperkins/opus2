@@ -2,7 +2,8 @@
 // components/settings/PromptManager.jsx
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Copy, Save, X, FileText, Share2, Lock } from 'lucide-react';
-import { promptAPI } from '../../api/prompts';
+// Import promptAPI from the central API configuration module
+import { promptAPI } from '../../api/config';
 import { toast } from '../common/Toast';
 
 const categories = [

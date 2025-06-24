@@ -37,24 +37,28 @@ The following are implementation-verified single sources of truth. All contribut
 
 ### Frontend SSOTs
 
-- **Global Data Fetching & Caching (NEW)**
-  - **React-Query `QueryClient` singleton** in [`frontend/src/queryClient.js`](frontend/src/queryClient.js):
+- **Global Data Fetching & Caching**
+  - **TanStack Query `QueryClient` singleton** in [`frontend/src/queryClient.js`](frontend/src/queryClient.js):
     - Central source of truth for *all* remote data the browser knows about.
     - Provides caching, optimistic updates, de-duplication and refetch orchestration.
     - Components and hooks **must** obtain server data through
       `useQuery / useMutation` bound to this client – never via ad-hoc `axios` calls.
 
-- **Project State Management**
-  - [`useProjectStore`](frontend/src/stores/projectStore.js) in [`frontend/src/stores/projectStore.js`](frontend/src/stores/projectStore.js):
-    - Manages all canonical project data, filters, pagination, and state updates using Zustand.
-    - All features dealing with projects *must* utilize this store as the source of state and perform state mutations through defined store actions.
-    - Provides optimistic updates and caching with deduplication logic.
+- **Hybrid State Management Architecture**
+  - **Server State**: TanStack Query for all remote data and API interactions
+  - **Client State**: Zustand stores for local application state:
+    - [`useProjectStore`](frontend/src/stores/projectStore.js): Project data, filters, pagination, and state updates
+    - [`useAuthStore`](frontend/src/stores/authStore.js): User preferences (theme, settings) and session metadata
+    - [`useChatStore`](frontend/src/stores/chatStore.js): Chat-specific client state and UI preferences
+  - **Runtime Context**: React Context for cross-cutting concerns:
+    - [`AuthContext`](frontend/src/contexts/AuthContext.jsx): Authentication runtime state powered by TanStack Query (`useQuery(['me'])`)
 
-- **Authentication & User Preferences**
-  - Dual-layer auth management:
-    - [`AuthContext`](frontend/src/contexts/AuthContext.jsx): Runtime user session state, login/logout operations **powered by React-Query** (`useQuery(['me'])`).
-    - [`useAuthStore`](frontend/src/stores/authStore.js): Persists lightweight user preferences (theme, last-login etc.) using Zustand.
-  - `AuthContext` must mutate the `['me']` cache key on login/logout so that every open tab receives up-to-date user state.  Do **not** bypass this path.
+- **Primary Chat Interface**
+  - [`ProjectChatPage`](frontend/src/pages/ProjectChatPage.jsx): **Main chat interface** replacing removed ChatPage.jsx
+    - Integrated code execution, knowledge base, and AI model selection
+    - Mobile-first responsive design with bottom sheet integration
+    - Enhanced message rendering with streaming support and citations
+    - WebSocket-powered real-time communication
 
 - **Project Interaction Hooks**
   - Custom hooks in [`frontend/src/hooks/useProjects.js`](frontend/src/hooks/useProjects.js):
@@ -63,9 +67,18 @@ The following are implementation-verified single sources of truth. All contribut
     - `useProjectTimeline()`: Timeline event management
   - Chat interaction hooks in [`frontend/src/hooks/useChat.js`](frontend/src/hooks/useChat.js) – built on
     [`useWebSocketChannel`](frontend/src/hooks/useWebSocketChannel.js) for resilient real-time updates.
-  - Search / Knowledge hooks [`useSearch`](frontend/src/hooks/useSearch.js), [`useCodeSearch`](frontend/src/hooks/useCodeSearch.js),
-    [`useKnowledgeContext`](frontend/src/hooks/useKnowledgeContext.js) all fetch via React-Query.
+  - Knowledge and search hooks:
+    - [`useCodeSearch`](frontend/src/hooks/useCodeSearch.js): Code-specific search functionality
+    - [`useKnowledgeContext`](frontend/src/hooks/useKnowledgeContext.js): Knowledge base integration
   - Auth hooks in [`frontend/src/hooks/useAuth.js`](frontend/src/hooks/useAuth.js): `useAuth()`, `useUser()`, `useRequireAuth()`
+  - AI/Model hooks:
+    - [`useModelSelect`](frontend/src/hooks/useModelSelect.js): AI model selection and configuration
+    - [`useCodeExecutor`](frontend/src/hooks/useCodeExecutor.js): Code execution pipeline integration
+
+- **Mobile-First Design System**
+  - [`MobileBottomSheet`](frontend/src/components/common/MobileBottomSheet.jsx): Advanced mobile UI with gesture support
+  - [`useMediaQuery`](frontend/src/hooks/useMediaQuery.js): Responsive design helper for breakpoint management
+  - Mobile-optimized layouts in primary interfaces (ProjectChatPage, knowledge panels)
 
 _Legacy SWR has been fully removed as of 2025-W22._
 
@@ -218,6 +231,9 @@ The following application logic patterns and modules are essential for the corre
     - [`useProject()`](frontend/src/hooks/useProjects.js), [`useProjectSearch()`](frontend/src/hooks/useProjects.js), [`useProjectTimeline()`](frontend/src/hooks/useProjects.js)
     - [`useProjectStore`](frontend/src/stores/projectStore.js) for all project state management
     - [`useChat()`](frontend/src/hooks/useChat.js) for all chat-related actions and initialization
+  - Chat interface must use [`ProjectChatPage`](frontend/src/pages/ProjectChatPage.jsx) as the single source of truth for chat UI
+  - AI model selection must go through [`useModelSelect`](frontend/src/hooks/useModelSelect.js) hook
+  - Code execution must use [`useCodeExecutor`](frontend/src/hooks/useCodeExecutor.js) for all code running operations
   - Never bypass these hooks for direct API calls in components.
 
 - **HTTP Client Configuration:**
@@ -227,6 +243,43 @@ The following application logic patterns and modules are essential for the corre
     - Automatic 401/403 handling with logout events
     - Exponential backoff retry for 5xx errors
   - Never create separate Axios instances without these configurations.
+
+- **Mobile-First UI Patterns:**
+  - [`MobileBottomSheet`](frontend/src/components/common/MobileBottomSheet.jsx) must be used for all mobile modal/overlay interfaces
+  - Responsive breakpoints must be managed through [`useMediaQuery`](frontend/src/hooks/useMediaQuery.js) hook
+  - Mobile knowledge panel state must be managed consistently across all chat interfaces
+  - Touch gestures and swipe interactions must follow established patterns in MobileBottomSheet
+  - Never implement custom mobile modals or overlays without using the established bottom sheet pattern
+
+- **Enhanced Chat Architecture:**
+  - Message rendering must use [`EnhancedMessageRenderer`](frontend/src/components/chat/EnhancedMessageRenderer.jsx) for consistent formatting
+  - Command input must use [`EnhancedCommandInput`](frontend/src/components/chat/EnhancedCommandInput.jsx) for Monaco editor integration
+  - Streaming messages must use [`StreamingMessage`](frontend/src/components/chat/StreamingMessage.jsx) component
+  - Citations must be rendered via [`CitationRenderer`](frontend/src/components/chat/CitationRenderer.jsx)
+  - Interactive elements must be processed through established callback patterns
+  - Never implement custom message rendering outside these established components
+
+- **Unified State Management Patterns:**
+  - **Server State**: Must use TanStack Query (`useQuery`, `useMutation`) for all API data
+  - **Client State**: Must use designated Zustand stores for local state:
+    - Project data: `useProjectStore` only
+    - User preferences: `useAuthStore` only  
+    - Chat UI state: `useChatStore` only (when implemented)
+  - **Cross-cutting State**: Use React Context sparingly, only for auth runtime state
+  - **State Synchronization**: Server state changes must invalidate relevant TanStack Query cache keys
+  - Never duplicate state across multiple stores or contexts
+  - Never create ad-hoc state management outside established stores
+
+- **TypeScript Migration Standards:**
+  - All new components must be created as `.tsx` files with proper TypeScript
+  - Existing `.jsx` files should be migrated to `.tsx` when touched for feature work
+  - **Interface Definitions**: Create centralized interfaces in `frontend/src/types/`
+  - **Prop Types**: All component props must have proper TypeScript interfaces
+  - **API Response Types**: All API responses must have corresponding TypeScript types
+  - **Hook Return Types**: Custom hooks must explicitly type their return values
+  - **Event Handler Types**: Use proper React event handler types (`MouseEventHandler`, etc.)
+  - Never use `any` type - use proper typing or `unknown` with type guards
+  - Strict null checks must be enabled and respected
 
 ### Cross-Cutting Security Patterns
 
@@ -442,6 +495,9 @@ These layers collectively enforce application invariants, trust boundaries, and 
   - Never create direct database connections outside of `DatabaseDep`
   - Do not bypass Zustand stores for frontend state management
   - Never create separate HTTP clients without CSRF/auth configuration
+  - Do not implement duplicate chat interfaces outside of `ProjectChatPage`
+  - Never bypass established mobile UI patterns (`MobileBottomSheet`, `useMediaQuery`)
+  - Do not create custom message rendering outside of established chat components
 
 - **Development Practices:**
   - No feature toggling via untracked ad-hoc settings in production
@@ -463,6 +519,22 @@ These layers collectively enforce application invariants, trust boundaries, and 
   - Do not bypass `ChatService` for message operations
   - Never directly manipulate chat state without WebSocket notifications
   - Do not implement custom command handlers outside the registry pattern
+  - Do not create chat interfaces outside of `ProjectChatPage` architecture
+  - Never bypass `useModelSelect` for AI model selection
+  - Do not implement custom interactive element handlers outside established patterns
+
+- **Mobile UX Violations:**
+  - Never implement custom mobile overlays without using `MobileBottomSheet`
+  - Do not hardcode breakpoints - use `useMediaQuery` hook
+  - Never create inconsistent mobile knowledge panel implementations
+  - Do not bypass established responsive design patterns
+
+- **TypeScript Violations:**
+  - Never create new `.jsx` files - use `.tsx` with proper typing
+  - Do not use `any` type except in extreme legacy scenarios
+  - Never bypass TypeScript strict null checks
+  - Do not create untyped component props or hook returns
+  - Never use implicit `any` for API responses or complex objects
 
 ---
 

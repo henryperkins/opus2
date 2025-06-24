@@ -6,6 +6,8 @@ import UserMenu from '../auth/UserMenu';
 import ThemeToggle from './ThemeToggle';
 import Sidebar from './Sidebar';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { ResponsivePage, ShowOnDesktop, HideOnDesktop } from '../layout/ResponsiveContainer';
 import { Menu } from 'lucide-react';
 
 // -------------------------------------------------------------------------------------------------
@@ -17,6 +19,7 @@ export default function Layout({ children }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isMobile, isTablet } = useMediaQuery();
+  const layout = useResponsiveLayout();
   const isDesktop = !isMobile && !isTablet;
 
   // Always gate on authLoading for bulletproofness.
@@ -125,7 +128,7 @@ export default function Layout({ children }) {
         <header className="glass border-b border-white/20 dark:border-gray-700/20 transition-all duration-200 backdrop-blur-md flex-shrink-0 z-10">
           <div className="px-4 sm:px-6">
             <div className="flex justify-between items-center h-16">
-              {!isDesktop ? (
+              <HideOnDesktop>
                 <button
                   onClick={() => setSidebarOpen(true)}
                   className="p-2 -ml-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
@@ -136,9 +139,10 @@ export default function Layout({ children }) {
                   <span className="sr-only">Open sidebar</span>
                   <Menu className="h-6 w-6" />
                 </button>
-              ) : (
-                <div className="flex-1" /> /* Spacer for desktop */
-              )}
+              </HideOnDesktop>
+              <ShowOnDesktop>
+                <div className="flex-1" /> {/* Spacer for desktop */}
+              </ShowOnDesktop>
 
               <div className="flex items-center">
                 <UserMenu />
