@@ -72,14 +72,18 @@ class Settings(BaseSettings):
     # external databases continue to work unchanged.
     # -------------------------------------------------------------------
 
-    # Build absolute path <repo_root>/ai-productivity-app/data/app.db
+    # Build absolute path <repo_root>/ai-productivity-app/data/app.db (SQLite fallback)
     _DEFAULT_DB_PATH: ClassVar[Path] = (
         Path(__file__).resolve().parents[2]  # …/ai-productivity-app
         / "data"
         / "app.db"
     )
 
-    database_url: str = f"sqlite:///{_DEFAULT_DB_PATH.as_posix()}"
+    # Default to PostgreSQL, fallback to SQLite for development
+    database_url: str = Field(
+        default="postgresql://postgres:postgres@localhost:5432/ai_productivity",
+        description="Database connection URL"
+    )
     database_echo: bool = False
 
     # Security

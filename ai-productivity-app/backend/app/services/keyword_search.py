@@ -1,8 +1,8 @@
 # backend/app/services/keyword_search.py
-"""Keyword search implementation using FTS5."""
+"""Keyword search implementation with PostgreSQL FTS and SQLite FTS5 fallback."""
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import select, or_, and_, func
+from sqlalchemy import select, or_, and_, func, text
 import re
 import logging
 
@@ -17,6 +17,7 @@ class KeywordSearch:
 
     def __init__(self, db: Session):
         self.db = db
+        self.is_postgresql = db.bind.dialect.name == 'postgresql'
 
     async def search(
         self,
@@ -28,11 +29,14 @@ class KeywordSearch:
         """Perform keyword search using FTS5 and fallback methods."""
         results = []
 
-        # Try FTS5 search first
+        # Try PostgreSQL FTS or SQLite FTS5 search first
         try:
-            results.extend(await self._fts_search(query, project_ids, filters, limit))
+            if self.is_postgresql:
+                results.extend(await self._postgresql_fts_search(query, project_ids, filters, limit))
+            else:
+                results.extend(await self._fts_search(query, project_ids, filters, limit))
         except Exception as e:
-            logger.warning(f"FTS5 search failed: {e}")
+            logger.warning(f"Full-text search failed: {e}")
 
         # Fallback to LIKE search
         if len(results) < limit:
@@ -52,10 +56,54 @@ class KeywordSearch:
 
         return unique_results[:limit]
 
+    async def _postgresql_fts_search(
+        self, query: str, project_ids: List[int], filters: Optional[Dict], limit: int
+    ) -> List[Dict]:
+        """PostgreSQL full-text search with ranking."""
+        # Prepare query for PostgreSQL FTS
+        pg_query = self._prepare_postgresql_query(query)
+        
+        # Search across multiple content types
+        sql = text("""
+            SELECT 
+                m.rowid,
+                m.document_id,
+                m.chunk_id,
+                m.project_id,
+                m.content,
+                m.metadata,
+                ts_rank(to_tsvector('ai_english', m.content), plainto_tsquery('ai_english', :query)) as rank
+            FROM embedding_metadata m
+            WHERE to_tsvector('ai_english', m.content) @@ plainto_tsquery('ai_english', :query)
+                AND m.project_id = ANY(:project_ids)
+            ORDER BY rank DESC, m.created_at DESC
+            LIMIT :limit
+        """)
+        
+        result = self.db.execute(sql, {
+            'query': pg_query,
+            'project_ids': project_ids,
+            'limit': limit
+        })
+        
+        return [
+            {
+                'rowid': row.rowid,
+                'document_id': row.document_id,
+                'chunk_id': row.chunk_id,
+                'project_id': row.project_id,
+                'content': row.content,
+                'metadata': row.metadata,
+                'score': float(row.rank),
+                'search_type': 'postgresql_fts'
+            }
+            for row in result
+        ]
+
     async def _fts_search(
         self, query: str, project_ids: List[int], filters: Optional[Dict], limit: int
     ) -> List[Dict]:
-        """FTS5 full-text search."""
+        """SQLite FTS5 full-text search."""
         # Escape FTS5 special characters
         fts_query = self._prepare_fts_query(query)
 
@@ -160,7 +208,7 @@ class KeywordSearch:
         return results
 
     def _prepare_fts_query(self, query: str) -> str:
-        """Prepare query for FTS5."""
+        """Prepare query for SQLite FTS5."""
         # Remove special characters
         query = re.sub(r"[^\w\s]", " ", query)
 
@@ -169,3 +217,13 @@ class KeywordSearch:
         fts_terms = [f'"{term}"*' for term in terms if term]
 
         return " ".join(fts_terms)
+    
+    def _prepare_postgresql_query(self, query: str) -> str:
+        """Prepare query for PostgreSQL full-text search."""
+        # Clean query for PostgreSQL FTS
+        query = re.sub(r"[^\w\s]", " ", query)
+        
+        # Remove extra whitespace
+        query = " ".join(query.split())
+        
+        return query

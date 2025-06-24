@@ -38,7 +38,9 @@ export function useRequireAuth() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log('useRequireAuth effect triggered - loading:', loading, 'user:', !!user);
     if (!loading && !user) {
+      console.log('useRequireAuth: Redirecting to login - no user found');
       navigate('/login');
     }
   }, [user, loading, navigate]);

@@ -67,17 +67,6 @@ except ModuleNotFoundError as exc:
             "layer to avoid silent mis-configuration."
         ) from exc
 
-# Sentry is entirely optional for tests – use a fallback when not present.
-try:
-    import sentry_sdk  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover
-
-    class _StubSentry:  # pylint: disable=too-few-public-methods
-        @staticmethod
-        def capture_exception(_exc):
-            return None
-
-    sentry_sdk = _StubSentry()  # type: ignore
 
 from app.config import settings
 
@@ -166,7 +155,6 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 self._init_openai_client()
         except Exception as exc:  # noqa: BLE001 – propagate but record in Sentry
             logger.error("Failed to initialise LLM client: %s", exc, exc_info=True)
-            sentry_sdk.capture_exception(exc)
 
     def _get_runtime_config(self) -> Dict[str, Any]:
         """Get current runtime configuration, falling back to static settings."""
@@ -405,7 +393,6 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         except Exception as exc:  # noqa: BLE001 – broad for logging / Sentry
             # Forward exception after capturing telemetry so calling code can
             # decide how to react (retry, user-facing error, …).
-            sentry_sdk.capture_exception(exc)
             raise  # re-raise unchanged
 
     # ------------------------------------------------------------------

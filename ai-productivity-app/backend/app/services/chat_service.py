@@ -139,7 +139,7 @@ class ChatService:
         """Broadcast new message to session."""
         await connection_manager.send_message(
             {
-                "type": "new_message",
+                "type": "message",
                 "message": {
                     "id": message.id,
                     "content": message.content,
@@ -166,3 +166,4 @@ class ChatService:
             },
             message.session_id,
         )
+

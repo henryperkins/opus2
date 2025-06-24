@@ -6,6 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 export default [
   {
     files: ['**/*.{js,jsx}'],
+    ignores: ['**/*.test.{js,jsx}', '**/test/**', '**/tests/**', '**/api/client.js'],
     languageOptions: {
       ecmaVersion: 2021,
       sourceType: 'module',
@@ -17,7 +18,26 @@ export default [
       globals: {
         window: 'readonly',
         document: 'readonly',
-        console: 'readonly'
+        console: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        global: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        CustomEvent: 'readonly',
+        FormData: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        navigator: 'readonly',
+        fetch: 'readonly',
+        URLSearchParams: 'readonly',
+        URL: 'readonly',
+        location: 'readonly',
+        history: 'readonly',
+        btoa: 'readonly',
+        atob: 'readonly'
       }
     },
     plugins: {
@@ -34,16 +54,16 @@ export default [
           paths: [
             {
               name: 'axios',
-              message: 'Use frontend/src/api/client.js or React-query hooks instead of importing axios directly.',
-            },
+              message: 'Use frontend/src/api/client.js or React-query hooks instead of importing axios directly.'
+            }
           ],
           patterns: [
             {
               group: ['../api/*', './api/*'],
-              message: 'Components should call hooks, not API modules directly.',
-            },
-          ],
-        },
+              message: 'Components should call hooks, not API modules directly.'
+            }
+          ]
+        }
       ],
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'warn',
@@ -56,10 +76,55 @@ export default [
       react: {
         version: 'detect'
       }
+    }
+  },
+  {
+    files: ['**/*.test.{js,jsx}', '**/test/**/*.{js,jsx}', '**/tests/**/*.{js,jsx}'],
+    languageOptions: {
+      ecmaVersion: 2021,
+      sourceType: 'module',
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        console: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        vi: 'readonly',
+        vitest: 'readonly',
+        jest: 'readonly'
+      }
     },
-    env: {
-      browser: true,
-      es6: true
+    rules: {
+      'no-unused-vars': 'warn',
+      'react/prop-types': 'off'
+    }
+  },
+  {
+    // API layer files are allowed to import axios and other modules directly
+    files: ['**/api/**/*.{js,jsx}'],
+    languageOptions: {
+      ecmaVersion: 2021,
+      sourceType: 'module',
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        console: 'readonly',
+        process: 'readonly',
+        fetch: 'readonly',
+        FormData: 'readonly',
+        URLSearchParams: 'readonly',
+        URL: 'readonly'
+      }
+    },
+    rules: {
+      'no-restricted-imports': 'off',
+      'no-unused-vars': 'warn'
     }
   }
 ];

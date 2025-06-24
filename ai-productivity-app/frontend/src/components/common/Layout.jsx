@@ -5,6 +5,8 @@ import { useAuth } from '../../hooks/useAuth';
 import UserMenu from '../auth/UserMenu';
 import ThemeToggle from './ThemeToggle';
 import Sidebar from './Sidebar';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { Menu } from 'lucide-react';
 
 // -------------------------------------------------------------------------------------------------
 // Global layout wrapper
@@ -14,6 +16,8 @@ export default function Layout({ children }) {
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isMobile, isTablet } = useMediaQuery();
+  const isDesktop = !isMobile && !isTablet;
 
   // Always gate on authLoading for bulletproofness.
   if (authLoading) {
@@ -99,9 +103,15 @@ export default function Layout({ children }) {
         Skip to main content
       </a>
 
-      {/* Sidebar */}
-      {/* Overlay for mobile when sidebar open */}
-      {sidebarOpen && (
+      {/* Sidebar - adaptable based on screen size */}
+      <Sidebar
+        isOpen={isDesktop || sidebarOpen}
+        onToggle={() => setSidebarOpen(false)}
+        className="lg:w-72"
+      />
+
+      {/* Overlay for mobile/tablet when sidebar is open */}
+      {!isDesktop && sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/30 backdrop-blur-sm lg:hidden z-30"
           onClick={() => setSidebarOpen(false)}
@@ -109,39 +119,30 @@ export default function Layout({ children }) {
         />
       )}
 
-      <Sidebar
-        isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(false)}
-        className="lg:w-72"
-      />
-
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top header - now visible on all screen sizes */}
-        <header className="glass border-b border-white/20 dark:border-gray-700/20 transition-all duration-200 backdrop-blur-md">
+        <header className="glass border-b border-white/20 dark:border-gray-700/20 transition-all duration-200 backdrop-blur-md flex-shrink-0 z-10">
           <div className="px-4 sm:px-6">
             <div className="flex justify-between items-center h-16">
-              {/* Mobile menu button - only on small screens */}
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
-                aria-expanded={sidebarOpen}
-                aria-label="Toggle sidebar"
-                type="button"
-              >
-                <span className="sr-only">Open sidebar</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
+              {!isDesktop ? (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="p-2 -ml-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
+                  aria-expanded={sidebarOpen}
+                  aria-label="Toggle sidebar"
+                  type="button"
+                >
+                  <span className="sr-only">Open sidebar</span>
+                  <Menu className="h-6 w-6" />
+                </button>
+              ) : (
+                <div className="flex-1" /> /* Spacer for desktop */
+              )}
 
-              {/* Desktop: Empty space for potential breadcrumb/title */}
-              <div className="hidden lg:block flex-1">
-                {/* Space for future page title or breadcrumb */}
+              <div className="flex items-center">
+                <UserMenu />
               </div>
-
-              {/* User menu - visible on all screen sizes */}
-              <UserMenu />
             </div>
           </div>
         </header>

@@ -62,15 +62,14 @@ class HealthStatus:
     UNHEALTHY = "unhealthy"
 
 
-async def check_database(db) -> Dict[str, Any]:
+def check_database(db) -> Dict[str, Any]:
     """Check database connectivity and performance."""
     start_time = datetime.utcnow()
     try:
-        # Test basic connectivity – support both sync and async SQLAlchemy
-        execute_result = db.execute(text("SELECT 1"))
-        # For async engines *execute_result* is an awaitable – handle both
-        if hasattr(execute_result, "__await__"):
-            await execute_result
+        # Test basic connectivity with SQLAlchemy
+        result = db.execute(text("SELECT 1"))
+        # Ensure the query is executed and fetch the result
+        result.scalar()
 
         # Check response time
         duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
@@ -80,7 +79,7 @@ async def check_database(db) -> Dict[str, Any]:
             query = text(
                 "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"
             )
-            conn_result = await db.execute(query)
+            conn_result = db.execute(query)
             active_connections = conn_result.scalar()
         else:
             active_connections = 1
@@ -257,18 +256,25 @@ async def readiness_check(
     else:
         min_components = ["db"]
 
-    # Run all checks concurrently
-    check_tasks = {
-        "database": check_database(db),
+    # Run async checks concurrently, db check synchronously
+    async_check_tasks = {
         "redis": check_redis(),
         "openai": check_openai(),
         "workers": check_background_workers()
     }
-
-    results = await asyncio.gather(
-        *check_tasks.values(),
+    
+    # Run database check synchronously
+    db_result = check_database(db)
+    
+    # Run async checks concurrently
+    async_results = await asyncio.gather(
+        *async_check_tasks.values(),
         return_exceptions=True
     )
+    
+    # Combine results
+    results = [db_result] + list(async_results)
+    check_tasks = {"database": db_result, **async_check_tasks}
 
     # Process results
     for (name, _), result in zip(check_tasks.items(), results):

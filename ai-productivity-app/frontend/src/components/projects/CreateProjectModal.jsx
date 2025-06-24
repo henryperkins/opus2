@@ -6,31 +6,42 @@
  */
 import React, { useState } from 'react';
 import Modal from '../common/Modal';
-import ProjectForm from './ProjectForm';
+import ProjectForm from './ProjectFormFixed';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectAPI } from '../../api/projects';
 
 export default function CreateProjectModal({ isOpen, onClose, onSuccess }) {
-  const queryClient = useQueryClient();
   const [localError, setLocalError] = useState(null);
+  const queryClient = useQueryClient();
   
-  const createProjectMutation = useMutation({
-    mutationFn: (formData) => projectAPI.create(formData),
-    onSuccess: (project) => {
-      queryClient.invalidateQueries(['projects']);
+  const mutation = useMutation({
+    mutationFn: projectAPI.create,
+    onSuccess: (data) => {
+      // Invalidate and refetch projects list
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      
+      // Clear any local errors
+      setLocalError(null);
+      
+      // Call success callback if provided
       if (onSuccess) {
-        onSuccess(project);
+        onSuccess(data);
       }
+      
+      // Close modal
       onClose();
     },
     onError: (error) => {
-      setLocalError(error.message || 'Failed to create project');
+      const errorMessage = error.response?.data?.detail || 
+                          error.message || 
+                          'Failed to create project. Please try again.';
+      setLocalError(errorMessage);
     }
   });
-
+  
   const handleSubmit = async (formData) => {
     setLocalError(null);
-    createProjectMutation.mutate(formData);
+    mutation.mutate(formData);
   };
 
   const handleClose = () => {
@@ -38,21 +49,19 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }) {
     onClose();
   };
 
-  const displayError = localError || createProjectMutation.error?.message;
-
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Create New Project">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Create New Project" closeOnOverlayClick={false}>
       <div className="mt-4">
-        {displayError && (
+        {localError && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-sm text-red-600">{displayError}</p>
+            <p className="text-sm text-red-600">{localError}</p>
           </div>
         )}
         
         <ProjectForm
           onSubmit={handleSubmit}
           onCancel={handleClose}
-          loading={createProjectMutation.isLoading}
+          loading={mutation.isPending}
           submitText="Create Project"
         />
       </div>

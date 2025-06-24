@@ -1,6 +1,8 @@
 // Git repository connection interface with branch selection and sync status
 import React, { useState } from 'react';
-import { repositoryAPI } from '../../api/repositories';
+// Adjusted import path to existing API module. Previously pointed to a non-existent
+// '../../api/repositories' file which broke the Vite build.
+import { repositoryAPI } from '../../api/github';
 
 export default function RepositoryConnect({ projectId, onSuccess }) {
   const [formData, setFormData] = useState({

@@ -3,9 +3,10 @@
 from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 import logging
 
-from app.models.config import RuntimeConfig, ConfigHistory
+from app.models.config import RuntimeConfig, ConfigHistory, ModelConfiguration, ModelUsageMetrics
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -192,3 +193,168 @@ class ConfigService:
             
         except Exception as e:
             logger.warning(f"Failed to record config history for {key}: {e}")
+    
+    # Model Configuration Management
+    
+    def get_model_configuration(self, model_id: str) -> Optional[ModelConfiguration]:
+        """Get detailed configuration for a specific model."""
+        return self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
+    
+    def get_available_models(self, provider: Optional[str] = None, 
+                           capabilities: Optional[List[str]] = None) -> List[ModelConfiguration]:
+        """Get list of available models with optional filtering."""
+        query = self.db.query(ModelConfiguration).filter(
+            ModelConfiguration.is_available == True,
+            ModelConfiguration.is_deprecated == False
+        )
+        
+        if provider:
+            query = query.filter(ModelConfiguration.provider == provider)
+        
+        if capabilities and self.db.bind.dialect.name == 'postgresql':
+            # Use PostgreSQL JSONB operators for capability filtering
+            for capability in capabilities:
+                query = query.filter(
+                    text("capabilities @> :capability").bindparam(capability=f'["{capability}"]')
+                )
+        
+        return query.order_by(ModelConfiguration.model_family, ModelConfiguration.name).all()
+    
+    def create_model_configuration(self, model_data: Dict[str, Any]) -> ModelConfiguration:
+        """Create a new model configuration."""
+        model_config = ModelConfiguration(**model_data)
+        self.db.add(model_config)
+        
+        try:
+            self.db.commit()
+            logger.info(f"Created model configuration: {model_config.model_id}")
+            return model_config
+        except IntegrityError as e:
+            self.db.rollback()
+            logger.error(f"Failed to create model configuration: {e}")
+            raise
+    
+    def update_model_configuration(self, model_id: str, updates: Dict[str, Any]) -> Optional[ModelConfiguration]:
+        """Update an existing model configuration."""
+        model_config = self.get_model_configuration(model_id)
+        if not model_config:
+            return None
+        
+        for key, value in updates.items():
+            if hasattr(model_config, key):
+                setattr(model_config, key, value)
+        
+        try:
+            self.db.commit()
+            logger.info(f"Updated model configuration: {model_id}")
+            return model_config
+        except IntegrityError as e:
+            self.db.rollback()
+            logger.error(f"Failed to update model configuration: {e}")
+            raise
+    
+    def get_model_by_capabilities(self, required_capabilities: List[str], 
+                                provider: Optional[str] = None) -> List[ModelConfiguration]:
+        """Find models that have all required capabilities."""
+        if self.db.bind.dialect.name == 'postgresql':
+            # Use PostgreSQL JSONB containment operator
+            capability_filter = text("capabilities @> :capabilities").bindparam(
+                capabilities=str(required_capabilities).replace("'", '"')
+            )
+        else:
+            # Fallback for SQLite - less efficient
+            capability_filter = text("1=1")  # TODO: Implement SQLite fallback
+        
+        query = self.db.query(ModelConfiguration).filter(
+            ModelConfiguration.is_available == True,
+            ModelConfiguration.is_deprecated == False,
+            capability_filter
+        )
+        
+        if provider:
+            query = query.filter(ModelConfiguration.provider == provider)
+        
+        return query.order_by(ModelConfiguration.avg_response_time_ms).all()
+    
+    def get_cost_efficient_models(self, limit: int = 5) -> List[ModelConfiguration]:
+        """Get most cost-efficient models based on cost per token and throughput."""
+        if self.db.bind.dialect.name == 'postgresql':
+            # Use PostgreSQL expression for cost efficiency calculation
+            query = self.db.query(ModelConfiguration).filter(
+                ModelConfiguration.is_available == True,
+                ModelConfiguration.is_deprecated == False,
+                ModelConfiguration.cost_input_per_1k.isnot(None),
+                ModelConfiguration.cost_output_per_1k.isnot(None),
+                ModelConfiguration.throughput_tokens_per_sec.isnot(None)
+            ).order_by(
+                text("(cost_input_per_1k + cost_output_per_1k) / throughput_tokens_per_sec")
+            ).limit(limit)
+        else:
+            # Fallback for SQLite
+            query = self.db.query(ModelConfiguration).filter(
+                ModelConfiguration.is_available == True,
+                ModelConfiguration.is_deprecated == False
+            ).order_by(ModelConfiguration.cost_input_per_1k).limit(limit)
+        
+        return query.all()
+    
+    # Model Usage Metrics
+    
+    def record_model_usage(self, model_id: str, metrics_data: Dict[str, Any]) -> ModelUsageMetrics:
+        """Record usage metrics for a model."""
+        usage_metrics = ModelUsageMetrics(
+            model_id=model_id,
+            **metrics_data
+        )
+        self.db.add(usage_metrics)
+        
+        try:
+            self.db.commit()
+            logger.debug(f"Recorded usage metrics for model: {model_id}")
+            return usage_metrics
+        except IntegrityError as e:
+            self.db.rollback()
+            logger.error(f"Failed to record model usage metrics: {e}")
+            raise
+    
+    def get_model_usage_metrics(self, model_id: str, days: int = 30) -> List[ModelUsageMetrics]:
+        """Get usage metrics for a model over the specified time period."""
+        if self.db.bind.dialect.name == 'postgresql':
+            query = self.db.query(ModelUsageMetrics).filter(
+                ModelUsageMetrics.model_id == model_id,
+                text("period_end > CURRENT_TIMESTAMP - INTERVAL :days DAY").bindparam(days=days)
+            ).order_by(ModelUsageMetrics.period_start.desc())
+        else:
+            # SQLite fallback
+            query = self.db.query(ModelUsageMetrics).filter(
+                ModelUsageMetrics.model_id == model_id
+            ).order_by(ModelUsageMetrics.period_start.desc())
+        
+        return query.all()
+    
+    def get_model_performance_summary(self, model_id: str) -> Optional[Dict[str, Any]]:
+        """Get aggregated performance summary for a model."""
+        if self.db.bind.dialect.name == 'postgresql':
+            # Use PostgreSQL aggregation functions
+            result = self.db.execute(text("""
+                SELECT 
+                    AVG(avg_response_time_ms) as avg_response_time,
+                    AVG(success_rate) as avg_success_rate,
+                    SUM(total_requests) as total_requests,
+                    SUM(total_cost) as total_cost,
+                    AVG(avg_user_rating) as avg_user_rating
+                FROM model_usage_metrics 
+                WHERE model_id = :model_id 
+                AND period_end > CURRENT_TIMESTAMP - INTERVAL '30 days'
+            """), {"model_id": model_id}).fetchone()
+            
+            if result:
+                return {
+                    "avg_response_time_ms": float(result.avg_response_time) if result.avg_response_time else None,
+                    "avg_success_rate": float(result.avg_success_rate) if result.avg_success_rate else None,
+                    "total_requests": int(result.total_requests) if result.total_requests else 0,
+                    "total_cost": float(result.total_cost) if result.total_cost else 0.0,
+                    "avg_user_rating": float(result.avg_user_rating) if result.avg_user_rating else None
+                }
+        
+        return None

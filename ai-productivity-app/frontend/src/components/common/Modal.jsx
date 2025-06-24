@@ -16,50 +16,7 @@ export default function Modal({
   showCloseButton = true,
   ariaDescribedBy,
 }) {
-  const modalRef = useRef(null);
-  const previousActiveElement = useRef(null);
-
-  // Focus management ---------------------------------------------------------
-  useEffect(() => {
-    if (!isOpen) return;
-
-    previousActiveElement.current = document.activeElement;
-    modalRef.current?.focus();
-
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-
-      // Focus trap -----------------------------------------------------------
-      if (e.key === 'Tab') {
-        const focusableElements = modalRef.current?.querySelectorAll(
-          'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'
-        );
-
-        if (!focusableElements?.length) return;
-
-        const first = focusableElements[0];
-        const last = focusableElements[focusableElements.length - 1];
-
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus();
-    };
-  }, [isOpen, onClose]);
-
-  // Prevent body scroll ------------------------------------------------------
+  // Simplified modal - remove problematic focus management and event handling
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -82,41 +39,23 @@ export default function Modal({
   };
 
   const modal = (
-    <div
-      className="fixed inset-0 z-50 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
-      aria-describedby={ariaDescribedBy}
-    >
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20">
         {/* Backdrop */}
-        <div
-          className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 transition-opacity animate-fade-in"
-          onClick={closeOnOverlayClick ? onClose : undefined}
-          aria-hidden="true"
-        />
-
-        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">
-          &#8203;
-        </span>
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" />
 
         {/* Panel */}
-        <div
-          ref={modalRef}
-          tabIndex={-1}
-          className={`inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} w-full animate-scale-in`}
-        >
+        <div className={`relative bg-white rounded-lg shadow-xl ${sizeClasses[size]} w-full max-h-[90vh] overflow-y-auto`}>
           {/* Header */}
-          <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+          <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 id="modal-title" className="text-lg font-medium text-gray-900 dark:text-gray-100">
+              <h3 className="text-lg font-medium text-gray-900">
                 {title}
               </h3>
               {showCloseButton && (
                 <button
                   onClick={onClose}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150 p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="text-gray-400 hover:text-gray-600 transition-colors duration-150 p-1 rounded-md hover:bg-gray-100"
                   aria-label="Close modal"
                   type="button"
                 >

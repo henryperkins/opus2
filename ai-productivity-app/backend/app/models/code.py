@@ -7,8 +7,13 @@ semantic search capabilities.
 from pathlib import Path, PurePosixPath
 import re
 from sqlalchemy import (
-    Column, Integer, String, Text, JSON, ForeignKey, Boolean, DateTime
+    Column, Integer, String, Text, JSON, ForeignKey, Boolean, DateTime, Index, CheckConstraint
 )
+# Replace *TSVectorType* from the missing *sqlalchemy-utils* package with the
+# built-in ``TSVECTOR`` type provided by SQLAlchemy's PostgreSQL dialect.
+
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR as TSVectorType
+from sqlalchemy.sql import func, text
 from sqlalchemy.orm import relationship, validates
 from sqlalchemy.ext.mutable import MutableList
 
@@ -29,6 +34,22 @@ class CodeDocument(Base, TimestampMixin):
 
     __tablename__ = 'code_documents'
     __table_args__ = (
+        # PostgreSQL-specific indexes
+        Index('idx_code_documents_project_lang', 'project_id', 'language'),
+        Index('idx_code_documents_hash', 'content_hash', postgresql_using='hash'),
+        Index('idx_code_documents_symbols_gin', 'symbols', postgresql_using='gin'),
+        Index('idx_code_documents_imports_gin', 'imports', postgresql_using='gin'),
+        Index('idx_code_documents_ast_gin', 'ast_metadata', postgresql_using='gin'),
+        Index('idx_code_documents_search_gin', 'search_vector', postgresql_using='gin'),
+        Index('idx_code_documents_path_trgm', 'file_path', 
+              postgresql_using='gin', postgresql_ops={'file_path': 'gin_trgm_ops'}),
+        
+        # Check constraints for data integrity
+        CheckConstraint('file_size >= 0', name='positive_file_size'),
+        CheckConstraint("jsonb_typeof(symbols) = 'array'", name='symbols_is_array'),
+        CheckConstraint("jsonb_typeof(imports) = 'array'", name='imports_is_array'),
+        CheckConstraint("jsonb_typeof(ast_metadata) = 'object'", name='ast_metadata_is_object'),
+        
         {"extend_existing": True},
     )
 
@@ -67,21 +88,27 @@ class CodeDocument(Base, TimestampMixin):
         comment="File modification time"
     )
 
-    # Parsing results stored as JSON for flexibility
+    # Parsing results stored as JSONB for PostgreSQL optimization
     symbols = Column(
-        MutableList.as_mutable(JSON),
+        JSONB,
         default=list,
         comment="Extracted symbols [{name, type, line_start, line_end}]"
     )
     imports = Column(
-        MutableList.as_mutable(JSON),
+        JSONB,
         default=list,
         comment="Import statements"
     )
     ast_metadata = Column(
-        JSON,
+        JSONB,
         default=dict,
         comment="Additional AST information"
+    )
+    
+    # Full-text search vector for PostgreSQL
+    search_vector = Column(
+        TSVectorType,
+        comment="Full-text search vector for code content"
     )
 
     # Search optimization
@@ -201,6 +228,23 @@ class CodeEmbedding(Base, TimestampMixin):
 
     __tablename__ = 'code_embeddings'
     __table_args__ = (
+        # PostgreSQL-specific indexes
+        Index('idx_code_embeddings_document', 'document_id'),
+        Index('idx_code_embeddings_symbol', 'symbol_name', 'symbol_type'),
+        Index('idx_code_embeddings_tags_gin', 'tags', postgresql_using='gin'),
+        Index('idx_code_embeddings_deps_gin', 'dependencies', postgresql_using='gin'),
+        Index('idx_code_embeddings_model_dim', 'embedding_model', 'embedding_dim'),
+        
+        # Vector indexes will be added via migration when pgvector is available
+        # Index('idx_code_embeddings_vector_cosine', 'embedding_vector', 
+        #       postgresql_using='ivfflat', postgresql_ops={'embedding_vector': 'vector_cosine_ops'}),
+        
+        # Check constraints
+        CheckConstraint('embedding_dim > 0', name='positive_embedding_dim'),
+        CheckConstraint('start_line <= end_line', name='valid_line_range'),
+        CheckConstraint("jsonb_typeof(tags) = 'array'", name='tags_is_array'),
+        CheckConstraint("jsonb_typeof(dependencies) = 'object'", name='dependencies_is_object'),
+        
         {"extend_existing": True},
     )
 
@@ -235,11 +279,15 @@ class CodeEmbedding(Base, TimestampMixin):
         comment="Ending line number"
     )
 
-    # Embedding data (stored as JSON array for SQLite compatibility)
+    # Embedding data (JSON for SQLite compatibility, will add pgvector column via migration)
     embedding = Column(
         JSON,
-        comment="Embedding vector as JSON array"
+        comment="Embedding vector as JSON array (legacy compatibility)"
     )
+    
+    # pgvector support will be added via migration
+    # embedding_vector = Column(Vector(1536), comment="Native PostgreSQL vector")
+    
     embedding_model = Column(
         String(50),
         default='text-embedding-3-small',
@@ -251,14 +299,15 @@ class CodeEmbedding(Base, TimestampMixin):
         comment="Embedding dimension"
     )
 
-    # Additional metadata
+    # Additional metadata as JSONB for better performance
     tags = Column(
-        MutableList.as_mutable(JSON),
+        JSONB,
         default=list,
         comment="Static analysis tags"
     )
     dependencies = Column(
-        JSON,
+        JSONB,
+        default=dict,
         comment="Functions/classes this chunk depends on"
     )
 

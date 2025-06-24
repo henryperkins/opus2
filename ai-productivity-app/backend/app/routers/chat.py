@@ -25,6 +25,7 @@ from app.services.chat_service import ChatService
 from app.websocket.handlers import handle_chat_connection
 from app.auth.utils import get_current_user_ws
 from app.chat.commands import command_registry
+from app.chat.processor import ChatProcessor
 
 # ---------------------------------------------------------------------------
 # Module level logger
@@ -211,6 +212,23 @@ async def create_message(
         user_id=current_user.id,
         metadata=metadata,
     )
+    
+    # Trigger AI processing for user messages
+    if msg.role == 'user':
+        import asyncio
+        from app.websocket.mock import MockWebSocket
+        
+        # Create a mock WebSocket for the REST API context
+        mock_websocket = MockWebSocket()
+        
+        # Process with AI in background
+        processor = ChatProcessor(db)
+        asyncio.create_task(processor.process_message(
+            session_id=session_id,
+            message=msg,
+            websocket=mock_websocket
+        ))
+    
     return MessageResponse.from_orm(msg)
 
 

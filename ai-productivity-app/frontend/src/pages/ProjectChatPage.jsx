@@ -1,126 +1,125 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+
+// Data hooks
 import { useChat } from '../hooks/useChat';
 import { useProject } from '../hooks/useProjects';
 import { useUser } from '../hooks/useAuth';
 import { useCodeExecutor } from '../hooks/useCodeExecutor';
 import { useKnowledgeChat } from '../hooks/useKnowledgeContext';
+
+// Responsive helper
+import useMediaQuery from '../hooks/useMediaQuery';
+
+// UI components
 import EnhancedMessageRenderer from '../components/chat/EnhancedMessageRenderer';
 import EnhancedCommandInput from '../components/chat/EnhancedCommandInput';
 import KnowledgeAssistant from '../components/chat/KnowledgeAssistant';
-import ChatErrorBoundary from '../components/chat/ChatErrorBoundary';
-import MonacoEditor from '@monaco-editor/react';
-import SplitPane from '../components/common/SplitPane';
+import ResponsiveSplitPane from '../components/common/ResponsiveSplitPane';
+import MobileBottomSheet from '../components/common/MobileBottomSheet';
 import ConnectionIndicator from '../components/common/ConnectionIndicator';
-import { Send, Brain, Code, FileText } from 'lucide-react';
+
+// Icons
+import { Brain } from 'lucide-react';
 
 export default function ProjectChatPage() {
+  // -------------------------------------------------------------
+  // Routing / identifiers
+  // -------------------------------------------------------------
   const { projectId, sessionId: urlSessionId } = useParams();
   const navigate = useNavigate();
+
+  // -------------------------------------------------------------
+  // Responsive helpers
+  // -------------------------------------------------------------
+  const { isMobile } = useMediaQuery();
+
+  // -------------------------------------------------------------
+  // Data hooks
+  // -------------------------------------------------------------
   const user = useUser();
+
   const { project, loading: projectLoading } = useProject(projectId);
+
   const {
     messages,
     sendMessage,
     connectionState,
     typingUsers,
     sendTypingIndicator,
-    streamingMessages
+    streamingMessages,
   } = useChat(projectId, urlSessionId);
 
-  // Centralised code execution hook – shared across components
   const { executeCode, results: executionResults } = useCodeExecutor(projectId);
   const knowledgeChat = useKnowledgeChat(projectId);
 
-  // State
+  // -------------------------------------------------------------
+  // Local UI state
+  // -------------------------------------------------------------
   const [editorContent, setEditorContent] = useState('');
   const [editorLanguage, setEditorLanguage] = useState('python');
-  const [selectedText, setSelectedText] = useState('');
   const [currentFile, setCurrentFile] = useState();
+
   const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(true);
-  // Wrapper so EnhancedMessageRenderer gets a promise-like API identical to previous signature
-  const handleCodeExecution = useCallback(
-    async (code, language, messageId) => {
-      try {
-        const res = await executeCode(code, language, projectId, messageId);
-        return res;
-      } catch (error) {
-        console.error('Code execution failed:', error);
-        return {
-          output: '',
-          error: error.message || 'Execution failed',
-          execution_time: 0,
-        };
-      }
-    },
-    [executeCode, projectId]
-  );
 
-  // Handle message sending with all metadata
-  const handleSendMessage = useCallback(async (content, metadata = {}) => {
+  // -------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------
+  const handleCodeExecution = useCallback(async (code, language, messageId) => {
     try {
-      // Add editor context if referenced
-      if (content.includes('@editor') && editorContent) {
-        metadata.code_snippets = [{
-          language: editorLanguage,
-          code: editorContent,
-          file_path: currentFile || 'editor'
-        }];
-      }
-
-      // Add knowledge context if available
-      if (knowledgeChat.currentContext.length > 0) {
-        metadata.referenced_chunks = knowledgeChat.currentContext.map(ctx => ctx.id);
-        metadata.referenced_files = [...new Set(knowledgeChat.currentContext.map(ctx => ctx.file_path).filter(Boolean))];
-      }
-
-      const messageId = await sendMessage(content, metadata);
-      return messageId;
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      // Show user-friendly error message
-      if (error.response?.status === 422) {
-        console.error('Message validation failed:', error.response.data);
-      }
-      throw error;
+      return await executeCode(code, language, projectId, messageId);
+    } catch (err) {
+      console.error('Code execution failed:', err);
+      return { output: '', error: err.message || 'Execution failed', execution_time: 0 };
     }
-  }, [sendMessage, editorContent, editorLanguage, currentFile, knowledgeChat]);
+  }, [executeCode, projectId]);
 
-  // Handle code apply from messages
   const handleCodeApply = useCallback((code, language) => {
     setEditorContent(code);
     setEditorLanguage(language || 'python');
   }, []);
 
-  // Handle knowledge search result selection
+  const handleSendMessage = useCallback(async (content, metadata = {}) => {
+    // Include editor context if referenced
+    if (content.includes('@editor') && editorContent) {
+      metadata.code_snippets = [
+        { language: editorLanguage, code: editorContent, file_path: currentFile || 'editor' },
+      ];
+    }
+
+    // Include knowledge context if present
+    if (knowledgeChat.currentContext.length) {
+      metadata.referenced_chunks = knowledgeChat.currentContext.map((c) => c.id);
+      metadata.referenced_files = [
+        ...new Set(knowledgeChat.currentContext.map((c) => c.file_path).filter(Boolean)),
+      ];
+    }
+
+    await sendMessage(content, metadata);
+  }, [sendMessage, editorContent, editorLanguage, currentFile, knowledgeChat]);
+
   const handleSearchResultSelect = useCallback((result) => {
     knowledgeChat.addToCitations([result]);
-    console.log('Added knowledge to context');
   }, [knowledgeChat]);
 
-  // Render message with streaming support
-  const renderMessage = (message) => {
-    const isStreaming = streamingMessages.has(message.id);
-    const streamingContent = streamingMessages.get(message.id);
-    const executionResult = executionResults.get(message.id);
+  // -------------------------------------------------------------
+  // Render helpers
+  // -------------------------------------------------------------
+  const renderMessage = (msg) => {
+    const streaming = streamingMessages.has(msg.id);
+    const streamingContent = streamingMessages.get(msg.id);
+    const executionResult = executionResults.get(msg.id);
 
     return (
-      <div
-        key={message.id}
-        className={`flex ${
-          message.role === 'user' ? 'justify-end' : 'justify-start'
-        } mb-4`}
-      >
+      <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
         <div
-          className={`max-w-3xl ${
-            message.role === 'user'
-              ? 'bg-blue-600 text-white dark:bg-blue-500'
-              : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
-          } rounded-lg px-4 py-3`}
+          className={`max-w-3xl rounded-lg px-4 py-3 ${
+            msg.role === 'user' ? 'bg-blue-600 text-white dark:bg-blue-500' : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
+          }`}
         >
-          {isStreaming ? (
+          {streaming ? (
             <div className="space-y-2">
-              <div className="text-sm opacity-75">AI Assistant (streaming...)</div>
+              <div className="text-sm opacity-75">AI Assistant (streaming…)</div>
               <div className="whitespace-pre-wrap">
                 {streamingContent?.content || ''}
                 <span className="inline-block w-2 h-4 bg-blue-500 ml-0.5 animate-pulse" />
@@ -128,10 +127,10 @@ export default function ProjectChatPage() {
             </div>
           ) : (
             <EnhancedMessageRenderer
-              message={message}
-              content={message.content}
-              metadata={message.metadata}
-              onCodeRun={(code, language) => handleCodeExecution(code, language, message.id)}
+              message={msg}
+              content={msg.content}
+              metadata={msg.metadata}
+              onCodeRun={(code, lang) => handleCodeExecution(code, lang, msg.id)}
               onCodeApply={handleCodeApply}
               executionResult={executionResult}
             />
@@ -141,23 +140,23 @@ export default function ProjectChatPage() {
     );
   };
 
+  // -------------------------------------------------------------
+  // Early states
+  // -------------------------------------------------------------
   if (projectLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-gray-500">Loading project...</div>
+        <div className="text-gray-500">Loading project…</div>
       </div>
     );
   }
 
   if (!project) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
+      <div className="flex items-center justify-center h-screen text-center">
+        <div>
           <h2 className="text-xl font-semibold mb-2">Project not found</h2>
-          <button
-            onClick={() => navigate('/projects')}
-            className="text-blue-600 hover:underline"
-          >
+          <button onClick={() => navigate('/projects')} className="text-blue-600 hover:underline">
             Back to projects
           </button>
         </div>
@@ -165,18 +164,68 @@ export default function ProjectChatPage() {
     );
   }
 
+  // -------------------------------------------------------------
+  // Panels
+  // -------------------------------------------------------------
+  const chatPanel = (
+    <section className="flex flex-col h-full" aria-label="Project chat">
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.length ? (
+          messages.map(renderMessage)
+        ) : (
+          <div className="text-center text-gray-500 mt-8">
+            <p>Start a conversation about {project.title}</p>
+            <p className="text-sm mt-2">Use @editor to reference editor contents.</p>
+          </div>
+        )}
+
+        {typingUsers.size > 0 && (
+          <div className="text-sm text-gray-500 italic ml-2">
+            {typingUsers.size} user{typingUsers.size > 1 ? 's' : ''} typing…
+          </div>
+        )}
+      </div>
+
+      <footer className="border-t bg-white dark:bg-gray-900/50">
+        <EnhancedCommandInput
+          onSend={handleSendMessage}
+          onTyping={sendTypingIndicator}
+          projectId={projectId}
+          editorContent={editorContent}
+          currentFile={currentFile}
+          userId={user?.id}
+        />
+      </footer>
+    </section>
+  );
+
+  const assistantPanel = (
+    <KnowledgeAssistant
+      projectId={projectId}
+      onSearchSelect={handleSearchResultSelect}
+      showEditor
+      editorContent={editorContent}
+      onEditorChange={setEditorContent}
+      editorLanguage={editorLanguage}
+      onLanguageChange={setEditorLanguage}
+    />
+  );
+
+  // -------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------
   return (
-    <div className="split-layout">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-800">
       {/* Header */}
-      <header className="border-b bg-white dark:bg-gray-900 dark:border-gray-700 px-4 py-3">
+      <header className="border-b bg-white dark:bg-gray-900 dark:border-gray-700 px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-semibold">{project.title}</h1>
+            <h1 className="text-xl font-semibold truncate max-w-xs sm:max-w-none">{project.title}</h1>
             <ConnectionIndicator state={connectionState} />
           </div>
 
           <button
-            onClick={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
+            onClick={() => setShowKnowledgeAssistant((v) => !v)}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg touch-safe"
             aria-label="Toggle Knowledge Assistant"
           >
@@ -185,90 +234,24 @@ export default function ProjectChatPage() {
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1 flex overflow-hidden">
-        <SplitPane
-          split="vertical"
-          minSize={300}
-          defaultSize="60%"
-        >
-          {/* Chat panel */}
-          <section className="chat-layout" aria-label="Project chat">
-            <div className="scrollable-content p-4">
-              {messages.length === 0 ? (
-                <div className="text-center text-gray-500 mt-8">
-                  <p>Start a conversation about your code</p>
-                  <p className="text-sm mt-2">
-                    Use @editor to reference the code editor content
-                  </p>
-                </div>
-              ) : (
-                messages.map(renderMessage)
-              )}
-
-              {/* Typing indicators */}
-              {typingUsers.size > 0 && (
-                <div className="text-sm text-gray-500 italic ml-2">
-                  {typingUsers.size} user{typingUsers.size > 1 ? 's' : ''} typing...
-                </div>
-              )}
-            </div>
-
-            <footer className="border-t bg-white">
-              <EnhancedCommandInput
-                onSend={handleSendMessage}
-                onTyping={sendTypingIndicator}
-                projectId={projectId}
-                editorContent={editorContent}
-                selectedText={selectedText}
-                currentFile={currentFile}
-                userId={user?.id}
-              />
-            </footer>
-          </section>
-
-          {/* Right panel - Knowledge Assistant or Code Editor */}
-          {showKnowledgeAssistant ? (
-            <KnowledgeAssistant
-              projectId={projectId}
-              onSearchSelect={handleSearchResultSelect}
-              showEditor={true}
-              editorContent={editorContent}
-              onEditorChange={setEditorContent}
-              editorLanguage={editorLanguage}
-              onLanguageChange={setEditorLanguage}
-            />
-          ) : (
-            <div className="h-full flex flex-col">
-              <div className="border-b px-4 py-2 bg-gray-50 dark:bg-gray-900 dark:border-gray-700">
-                <select
-                  value={editorLanguage}
-                  onChange={(e) => setEditorLanguage(e.target.value)}
-                  className="text-sm border rounded px-2 py-1"
-                >
-                  <option value="python">Python</option>
-                  <option value="javascript">JavaScript</option>
-                  <option value="typescript">TypeScript</option>
-                  <option value="java">Java</option>
-                  <option value="cpp">C++</option>
-                </select>
-              </div>
-              <div className="flex-1">
-                <MonacoEditor
-                  language={editorLanguage}
-                  value={editorContent}
-                  onChange={setEditorContent}
-                  theme="vs-light"
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 14,
-                    wordWrap: 'on'
-                  }}
-                />
-              </div>
-            </div>
-          )}
-        </SplitPane>
+      {/* Main */}
+      <main className="flex-1 overflow-hidden">
+        {isMobile ? (
+          <>
+            {chatPanel}
+            <MobileBottomSheet
+              isOpen={showKnowledgeAssistant}
+              onClose={() => setShowKnowledgeAssistant(false)}
+              title="Knowledge Assistant"
+              snapPoints={[0.4, 0.9]}
+              initialSnap={0.9}
+            >
+              {assistantPanel}
+            </MobileBottomSheet>
+          </>
+        ) : (
+          <ResponsiveSplitPane left={chatPanel} right={assistantPanel} />
+        )}
       </main>
     </div>
   );

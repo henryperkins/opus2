@@ -4,7 +4,7 @@ workflows.
 
 Contains:
 • verify_credentials – check username/email + password against DB
-• create_session      – update last_login timestamp (sessions table later)
+• create_session      – persist login session and return it
 • get_current_user    – FastAPI dependency to retrieve authenticated user
 """
 from __future__ import annotations
@@ -87,13 +87,22 @@ def create_user(
     return user
 
 
+def create_session(db: DBSession, user: User, jti: str, ttl_minutes: int = 60) -> Session:  # noqa: W0613
+    """Persist login session and return it."""
+    session = Session(user_id=user.id, jti=jti)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
 def send_welcome_email(email: str, username: str) -> None:
     """
     Send welcome email to new user.
-    
+
     This is a placeholder implementation that logs the welcome message.
     In production, this should integrate with an email service.
-    
+
     Args:
         email: User's email address
         username: User's username
@@ -106,32 +115,6 @@ def send_welcome_email(email: str, username: str) -> None:
 ###############################################################################
 # Session management (placeholder; full table arrives via migration)
 ###############################################################################
-
-
-def create_session(db: DBSession, user: User, jti: str) -> Session:
-    """
-    Create a new session record and update user's last_login timestamp.
-
-    Args:
-        db: Database session
-        user: User instance
-        jti: JWT ID claim (unique token identifier)
-
-    Returns:
-        Session: The created session record
-    """
-    # Update user's last login
-    user.last_login = datetime.datetime.now(tz=datetime.timezone.utc)
-
-    # Create session record
-    session = Session(user_id=user.id, jti=jti)
-
-    db.add(user)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
-
-    return session
 
 
 def revoke_session(db: DBSession, jti: str) -> bool:

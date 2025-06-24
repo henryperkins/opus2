@@ -47,8 +47,6 @@ except ModuleNotFoundError:  # pragma: no cover – sandbox only
         def get(self, url, **kw):
             return self.request("GET", url, **kw)
 
-        def post(self, url, **kw):
-            return self.request("POST", url, **kw)
 
         def __enter__(self):
             return self

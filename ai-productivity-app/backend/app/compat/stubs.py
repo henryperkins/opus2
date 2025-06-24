@@ -778,6 +778,19 @@ def install_stubs():
         ("fastapi", _install_fastapi_stub),
         ("pydantic", _install_pydantic_stub),
         ("pydantic_settings", _install_pydantic_stub),
+        # The backend imports *openai* unconditionally via ``app.llm.client``.
+        # When the real SDK is not available inside the sandbox we fall back
+        # to a lightweight stub that exposes the minimal public surface area
+        # required by the surrounding code-base (AsyncOpenAI, errors, etc.).
+        #
+        # Failing to register the stub caused **ModuleNotFoundError: openai**
+        # during test collection which in turn prevented the application from
+        # bootstrapping and broke seemingly unrelated features such as the
+        # *login* and *register* endpoints.  Adding the entry here ensures the
+        # stub is installed automatically whenever the genuine package is
+        # missing so that the rest of the code can import ``openai`` without
+        # errors.
+        ("openai", _install_openai_stub),
         ("passlib.context", _install_passlib_stub),
         ("git", _install_gitpython_stub),
         ("aiofiles", _install_aiofiles_stub),

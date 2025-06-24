@@ -41,6 +41,15 @@ export default function ProjectDashboard() {
   // Local UI state
   // ---------------------------------------------------------------------------
   const [showCreateModal, setShowCreateModal] = useState(false);
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('ProjectDashboard showCreateModal changed:', showCreateModal);
+  }, [showCreateModal]);
+  
+  useEffect(() => {
+    console.log('ProjectDashboard filters changed:', filters);
+  }, [filters]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [view, setView] = useState('grid'); // 'grid' | 'timeline'
 
@@ -48,8 +57,14 @@ export default function ProjectDashboard() {
   // Authentication – only fetch once user is known
   // ---------------------------------------------------------------------------
   const { user, loading: authLoading } = useAuth();
+  
+  // Debug auth changes
+  useEffect(() => {
+    console.log('ProjectDashboard auth state changed - user:', !!user, 'authLoading:', authLoading);
+  }, [user, authLoading]);
 
   useEffect(() => {
+    console.log('useEffect triggered - authLoading:', authLoading, 'user:', !!user, 'filters changed');
     if (!authLoading && user) {
       fetchProjects();
     }
@@ -89,7 +104,8 @@ export default function ProjectDashboard() {
     }
   };
 
-  const handleProjectCreated = () => {
+  const handleProjectCreated = (project) => {
+    console.log('handleProjectCreated called with project:', project);
     setShowCreateModal(false);
     fetchProjects();
   };
@@ -263,7 +279,11 @@ export default function ProjectDashboard() {
             </div>
 
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('New Project button clicked');
+                setShowCreateModal(true);
+              }}
               className="btn btn-primary animate-bounce-in"
             >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

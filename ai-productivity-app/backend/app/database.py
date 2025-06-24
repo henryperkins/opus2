@@ -2,7 +2,51 @@
 
 from typing import Generator
 
+# ---------------------------------------------------------------------------
+# Engine + cross-dialect compatibility helpers
+# ---------------------------------------------------------------------------
+# The ORM models use PostgreSQL specific column types like *JSONB* and
+# *TSVECTOR* because the production stack runs on Postgres.  During the unit
+# tests, however, we spin up an **in-memory SQLite** database (see
+# *backend/tests/conftest.py*).  SQLite has no notion of these types which
+# means SQLAlchemy fails when it tries to emit the corresponding *CREATE
+# TABLE* statement:
+#
+#     sqlalchemy.exc.CompileError: (in table 'users', column 'preferences')
+#         Compiler <SQLiteTypeCompiler> can't render element of type JSONB
+#
+# To keep the model definitions unchanged while still allowing the schema to
+# be created under SQLite we *register* lightweight type compilers that map
+# the unsupported types to plain *TEXT* (good enough for the scope of the
+# tests).  The patch is limited to the SQLite dialect so the real Postgres
+# behaviour remains untouched in production.
+# ---------------------------------------------------------------------------
+
 from sqlalchemy import create_engine
+
+# Register SQLite fallbacks only when the package is importable.  The
+# *sqlalchemy.dialects.postgresql* module might be missing in minimal
+# environments but then there is no need to patch anything.
+
+try:
+    from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR  # type: ignore
+    from sqlalchemy.ext.compiler import compiles
+
+    @compiles(JSONB, "sqlite")  # type: ignore[misc]
+    def _compile_jsonb_sqlite(_element, _compiler, **_):  # noqa: D401
+        """Render JSONB as plain TEXT on SQLite."""
+
+        return "TEXT"
+
+    @compiles(TSVECTOR, "sqlite")  # type: ignore[misc]
+    def _compile_tsvector_sqlite(_element, _compiler, **_):  # noqa: D401
+        """Render TSVECTOR as plain TEXT on SQLite."""
+
+        return "TEXT"
+
+except ModuleNotFoundError:  # pragma: no cover – PostgreSQL dialect missing
+    # Safe to ignore: the models won't import these types either.
+    pass
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
 
