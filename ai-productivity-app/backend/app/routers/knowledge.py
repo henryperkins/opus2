@@ -129,6 +129,26 @@ async def search_knowledge(
         )
 
 
+@router.post("/search/{project_id}")
+async def search_knowledge_by_project(
+    project_id: int,
+    request: KnowledgeSearchRequest,
+    db: Session = Depends(get_db)
+) -> KnowledgeResponse:
+    """
+    Search knowledge base for a specific project (backward compatibility).
+
+    This endpoint provides backward compatibility for frontend calls to
+    /api/knowledge/search/{project_id}. It forwards to the main search endpoint
+    with the project_id from the path parameter.
+    """
+    # Override project_ids from path parameter for backward compatibility
+    request.project_ids = [project_id]
+
+    # Forward to the main search endpoint
+    return await search_knowledge(request, db)
+
+
 @router.post("/context")
 async def build_context(
     request: ContextBuildRequest,

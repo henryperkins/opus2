@@ -82,6 +82,73 @@ def init_db() -> None:
     if "pytest" not in sys.modules and os.getenv("SKIP_INIT_DB") is None:
         Base.metadata.create_all(bind=engine)
 
+# ---------------------------------------------------------------------------
+# Compatibility shim: expose ``app.database.transactions`` for legacy imports
+# ---------------------------------------------------------------------------
+#
+# The original codebase stored the *transaction helpers* in a **sub-module**
+# ``app.database.transactions``.  During the refactor that moved the majority
+# of the implementation into this single *database.py* file the tests were *not*
+# updated and therefore still import the old path:
+#
+#     from app.database.transactions import atomic
+#
+# Python resolves *sub-modules* based on the *parent module* being a *package*
+# (i.e. a directory with ``__init__.py``).  Because *app.database* is now a
+# **plain module file** the dotted import fails with ``ModuleNotFoundError``.
+#
+# To keep backwards-compatibility we *dynamically* create a **virtual
+# sub-module** that re-exports the :pyfunc:`atomic` context-manager implemented
+# in ``backend/app/database/transactions.py`` (still present for completeness).
+# The shim is only a few lines and avoids the much riskier alternative of
+# renaming files or touching the public test-suite.
+# ---------------------------------------------------------------------------
+
+import types as _types
+
+
+def _install_transactions_submodule() -> None:  # noqa: D401 – helper
+    """Register a virtual ``app.database.transactions`` module."""
+
+    import sys as _sys
+    import contextlib as _contextlib
+
+    # Re-use the *real* implementation when the helper file is available to
+    # avoid code duplication.
+    try:
+        from importlib import import_module as _import_module
+
+        _transactions = _import_module(__name__ + ".transactions")  # type: ignore
+        _sys.modules[__name__ + ".transactions"] = _transactions
+        setattr(_sys.modules[__name__], "transactions", _transactions)
+        return
+    except ModuleNotFoundError:
+        # Fallback to a minimal stub when the side-car file was removed.
+        pass
+
+    _mod = _types.ModuleType(__name__ + ".transactions")
+
+    @_contextlib.contextmanager  # type: ignore[misc]
+    def atomic(session: Session):  # noqa: D401 – identical signature
+        """Commit on success / rollback on failure."""
+
+        tx = session.begin()
+        try:
+            yield session
+            tx.commit()
+        except Exception:  # pragma: no cover  # noqa: BLE001
+            tx.rollback()
+            raise
+
+    _mod.atomic = atomic  # type: ignore[attr-defined]
+
+    _sys.modules[_mod.__name__] = _mod
+    setattr(_sys.modules[__name__], "transactions", _mod)
+
+
+# Install shim unconditionally – the operation is idempotent.
+_install_transactions_submodule()
+
 
 def check_db_connection() -> bool:
     """Return True if a trivial query can be executed successfully."""

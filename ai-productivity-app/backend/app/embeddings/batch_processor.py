@@ -1,10 +1,10 @@
 # backend/app/embeddings/batch_processor.py
 """Batch processing for embedding generation with progress tracking."""
-from typing import List, Optional, Dict, Any
+from typing import Dict, Any
 import asyncio
 import logging
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+# Unused import removed: from sqlalchemy import select
 from app.models.code import CodeDocument, CodeEmbedding
 from app.embeddings.generator import EmbeddingGenerator
 
@@ -37,8 +37,8 @@ class BatchEmbeddingProcessor:
         for callback in self.progress_callbacks:
             try:
                 await callback(progress)
-            except Exception as e:
-                logger.error(f"Progress callback failed: {e}")
+            except RuntimeError as e:
+                logger.error("Progress callback failed: %s", e)
 
     async def process_project_embeddings(
         self, project_id: int, db: Session, force_regenerate: bool = False
@@ -69,7 +69,7 @@ class BatchEmbeddingProcessor:
 
         # Process in batches
         for i in range(0, total, self.batch_size):
-            batch = chunks[i : i + self.batch_size]
+            batch = chunks[i:i + self.batch_size]
 
             try:
                 await self.generator.generate_and_store(batch, db)
@@ -82,8 +82,8 @@ class BatchEmbeddingProcessor:
                 if processed < total:
                     await asyncio.sleep(1)
 
-            except Exception as e:
-                logger.error(f"Batch processing failed: {e}")
+            except RuntimeError as e:
+                logger.error("Batch processing failed: %s", e)
                 failed += len(batch)
 
                 # Continue with next batch
@@ -125,8 +125,8 @@ class BatchEmbeddingProcessor:
                 "processed": len(chunks),
                 "total": len(chunks),
             }
-        except Exception as e:
-            logger.error(f"Document embedding generation failed: {e}")
+        except RuntimeError as e:
+            logger.error("Document embedding generation failed: %s", e)
             return {
                 "status": "failed",
                 "processed": 0,

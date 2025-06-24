@@ -1,0 +1,4 @@
+# Ruff configuration
+[tool.ruff]
+line-length = 999
+ignore = ["E501"]

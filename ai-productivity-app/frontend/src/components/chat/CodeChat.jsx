@@ -9,6 +9,7 @@ import MonacoEditor from '@monaco-editor/react';
 import SplitPane from '../common/SplitPane';
 import DependencyGraph from '../knowledge/DependencyGraph';
 import InteractiveCanvas from '../canvas/InteractiveCanvas';
+import ConnectionIndicator from '../common/ConnectionIndicator';
 
 export default function CodeChat({ sessionId, projectId }) {
   const user = useUser();
@@ -67,46 +68,42 @@ export default function CodeChat({ sessionId, projectId }) {
   };
 
   const chatPanel = (
-      <div className="flex flex-col h-full bg-white border-r border-gray-200">
-        <div className="flex-1 overflow-hidden">
-          <MessageList
-            messages={messages}
-            onMessageSelect={setSelectedMessage}
-            onCodeSelect={handleCodeSelect}
-            onMessageEdit={editMessage}
-            onMessageDelete={deleteMessage}
-            currentUserId={user?.id}
-          />
+    <section className="chat-layout border-r border-gray-200" aria-label="Chat messages">
+      <MessageList
+        messages={messages}
+        onMessageSelect={setSelectedMessage}
+        onCodeSelect={handleCodeSelect}
+        onMessageEdit={editMessage}
+        onMessageDelete={deleteMessage}
+        currentUserId={user?.id}
+        className="scrollable-content"
+      />
+
+      {/* Status indicators */}
+      {typingUsers.size > 0 && (
+        <div className="px-4 py-2 text-sm text-gray-500">
+          {typingUsers.size} user{typingUsers.size > 1 ? 's' : ''} typing...
         </div>
+      )}
 
-        {/* Typing indicators */}
-        {typingUsers.size > 0 && (
-          <div className="px-4 py-2 text-sm text-gray-500">
-            {typingUsers.size} user{typingUsers.size > 1 ? 's' : ''} typing...
-          </div>
-        )}
+      {connectionState !== 'connected' && (
+        <ConnectionIndicator state={connectionState} className="mx-4 mb-2 self-start" />
+      )}
 
-        {/* Connection status */}
-        {connectionState !== 'connected' && (
-          <div className="px-4 py-2 bg-yellow-50 text-yellow-800 text-sm">
-            {connectionState === 'connecting' ? 'Connecting...' : 'Disconnected'}
-          </div>
-        )}
-
-        <EnhancedCommandInput
-          onSend={handleSendMessage}
-          onTyping={sendTypingIndicator}
-          projectId={projectId}
-          editorContent={editorContent}
-          selectedText={selectedText}
-          currentFile={currentFile}
-          userId={user?.id}
-        />
-      </div>
+      <EnhancedCommandInput
+        onSend={handleSendMessage}
+        onTyping={sendTypingIndicator}
+        projectId={projectId}
+        editorContent={editorContent}
+        selectedText={selectedText}
+        currentFile={currentFile}
+        userId={user?.id}
+      />
+    </section>
   );
 
   const editorPanel = (
-      <div className="flex flex-col h-full bg-white">
+    <section className="panel-layout bg-white" aria-label="Code editor">
         <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
           <div className="flex items-center space-x-4">
             <select

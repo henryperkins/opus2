@@ -33,7 +33,19 @@ export function useSearch(initialQuery = '', initialFilters = {}) {
 
   const debouncedQuery = useDebounce(query, 300);
 
-  const enabled = debouncedQuery && debouncedQuery.length >= MIN_QUERY_LENGTH;
+  // React-Query's query client – obtain it once at the top level so the
+  // hook rules are respected.  It is then reused inside callbacks such as
+  // `clearSearch` without re-invoking hooks from inside those callbacks.
+  const queryClient = useQueryClient();
+
+  // React-Query expects `enabled` to be strictly boolean (or a function that
+  // returns a boolean). Using the logical-AND operator with a string can
+  // inadvertently pass a string value (e.g. the empty string "") which leads
+  // to run-time errors such as:
+  //   "Expected enabled to be a boolean or a callback that returns a boolean".
+  // Coerce the first operand to a boolean so the final result is always
+  // `true` or `false`.
+  const enabled = !!debouncedQuery && debouncedQuery.length >= MIN_QUERY_LENGTH;
 
   const {
     data,
@@ -58,8 +70,7 @@ export function useSearch(initialQuery = '', initialFilters = {}) {
   const clearSearch = () => {
     setQuery('');
     setFilters({});
-    const qc = useQueryClient();
-    qc.removeQueries({ queryKey: ['search'] });
+    queryClient.removeQueries({ queryKey: ['search'] });
   };
 
   const indexDocument = async (documentId, options) => {

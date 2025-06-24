@@ -17,6 +17,8 @@ from app.schemas.chat import (
     ChatSessionListResponse,
     ChatSessionResponse,
     ChatSessionUpdate,
+    MessageCreate,
+    MessageUpdate,
     MessageResponse,
 )
 from app.services.chat_service import ChatService
@@ -173,6 +175,75 @@ async def get_messages(
     service = ChatService(db)
     messages = service.get_session_messages(session_id, limit, before_id)
     return [MessageResponse.from_orm(msg) for msg in messages]
+
+
+# ---------------------------------------------------------------------------
+# Message CRUD endpoints
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/sessions/{session_id}/messages",
+    response_model=MessageResponse,
+    status_code=201,
+)
+async def create_message(
+    session_id: int,
+    message: MessageCreate,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep,
+):
+    """Create a new message in a chat session."""
+    service = ChatService(db)
+
+    # Extract metadata from the schema fields
+    metadata = {
+        'code_snippets': message.code_snippets,
+        'referenced_files': message.referenced_files,
+        'referenced_chunks': message.referenced_chunks,
+        'applied_commands': message.applied_commands,
+    }
+
+    msg = await service.create_message(
+        session_id=session_id,
+        content=message.content,
+        role=message.role.value,  # Use the role from the request
+        user_id=current_user.id,
+        metadata=metadata,
+    )
+    return MessageResponse.from_orm(msg)
+
+
+@router.patch(
+    "/messages/{message_id}",
+    response_model=MessageResponse,
+)
+async def update_message(
+    message_id: int,
+    update: MessageUpdate,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep,
+):
+    """Update an existing chat message."""
+    service = ChatService(db)
+    msg = await service.update_message(
+        message_id=message_id, content=update.content, user_id=current_user.id
+    )
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return MessageResponse.from_orm(msg)
+
+
+@router.delete("/messages/{message_id}", status_code=204)
+async def delete_message(
+    message_id: int,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep,
+):
+    """Soft-delete a chat message."""
+    service = ChatService(db)
+    success = await service.delete_message(message_id, current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Message not found")
 
 
 @router.websocket("/ws/sessions/{session_id}")

@@ -165,7 +165,7 @@ const AIProviderInfo = () => {
               </select>
             ) : (
               <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${isAzure ? 'bg-blue-500' : 'bg-green-500'}`}></div>
+                <div className={`w-2 h-2 rounded-full ${isAzure ? 'bg-brand-primary-600' : 'bg-green-600'}`}></div>
                 <span className="text-sm font-medium">
                   {isAzure ? 'Azure OpenAI' : 'OpenAI'}
                 </span>

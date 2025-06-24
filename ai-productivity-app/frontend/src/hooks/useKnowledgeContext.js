@@ -30,13 +30,13 @@ export function useKnowledgeChat(projectId, userSettings = {}) {
   // Mutations
   // -----------------------------
 
-  const analyzeMutation = useMutation(({ query }) =>
-    knowledgeAPI.analyzeQuery(query, projectId)
-  );
+  const analyzeMutation = useMutation({
+    mutationFn: ({ query }) => knowledgeAPI.analyzeQuery(query, projectId),
+  });
 
-  const retrieveMutation = useMutation(({ analysis }) =>
-    knowledgeAPI.retrieveKnowledge(analysis, projectId, settings)
-  );
+  const retrieveMutation = useMutation({
+    mutationFn: ({ analysis }) => knowledgeAPI.retrieveKnowledge(analysis, projectId, settings),
+  });
 
   // -----------------------------
   // Helpers

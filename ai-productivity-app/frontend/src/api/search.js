@@ -225,6 +225,33 @@ class SearchAPI {
     }
   }
 
+  // -----------------------------------------------------------------------
+  // Global search across multiple projects (used by the new <SearchPage>)
+  // -----------------------------------------------------------------------
+  /**
+   * Perform a global search across one or more projects.
+   *
+   * Expected payload structure (see useSearch hook):
+   *   {
+   *     query: string,
+   *     project_ids?: number[],
+   *     filters?: {
+   *       language?: string,
+   *       file_type?: string,
+   *       symbol_type?: string,
+   *       tags?: string[],
+   *     },
+   *     limit?: number,
+   *     search_types?: string[]
+   *   }
+   *
+   * The backend exposes POST /api/search endpoint that accepts the same body.
+   */
+  async search(options) {
+    const response = await client.post(`${this._baseURL}/search`, options);
+    return response.data;
+  }
+
   /**
    * Search project content (legacy method for backward compatibility)
    * @param {string} projectId

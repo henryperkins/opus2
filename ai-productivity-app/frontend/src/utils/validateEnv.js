@@ -5,7 +5,22 @@
 // Components can import `validateEnvironment()` during app startup and show a
 // friendly warning when the backend cannot be contacted.
 
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Normalise the backend URL so that it always contains a protocol.  Developers
+// sometimes configure `VITE_API_URL` as "localhost:8000" which causes the
+// browser `fetch()` API to throw "The string did not match the expected
+// pattern".  When the protocol is missing we implicitly prefix it with
+// "http://".  Falling back to the conventional FastAPI dev port when the env
+// variable is absent.
+
+function normaliseApiUrl(value) {
+  if (!value) return 'http://localhost:8000';
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return value;
+  }
+  return `http://${value}`;
+}
+
+export const API_URL = normaliseApiUrl(import.meta.env.VITE_API_URL);
 
 /**
  * Perform a HEAD/GET request to the backend health endpoint to ensure the

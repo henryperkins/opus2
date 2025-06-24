@@ -30,7 +30,9 @@ export function useCodeSearch(initialQuery = '', initialFilters = {}) {
   const [filters, setFilters] = useState(initialFilters);
 
   const debouncedQuery = useDebounce(query, 300);
-  const enabled = debouncedQuery && debouncedQuery.length >= MIN_QUERY_LENGTH;
+  // Ensure `enabled` is always a boolean. Using a raw logical-AND with a
+  // string can leak the string value (""), which React-Query rejects.
+  const enabled = !!debouncedQuery && debouncedQuery.length >= MIN_QUERY_LENGTH;
 
   const { data, isFetching: loading, error } = useQuery({
     queryKey: ['codeSearch', { q: debouncedQuery, filters }],

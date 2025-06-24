@@ -23,9 +23,13 @@ class ChatService:
         session = ChatSession(
             project_id=project_id,
             title=title or f"Chat {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            is_active=True,  # Explicitly set to avoid server_default/None mismatch
         )
         self.db.add(session)
         self.db.commit()
+
+        # Refresh to get server defaults populated
+        self.db.refresh(session)
 
         # Add timeline event
         event = TimelineEvent(
@@ -55,6 +59,7 @@ class ChatService:
             user_id=user_id,
             code_snippets=metadata.get("code_snippets", []) if metadata else [],
             referenced_files=metadata.get("referenced_files", []) if metadata else [],
+            referenced_chunks=metadata.get("referenced_chunks", []) if metadata else [],
             applied_commands=metadata.get("commands", {}) if metadata else {},
         )
         self.db.add(message)

@@ -29,7 +29,7 @@ const WhatsNewModal = ({ isOpen, onClose }) => {
         {features.map((feature) => (
           <div key={feature.version}>
             <div className="flex items-center space-x-3">
-              <span className="px-2 py-1 text-xs font-semibold text-white bg-blue-500 rounded-full">
+              <span className="px-2 py-1 text-xs font-semibold text-white bg-brand-primary-600 rounded-full">
                 {feature.version}
               </span>
               <h3 className="text-lg font-semibold text-gray-800">{feature.title}</h3>

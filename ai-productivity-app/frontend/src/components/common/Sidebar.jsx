@@ -447,7 +447,10 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
                   className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
                   disabled={projectsLoading}
                 >
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: project.color || '#6B7280' }}></div>
+                  <div 
+                    className="color-dot" 
+                    style={{ '--dot-color': project.color || '#6B7280' }}
+                  ></div>
                   <span className="truncate">{project.title}</span>
                   {project.status === 'active' && (
                     <div className="w-2 h-2 bg-green-400 rounded-full ml-auto"></div>

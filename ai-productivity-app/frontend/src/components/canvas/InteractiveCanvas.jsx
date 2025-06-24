@@ -312,17 +312,13 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
           )}
           <button
             onClick={() => setTool('select')}
-            className={`px-3 py-1 text-sm rounded ${
-              tool === 'select' ? 'bg-blue-500 text-white' : 'bg-white border hover:bg-gray-50'
-            }`}
+            className={`btn ${tool === 'select' ? 'btn-primary' : 'btn-secondary'}`}
           >
             Select
           </button>
           <button
             onClick={() => setTool('draw')}
-            className={`px-3 py-1 text-sm rounded ${
-              tool === 'draw' ? 'bg-blue-500 text-white' : 'bg-white border hover:bg-gray-50'
-            }`}
+            className={`btn ${tool === 'draw' ? 'btn-primary' : 'btn-secondary'}`}
           >
             Draw
           </button>
@@ -423,7 +419,7 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
           style={{ minHeight: '400px' }}
         />
         {isDrawing && (
-          <span className="absolute top-2 left-2 px-2 py-1 bg-blue-500 text-white text-xs rounded">
+          <span className="absolute top-2 left-2 px-2 py-1 bg-brand-primary-600 text-white text-xs rounded">
             Drawing…
           </span>
         )}

@@ -10,7 +10,9 @@
 
 export function checkAuthEnvironment() {
   const info = {
-    apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+    apiUrl: (import.meta.env.VITE_API_URL?.match(/^https?:\/\//)
+      ? import.meta.env.VITE_API_URL
+      : `http://${import.meta.env.VITE_API_URL || 'localhost:8000'}`),
     cookies: document.cookie,
     localStorageAuth: localStorage.getItem('ai-productivity-auth'),
     extensions: detectBrowserExtensions(),

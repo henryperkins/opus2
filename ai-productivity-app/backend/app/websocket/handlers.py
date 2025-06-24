@@ -86,7 +86,8 @@ async def handle_chat_connection(
                 await connection_manager.send_message({
                     'type': 'user_typing',
                     'user_id': current_user.id,
-                    'is_typing': data['is_typing']
+                    # Accept both new ``is_typing`` and legacy ``typing`` keys
+                    'is_typing': data.get('is_typing', data.get('typing', False))
                 }, session_id)
 
     except WebSocketDisconnect:
@@ -111,6 +112,8 @@ def serialize_message(message: ChatMessage) -> dict:
         'created_at': message.created_at.isoformat(),
         'is_edited': message.is_edited,
         'edited_at': message.edited_at.isoformat() if message.edited_at else None,
-        'code_snippets': message.code_snippets,
-        'referenced_files': message.referenced_files
+        'code_snippets': message.code_snippets or [],
+        'referenced_files': message.referenced_files or [],
+        'referenced_chunks': message.referenced_chunks or [],
+        'applied_commands': message.applied_commands or {}
     }

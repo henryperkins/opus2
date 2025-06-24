@@ -58,25 +58,24 @@ export function useProject(id) {
   });
 
   // Update
-  const updateMutation = useMutation(
-    (payload) => projectAPI.update(id, payload),
-    {
-      onMutate: async (payload) => {
-        await qc.cancelQueries(projectKey(id));
-        const prev = qc.getQueryData(projectKey(id));
-        qc.setQueryData(projectKey(id), { ...prev, ...payload });
-        return { prev };
-      },
-      onError: (_err, _vars, ctx) => qc.setQueryData(projectKey(id), ctx.prev),
-      onSettled: () => qc.invalidateQueries(projectKey(id)),
-    }
-  );
+  const updateMutation = useMutation({
+    mutationFn: (payload) => projectAPI.update(id, payload),
+    onMutate: async (payload) => {
+      await qc.cancelQueries({ queryKey: projectKey(id) });
+      const prev = qc.getQueryData(projectKey(id));
+      qc.setQueryData(projectKey(id), { ...prev, ...payload });
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => qc.setQueryData(projectKey(id), ctx.prev),
+    onSettled: () => qc.invalidateQueries({ queryKey: projectKey(id) }),
+  });
 
   // Delete
-  const deleteMutation = useMutation(() => projectAPI.delete(id), {
+  const deleteMutation = useMutation({
+    mutationFn: () => projectAPI.delete(id),
     onSuccess: () => {
-      qc.invalidateQueries(projectsKey({}));
-      qc.removeQueries(projectKey(id));
+      qc.invalidateQueries({ queryKey: projectsKey({}) });
+      qc.removeQueries({ queryKey: projectKey(id) });
     },
   });
 
@@ -86,7 +85,7 @@ export function useProject(id) {
     error,
     update: updateMutation.mutateAsync,
     remove: deleteMutation.mutateAsync,
-    refresh: () => qc.invalidateQueries(projectKey(id)),
+    refresh: () => qc.invalidateQueries({ queryKey: projectKey(id) }),
   };
 }
 
@@ -117,7 +116,7 @@ export function useProjectSearch(initialFilters = {}) {
   const search = useCallback((updatedFilters = {}) => {
     setFilters((prev) => {
       const merged = { ...prev, ...updatedFilters };
-      qc.invalidateQueries(projectsKey(merged));
+      qc.invalidateQueries({ queryKey: projectsKey(merged) });
       return merged;
     });
   }, [qc]);
@@ -150,12 +149,10 @@ export function useProjectTimeline(projectId) {
     staleTime: 30 * 1000,
   });
 
-  const addEventMutation = useMutation(
-    (payload) => projectAPI.addTimelineEvent(projectId, payload),
-    {
-      onSuccess: () => qc.invalidateQueries(timelineKey(projectId)),
-    }
-  );
+  const addEventMutation = useMutation({
+    mutationFn: (payload) => projectAPI.addTimelineEvent(projectId, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: timelineKey(projectId) }),
+  });
 
   return useMemo(
     () => ({
@@ -163,7 +160,7 @@ export function useProjectTimeline(projectId) {
       loading,
       error,
       addEvent: addEventMutation.mutateAsync,
-      refresh: () => qc.invalidateQueries(timelineKey(projectId)),
+      refresh: () => qc.invalidateQueries({ queryKey: timelineKey(projectId) }),
     }),
     [timeline, loading, error, addEventMutation.mutateAsync, projectId]
   );

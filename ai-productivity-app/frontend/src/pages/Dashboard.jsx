@@ -15,8 +15,27 @@ function Dashboard() {
         // Use absolute backend URL so that local development (without Vite
         // proxy) and Docker both work.  We fall back to localhost when the
         // VITE env variable is absent.
-        const base = import.meta.env.VITE_API_URL || (window.location.protocol === 'https:' ? '' : 'http://localhost:8000');
-        const response = await fetch(`${base}/api/health/ready`, {
+        // Determine the backend base URL.
+        //
+        // 1. If the VITE_API_URL environment variable is provided *and* the
+        //    site is not served over HTTPS (to avoid mixed-content warnings),
+        //    use that value.  When developers forget to include the protocol
+        //    ("localhost:8000" instead of "http://localhost:8000") we prefix
+        //    it with "http://" so that the resulting URL is valid.
+        // 2. Otherwise fall back to:
+        //    • an empty string when running on HTTPS (so the request is
+        //      relative to the current origin and keeps the secure scheme),
+        //    • or the conventional FastAPI dev port 8000 for HTTP.
+
+        const envUrl = import.meta.env.VITE_API_URL;
+        const shouldUseEnv = envUrl && window.location.protocol !== 'https:';
+
+        const base = shouldUseEnv
+          ? (envUrl.startsWith('http://') || envUrl.startsWith('https://')
+              ? envUrl
+              : `http://${envUrl}`)
+          : (window.location.protocol === 'https:' ? '' : 'http://localhost:8000');
+        const response = await fetch(`${base}/health/ready`, {
           credentials: 'include',
         });
         if (!response.ok) throw new Error('API not responding');

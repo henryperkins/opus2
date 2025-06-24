@@ -93,7 +93,7 @@ function UserMenu() {
         aria-expanded={isOpen}
         aria-haspopup="true"
       >
-        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+        <div className="w-8 h-8 bg-brand-primary-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
           {firstInitial}
         </div>
         <span className="hidden md:block text-sm font-medium">

@@ -16,18 +16,66 @@ export default function KnowledgeAssistant({
   // Normalise *message* so that downstream code always sees a *string*
   const message = typeof incomingMessage === 'string' ? incomingMessage : '';
   const {
-    context,
-    loading,
-    error,
-    search,
-    citations,
+    analyzeMutation,
+    retrieveMutation,
+    buildContextForQuery,
     addToCitations,
-    updateContextFromChat,
-    activeQuery,
-    selectedItems,
-    toggleItemSelection,
-    clearSelections
+    clearCitations,
+    citations,
+    currentContext,
   } = useKnowledgeChat(projectId);
+
+  // Initialize missing state locally since the hook doesn't provide them
+  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [activeQuery, setActiveQuery] = useState('');
+  const [context, setContext] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Helper functions for missing functionality
+  const toggleItemSelection = useCallback((id) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const clearSelections = useCallback(() => {
+    setSelectedItems(new Set());
+  }, []);
+
+  const updateContextFromChat = useCallback(async (message) => {
+    if (!message || message.length < 10) return;
+
+    setLoading(true);
+    setActiveQuery(message);
+    try {
+      const result = await buildContextForQuery(message);
+      setContext(result);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [buildContextForQuery]);
+
+  const search = useCallback(async (query) => {
+    setLoading(true);
+    setActiveQuery(query);
+    try {
+      const result = await buildContextForQuery(query);
+      setContext(result);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [buildContextForQuery]);
 
   const [showSearch, setShowSearch] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
@@ -160,18 +208,17 @@ export default function KnowledgeAssistant({
             )}
 
             {/* Knowledge Context */}
-            <div className="overflow-y-auto" style={{ maxHeight: '400px' }}>
-              <KnowledgeContextPanel
-                query={activeQuery}
-                projectId={projectId}
-                onDocumentSelect={handleDocumentSelect}
-                onCodeSelect={handleCodeSelect}
-                maxHeight="400px"
-              />
-            </div>
+            <KnowledgeContextPanel
+              query={activeQuery}
+              projectId={projectId}
+              onDocumentSelect={handleDocumentSelect}
+              onCodeSelect={handleCodeSelect}
+              className="scrollable-content"
+              maxHeight="400px"
+            />
 
             {/* Actions */}
-            {selectedItems.size > 0 && (
+            {selectedItems && selectedItems.size > 0 && (
               <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
                 <button
                   onClick={handleApplyContext}

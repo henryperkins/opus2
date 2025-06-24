@@ -4,7 +4,7 @@ FastAPI service for syntax highlighting, math, and diagram rendering
 """
 import os
 import html
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
@@ -114,8 +114,10 @@ async def render_markdown(request: MarkdownRequest):
                 extensions.append('tables')
 
         if request.options.get("enable_math", False):
-            # Would add math extension if available
-            pass
+            raise HTTPException(
+                status_code=501,
+                detail="Math rendering requested but math extension is not available in the rendering service."
+            )
 
         if PYGMENTS_AVAILABLE and request.options.get("syntax_theme"):
             extensions.append('codehilite')

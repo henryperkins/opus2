@@ -1,0 +1,17 @@
+[flake8]
+# Disable line-length warnings globally so VS Code’s Flake8 extension picks it up
+ignore = E501
+max-line-length = 999
+
+# Common excludes
+exclude =
+    .git,
+    __pycache__,
+    .pytest_cache,
+    .mypy_cache,
+    .ruff_cache,
+    venv,
+    .venv,
+    frontend,
+    data,
+    docs

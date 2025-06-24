@@ -285,7 +285,7 @@ export default function EnhancedCommandInput({
               <button
                 key={c.id}
                 onClick={() => insertCitation(c)}
-                className="px-2 text-xs bg-blue-100 hover:bg-blue-200 rounded text-blue-800"
+                className="px-2 text-xs rounded bg-brand-primary-50 hover:bg-brand-primary-100 text-brand-primary-700"
               >
                 [{c.number}]
               </button>
@@ -401,7 +401,10 @@ export default function EnhancedCommandInput({
                 disabled={isSending}
               />
             ) : (
-              <div style={{ height: editorHeight }} className="border rounded-lg overflow-hidden">
+              <div 
+                className="border rounded-lg overflow-hidden dynamic-height"
+                style={{ '--dynamic-height': editorHeight }}
+              >
                 <MonacoEditor
                   value={message}
                   onChange={setMessage}

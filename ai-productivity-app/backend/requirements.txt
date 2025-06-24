@@ -45,7 +45,7 @@ tiktoken
 # Scientific computing library required for vector store math operations
 numpy==1.26.4
 # LLM provider
-openai==1.14.2
+openai
 azure-identity==1.15.0  # For Azure OpenAI authentication
 
 # Optional: Qdrant vector database (alternative to SQLite VSS)

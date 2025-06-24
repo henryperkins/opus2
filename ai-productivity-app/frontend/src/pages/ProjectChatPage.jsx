@@ -8,8 +8,10 @@ import { useKnowledgeChat } from '../hooks/useKnowledgeContext';
 import EnhancedMessageRenderer from '../components/chat/EnhancedMessageRenderer';
 import EnhancedCommandInput from '../components/chat/EnhancedCommandInput';
 import KnowledgeAssistant from '../components/chat/KnowledgeAssistant';
+import ChatErrorBoundary from '../components/chat/ChatErrorBoundary';
 import MonacoEditor from '@monaco-editor/react';
 import SplitPane from '../components/common/SplitPane';
+import ConnectionIndicator from '../components/common/ConnectionIndicator';
 import { Send, Brain, Code, FileText } from 'lucide-react';
 
 export default function ProjectChatPage() {
@@ -17,15 +19,15 @@ export default function ProjectChatPage() {
   const navigate = useNavigate();
   const user = useUser();
   const { project, loading: projectLoading } = useProject(projectId);
-  const { 
-    messages, 
-    sendMessage, 
-    connectionState, 
+  const {
+    messages,
+    sendMessage,
+    connectionState,
     typingUsers,
     sendTypingIndicator,
-    streamingMessages 
+    streamingMessages
   } = useChat(projectId, urlSessionId);
-  
+
   // Centralised code execution hook – shared across components
   const { executeCode, results: executionResults } = useCodeExecutor(projectId);
   const knowledgeChat = useKnowledgeChat(projectId);
@@ -68,13 +70,18 @@ export default function ProjectChatPage() {
 
       // Add knowledge context if available
       if (knowledgeChat.currentContext.length > 0) {
-        metadata.knowledge_context = knowledgeChat.currentContext;
+        metadata.referenced_chunks = knowledgeChat.currentContext.map(ctx => ctx.id);
+        metadata.referenced_files = [...new Set(knowledgeChat.currentContext.map(ctx => ctx.file_path).filter(Boolean))];
       }
 
       const messageId = await sendMessage(content, metadata);
       return messageId;
     } catch (error) {
       console.error('Failed to send message:', error);
+      // Show user-friendly error message
+      if (error.response?.status === 422) {
+        console.error('Message validation failed:', error.response.data);
+      }
       throw error;
     }
   }, [sendMessage, editorContent, editorLanguage, currentFile, knowledgeChat]);
@@ -107,8 +114,8 @@ export default function ProjectChatPage() {
         <div
           className={`max-w-3xl ${
             message.role === 'user'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-900'
+              ? 'bg-blue-600 text-white dark:bg-blue-500'
+              : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
           } rounded-lg px-4 py-3`}
         >
           {isStreaming ? (
@@ -159,45 +166,35 @@ export default function ProjectChatPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="split-layout">
       {/* Header */}
-      <div className="border-b bg-white px-4 py-3">
+      <header className="border-b bg-white dark:bg-gray-900 dark:border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-semibold">{project.title}</h1>
-            <span className={`text-sm px-2 py-1 rounded ${
-              connectionState === 'connected' 
-                ? 'bg-green-100 text-green-700' 
-                : connectionState === 'connecting'
-                ? 'bg-yellow-100 text-yellow-700'
-                : 'bg-red-100 text-red-700'
-            }`}>
-              {connectionState}
-            </span>
+            <ConnectionIndicator state={connectionState} />
           </div>
-          
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
-              className="p-2 hover:bg-gray-100 rounded-lg"
-              aria-label="Toggle Knowledge Assistant"
-            >
-              <Brain className="w-5 h-5" />
-            </button>
-          </div>
+
+          <button
+            onClick={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg touch-safe"
+            aria-label="Toggle Knowledge Assistant"
+          >
+            <Brain className="w-5 h-5" />
+          </button>
         </div>
-      </div>
+      </header>
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
+      <main className="flex-1 flex overflow-hidden">
         <SplitPane
           split="vertical"
           minSize={300}
           defaultSize="60%"
         >
           {/* Chat panel */}
-          <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-y-auto p-4">
+          <section className="chat-layout" aria-label="Project chat">
+            <div className="scrollable-content p-4">
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-8">
                   <p>Start a conversation about your code</p>
@@ -208,7 +205,7 @@ export default function ProjectChatPage() {
               ) : (
                 messages.map(renderMessage)
               )}
-              
+
               {/* Typing indicators */}
               {typingUsers.size > 0 && (
                 <div className="text-sm text-gray-500 italic ml-2">
@@ -217,7 +214,7 @@ export default function ProjectChatPage() {
               )}
             </div>
 
-            <div className="border-t bg-white">
+            <footer className="border-t bg-white">
               <EnhancedCommandInput
                 onSend={handleSendMessage}
                 onTyping={sendTypingIndicator}
@@ -227,8 +224,8 @@ export default function ProjectChatPage() {
                 currentFile={currentFile}
                 userId={user?.id}
               />
-            </div>
-          </div>
+            </footer>
+          </section>
 
           {/* Right panel - Knowledge Assistant or Code Editor */}
           {showKnowledgeAssistant ? (
@@ -243,7 +240,7 @@ export default function ProjectChatPage() {
             />
           ) : (
             <div className="h-full flex flex-col">
-              <div className="border-b px-4 py-2 bg-gray-50">
+              <div className="border-b px-4 py-2 bg-gray-50 dark:bg-gray-900 dark:border-gray-700">
                 <select
                   value={editorLanguage}
                   onChange={(e) => setEditorLanguage(e.target.value)}
@@ -272,7 +269,7 @@ export default function ProjectChatPage() {
             </div>
           )}
         </SplitPane>
-      </div>
+      </main>
     </div>
   );
 }

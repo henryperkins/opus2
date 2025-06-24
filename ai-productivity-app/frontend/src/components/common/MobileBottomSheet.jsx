@@ -135,10 +135,10 @@ export default function MobileBottomSheet({
       {/* Bottom Sheet */}
       <div
         ref={sheetRef}
-        className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${className}`}
+        className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 flex flex-col dynamic-height dynamic-transform ${className}`}
         style={{
-          height: `${sheetHeight}px`,
-          transform: isOpen ? 'translateY(0)' : 'translateY(100%)',
+          '--dynamic-height': `${sheetHeight}px`,
+          '--dynamic-transform': isOpen ? 'translateY(0)' : 'translateY(100%)',
         }}
         {...props}
       >
@@ -165,7 +165,7 @@ export default function MobileBottomSheet({
                   onClick={() => setCurrentSnap(snap)}
                   className={`w-2 h-2 rounded-full transition-colors ${
                     Math.abs(currentSnap - snap) < 0.05
-                      ? 'bg-blue-500'
+                      ? 'bg-brand-primary-600'
                       : 'bg-gray-300'
                   }`}
                   title={`${Math.round(snap * 100)}% height`}
@@ -175,8 +175,7 @@ export default function MobileBottomSheet({
 
             <button
               onClick={onClose}
-              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg touch-target"
-              style={{ minWidth: '44px', minHeight: '44px' }}
+              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg touch-safe"
             >
               <X className="w-5 h-5" />
             </button>
@@ -186,12 +185,9 @@ export default function MobileBottomSheet({
         {/* Content */}
         <div
           ref={contentRef}
-          className="flex-1 overflow-y-auto overscroll-contain"
+          className="scrollable-content touch-safe"
           style={{
-            // Prevent content from being selectable during drag
-            userSelect: isDragging ? 'none' : 'auto',
-            // Add momentum scrolling on iOS
-            WebkitOverflowScrolling: 'touch'
+            '--user-select': isDragging ? 'none' : 'auto',
           }}
         >
           {children}

@@ -1,14 +1,13 @@
 # backend/app/code_processing/git_integration.py
 """Git repository management for code ingestion."""
-import git
 from pathlib import Path
-import tempfile
-from typing import List, Dict, Any, Optional
 import shutil
 import logging
-import aiofiles
 import asyncio
 from datetime import datetime
+from typing import List, Dict, Any, Optional
+import git
+import aiofiles
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +47,7 @@ class GitManager:
                             await asyncio.to_thread(origin.pull)
                             branch = fallback
                             break
-                        except:
+                        except git.exc.GitCommandError:
                             continue
             else:
                 # New clone
@@ -69,8 +68,8 @@ class GitManager:
                 "total_files": len(files),
             }
 
-        except Exception as e:
-            logger.error(f"Git operation failed: {e}")
+        except git.exc.GitError as e:
+            logger.error("Git operation failed: %s", e)
             # Clean up on failure
             if repo_path.exists():
                 shutil.rmtree(repo_path, ignore_errors=True)
@@ -102,11 +101,10 @@ class GitManager:
                                     "sha": item.binsha.hex(),
                                 }
                             )
-                        except Exception as e:
-                            logger.warning(f"Failed to stat file {file_path}: {e}")
-
-        except Exception as e:
-            logger.error(f"Failed to traverse git tree: {e}")
+                        except OSError as e:
+                            logger.warning("Failed to stat file %s: %s", file_path, e)
+        except git.exc.GitError as e:
+            logger.error("Failed to traverse git tree: %s", e)
 
         return files
 
@@ -167,7 +165,7 @@ class GitManager:
         try:
             full_path.resolve().relative_to(Path(repo_path).resolve())
         except ValueError:
-            raise ValueError("File path outside repository")
+            raise ValueError("File path outside repository") from None
 
         try:
             async with aiofiles.open(full_path, "r", encoding="utf-8") as f:
@@ -193,8 +191,8 @@ class GitManager:
                 )
 
             return diff if diff else None
-        except Exception as e:
-            logger.error(f"Failed to get diff: {e}")
+        except git.exc.GitError as e:
+            logger.error("Failed to get diff: %s", e)
             return None
 
     def cleanup_repo(self, project_id: int, repo_name: str):

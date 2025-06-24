@@ -186,8 +186,8 @@ export default function ChatPage() {
         <div
           className={`max-w-3xl ${
             message.role === 'user'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-900'
+              ? 'bg-blue-600 text-white dark:bg-blue-500'
+              : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
           } rounded-lg px-4 py-3`}
         >
           {/* Message Header */}
@@ -244,7 +244,7 @@ export default function ChatPage() {
 
           {/* Response Actions & Quality */}
           {message.role === 'assistant' && !isStreaming && (
-            <div className="mt-4 pt-3 border-t border-gray-200">
+            <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
                 <ResponseTransformer
                   content={message.content}
@@ -272,7 +272,7 @@ export default function ChatPage() {
   // Loading state with context-aware skeleton
   if (projectLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <ErrorBoundary>
           <div className="flex items-center justify-center min-h-screen">
             <SkeletonLoader
@@ -288,7 +288,7 @@ export default function ChatPage() {
   // Project not found with enhanced error state
   if (!project) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <ErrorBoundary>
           <div className="flex items-center justify-center min-h-screen">
             <EmptyState
@@ -308,7 +308,7 @@ export default function ChatPage() {
 
   // Main chat interface
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <ErrorBoundary>
         {/* Header with model switcher */}
         <Header>
@@ -325,28 +325,28 @@ export default function ChatPage() {
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
                 aria-label="Toggle Knowledge Assistant"
               >
                 <Brain className="w-5 h-5" />
               </button>
               <button
                 onClick={() => setShowSearch(!showSearch)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
                 aria-label="Open Knowledge Search"
               >
                 <Search className="w-5 h-5" />
               </button>
               <button
                 onClick={() => setShowPromptManager(!showPromptManager)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
                 aria-label="Open Prompt Manager"
               >
                 <Settings className="w-5 h-5" />
               </button>
               <button
                 onClick={() => setShowAnalytics(!showAnalytics)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
                 aria-label="Toggle Analytics View"
               >
                 <BarChart2 className="w-5 h-5" />
@@ -378,7 +378,7 @@ export default function ChatPage() {
                 />
               </MobileBottomSheet>
 
-              <div className="border-t bg-white">
+              <div className="border-t bg-white dark:bg-gray-900 dark:border-gray-700">
                 <EnhancedCommandInput
                   onSend={handleSendMessage}
                   onTyping={sendTypingIndicator}

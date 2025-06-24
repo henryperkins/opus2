@@ -23,46 +23,49 @@ export function useChat(projectId, preferredSessionId = null) {
   const { user, loading: authLoading } = useAuth();
   const qc = useQueryClient();
 
-  const [sessionId, setSessionId] = useState(preferredSessionId);
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [streamingMessages, setStreamingMessages] = useState(new Map());
 
   // ---------------------------------------------------
-  // 1. Session bootstrap (fetch or create)
+  // 1. Session bootstrap (React Query-driven approach)
   // ---------------------------------------------------
-  useEffect(() => {
-    let cancelled = false;
-
-    async function ensureSession() {
-      if (!projectId || authLoading || !user) return;
+  const { data: sessionData, isLoading: sessionLoading } = useQuery({
+    queryKey: ['session', projectId, preferredSessionId],
+    queryFn: async () => {
+      if (!projectId || authLoading || !user) return null;
 
       let sid = preferredSessionId;
       try {
+        // First try to validate the preferred session
         if (sid) {
           const { data } = await client.get(`/api/chat/sessions/${sid}`);
-          if (data.project_id !== Number(projectId)) sid = null;
+          if (data.project_id === Number(projectId)) {
+            return { id: sid, ...data };
+          }
+          sid = null;
         }
 
+        // Create new session if needed
         if (!sid) {
           const { data } = await client.post('/api/chat/sessions', {
             project_id: Number(projectId),
           });
-          sid = data.id;
+          return data;
         }
-        if (!cancelled) setSessionId(sid);
-      } catch {
-        /* swallow – ErrorBoundary higher up will display */
+      } catch (error) {
+        console.error('Session bootstrap error:', error);
+        throw error;
       }
-    }
+    },
+    enabled: !!projectId && !authLoading && !!user,
+    staleTime: 5 * 60 * 1000, // 5 minutes - sessions don't change often
+    cacheTime: 10 * 60 * 1000, // 10 minutes
+  });
 
-    ensureSession();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, preferredSessionId, authLoading, user]);
+  const sessionId = sessionData?.id;
 
   // ---------------------------------------------------
-  // 2. Historical messages
+  // 2. Historical messages (depends on session)
   // ---------------------------------------------------
   const {
     data: messages = [],
@@ -70,17 +73,17 @@ export function useChat(projectId, preferredSessionId = null) {
   } = useQuery({
     queryKey: messagesKey(sessionId),
     queryFn: () => client.get(`/api/chat/sessions/${sessionId}/messages`).then((r) => r.data),
-    enabled: !!sessionId,
-    staleTime: 0,
+    enabled: !!sessionId && !sessionLoading,
+    staleTime: 30 * 1000, // 30 seconds - messages can change frequently
   });
 
   // ---------------------------------------------------
-  // 3. Live WebSocket connection
+  // 3. Live WebSocket connection (managed by query key)
   // ---------------------------------------------------
   const { state: connectionState, send } = useWebSocketChannel({
     path: sessionId ? `/api/chat/ws/sessions/${sessionId}` : null,
-    retry: 5,
-    onMessage: (event) => {
+    retry: 3, // Limit to 3 attempts with exponential backoff
+    onMessage: useCallback((event) => {
       try {
         const data = JSON.parse(event.data);
         switch (data.type) {
@@ -130,56 +133,59 @@ export function useChat(projectId, preferredSessionId = null) {
       } catch (e) {
         console.error('WS parse error', e);
       }
-    },
+    }, [sessionId, qc]), // Stable dependencies
   });
 
   // ---------------------------------------------------
   // 4. Mutations (send / edit / delete)
   // ---------------------------------------------------
-  const sendMutation = useMutation(
-    async ({ content, metadata }) => {
-      const { data } = await client.post(`/api/chat/sessions/${sessionId}/messages`, {
+  const sendMutation = useMutation({
+    mutationFn: async ({ content, metadata = {} }) => {
+      // Map frontend metadata to backend schema fields
+      const payload = {
+        role: 'user', // Required field that was missing
         content,
-        metadata,
-      });
+        code_snippets: metadata.code_snippets || [],
+        referenced_files: metadata.referenced_files || [],
+        referenced_chunks: metadata.referenced_chunks || [],
+        applied_commands: metadata.applied_commands || {},
+        // Include any knowledge context if present
+        ...(metadata.knowledge_context && { knowledge_context: metadata.knowledge_context }),
+      };
+
+      const { data } = await client.post(`/api/chat/sessions/${sessionId}/messages`, payload);
       return data;
     },
-    {
-      onSuccess: (newMsg) => {
-        qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, newMsg]);
-      },
-    }
-  );
+    onSuccess: (newMsg) => {
+      qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, newMsg]);
+    },
+  });
 
-  const editMutation = useMutation(
-    ({ id, content }) => client.patch(`/api/chat/messages/${id}`, { content }).then((r) => r.data),
-    {
-      onMutate: async ({ id, content }) => {
-        await qc.cancelQueries(messagesKey(sessionId));
-        const prev = qc.getQueryData(messagesKey(sessionId));
-        qc.setQueryData(messagesKey(sessionId), (old = []) =>
-          old.map((m) => (m.id === id ? { ...m, content, edited: true } : m))
-        );
-        return { prev };
-      },
-      onError: (_err, _vars, ctx) => qc.setQueryData(messagesKey(sessionId), ctx.prev),
-      onSettled: () => qc.invalidateQueries(messagesKey(sessionId)),
-    }
-  );
+  const editMutation = useMutation({
+    mutationFn: ({ id, content }) => client.patch(`/api/chat/messages/${id}`, { content }).then((r) => r.data),
+    onMutate: async ({ id, content }) => {
+      await qc.cancelQueries({ queryKey: messagesKey(sessionId) });
+      const prev = qc.getQueryData(messagesKey(sessionId));
+      qc.setQueryData(messagesKey(sessionId), (old = []) =>
+        old.map((m) => (m.id === id ? { ...m, content, edited: true } : m))
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => qc.setQueryData(messagesKey(sessionId), ctx.prev),
+    onSettled: () => qc.invalidateQueries({ queryKey: messagesKey(sessionId) }),
+  });
 
-  const deleteMutation = useMutation(
-    (id) => client.delete(`/api/chat/messages/${id}`),
-    {
-      onMutate: async (id) => {
-        await qc.cancelQueries(messagesKey(sessionId));
-        const prev = qc.getQueryData(messagesKey(sessionId));
-        qc.setQueryData(messagesKey(sessionId), (old = []) => old.filter((m) => m.id !== id));
-        return { prev };
-      },
-      onError: (_err, _id, ctx) => qc.setQueryData(messagesKey(sessionId), ctx.prev),
-      onSettled: () => qc.invalidateQueries(messagesKey(sessionId)),
-    }
-  );
+  const deleteMutation = useMutation({
+    mutationFn: (id) => client.delete(`/api/chat/messages/${id}`),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: messagesKey(sessionId) });
+      const prev = qc.getQueryData(messagesKey(sessionId));
+      qc.setQueryData(messagesKey(sessionId), (old = []) => old.filter((m) => m.id !== id));
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => qc.setQueryData(messagesKey(sessionId), ctx.prev),
+    onSettled: () => qc.invalidateQueries({ queryKey: messagesKey(sessionId) }),
+  });
 
   // Typing indicator
   const sendTypingIndicator = useCallback(
@@ -196,7 +202,7 @@ export function useChat(projectId, preferredSessionId = null) {
       messages,
       streamingMessages,
       typingUsers,
-      historyLoading,
+      historyLoading: historyLoading || sessionLoading,
       sendMessage: (c, m) => sendMutation.mutateAsync({ content: c, metadata: m }),
       editMessage: (id, content) => editMutation.mutateAsync({ id, content }),
       deleteMessage: (id) => deleteMutation.mutateAsync(id),
@@ -209,6 +215,7 @@ export function useChat(projectId, preferredSessionId = null) {
       streamingMessages,
       typingUsers,
       historyLoading,
+      sessionLoading,
       sendMutation.mutateAsync,
       editMutation.mutateAsync,
       deleteMutation.mutateAsync,

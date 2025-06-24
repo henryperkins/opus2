@@ -1,0 +1,11 @@
+[MASTER]
+# Ensure backend package is on PYTHONPATH when linting from workspace root
+init-hook='import sys, pathlib; backend = pathlib.Path(__file__).resolve().parent / "ai-productivity-app" / "backend"; sys.path.insert(0, str(backend))'
+
+[MESSAGES CONTROL]
+# Keep common docstring warnings disabled and turn off line-length check (C0301)
+disable=missing-module-docstring,missing-class-docstring,missing-function-docstring,line-too-long
+
+[FORMAT]
+# Allow long lines
+max-line-length=999
