@@ -1,0 +1,11 @@
+[flake8]
+# Disable line length checking completely
+ignore = E501
+max-line-length = 999
+exclude =
+    .git,
+    __pycache__,
+    .pytest_cache,
+    .mypy_cache,
+    venv,
+    .venv

@@ -32,10 +32,11 @@ class Settings(BaseSettings):
     vector_store_type: str = Field(default="sqlite_vss", description="Vector store type: sqlite_vss or qdrant")
 
     # Qdrant settings
-    qdrant_host: str = Field(default="localhost", description="Qdrant server host")
-    qdrant_port: int = Field(default=6333, description="Qdrant server port")
-    qdrant_collection: str = Field(default="kb_entries", description="Qdrant collection name")
+    qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant server URL")
+    qdrant_api_key: Optional[str] = Field(default=None, description="Qdrant API key")
+    qdrant_vector_size: int = Field(default=1536, description="Vector size for embeddings")
     qdrant_timeout: int = Field(default=30, description="Qdrant client timeout in seconds")
+    qdrant_max_workers: int = Field(default=16, description="Threadpool size for Qdrant operations")
 
     # Vector search settings
     vector_search_limit: int = Field(default=10, description="Default vector search result limit")

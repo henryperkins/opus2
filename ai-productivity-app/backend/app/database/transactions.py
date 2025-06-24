@@ -22,6 +22,7 @@ def atomic(session: Session) -> Iterator[Session]:  # noqa: D401 – helper
     try:
         yield session
         tx.commit()
-    except Exception:  # pragma: no cover  # noqa: BLE001 – re-raise caller error
+    except Exception:  # pragma: no cover  # noqa: BLE001
+        # Re-raise caller error
         tx.rollback()
         raise

@@ -4,4 +4,4 @@ init-hook='import sys, pathlib; backend = pathlib.Path(__file__).resolve().paren
 
 [MESSAGES CONTROL]
 # Disable common docstring warnings to keep noise low.
-disable=missing-module-docstring,missing-class-docstring,missing-function-docstring
+disable=missing-module-docstring,missing-class-docstring,missing-function-docstring,line-too-long

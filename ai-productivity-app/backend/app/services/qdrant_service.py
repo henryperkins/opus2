@@ -1,163 +1,230 @@
-# backend/app/services/qdrant_service.py
-"""Qdrant vector database service for semantic search."""
-from typing import List, Dict, Optional, Any
-import numpy as np
-from qdrant_client import QdrantClient
-from qdrant_client.http import models
-from qdrant_client.http.models import Distance, VectorParams, PointStruct
+"""Async façade over Qdrant for embeddings & semantic search."""
+
+from __future__ import annotations
+
+import concurrent.futures
 import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import anyio
+
+try:
+    from qdrant_client import QdrantClient  # type: ignore
+    from qdrant_client.http.models import (  # type: ignore
+        Distance,
+        FieldCondition,
+        Filter,
+        HnswConfigDiff,
+        MatchAny,
+        MatchValue,
+        PointStruct,
+        UpdateStatus,
+        VectorParams,
+    )
+except ModuleNotFoundError as exc:  # pragma: no cover
+    raise ImportError(
+        "The `qdrant-client` package is required. "
+        "Install with: pip install qdrant-client>=1.9.0"
+    ) from exc
+
+from app.config import settings  # pylint: disable=import-error
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["QdrantService"]
+
+
+def _run_blocking(func, *args, **kwargs):
+    """Run a blocking Qdrant call inside the shared thread-pool."""
+    return anyio.to_thread.run_sync(func, *args, **kwargs)
+
 
 class QdrantService:
-    """Qdrant vector database service for embeddings."""
+    """Async-friendly wrapper around Qdrant collections."""
 
-    def __init__(self, host: str = "localhost", port: int = 6333):
-        self.client = QdrantClient(host=host, port=port)
-        self.collection_name = "kb_entries"
+    _EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
 
-    async def initialize(self) -> None:
-        """Initialize the Qdrant service."""
-        await self.create_index_if_missing()
-
-    async def create_index_if_missing(self):
-        """Ensure the collection exists with proper configuration."""
-        try:
-            # Check if collection exists
-            collections = self.client.get_collections()
-            collection_names = [col.name for col in collections.collections]
-
-            if self.collection_name not in collection_names:
-                # Create collection with HNSW index
-                self.client.create_collection(
-                    collection_name=self.collection_name,
-                    vectors_config=VectorParams(
-                        size=1536,  # OpenAI embedding dimension
-                        distance=Distance.COSINE
-                    ),
-                    hnsw_config=models.HnswConfigDiff(
-                        m=16,  # Number of bi-directional links
-                        ef_construct=200,  # Size of dynamic candidate list
-                    )
-                )
-                logger.info(
-                    f"Created Qdrant collection: {self.collection_name}"
-                )
-            else:
-                logger.info(
-                    f"Qdrant collection already exists: {self.collection_name}"
-                )
-
-        except Exception as e:
-            logger.error(f"Failed to create Qdrant collection: {e}")
-            raise
-
-    async def upsert(self, embeddings: List[Dict[str, Any]]) -> List[str]:
-        """Insert or update embeddings in Qdrant."""
-        points = []
-
-        for embedding_data in embeddings:
-            # Convert vector to list format
-            vector_data = embedding_data["vector"]
-            if isinstance(vector_data, np.ndarray):
-                vector_list = vector_data.tolist()
-            else:
-                vector_list = vector_data
-
-            point = PointStruct(
-                id=embedding_data["id"],
-                vector=vector_list,
-                payload={
-                    "document_id": embedding_data.get("document_id"),
-                    "project_id": embedding_data.get("project_id"),
-                    "content": embedding_data.get("content", ""),
-                    "chunk_id": embedding_data.get("chunk_id"),
-                    "metadata": embedding_data.get("metadata", {})
-                }
+    def __init__(
+        self,
+        *,
+        collection: str = "kb_entries",
+        url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        vector_size: int | None = None,
+    ) -> None:
+        if QdrantService._EXECUTOR is None:
+            QdrantService._EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+                max_workers=settings.qdrant_max_workers or 16,
+                thread_name_prefix="qdrant",
             )
-            points.append(point)
 
-        # Upsert points
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points
+        self.collection_name = collection
+        self.vector_size = vector_size or settings.qdrant_vector_size
+        self.client = QdrantClient(
+            url=url or settings.qdrant_url,
+            api_key=api_key or settings.qdrant_api_key,
+            timeout=settings.qdrant_timeout or 30,
         )
 
+    # ------------------------------------------------------------------ #
+    # Bootstrap
+    # ------------------------------------------------------------------ #
+    async def initialize(self) -> None:
+        """Initialize the Qdrant service by creating the collection if it doesn't exist."""
+        await self._create_collection_if_missing()
+
+    async def _create_collection_if_missing(self) -> None:
+        """Create the Qdrant collection if it does not already exist."""
+        collections = await _run_blocking(self.client.get_collections)
+        names = [c.name for c in collections.collections]
+        if self.collection_name in names:
+            logger.info("Qdrant collection '%s' exists", self.collection_name)
+            return
+
+        await _run_blocking(
+            self.client.create_collection,
+            collection_name=self.collection_name,
+            vectors_config=VectorParams(
+                size=self.vector_size,
+                distance=Distance.COSINE
+            ),
+            hnsw_config=HnswConfigDiff(m=16, ef_construct=200),
+        )
+        logger.info("Created Qdrant collection '%s'", self.collection_name)
+
+    # ------------------------------------------------------------------ #
+    # Upsert
+    # ------------------------------------------------------------------ #
+    async def upsert(self, embeddings: List[Dict[str, Any]]) -> List[str]:
+        """Upsert embeddings into the Qdrant collection.
+
+        Args:
+            embeddings: List of dictionaries containing embedding data.
+
+        Returns:
+            List of IDs for the upserted points.
+        """
+        points = [
+            PointStruct(
+                id=e["id"],
+                vector=e["vector"],
+                payload={
+                    "document_id": e.get("document_id"),
+                    "project_id": e.get("project_id"),
+                    "content": e.get("content", ""),
+                    "chunk_id": e.get("chunk_id"),
+                    "metadata": e.get("metadata", {}),
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+            )
+            for e in embeddings
+        ]
+
+        result = await _run_blocking(
+            self.client.upsert,
+            collection_name=self.collection_name,
+            points=points,
+        )
+        if result.status != UpdateStatus.COMPLETED:  # type: ignore[attr-defined]
+            logger.error(
+                "Qdrant upsert failed (%s)",
+                result.status
+            )
         return [str(p.id) for p in points]
 
+    # ------------------------------------------------------------------ #
+    # Search
+    # ------------------------------------------------------------------ #
     async def search(
         self,
-        query_vector: np.ndarray,
+        *,
+        query_vector: List[float],
         limit: int = 10,
         project_ids: Optional[List[int]] = None,
-        score_threshold: float = 0.7
+        score_threshold: float = 0.7,
     ) -> List[Dict[str, Any]]:
-        """Search for similar embeddings."""
-        # Build filter conditions
-        filters = []
-        if project_ids:
-            filters.append(
-                models.FieldCondition(
-                    key="project_id",
-                    match=models.MatchAny(any=project_ids)
-                )
+        """Search for similar vectors in the Qdrant collection.
+
+        Args:
+            query_vector: Vector to search for similarities.
+            limit: Maximum number of results to return.
+            project_ids: Optional list of project IDs to filter results.
+            score_threshold: Minimum similarity score for results.
+
+        Returns:
+            List of search results with IDs, scores, and payload data.
+        """
+        filt = (
+            Filter(
+                must=[
+                    FieldCondition(
+                        key="project_id",
+                        match=MatchAny(any=project_ids)
+                    )
+                ]
             )
+            if project_ids
+            else None
+        )
 
-        query_filter = models.Filter(must=filters) if filters else None
-
-        # Convert query vector to list format
-        if isinstance(query_vector, np.ndarray):
-            query_vector_list = query_vector.tolist()
-        else:
-            query_vector_list = query_vector
-
-        # Perform search
-        search_results = self.client.search(
+        results = await _run_blocking(
+            self.client.search,
             collection_name=self.collection_name,
-            query_vector=query_vector_list,
-            query_filter=query_filter,
+            query_vector=query_vector,
+            query_filter=filt,
             limit=limit,
-            score_threshold=score_threshold
+            score_threshold=score_threshold,
         )
+        return [
+            {
+                "id": r.id,
+                "score": r.score,
+                **r.payload,
+            }
+            for r in results
+        ]
 
-        # Format results
-        results = []
-        for result in search_results:
-            results.append({
-                "id": result.id,
-                "score": result.score,
-                "document_id": result.payload.get("document_id"),
-                "project_id": result.payload.get("project_id"),
-                "content": result.payload.get("content", ""),
-                "chunk_id": result.payload.get("chunk_id"),
-                "metadata": result.payload.get("metadata", {})
-            })
+    # ------------------------------------------------------------------ #
+    # Delete
+    # ------------------------------------------------------------------ #
+    async def delete_by_document(self, document_id: int) -> None:
+        """Delete vectors associated with a specific document ID.
 
-        return results
-
-    async def delete_by_document(self, document_id: int):
-        """Delete all vectors for a document."""
-        self.client.delete(
+        Args:
+            document_id: ID of the document whose vectors should be deleted.
+        """
+        await _run_blocking(
+            self.client.delete,
             collection_name=self.collection_name,
-            points_selector=models.FilterSelector(
-                filter=models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="document_id",
-                            match=models.MatchValue(value=document_id)
-                        )
-                    ]
-                )
-            )
+            points_selector=Filter(
+                must=[
+                    FieldCondition(
+                        key="document_id",
+                        match=MatchValue(value=document_id)
+                    )
+                ]
+            ),
+        )
+        logger.info(
+            "Removed vectors for document %s from '%s'",
+            document_id,
+            self.collection_name
         )
 
+    # ------------------------------------------------------------------ #
+    # Stats
+    # ------------------------------------------------------------------ #
     async def get_stats(self) -> Dict[str, Any]:
-        """Get collection statistics."""
-        info = self.client.get_collection(self.collection_name)
+        """Get statistics about the Qdrant collection.
+
+        Returns:
+            Dictionary containing collection statistics.
+        """
+        info = await _run_blocking(self.client.get_collection, self.collection_name)
         return {
             "total_points": info.points_count,
             "vector_size": info.config.params.vectors.size,
             "distance_metric": info.config.params.vectors.distance,
-            "collection_name": self.collection_name
+            "collection_name": self.collection_name,
         }

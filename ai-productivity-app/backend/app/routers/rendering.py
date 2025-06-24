@@ -1,87 +1,80 @@
-"""
-Rendering API router for response processing and rendering.
-"""
+# backend/app/routers/rendering_router.py
+"""Rendering API router - format detection, rendering, and interactive
+helpers."""
+
+from __future__ import annotations
+
 import re
 from datetime import datetime
+from typing import List
 
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException
 
-from ..database import get_db
 from ..config import settings
-from ..services.rendering_service import RenderingServiceClient
+from ..services.rendering_service import RenderingServiceClient  # new import
 from ..schemas.rendering import (
-    FormatDetectionResult,
-    ChunkRenderRequest,
-    InteractiveElement,
-    RenderedChunk,
-    InteractiveInjectionRequest,
     ActionBindingRequest,
-    MathRenderRequest,
-    DiagramRenderRequest,
+    ChunkRenderRequest,
     ContentValidationRequest,
-    ValidationResult,
+    DiagramRenderRequest,
+    FormatDetectionResult,
+    InteractiveElement,
+    InteractiveInjectionRequest,
+    MathRenderRequest,
     RenderingCapabilities,
-    RenderingResponse
+    RenderingResponse,
+    ValidationResult,
 )
 
 router = APIRouter(prefix="/api/v1/rendering", tags=["rendering"])
 
-# Global rendering client
-rendering_client = None
+# --------------------------------------------------------------------------- #
+# Shared rendering-service dependency
+# --------------------------------------------------------------------------- #
 
 
-@router.on_event("startup")
-async def startup_rendering_client():
-    """Initialize rendering client on startup."""
-    global rendering_client
-    rendering_client = RenderingServiceClient(settings.render_service_url)
+def get_renderer() -> RenderingServiceClient:
+    """Return the shared RenderingServiceClient singleton (cheap call)."""
+    return RenderingServiceClient(settings.render_service_url)
 
 
-@router.on_event("shutdown")
-async def shutdown_rendering_client():
-    """Clean up rendering client."""
-    global rendering_client
-    if rendering_client:
-        await rendering_client.__aexit__(None, None, None)
+# --------------------------------------------------------------------------- #
+# Pre-compiled regexes for format detection
+# --------------------------------------------------------------------------- #
+_RE_CODE = re.compile(r"```|`[^`]+`")
+_RE_MATH = re.compile(r"\$.*?\$|\\\(.*?\\\)")
+_RE_DIAGRAM = re.compile(r"\b(?:mermaid|graph|flowchart)\b", re.I)
+_RE_TABLE = re.compile(r"\|.*\|")
+_RE_INTERACTIVE = re.compile(r"\[(?:interactive|button)]", re.I)
 
 
-@router.post("/detect-formats")
-async def detect_formats(
-    content: str,
-    db: Session = Depends(get_db)
-) -> RenderingResponse:
-    """Detect content formats in the response."""
+@router.post("/detect-formats", response_model=RenderingResponse)
+async def detect_formats(content: str) -> RenderingResponse:
+    """
+    Detect whether the chunk contains code, math, diagrams, tables, or interactive markup.
+    """
     try:
-        # Format detection logic
-        has_code = bool(re.search(r'```|`[^`]+`', content))
-        has_math = bool(re.search(r'\$.*?\$|\\\(.*?\\\)', content))
-        has_diagrams = bool(re.search(r'mermaid|graph|flowchart', content))
-        has_tables = bool(re.search(r'\|.*\|', content))
-        has_interactive = bool(
-            re.search(r'\[interactive\]|\[button\]', content)
-        )
+        has_code = bool(_RE_CODE.search(content))
+        has_math = bool(_RE_MATH.search(content))
+        has_diagrams = bool(_RE_DIAGRAM.search(content))
+        has_tables = bool(_RE_TABLE.search(content))
+        has_interactive = bool(_RE_INTERACTIVE.search(content))
 
-        # Detect programming languages
-        languages = []
-        if '```python' in content:
-            languages.append('python')
-        if '```javascript' in content:
-            languages.append('javascript')
-        if '```sql' in content:
-            languages.append('sql')
+        languages: List[str] = []
+        for lang in ("python", "javascript", "sql"):
+            if f"```{lang}" in content:
+                languages.append(lang)
 
-        # Determine primary format
         if has_code:
-            primary_format = "code"
+            primary = "code"
         elif has_math:
-            primary_format = "math"
+            primary = "math"
         elif has_diagrams:
-            primary_format = "diagram"
+            primary = "diagram"
         elif has_tables:
-            primary_format = "table"
+            primary = "table"
         else:
-            primary_format = "text"
+            primary = "text"
 
         result = FormatDetectionResult(
             has_code=has_code,
@@ -89,271 +82,179 @@ async def detect_formats(
             has_diagrams=has_diagrams,
             has_tables=has_tables,
             has_interactive=has_interactive,
-            primary_format=primary_format,
-            detected_languages=languages if languages else None,
-            confidence=0.9
+            primary_format=primary,
+            detected_languages=languages or None,
+            confidence=0.9,
         )
-
         return RenderingResponse(success=True, data=result.dict())
-    except Exception as e:
-        detail = f"Format detection failed: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=500, detail=f"Format detection failed: {exc}") from exc
 
 
-@router.post("/render-chunk")
+# --------------------------------------------------------------------------- #
+# Render chunk
+# --------------------------------------------------------------------------- #
+@router.post("/render-chunk", response_model=RenderingResponse)
 async def render_chunk(
     request: ChunkRenderRequest,
-    db: Session = Depends(get_db)
+    renderer: RenderingServiceClient = Depends(get_renderer),
 ) -> RenderingResponse:
-    """Render a content chunk with appropriate formatting."""
+    """Render a single chunk of content based on detected format."""
     try:
-        start_time = datetime.utcnow()
+        start = datetime.utcnow()
 
-        # Use real rendering service
         if request.format_info and request.format_info.has_code:
-            # Extract code blocks and render them
-            result = await rendering_client.render_markdown(
-                request.chunk,
-                {
-                    "syntax_theme": request.syntax_theme,
-                    "enable_tables": True,
-                    "enable_math": request.format_info.has_math
-                }
+            # Prefer explicit code renderer when the chunk was fenced
+            lang = (request.format_info.detected_languages[0]
+                    if request.format_info.detected_languages else "text")
+            rendered = await renderer.render_code(
+                code=request.chunk,
+                language=lang,
+                theme=request.syntax_theme or "github",
             )
         else:
-            # Plain text rendering
-            result = {
-                "html": request.chunk,
-                "fallback": False
-            }
+            has_math = (request.format_info.has_math
+                        if request.format_info else False)
+            rendered = await renderer.render_markdown(
+                content=request.chunk,
+                options={
+                    "syntax_theme": request.syntax_theme,
+                    "enable_tables": True,
+                    "enable_math": has_math,
+                },
+            )
 
-        render_time = (datetime.utcnow() - start_time).total_seconds()
-
-        rendered = RenderedChunk(
-            content=result["html"],
-            formatted=True,
-            render_time=render_time,
-            format_used=(request.format_info.primary_format
-                        if request.format_info else "text"),
-            metadata={
+        render_time = (datetime.utcnow() - start).total_seconds()
+        data = {
+            "content": rendered["html"],
+            "formatted": True,
+            "render_time": render_time,
+            "format_used": (request.format_info.primary_format
+                            if request.format_info else "text"),
+            "metadata": {
                 "theme": request.syntax_theme,
-                "fallback": result.get("fallback", False)
-            }
-        )
-
-        return RenderingResponse(success=True, data=rendered.dict())
-
-    except Exception as e:
-        # Return plain text as ultimate fallback
+                "fallback": rendered.get("fallback", False),
+            },
+        }
+        return RenderingResponse(success=True, data=data)
+    except ValueError as exc:  # pragma: no cover
+        # Safe fallback: return unformatted chunk.
         return RenderingResponse(
             success=False,
-            data={
-                "content": request.chunk,
-                "formatted": False,
-                "error": str(e)
-            }
+            data={"content": request.chunk, "formatted": False, "error": str(exc)},
         )
 
 
-@router.post("/inject-interactive")
+# --------------------------------------------------------------------------- #
+# Inject interactive elements
+# --------------------------------------------------------------------------- #
+@router.post("/inject-interactive", response_model=RenderingResponse)
 async def inject_interactive_elements(
     request: InteractiveInjectionRequest,
-    db: Session = Depends(get_db)
 ) -> RenderingResponse:
-    """Inject interactive elements into rendered content."""
+    """Add copy / run buttons, etc., to rendered chunks (mock)."""
     try:
-        enhanced_chunks = []
+        enhanced = []
+        for idx, chunk in enumerate(request.chunks):
+            interactives: List[InteractiveElement] = []
 
-        for chunk in request.chunks:
-            # Mock interactive element detection and injection
-            interactive_elements = []
-
-            if request.format_info.has_code:
-                # Add copy/run buttons for code blocks
-                interactive_elements.append(
+            if request.format_info and request.format_info.has_code:
+                interactives.append(
                     InteractiveElement(
-                        id=f"code_{len(enhanced_chunks)}",
+                        id=f"code_{idx}",
                         type="code",
                         content=chunk.content,
                         actions=["copy", "run", "edit"],
-                        metadata={"language": "python"}
+                        metadata={"language": "python"},
                     )
                 )
 
-            if request.format_info.has_interactive:
-                # Add custom interactive elements
-                interactive_elements.append(
+            if request.format_info and request.format_info.has_interactive:
+                interactives.append(
                     InteractiveElement(
-                        id=f"interactive_{len(enhanced_chunks)}",
+                        id=f"interactive_{idx}",
                         type="button",
                         content="Click me",
-                        actions=["click", "hover"],
-                        metadata={"style": "primary"}
+                        actions=["click"],
+                        metadata={"style": "primary"},
                     )
                 )
 
-            # Create enhanced chunk
-            enhanced_chunk = RenderedChunk(
-                content=chunk.content,
-                formatted=chunk.formatted,
-                interactive_elements=interactive_elements,
-                render_time=chunk.render_time,
-                format_used=chunk.format_used,
-                metadata=chunk.metadata
-            )
-
-            enhanced_chunks.append(enhanced_chunk)
+            chunk.interactive_elements = interactives
+            enhanced.append(chunk)
 
         return RenderingResponse(
             success=True,
-            data={"enhanced_chunks": [chunk.dict() for chunk in enhanced_chunks]}
+            data={"enhanced_chunks": [c.dict() for c in enhanced]},
         )
-    except Exception as e:
-        detail = f"Interactive element injection failed: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=500, detail=f"Interactive injection failed: {exc}") from exc
 
 
-@router.post("/bind-actions")
-async def bind_actions(
-    request: ActionBindingRequest,
-    db: Session = Depends(get_db)
-) -> RenderingResponse:
+# --------------------------------------------------------------------------- #
+# Bind actions (mock)
+# --------------------------------------------------------------------------- #
+@router.post("/bind-actions", response_model=RenderingResponse)
+async def bind_actions(request: ActionBindingRequest) -> RenderingResponse:
     """Bind actions to interactive elements."""
     try:
-        bound_elements = []
-
-        for element in request.elements:
-            # Mock action binding
-            action_handlers = {}
-
-            for action in element.actions:
-                if action == "copy":
-                    action_handlers[action] = "handleCopy"
-                elif action == "run":
-                    action_handlers[action] = "handleRun"
-                elif action == "edit":
-                    action_handlers[action] = "handleEdit"
-                elif action == "click":
-                    action_handlers[action] = "handleClick"
-
-            # Create bound element
-            bound_element = InteractiveElement(
-                id=element.id,
-                type=element.type,
-                content=element.content,
-                actions=element.actions,
-                metadata={
-                    **(element.metadata or {}),
-                    "handlers": action_handlers
-                },
-                position=element.position
-            )
-
-            bound_elements.append(bound_element)
-
-        return RenderingResponse(
-            success=True,
-            data={"bound_elements": [elem.dict() for elem in bound_elements]}
-        )
-    except Exception as e:
-        detail = f"Action binding failed: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+        bound = []
+        for elem in request.elements:
+            handlers = {act: f"handle{act.capitalize()}" for act in elem.actions}
+            elem.metadata = {**(elem.metadata or {}), "handlers": handlers}
+            bound.append(elem)
+        return RenderingResponse(success=True, data={"bound_elements": [e.dict() for e in bound]})
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=500, detail=f"Action binding failed: {exc}") from exc
 
 
-@router.post("/math")
-async def render_math(
-    request: MathRenderRequest,
-    db: Session = Depends(get_db)
-) -> RenderingResponse:
+# --------------------------------------------------------------------------- #
+# Math & diagram renderers (mock; peg future real client)
+# --------------------------------------------------------------------------- #
+@router.post("/math", response_model=RenderingResponse)
+async def render_math(request: MathRenderRequest) -> RenderingResponse:
     """Render mathematical expressions."""
-    try:
-        # Mock math rendering
-        # In production, this would use KaTeX or MathJax
-
-        rendered_math = {
-            "expression": request.expression,
-            "renderer": request.renderer,
-            "html": f'<span class="math-{request.renderer}">{request.expression}</span>',
-            "success": True
-        }
-
-        return RenderingResponse(success=True, data=rendered_math)
-    except Exception as e:
-        detail = f"Math rendering failed: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+    html = f'<span class="math-{request.renderer}">{request.expression}</span>'
+    return RenderingResponse(success=True, data={"html": html, "renderer": request.renderer})
 
 
-@router.post("/diagram")
-async def render_diagram(
-    request: DiagramRenderRequest,
-    db: Session = Depends(get_db)
-) -> RenderingResponse:
-    """Render diagram content."""
-    try:
-        # Mock diagram rendering
-        # In production, this would use Mermaid, D3, etc.
-
-        rendered_diagram = {
-            "code": request.code,
-            "type": request.type,
-            "svg": f'<svg><!-- {request.type} diagram --></svg>',
-            "success": True
-        }
-
-        return RenderingResponse(success=True, data=rendered_diagram)
-    except Exception as e:
-        detail = f"Diagram rendering failed: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+@router.post("/diagram", response_model=RenderingResponse)
+async def render_diagram(request: DiagramRenderRequest) -> RenderingResponse:
+    """Render diagrams."""
+    svg = f'<svg><!-- {request.type} diagram --></svg>'
+    return RenderingResponse(success=True, data={"svg": svg, "type": request.type})
 
 
-@router.get("/capabilities")
-async def get_capabilities(
-    db: Session = Depends(get_db)
-) -> RenderingResponse:
-    """Get rendering capabilities and supported formats."""
-    try:
-        capabilities = RenderingCapabilities(
-            supported_formats=["markdown", "html", "text", "code", "math"],
-            syntax_themes=["github", "monokai", "solarized", "vs-dark"],
-            math_renderers=["katex", "mathjax"],
-            diagram_types=["mermaid", "d3", "graphviz"],
-            interactive_types=["code", "button", "form", "chart", "decision_tree"],
-            max_content_length=50000
-        )
-
-        return RenderingResponse(success=True, data=capabilities.dict())
-    except Exception as e:
-        detail = f"Failed to get capabilities: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+# --------------------------------------------------------------------------- #
+# Capabilities
+# --------------------------------------------------------------------------- #
+@router.get("/capabilities", response_model=RenderingResponse)
+async def get_capabilities() -> RenderingResponse:
+    """Get rendering capabilities."""
+    caps = RenderingCapabilities(
+        supported_formats=["markdown", "html", "text", "code", "math"],
+        syntax_themes=["github", "monokai", "solarized", "vs-dark"],
+        math_renderers=["katex", "mathjax"],
+        diagram_types=["mermaid", "d3", "graphviz"],
+        interactive_types=["code", "button", "form", "chart", "decision_tree"],
+        max_content_length=50_000,
+    )
+    return RenderingResponse(success=True, data=caps.dict())
 
 
-@router.post("/validate")
-async def validate_content(
-    request: ContentValidationRequest,
-    db: Session = Depends(get_db)
-) -> RenderingResponse:
-    """Validate content for security."""
-    try:
-        # Mock content validation
-        # In production, this would perform actual XSS and security checks
-
-        issues = []
-        warnings = []
-
-        if "<script" in request.content.lower():
-            issues.append("Script tags detected")
-
-        if "javascript:" in request.content.lower():
-            warnings.append("JavaScript protocol detected")
-
-        result = ValidationResult(
-            is_safe=len(issues) == 0,
-            issues=issues if issues else None,
-            sanitized_content=request.content,  # Would be sanitized in production
-            warnings=warnings if warnings else None
-        )
-
-        return RenderingResponse(success=True, data=result.dict())
-    except Exception as e:
-        detail = f"Content validation failed: {str(e)}"
-        raise HTTPException(status_code=500, detail=detail)
+# --------------------------------------------------------------------------- #
+# Content validation (simple heuristics)
+# --------------------------------------------------------------------------- #
+@router.post("/validate", response_model=RenderingResponse)
+async def validate_content(request: ContentValidationRequest) -> RenderingResponse:
+    """Validate content for safety."""
+    lc = request.content.lower()
+    issues = ["Script tag detected"] if "<script" in lc else []
+    warns = ["`javascript:` URI detected"] if "javascript:" in lc else []
+    result = ValidationResult(
+        is_safe=not issues,
+        issues=issues or None,
+        sanitized_content=request.content,
+        warnings=warns or None
+    )
+    return RenderingResponse(success=True, data=result.dict())

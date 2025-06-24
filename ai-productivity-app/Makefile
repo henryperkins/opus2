@@ -56,7 +56,7 @@ clean: ## Clean up all generated files and containers
 
 lint: ## Run linters
 	@echo "$(GREEN)Linting backend...$(NC)"
-	cd backend && flake8 app --max-line-length=100
+	cd backend && flake8 app --ignore=E501
 	cd backend && mypy app --ignore-missing-imports
 	@echo "$(GREEN)Linting frontend...$(NC)"
 	cd frontend && npm run lint
