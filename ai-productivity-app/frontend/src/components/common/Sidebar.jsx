@@ -575,7 +575,14 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
 
   return (
     <>
-      <div className={className}>
+      {/*
+        Ensure the sidebar itself never collapses inside flex layouts by
+        explicitly preventing flex-box shrinking. Without this, some browsers
+        may reduce the calculated width to 0 and the sidebar appears missing
+        even though it is rendered.  The `flex-shrink-0` utility keeps the
+        allotted width (e.g. `w-64` / `lg:w-72`) intact across all breakpoints.
+      */}
+      <div className={`flex-shrink-0 ${className}`.trim()}>
         {sidebarContent}
       </div>
       <KeyboardShortcutsModal isOpen={isKeyboardShortcutsModalOpen} onClose={() => setKeyboardShortcutsModalOpen(false)} />
