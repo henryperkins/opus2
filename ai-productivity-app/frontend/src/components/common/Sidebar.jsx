@@ -48,7 +48,9 @@ const Sidebar = ({ isOpen = false, onToggle, className = '' }) => {
   const [isDocumentationModalOpen, setDocumentationModalOpen] = useState(false);
 
   // Helper to close sidebar on mobile/tablet after navigation
-  const closeOnMobile = () => { if (!isDesktop) onToggle(); };
+  const closeOnMobile = () => {           // NEW
+    if (!isDesktop && !isPinned) onToggle();
+  };
 
   // ---------------------------------------------------------------------------
   // Data loaders – wrapped in useCallback to keep references stable and avoid
