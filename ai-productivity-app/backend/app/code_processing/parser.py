@@ -126,7 +126,7 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                         import tree_sitter_python as tsp
                         import tree_sitter_javascript as tsjs
                         import tree_sitter_typescript as tsts
-                        
+
                         self.languages = {
                             "python": tsp.language(),
                             "javascript": tsjs.language(),
@@ -140,7 +140,7 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                             try:
                                 self.languages = {
                                     "python": Language(lib_path, "python"),
-                                    "javascript": Language(lib_path, "javascript"), 
+                                    "javascript": Language(lib_path, "javascript"),
                                     "typescript": Language(lib_path, "typescript"),
                                     "tsx": Language(lib_path, "tsx"),
                                 }

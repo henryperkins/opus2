@@ -353,7 +353,7 @@ export default function ProjectChatPage() {
 
           {/* Body */}
           {streaming ? (
-            <StreamingMessage messageId={msg.id} isStreaming content={streaming.content} />
+            <StreamingMessage messageId={msg.id} isStreaming={streaming.isStreaming} content={streaming.content} />
           ) : msg.metadata?.citations?.length ? (
             <CitationRenderer text={msg.content} citations={msg.metadata.citations} inline onCitationClick={handleCitationClick} />
           ) : (

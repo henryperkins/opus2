@@ -5,7 +5,7 @@
  *
  * Features
  *   • automatic exponential-backoff reconnect with jitter
- *   • status tracking: 'connecting' | 'open' | 'closed' | 'error'
+*   • status tracking: 'connecting' | 'connected' | 'disconnected' | 'error'
  *   • helper send() that queues messages while socket connecting
  *   • optional custom onMessage handler
  */
@@ -32,7 +32,14 @@ export function useWebSocketChannel({
   retry = 5,
   protocols,
 }) {
-  const [state, setState] = useState('connecting'); // connecting | open | closed | error
+  // `state` semantics deliberately follow the naming that the rest of the
+  // frontend (ConnectionIndicator, ProjectChatPage, etc.) already relies on:
+  //   connecting | connected | disconnected | error
+  // Previously this hook used the native WebSocket readyState names (open /
+  //   closed) which caused a mismatch – `connected` was never reported and the
+  //   UI refused to send messages. Aligning the vocabulary here fixes the
+  //   "Cannot send message: Not connected to server" error.
+  const [state, setState] = useState('connecting');
   const wsRef = useRef(null);
   const retryRef = useRef(0);
   const queueRef = useRef([]);
@@ -66,7 +73,7 @@ export function useWebSocketChannel({
     let aborted = false;
 
     if (!path) {
-      setState('closed');
+      setState('disconnected');
       return () => { };
     }
 
@@ -82,41 +89,23 @@ export function useWebSocketChannel({
       ws.onopen = () => {
         console.log(`WebSocket connected: ${ws.url}`);
         retryRef.current = 0;
-        setState('open');
+        setState('connected');
         // flush queue
         queueRef.current.forEach((m) => send(m));
         queueRef.current = [];
       };
 
       ws.onmessage = (evt) => {
-        // Performance monitoring: throttle message handling to prevent blocking
-        const startTime = performance.now();
-
         if (onMessageRef.current) {
-          // Use requestIdleCallback if available, otherwise setTimeout
-          if (window.requestIdleCallback) {
-            window.requestIdleCallback(() => {
-              onMessageRef.current(evt);
-              const duration = performance.now() - startTime;
-              if (duration > 50) {
-                console.warn(`🔌 WebSocket message handler took ${duration.toFixed(1)}ms - consider optimizing`);
-              }
-            });
-          } else {
-            setTimeout(() => {
-              onMessageRef.current(evt);
-              const duration = performance.now() - startTime;
-              if (duration > 50) {
-                console.warn(`🔌 WebSocket message handler took ${duration.toFixed(1)}ms - consider optimizing`);
-              }
-            }, 0);
-          }
+          // Direct message handling for better mobile performance
+          // Previous async wrapping was causing messages to not appear on mobile
+          onMessageRef.current(evt);
         }
       };
 
       ws.onclose = (evt) => {
         if (aborted) return;
-        setState('closed');
+        setState('disconnected');
 
         // Enhanced logging for debugging
         console.warn(`WebSocket closed: code=${evt.code}, reason="${evt.reason}", wasClean=${evt.wasClean}`);

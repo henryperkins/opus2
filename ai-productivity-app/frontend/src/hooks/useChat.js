@@ -115,8 +115,15 @@ export function useChat(projectId, preferredSessionId = null) {
               const map = new Map(prev);
               const m = map.get(data.message_id);
               if (m) {
-                m.isStreaming = false;
-                qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, m]);
+                // Create a proper message object for the messages array
+                const completeMessage = {
+                  id: data.message_id,
+                  role: 'assistant',
+                  content: m.content,
+                  created_at: new Date().toISOString(),
+                  metadata: data.metadata || {}
+                };
+                qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, completeMessage]);
                 map.delete(data.message_id);
               }
               return map;
