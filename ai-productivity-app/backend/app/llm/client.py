@@ -359,9 +359,18 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 if active_max_tokens:
                     responses_kwargs["max_output_tokens"] = active_max_tokens
 
-                # Add tools if provided (Responses API supports tools)
+                # Add tools if provided (Responses API supports tools) – ensure
+                # each entry includes the mandatory "type" field ("function"
+                # is the only allowed value at the moment).
                 if tools:
-                    responses_kwargs["tools"] = tools
+                    resp_tools: List[Dict[str, Any]] = []
+                    for t in tools:
+                        t_copy = dict(t)
+                        # Azure requires explicit type declaration
+                        t_copy.setdefault("type", "function")
+                        resp_tools.append(t_copy)
+
+                    responses_kwargs["tools"] = resp_tools
 
                 # Remove None values to avoid sending JSON null
                 clean_responses_kwargs = {k: v for k, v in responses_kwargs.items() if v is not None}
