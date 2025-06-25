@@ -249,33 +249,52 @@ export default function EnhancedMessageRenderer({
   const messageMetadata = message?.metadata || metadata;
   const messageId = message?.id || 'msg';
 
-  // Parse special content blocks
+  // Parse special content blocks with optimized regex processing
   const { processedContent, specialBlocks } = useMemo(() => {
+    // Skip processing if content is empty or very short
+    if (!messageContent || messageContent.length < 10) {
+      return { processedContent: messageContent, specialBlocks: [] };
+    }
+
     let processed = messageContent;
     const blocks = [];
 
-    // Extract mermaid diagrams
-    const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
-    processed = processed.replace(mermaidRegex, (match, diagram) => {
-      const id = `mermaid-${blocks.length}`;
-      blocks.push({ type: 'mermaid', id, content: diagram.trim() });
-      return `<div id="${id}"></div>`;
-    });
+    // Batch regex operations for better performance
+    try {
+      // Extract mermaid diagrams
+      if (processed.includes('```mermaid')) {
+        const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
+        processed = processed.replace(mermaidRegex, (match, diagram) => {
+          const id = `mermaid-${blocks.length}`;
+          blocks.push({ type: 'mermaid', id, content: diagram.trim() });
+          return `<div id="${id}"></div>`;
+        });
+      }
 
-    // Extract tables (simple markdown tables)
-    const tableRegex = /\|(.+)\|[\s\S]*?\n\|(.+)\|/g;
-    const tables = processed.match(tableRegex);
-    if (tables) {
-      tables.forEach((table, idx) => {
-        const rows = table.trim().split('\n')
-          .filter(row => row.includes('|') && !row.match(/^\|[-:\s|]+\|$/))
-          .map(row => row.split('|').slice(1, -1).map(cell => cell.trim()));
+      // Extract tables (simple markdown tables) - only if contains table markers
+      if (processed.includes('|') && processed.includes('\n')) {
+        const tableRegex = /\|(.+)\|[\s\S]*?\n\|(.+)\|/g;
+        const tables = processed.match(tableRegex);
+        if (tables && tables.length > 0) {
+          tables.forEach((table, idx) => {
+            try {
+              const rows = table.trim().split('\n')
+                .filter(row => row.includes('|') && !row.match(/^\|[-:\s|]+\|$/))
+                .map(row => row.split('|').slice(1, -1).map(cell => cell.trim()));
 
-        if (rows.length > 1) {
-          const id = `table-${idx}`;
-          blocks.push({ type: 'table', id, content: rows });
+              if (rows.length > 1) {
+                const id = `table-${idx}`;
+                blocks.push({ type: 'table', id, content: rows });
+              }
+            } catch (e) {
+              console.warn('Table parsing error:', e);
+            }
+          });
         }
-      });
+      }
+    } catch (error) {
+      console.warn('Content processing error:', error);
+      return { processedContent: messageContent, specialBlocks: [] };
     }
 
     return { processedContent: processed, specialBlocks: blocks };

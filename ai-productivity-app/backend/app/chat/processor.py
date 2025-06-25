@@ -351,9 +351,17 @@ Maintain conversation context and refer to previous discussions when relevant.""
             logger.info(f"Response Length: {len(final_text)} characters")
             logger.info(f"Response Content: {final_text}")
 
-            # now stream it to client (simulate streaming)
+            # now stream it to client (simulate streaming with proper chunks)
             async def _generator():  # noqa: D401
-                yield final_text
+                # Split response into words for more realistic streaming
+                words = final_text.split(' ')
+                chunk_size = 3  # Send 3 words per chunk
+                
+                for i in range(0, len(words), chunk_size):
+                    chunk = ' '.join(words[i:i + chunk_size])
+                    if i + chunk_size < len(words):
+                        chunk += ' '  # Add space except for last chunk
+                    yield chunk
 
             full_response = await streaming_handler.stream_response(_generator(), ai_message.id)
 

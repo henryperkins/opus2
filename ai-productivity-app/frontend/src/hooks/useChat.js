@@ -110,54 +110,77 @@ export function useChat(projectId, preferredSessionId = null) {
               setStreamingMessages((prev) => {
                 const map = new Map(prev);
                 const m = map.get(data.message_id) || { id: data.message_id, content: '', isStreaming: true };
-                m.content += data.content || '';
-                map.set(data.message_id, m);
+                // Create new object to avoid mutation
+                const updatedMessage = { 
+                  ...m, 
+                  content: m.content + (data.content || ''),
+                  lastUpdated: Date.now() 
+                };
+                map.set(data.message_id, updatedMessage);
                 return map;
               });
             } else {
               // Stream finished, commit final assistant message
               setStreamingMessages((prev) => {
                 const map = new Map(prev);
-                map.delete(data.message_id);
+                const streamingMessage = map.get(data.message_id);
+                
+                if (streamingMessage) {
+                  const finalContent = streamingMessage.content || data.content || '';
+                  
+                  const completeMessage = data.message || {
+                    id: data.message_id,
+                    role: 'assistant',
+                    content: finalContent,
+                    created_at: new Date().toISOString(),
+                    metadata: data.metadata || {}
+                  };
+                  
+                  // Atomic update: add complete message and remove streaming state
+                  qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, completeMessage]);
+                  map.delete(data.message_id);
+                }
+                
                 return map;
               });
-              const completeMessage = data.message || {
-                id: data.message_id,
-                role: 'assistant',
-                content: data.content || '',
-                created_at: new Date().toISOString(),
-                metadata: data.metadata || {}
-              };
-              qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, completeMessage]);
             }
             break;
           }
           case 'stream_chunk': {
+            // Legacy streaming format - convert to ai_stream format for consistency
             setStreamingMessages((prev) => {
               const map = new Map(prev);
               const m = map.get(data.message_id) || { id: data.message_id, content: '', isStreaming: true };
-              m.content += data.chunk;
-              map.set(data.message_id, m);
+              const updatedMessage = { 
+                ...m, 
+                content: m.content + (data.chunk || ''),
+                lastUpdated: Date.now() 
+              };
+              map.set(data.message_id, updatedMessage);
               return map;
             });
             break;
           }
           case 'stream_end': {
+            // Legacy streaming completion - convert to ai_stream format for consistency
             setStreamingMessages((prev) => {
               const map = new Map(prev);
-              const m = map.get(data.message_id);
-              if (m) {
-                // Create a proper message object for the messages array
+              const streamingMessage = map.get(data.message_id);
+              
+              if (streamingMessage) {
                 const completeMessage = {
                   id: data.message_id,
                   role: 'assistant',
-                  content: m.content,
+                  content: streamingMessage.content,
                   created_at: new Date().toISOString(),
                   metadata: data.metadata || {}
                 };
+                
+                // Atomic update: add complete message and remove streaming state
                 qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, completeMessage]);
                 map.delete(data.message_id);
               }
+              
               return map;
             });
             break;
@@ -240,6 +263,37 @@ export function useChat(projectId, preferredSessionId = null) {
     },
     [send]
   );
+
+  // Cleanup old streaming messages to prevent memory leaks
+  useEffect(() => {
+    const cleanup = () => {
+      const now = Date.now();
+      const staleThreshold = 5 * 60 * 1000; // 5 minutes
+      
+      setStreamingMessages(prev => {
+        const map = new Map();
+        let cleaned = false;
+        
+        for (const [id, stream] of prev) {
+          // Keep messages that are still streaming or recently updated
+          if (stream.isStreaming || (now - (stream.lastUpdated || 0)) < staleThreshold) {
+            map.set(id, stream);
+          } else {
+            cleaned = true;
+          }
+        }
+        
+        if (cleaned) {
+          console.log('Cleaned up stale streaming messages');
+        }
+        
+        return map;
+      });
+    };
+    
+    const interval = setInterval(cleanup, 2 * 60 * 1000); // Cleanup every 2 minutes
+    return () => clearInterval(interval);
+  }, []);
 
   return useMemo(
     () => ({

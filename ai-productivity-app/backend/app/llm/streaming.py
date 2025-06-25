@@ -32,12 +32,13 @@ class StreamingHandler:
                 self.total_tokens += len(chunk) // 4  # Rough estimate
 
                 # Send chunk
-                await self.websocket.send_json({
+                chunk_data = {
                     'type': 'ai_stream',
                     'message_id': message_id,
                     'content': chunk,
                     'done': False
-                })
+                }
+                await self.websocket.send_json(chunk_data)
 
                 # Small delay to prevent overwhelming client
                 await asyncio.sleep(0.01)

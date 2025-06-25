@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 // Data hooks
@@ -304,14 +304,19 @@ export default function ProjectChatPage() {
     // TODO: Could also switch to context tab if in another tab
   }, [showKnowledgeAssistant, addToCitations]);
 
-  // Auto-scroll helper
+  // Smart auto-scroll helper - only scrolls if user is near bottom
   const scrollToBottom = useCallback(() => {
     if (messageListRef.current) {
-      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      const { scrollTop, scrollHeight, clientHeight } = messageListRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100; // Within 100px of bottom
+      
+      if (isNearBottom) {
+        messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      }
     }
   }, []);
 
-  // Auto-scroll to bottom when messages or streaming updates arrive
+  // Auto-scroll to bottom when messages or streaming updates arrive (only if user is at bottom)
   useEffect(() => {
     scrollToBottom();
   }, [messages, streamingMessages, scrollToBottom]);
@@ -335,12 +340,10 @@ export default function ProjectChatPage() {
     </div>
   );
 
-  const renderMessage = (msg) => {
-    const streaming = streamingMessages.get(msg.id);
-    const executionResult = executionResults.get(msg.id);
-
+  // Memoized message component to prevent unnecessary re-renders
+  const MessageItem = React.memo(({ msg, streaming, executionResult }) => {
     return (
-      <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-6`}>
+      <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-6`}>
         <div
           className={`max-w-3xl rounded-lg px-4 py-3 ${
             msg.role === 'user'
@@ -399,7 +402,21 @@ export default function ProjectChatPage() {
         </div>
       </div>
     );
-  };
+  });
+
+  const renderMessage = useCallback((msg) => {
+    const streaming = streamingMessages.get(msg.id);
+    const executionResult = executionResults.get(msg.id);
+    
+    return (
+      <MessageItem 
+        key={msg.id} 
+        msg={msg} 
+        streaming={streaming} 
+        executionResult={executionResult} 
+      />
+    );
+  }, [streamingMessages, executionResults, handleCitationClick, handleCodeExecution, handleCodeApply, handleInteractiveElement, showAnalytics]);
 
   // ----------------------------------------------------------------------------------
   // Early states (loading / not-found)
