@@ -1,7 +1,7 @@
 # Core dependencies
 fastapi==0.109.0
 uvicorn[standard]==0.25.0
-python-multipart==0.0.6
+python-multipart==0.0.18
 
 # Database
 sqlalchemy==2.0.23
@@ -38,7 +38,7 @@ pytest-cov==4.1.0
 httpx==0.26.0
 
 # Development
-black==23.12.1
+black==24.3.0
 flake8==7.0.0
 mypy==1.8.0
 tiktoken
