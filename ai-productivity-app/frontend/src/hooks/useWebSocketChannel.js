@@ -77,6 +77,12 @@ export function useWebSocketChannel({
       return () => { };
     }
 
+    // Guard: prevent duplicate connections during HMR
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log(`🔌 WebSocket: reusing existing connection to ${path}`);
+      return () => { };
+    }
+
     console.log(`🔌 WebSocket useEffect: setting up connection to ${path}`);
 
     function connect() {
@@ -152,4 +158,12 @@ export function useWebSocketChannel({
   }, [path, protocols, retry, close, send]); // Include close and send in dependencies
 
   return { state, send, close, socket: wsRef.current };
+}
+
+// HMR: Keep WebSocket connections stable between updates
+if (import.meta.hot) {
+  import.meta.hot.accept();
+  import.meta.hot.dispose(() => {
+    console.log('[HMR] Disposing WebSocket hook module');
+  });
 }

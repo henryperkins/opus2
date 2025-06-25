@@ -1,10 +1,9 @@
 """Enhanced search API with hybrid capabilities."""
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Query, HTTPException, BackgroundTasks, Depends
 
-from app.dependencies import DatabaseDep, CurrentUserRequired
+from app.dependencies import DatabaseDep, CurrentUserRequired, CurrentUserOptional
 from app.services.vector_service import get_vector_service, VectorService
 from app.services.hybrid_search import HybridSearch
 from app.services.embedding_service import EmbeddingService
@@ -105,8 +104,8 @@ async def search(
 @router.get("/suggestions")
 async def get_suggestions(
     q: str = Query("", min_length=1, max_length=100),
-    current_user: Optional[CurrentUserRequired] = None,
-    db: Optional[DatabaseDep] = None
+    current_user: CurrentUserOptional = None,
+    db: DatabaseDep = None
 ):
     """Get search suggestions."""
     if len(q) < 2:
@@ -161,8 +160,8 @@ async def get_suggestions(
 @router.get("/history")
 async def get_history(
     limit: int = Query(20, ge=1, le=100),
-    current_user: Optional[CurrentUserRequired] = None,
-    db: Optional[DatabaseDep] = None,
+    current_user: CurrentUserOptional = None,
+    db: DatabaseDep = None,
 ):
     """Return the current user's recent search history (most recent first)."""
 

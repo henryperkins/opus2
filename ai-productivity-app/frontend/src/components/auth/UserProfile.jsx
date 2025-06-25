@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import Header from '../common/Header';
 
 function UserProfile() {
   const { user, updateProfile, logout } = useAuth();
@@ -57,9 +56,8 @@ function UserProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      <div className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-2xl mx-auto">
         <div className="bg-white shadow rounded-lg p-6">
       <div className="profile-header">
         <h2>User Profile</h2>

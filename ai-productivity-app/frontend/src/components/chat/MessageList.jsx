@@ -102,7 +102,6 @@ export default function MessageList({
       ref={containerRef}
       className={`chat-messages ${className}`.trim()}
       style={{
-        maxHeight: '70vh',
         overflowY: 'auto',
         contain: 'layout', // CSS containment for better performance
       }}

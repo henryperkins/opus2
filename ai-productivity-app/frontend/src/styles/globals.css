@@ -13,7 +13,7 @@
   /* Core colors */
   --color-white: #ffffff;
   --color-black: #000000;
-  
+
   /* Gray scale */
   --color-gray-50: #f9fafb;
   --color-gray-100: #f3f4f6;
@@ -25,7 +25,7 @@
   --color-gray-700: #374151;
   --color-gray-800: #1f2937;
   --color-gray-900: #111827;
-  
+
   /* Blue scale */
   --color-blue-50: #eff6ff;
   --color-blue-100: #dbeafe;
@@ -37,7 +37,7 @@
   --color-blue-700: #1d4ed8;
   --color-blue-800: #1e40af;
   --color-blue-900: #1e3a8a;
-  
+
   /* Red scale */
   --color-red-50: #fef2f2;
   --color-red-100: #fee2e2;
@@ -49,16 +49,16 @@
   --color-red-700: #b91c1c;
   --color-red-800: #991b1b;
   --color-red-900: #7f1d1d;
-  
+
   /* Brand colors */
   --color-brand-primary: #2563eb;
   --color-brand-secondary: #0ea5e9;
-  
+
   /* Semantic colors */
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
-  
+
   /* Spacing scale */
   --spacing-0: 0px;
   --spacing-1: 0.25rem;
@@ -92,14 +92,14 @@
   --spacing-80: 20rem;
   --spacing-88: 22rem;
   --spacing-96: 24rem;
-  
+
   /* Custom font families */
   --font-family-display: 'Inter', system-ui, sans-serif;
   --font-family-code: 'JetBrains Mono', 'Menlo', monospace;
-  
+
   /* Animation timing functions */
   --transition-timing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  
+
   /* Duration scale */
   --duration-75: 75ms;
   --duration-100: 100ms;
@@ -109,7 +109,7 @@
   --duration-500: 500ms;
   --duration-700: 700ms;
   --duration-1000: 1000ms;
-  
+
   /* Border radius scale */
   --radius-sm: 0.125rem;
   --radius-md: 0.375rem;
@@ -117,13 +117,13 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
   --radius-full: 9999px;
-  
+
   /* Shadow scale */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  
+
   /* Custom container sizes */
   --width-prose: 65ch;
   --width-content: 90rem;
@@ -297,48 +297,48 @@
     flex-direction: column;
     height: 100%;
     background-color: theme(--color-white);
-    
+
     @media (prefers-color-scheme: dark) {
       background-color: theme(--color-gray-900);
     }
   }
-  
+
   .panel-layout {
     display: flex;
     flex-direction: column;
     height: 100%;
     overflow: hidden;
   }
-  
+
   .split-layout {
     display: flex;
     height: 100vh;
     overflow: hidden;
   }
-  
+
   .scrollable-content {
     flex: 1;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
   }
-  
+
   /* Dynamic styles using CSS custom properties */
   .dynamic-height {
     height: var(--dynamic-height, auto);
   }
-  
+
   .dynamic-transform {
     transform: var(--dynamic-transform, none);
     transition: transform theme(--duration-300) ease-out;
   }
-  
+
   .touch-safe {
     min-width: 44px;
     min-height: 44px;
     user-select: var(--user-select, auto);
   }
-  
+
   .color-dot {
     width: 0.5rem;
     height: 0.5rem;
@@ -359,21 +359,21 @@
     min-height: 44px;
     min-width: 44px;
     box-shadow: theme(--shadow-sm);
-    
+
     &:focus {
       outline: none;
     }
-    
+
     &:focus-visible {
       outline: 2px solid theme(--color-brand-primary);
       outline-offset: 2px;
     }
-    
+
     &:disabled {
       opacity: 0.6;
       cursor: not-allowed;
     }
-    
+
     &:hover:not(:disabled) {
       box-shadow: theme(--shadow-md);
     }
@@ -386,7 +386,7 @@
     flex-direction: column;
     height: 100%;
     background-color: theme(--color-white);
-    
+
     @media (prefers-color-scheme: dark) {
       background-color: theme(--color-gray-900);
     }
@@ -399,7 +399,7 @@
     display: flex;
     flex-direction: column;
     gap: theme(--spacing-4);
-    
+
     @container (min-width: 768px) {
       padding: theme(--spacing-6);
     }
@@ -408,24 +408,24 @@
   .btn-primary {
     background: linear-gradient(to right, theme(--color-blue-600), theme(--color-blue-700));
     color: theme(--color-white);
-    
+
     &:hover:not(:disabled) {
       background: linear-gradient(to right, theme(--color-blue-700), theme(--color-blue-800));
       transform: scale(1.02);
     }
-    
+
     &:active:not(:disabled) {
       background: linear-gradient(to right, theme(--color-blue-800), theme(--color-blue-900));
       transform: scale(0.98);
     }
-    
+
     &:focus-visible {
       outline-color: theme(--color-blue-500);
     }
-    
+
     @media (prefers-color-scheme: dark) {
       background: linear-gradient(to right, theme(--color-blue-500), theme(--color-blue-600));
-      
+
       &:hover:not(:disabled) {
         background: linear-gradient(to right, theme(--color-blue-600), theme(--color-blue-700));
       }
@@ -436,20 +436,20 @@
     background-color: theme(--color-white);
     color: theme(--color-gray-700);
     border: 1px solid theme(--color-gray-300);
-    
+
     &:hover:not(:disabled) {
       background-color: theme(--color-gray-50);
     }
-    
+
     &:active:not(:disabled) {
       background-color: theme(--color-gray-100);
     }
-    
+
     @media (prefers-color-scheme: dark) {
       background-color: theme(--color-gray-800);
       color: theme(--color-gray-200);
       border-color: theme(--color-gray-600);
-      
+
       &:hover:not(:disabled) {
         background-color: theme(--color-gray-700);
       }
@@ -472,22 +472,22 @@
     display: flex;
     gap: theme(--spacing-3);
     max-inline-size: 70%;
-    
+
     &.chat-message-user {
       margin-inline-start: auto;
       flex-direction: row-reverse;
-      
+
       .chat-message-content {
         background-color: theme(--color-brand-primary);
         color: theme(--color-white);
       }
     }
-    
+
     &.chat-message-assistant {
       .chat-message-content {
         background-color: theme(--color-gray-100);
         color: theme(--color-gray-900);
-        
+
         @media (prefers-color-scheme: dark) {
           background-color: theme(--color-gray-800);
           color: theme(--color-gray-100);
@@ -704,43 +704,43 @@
   .margin-inline-auto {
     margin-inline: auto;
   }
-  
+
   .padding-block-start-safe {
     padding-block-start: env(safe-area-inset-top);
   }
-  
+
   .padding-block-end-safe {
     padding-block-end: env(safe-area-inset-bottom);
   }
 
   /* Custom animation utilities using modern units */
   @keyframes bounce-in {
-    0% { 
-      transform: scale(0.9); 
-      opacity: 0; 
+    0% {
+      transform: scale(0.9);
+      opacity: 0;
     }
-    50% { 
-      transform: scale(1.05); 
+    50% {
+      transform: scale(1.05);
     }
-    100% { 
-      transform: scale(1); 
-      opacity: 1; 
+    100% {
+      transform: scale(1);
+      opacity: 1;
     }
   }
-  
+
   .animate-bounce-in {
     animation: bounce-in theme(--duration-300) theme(--transition-timing-bounce);
   }
-  
+
   /* Modern viewport units */
   .h-screen-small {
     height: 100svh; /* Small viewport height */
   }
-  
+
   .h-screen-large {
     height: 100lvh; /* Large viewport height */
   }
-  
+
   .h-screen-dynamic {
     height: 100dvh; /* Dynamic viewport height */
   }
@@ -945,27 +945,27 @@
     font-size: theme(--font-size-sm);
     border-radius: theme(--radius-full);
     transition: background-color theme(--duration-300);
-    
+
     &[data-state="connected"] {
       background-color: color-mix(in srgb, theme(--color-success) 10%, transparent);
       color: theme(--color-success);
     }
-    
+
     &[data-state="connecting"] {
       background-color: color-mix(in srgb, theme(--color-warning) 10%, transparent);
       color: theme(--color-warning);
-      
+
       /* Pulse animation for connecting state */
       animation: pulse 2s infinite;
     }
-    
+
     &[data-state="disconnected"],
     &[data-state="error"] {
       background-color: color-mix(in srgb, theme(--color-error) 10%, transparent);
       color: theme(--color-error);
     }
   }
-  
+
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
@@ -1184,7 +1184,7 @@
     .chat-input-container {
       bottom: env(safe-area-inset-bottom, 0);
     }
-    
+
     /* Adjust when keyboard is shown */
     .chat-input-container:focus-within {
       position: fixed;
@@ -1194,6 +1194,13 @@
     }
   }
 
+/* Desktop override: allow chat input to behave as normal flex item */
+@media (min-width: 769px) {
+  .chat-input-container {
+    position: static;
+    bottom: auto;
+  }
+}
   /* Prevent layout jump on mobile */
   @media (max-width: 768px) {
     body:has(.chat-input-container:focus-within) {

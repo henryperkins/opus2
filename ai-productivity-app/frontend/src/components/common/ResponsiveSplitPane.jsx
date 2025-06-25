@@ -165,7 +165,10 @@ export default function ResponsiveSplitPane({
 
   // Desktop view - traditional split pane
   const direction = orientation === "vertical" ? "vertical" : "horizontal";
-  const minSizePercent = typeof minSize === 'number' ? Math.max(10, (minSize / window.innerWidth) * 100) : 25;
+  
+  // Fix minSize calculation for both directions
+  const sizeBase = direction === "horizontal" ? window.innerWidth : window.innerHeight;
+  const minSizePercent = typeof minSize === 'number' ? Math.max(10, (minSize / sizeBase) * 100) : 25;
   const defaultSizePercent = typeof defaultSize === 'string' && defaultSize.includes('%') 
     ? parseInt(defaultSize) 
     : 50;
@@ -184,12 +187,19 @@ export default function ResponsiveSplitPane({
             </div>
           </Panel>
         )}
-        <PanelResizeHandle className="w-2 bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors" />
-        <Panel minSize={minSizePercent}>
-          <div className="h-full overflow-auto">
-            {right}
-          </div>
-        </Panel>
+        
+        {/* Only show resizer when both panels exist */}
+        {left && right && (
+          <PanelResizeHandle className="w-px bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-col-resize" />
+        )}
+        
+        {right && (
+          <Panel minSize={minSizePercent}>
+            <div className="h-full overflow-auto">
+              {right}
+            </div>
+          </Panel>
+        )}
       </PanelGroup>
     </div>
   );

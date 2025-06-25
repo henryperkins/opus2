@@ -252,7 +252,7 @@ export default function EnhancedCommandInput({
   };
 
   return (
-    <div className="chat-input-container relative bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+    <div className="chat-input-container flex-shrink-0 relative z-10 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
       {/* Command suggestions */}
       {showSuggestions && (
         <div className="absolute bottom-full mb-2 left-0 right-0 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">

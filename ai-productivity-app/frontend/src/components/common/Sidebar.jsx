@@ -50,9 +50,17 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
     setLoadingRecentChats(true);
     setRecentChatsError(null);
     try {
-      const response = await chatAPI.getChatSessions();
-      const sessions = response.data || [];
-      const sortedSessions = sessions
+      // Debug: Check if getChatSessions exists
+      if (import.meta.env.DEV) {
+        console.log('[Sidebar] chatAPI methods:', Object.keys(chatAPI));
+        console.log('[Sidebar] getChatSessions available:', typeof chatAPI.getChatSessions);
+      }
+
+      // Axios returns {data, status, ...}.  API might also be pre-wrapped {sessions:[…]}
+      const axiosResp = await chatAPI.getChatSessions();
+      const raw = axiosResp?.data ?? axiosResp;                   // normalise
+      const sessionsArray = Array.isArray(raw) ? raw : raw.sessions ?? [];
+      const sortedSessions = [...sessionsArray]
         .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
         .slice(0, 5);
       setRecentChats(sortedSessions);

@@ -9,9 +9,8 @@ export default function TimelinePage() {
   const { events, loading, error } = useTimeline({ limit: 200 });
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-
-      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-4xl mx-auto">
         {/* Breadcrumb */}
         <nav className="flex mb-4 text-sm" aria-label="Breadcrumb">
           <ol className="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse">

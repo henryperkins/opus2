@@ -74,7 +74,7 @@ export default function ProjectChatPage() {
   // Global state & responsive helpers
   // ---------------------------------------------------------------------------
   const user = useUser();
-  const { isMobile } = useMediaQuery();
+  const { isMobile, breakpoint } = useMediaQuery();
 
   // ---------------------------------------------------------------------------
   // Project + chat data
@@ -404,7 +404,7 @@ export default function ProjectChatPage() {
 
   if (projectLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="flex items-center justify-center h-64">
         <SkeletonLoader type="websocket-connecting" />
       </div>
     );
@@ -412,7 +412,7 @@ export default function ProjectChatPage() {
 
   if (!project) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="flex items-center justify-center h-64">
         <EmptyState
           type="projects"
           title="Project not found"
@@ -533,8 +533,8 @@ export default function ProjectChatPage() {
         ) : (
           <ResponsiveSplitPane
             orientation="vertical"
-            minSize={300}
-            defaultSize="70%"
+            minSize={25}
+            defaultSize={breakpoint === "2xl" ? "60%" : "70%"}
             left={(
               <div className="flex flex-col h-full">
                 <div
@@ -556,6 +556,8 @@ export default function ProjectChatPage() {
               </div>
             )}
             right={showKnowledgeAssistant ? desktopAssistantPanel : null}
+            leftTitle="Chat"
+            rightTitle="Knowledge Assistant"
           />
         )}
       </main>
