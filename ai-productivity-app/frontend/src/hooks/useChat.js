@@ -226,7 +226,6 @@ export function useChat(projectId, preferredSessionId = null) {
       editMutation,
       deleteMutation,
       sendTypingIndicator,
-      config,
     ]
   );
 }

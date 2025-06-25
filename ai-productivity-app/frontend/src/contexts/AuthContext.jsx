@@ -15,7 +15,7 @@ import React, {
   useCallback,
 } from 'react';
 import PropTypes from 'prop-types';
-import client from '../api/client';
+import { authAPI } from '../api/auth';
 import useAuthStore from '../stores/authStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -56,7 +56,7 @@ export function AuthProvider({ children }) {
   // -----------------------------------------------------------
   const fetchMe = React.useCallback(async () => {
     try {
-      const { data } = await client.get('/api/auth/me');
+      const data = await authAPI.getCurrentUser();
       return data;
     } catch (e) {
       const status = e?.response?.status;
@@ -108,7 +108,7 @@ export function AuthProvider({ children }) {
       }
       setIsAuthenticating(true);
       try {
-        await client.post('/api/auth/login', { username_or_email, password });
+        await authAPI.login({ username_or_email, password });
 
         // ensure cookie persisted before /me
         await new Promise((r) => setTimeout(r, 120));
@@ -124,7 +124,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try {
-      await client.post('/api/auth/logout');
+      await authAPI.logout();
     } finally {
       endSession();
       queryClient.setQueryData(['me'], null);
@@ -139,7 +139,7 @@ export function AuthProvider({ children }) {
       queryClient.setQueryData(['me'], { ...user, ...changes });
 
       try {
-        const { data } = await client.patch('/api/auth/me', changes);
+        const data = await authAPI.updateProfile(changes);
         queryClient.setQueryData(['me'], data);
       } catch (err) {
         queryClient.setQueryData(['me'], prev);
@@ -192,10 +192,3 @@ AuthProvider.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-// -----------------------------------------------------------------------------
-// Hook
-// -----------------------------------------------------------------------------
-
-export function useAuthContext() {
-  return useContext(AuthContextInstance);
-}

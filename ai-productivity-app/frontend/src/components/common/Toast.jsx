@@ -141,11 +141,11 @@ function ToastItem({
         }
       `}
     >
-      <div className="flex-shrink-0">{icons[type]}</div>
+      <div className="shrink-0">{icons[type]}</div>
       <p className="text-sm font-medium">{message}</p>
       <button
         onClick={handleClose}
-        className="flex-shrink-0 ml-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+        className="shrink-0 ml-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
         aria-label="Close notification"
         type="button"
       >

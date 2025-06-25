@@ -11,7 +11,7 @@ import { useDebounce } from './useDebounce';
 const MIN_QUERY_LENGTH = 3;
 
 function searchCode({ queryKey }) {
-  const [_key, { q, filters }] = queryKey;
+  const [, { q, filters }] = queryKey;
   return searchAPI.search({
     query: q,
     project_ids: filters.projectIds,
@@ -42,9 +42,6 @@ export function useCodeSearch(initialQuery = '', initialFilters = {}) {
     staleTime: 60 * 1000,
   });
 
-  const results = data?.results ?? [];
-  const totalResults = data?.total ?? 0;
-
   const updateQuery = (q) => setQuery(q);
   const updateFilters = (f) => setFilters((prev) => ({ ...prev, ...f }));
 
@@ -54,17 +51,22 @@ export function useCodeSearch(initialQuery = '', initialFilters = {}) {
   };
 
   return useMemo(
-    () => ({
-      query,
-      filters,
-      results,
-      loading,
-      error,
-      totalResults,
-      updateQuery,
-      updateFilters,
-      clearSearch,
-    }),
-    [query, filters, results, loading, error, totalResults]
+    () => {
+      const results = data?.results ?? [];
+      const totalResults = data?.total ?? 0;
+      
+      return {
+        query,
+        filters,
+        results,
+        loading,
+        error,
+        totalResults,
+        updateQuery,
+        updateFilters,
+        clearSearch,
+      };
+    },
+    [query, filters, data, loading, error]
   );
 }

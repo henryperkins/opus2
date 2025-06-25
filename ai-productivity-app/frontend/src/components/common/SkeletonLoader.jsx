@@ -81,7 +81,7 @@ export default function SkeletonLoader({
       case 'streaming-message':
         return (
           <div key={index} className={`flex mb-4 ${className}`}>
-            <div className="w-8 h-8 bg-blue-200 rounded-full animate-pulse mr-3 flex-shrink-0" />
+            <div className="w-8 h-8 bg-blue-200 rounded-full animate-pulse mr-3 shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="h-4 bg-blue-100 rounded animate-pulse mb-2 w-16" />
               <div className="space-y-2">

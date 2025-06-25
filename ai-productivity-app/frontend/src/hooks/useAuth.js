@@ -14,7 +14,12 @@
 
 import { useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthContext } from '../contexts/AuthContext'; // named export
+import { AuthContext } from '../contexts/AuthContext';
+
+// Hook to access AuthContext
+export function useAuthContext() {
+  return useContext(AuthContext);
+}
 
 // -----------------------------------------------------------------------------
 

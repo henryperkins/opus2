@@ -40,7 +40,7 @@ export function useModelSelection() {
         clearInterval(statsIntervalRef.current);
       }
     };
-  }, []);
+  }, [loadModelStats]);
 
   const loadConfiguration = async () => {
     try {
@@ -61,14 +61,14 @@ export function useModelSelection() {
     }
   };
 
-  const loadModelStats = async () => {
+  const loadModelStats = useCallback(async () => {
     try {
       const stats = await configAPI.getModelStats(currentModel);
       setModelStats(stats);
     } catch (err) {
       console.error('Failed to load model stats:', err);
     }
-  };
+  }, [currentModel]);
 
   const setModel = useCallback(async (model) => {
     if (model === currentModel) return true;
@@ -120,7 +120,7 @@ export function useModelSelection() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentModel, currentProvider, modelHistory]);
+  }, [currentModel, currentProvider, modelHistory, loadModelStats, testModel]);
 
   const setProvider = useCallback(async (provider) => {
     if (provider === currentProvider) return true;

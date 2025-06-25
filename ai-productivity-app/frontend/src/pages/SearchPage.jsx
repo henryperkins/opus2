@@ -121,7 +121,7 @@ export default function SearchPage() {
 
         <div className="flex gap-6">
           {/* Filters Sidebar */}
-          <div className="w-64 flex-shrink-0">
+          <div className="w-64 shrink-0">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <SearchFilters
                 filters={filters}

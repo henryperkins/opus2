@@ -11,7 +11,7 @@ import { searchAPI } from '../api/search';
 const MIN_QUERY_LENGTH = 2;
 
 function searchFn({ queryKey }) {
-  const [_key, { q, filters, types }] = queryKey;
+  const [, { q, filters, types }] = queryKey;
   return searchAPI.search({
     query: q,
     project_ids: filters.projectIds,
@@ -102,6 +102,7 @@ export function useSearch(initialQuery = '', initialFilters = {}) {
       error,
       totalResults,
       searchTypes,
+      clearSearch,
     ]
   );
 }

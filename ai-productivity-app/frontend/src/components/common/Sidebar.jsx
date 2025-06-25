@@ -97,7 +97,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
   // Visual indicator for color
   const ColorDot = ({ color }) => (
     <div
-      className="w-2 h-2 rounded-full flex-shrink-0"
+      className="w-2 h-2 rounded-full shrink-0"
       style={{ backgroundColor: color || '#6B7280' }}
     />
   );
@@ -108,12 +108,12 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
         {/* Header with logo and pin button */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <Link to="/" className="flex items-center space-x-2 no-underline">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center transition-all duration-200 hover:scale-110 shadow-lg">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center transition-all duration-200 transform-gpu hover:scale-110 shadow-lg/20 hover:shadow-xl/30">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
             </div>
-            <span className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent dark:from-gray-100 dark:to-gray-300">
+            <span className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent dark:from-gray-100 dark:to-gray-300 text-shadow-sm text-shadow-black/20">
               AI Productivity
             </span>
           </Link>

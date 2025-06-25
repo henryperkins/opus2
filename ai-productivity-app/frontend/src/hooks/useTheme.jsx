@@ -4,16 +4,13 @@
 // scheme.
 
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import PropTypes from 'prop-types';
 
 const ThemeContext = createContext({
   theme: 'light',
   setTheme: () => {},
   toggleTheme: () => {},
 });
-
-export function useTheme() {
-  return useContext(ThemeContext);
-}
 
 export function ThemeProvider({ children }) {
   // ---------------------------------------------------------------------------
@@ -95,4 +92,12 @@ export function ThemeProvider({ children }) {
       {children}
     </ThemeContext.Provider>
   );
+}
+
+ThemeProvider.propTypes = {
+  children: PropTypes.node.isRequired,
+};
+
+export function useTheme() {
+  return useContext(ThemeContext);
 }
