@@ -74,7 +74,10 @@ export default function ProjectChatPage() {
   // Global state & responsive helpers
   // ---------------------------------------------------------------------------
   const user = useUser();
-  const { isMobile, breakpoint } = useMediaQuery();
+  const { isMobile, matchesQuery } = useMediaQuery();
+
+  // Detect very large desktop screens (≥ 1536px)
+  const isDesktopXL = matchesQuery('(min-width: 1536px)');
 
   // ---------------------------------------------------------------------------
   // Project + chat data
@@ -534,7 +537,7 @@ export default function ProjectChatPage() {
           <ResponsiveSplitPane
             orientation="vertical"
             minSize={25}
-            defaultSize={breakpoint === "2xl" ? "60%" : "70%"}
+            defaultSize={`${isDesktopXL ? 60 : 70}%`}
             left={(
               <div className="flex flex-col h-full">
                 <div

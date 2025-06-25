@@ -18,6 +18,7 @@ export default function ResponsiveSplitPane({
   leftTitle = "Panel",
   rightTitle = "Content",
   className = "",
+  collapsible = false,
   ...props
 }) {
   const { isMobile, isTablet, isTouchDevice } = useMediaQuery();
@@ -181,7 +182,7 @@ export default function ResponsiveSplitPane({
         {...props}
       >
         {left && (
-          <Panel minSize={minSizePercent} defaultSize={defaultSizePercent}>
+          <Panel minSize={minSizePercent} defaultSize={defaultSizePercent} collapsible={collapsible}>
             <div className="h-full overflow-auto">
               {left}
             </div>
@@ -194,7 +195,7 @@ export default function ResponsiveSplitPane({
         )}
         
         {right && (
-          <Panel minSize={minSizePercent}>
+          <Panel minSize={minSizePercent} collapsible={collapsible}>
             <div className="h-full overflow-auto">
               {right}
             </div>

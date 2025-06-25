@@ -33,7 +33,7 @@ export default function ResetPasswordPage() {
   const password = watch('password');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center p-4">
+    <div className="px-4 sm:px-6 lg:px-8 py-8 bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center">
       <div className="w-full max-w-md">
         {/* App Branding */}
         <div className="text-center mb-8">

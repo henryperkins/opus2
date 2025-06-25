@@ -215,7 +215,7 @@ export default function ProjectDashboard() {
   // Main render
   // ---------------------------------------------------------------------------
   return (
-    <div className="min-h-screen gradient-bg">
+    <div className="px-4 sm:px-6 lg:px-8 py-8 gradient-bg">
 
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Page header with quick stats */}
