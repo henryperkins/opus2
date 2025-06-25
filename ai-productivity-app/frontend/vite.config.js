@@ -52,6 +52,7 @@ export default defineConfig({
       'react-syntax-highlighter/dist/esm/languages/prism/bash',
       'monaco-editor',
       'monacopilot',
+      'buffer',
     ],
   },
 
@@ -66,7 +67,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@sentry/react': '/src/sentryStub.js',
+      buffer: 'buffer',
     },
+  },
+
+  define: {
+    global: 'globalThis',
   },
 
   // Base URL for production

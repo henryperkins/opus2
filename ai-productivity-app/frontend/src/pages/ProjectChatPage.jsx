@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 // Data hooks
@@ -6,7 +6,6 @@ import { useChat } from '../hooks/useChat';
 import { useProject } from '../hooks/useProjects';
 import { useUser } from '../hooks/useAuth';
 import { useCodeExecutor } from '../hooks/useCodeExecutor';
-import { useKnowledgeChat } from '../hooks/useKnowledgeContext';
 import { useResponseQualityTracking } from '../components/analytics/ResponseQuality';
 
 // Context providers
@@ -15,11 +14,8 @@ import { useKnowledgeContext } from '../contexts/KnowledgeContext';
 
 // UI and utility hooks
 import useMediaQuery from '../hooks/useMediaQuery';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { ResponsivePage, ShowOnMobile, HideOnMobile } from '../components/layout/ResponsiveContainer';
 
 // Common components
-import Header from '../components/common/Header';
 import ResponsiveSplitPane from '../components/common/ResponsiveSplitPane';
 import MobileBottomSheet from '../components/common/MobileBottomSheet';
 import SkeletonLoader from '../components/common/SkeletonLoader';
@@ -47,6 +43,9 @@ import ResponseQuality from '../components/analytics/ResponseQuality';
 
 // Icons
 import { Brain, Settings, Search, BarChart2, Sparkles } from 'lucide-react';
+
+// Utils
+import { toast } from '../components/common/Toast';
 
 // ----------------------------------------------------------------------------------
 // Helpers
@@ -76,7 +75,6 @@ export default function ProjectChatPage() {
   // ---------------------------------------------------------------------------
   const user = useUser();
   const { isMobile } = useMediaQuery();
-  const layout = useResponsiveLayout();
 
   // ---------------------------------------------------------------------------
   // Project + chat data
@@ -87,7 +85,6 @@ export default function ProjectChatPage() {
     messages,
     sendMessage,
     connectionState,
-    typingUsers,
     sendTypingIndicator,
     streamingMessages,
   } = useChat(projectId, urlSessionId);
@@ -96,24 +93,20 @@ export default function ProjectChatPage() {
   // Knowledge, model & analytics hooks
   // ---------------------------------------------------------------------------
   const { executeCode, results: executionResults } = useCodeExecutor(projectId);
-  const knowledgeChat = useKnowledgeChat(projectId);
   
   // Use unified context providers instead of multiple hooks
   const {
     currentModel,
     setModel,
     autoSelectModel,
-    trackPerformance,
-    loading: modelLoading,
-    error: modelError
+    trackPerformance
   } = useModelContext();
   
   const {
     addToCitations,
     clearCitations,
     currentContext,
-    analyzeMessage,
-    suggestions
+    analyzeMessage
   } = useKnowledgeContext();
   
   useResponseQualityTracking(projectId); // side-effects only
@@ -121,7 +114,7 @@ export default function ProjectChatPage() {
   // ---------------------------------------------------------------------------
   // Local UI state
   // ---------------------------------------------------------------------------
-  const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(true);
+  const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showPromptManager, setShowPromptManager] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -130,6 +123,10 @@ export default function ProjectChatPage() {
   const [editorContent, setEditorContent] = useState('');
   const [editorLanguage, setEditorLanguage] = useState('python');
   const [currentFile, setCurrentFile] = useState();
+
+  // Refs for auto-scroll
+  const messagesEndRef = useRef(null);
+  const messageListRef = useRef(null);
 
   // -------------------------------------------------------------
   // Knowledge-assistant helpers – must run every render to keep
@@ -159,6 +156,7 @@ export default function ProjectChatPage() {
       return await executeCode(code, language, projectId, messageId);
     } catch (err) {
       console.error('Code execution failed:', err);
+      toast.error(`Code execution failed: ${err.message || 'Unknown error'}`);
       return { output: '', error: err.message || 'Execution failed', execution_time: 0 };
     }
   }, [executeCode, projectId]);
@@ -169,6 +167,12 @@ export default function ProjectChatPage() {
   }, []);
 
   const handleSendMessage = useCallback(async (content, metadata = {}) => {
+    // Check connection state before sending
+    if (connectionState !== 'connected') {
+      toast.error('Cannot send message: Not connected to server');
+      return;
+    }
+
     const start = Date.now();
 
     // Model auto-selection using unified context
@@ -219,9 +223,10 @@ export default function ProjectChatPage() {
         inputTokens: 0,
         outputTokens: 0
       }, err.message);
+      toast.error(`Failed to send message: ${err.message || 'Unknown error'}`);
       throw err;
     }
-  }, [sendMessage, autoSelectModel, editorContent, editorLanguage, currentFile, currentContext, analyzeMessage, projectId, trackPerformance]);
+  }, [sendMessage, autoSelectModel, editorContent, editorLanguage, currentFile, currentContext, analyzeMessage, projectId, trackPerformance, connectionState]);
 
   const handleSearchResultSelect = useCallback((result) => {
     // Use unified knowledge context instead of separate hook
@@ -276,6 +281,7 @@ export default function ProjectChatPage() {
       
     } catch (error) {
       console.error('Interactive element handling failed:', error);
+      toast.error(`Interactive element failed: ${error.message || 'Unknown error'}`);
       return {
         success: false,
         error: error.message || 'Interactive element handling failed'
@@ -283,9 +289,43 @@ export default function ProjectChatPage() {
     }
   }, []);
 
+  const handleCitationClick = useCallback((citation) => {
+    // Open knowledge assistant if not already open
+    if (!showKnowledgeAssistant) {
+      setShowKnowledgeAssistant(true);
+    }
+    
+    // Add citation to context
+    addToCitations([citation]);
+    
+    // TODO: Could also switch to context tab if in another tab
+  }, [showKnowledgeAssistant, addToCitations]);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
   // ---------------------------------------------------------------------------
   // Render helpers
   // ---------------------------------------------------------------------------
+
+  const renderTypingIndicator = () => (
+    <div className="flex justify-start mb-6">
+      <div className="max-w-3xl rounded-lg px-4 py-3 bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100">
+        <div className="flex items-center space-x-2">
+          <div className="flex space-x-1">
+            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          </div>
+          <span className="text-sm text-gray-500">AI is typing...</span>
+        </div>
+      </div>
+    </div>
+  );
 
   const renderMessage = (msg) => {
     const streaming = streamingMessages.get(msg.id);
@@ -315,7 +355,7 @@ export default function ProjectChatPage() {
           {streaming ? (
             <StreamingMessage messageId={msg.id} isStreaming content={streaming.content} />
           ) : msg.metadata?.citations?.length ? (
-            <CitationRenderer text={msg.content} citations={msg.metadata.citations} inline />
+            <CitationRenderer text={msg.content} citations={msg.metadata.citations} inline onCitationClick={handleCitationClick} />
           ) : (
             <EnhancedMessageRenderer
               message={msg}
@@ -324,6 +364,7 @@ export default function ProjectChatPage() {
               onCodeRun={(code, lang) => handleCodeExecution(code, lang, msg.id)}
               onCodeApply={handleCodeApply}
               executionResult={executionResult}
+              onCitationClick={handleCitationClick}
             />
           )}
 
@@ -403,15 +444,20 @@ export default function ProjectChatPage() {
   );
 
   return (
-    <ResponsivePage className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900" padding={false}>
-      <Header className="sticky top-0 z-20 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur">
-        <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
+      {/* Debug info */}
+      <div className="text-red-500 p-2">
+        DEBUG: Project: {project?.title || 'No project'}, Messages: {messages?.length || 0}
+      </div>
+      
+      {/* Page header with project info and controls */}
+      <div className="sticky top-0 z-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-semibold truncate max-w-xs sm:max-w-none">
-              {project.title}
+              {project?.title || 'Loading...'}
             </h1>
-            <ConnectionIndicator state={connectionState} />
-            <ModelSwitcher compact={isMobile} currentModel={currentModel} onModelChange={setModel} />
+            <div>Connection: {connectionState}</div>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -445,15 +491,17 @@ export default function ProjectChatPage() {
             </button>
           </div>
         </div>
-      </Header>
+      </div>
 
       {/* Main content */}
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-hidden min-h-0">
         {isMobile ? (
           <div className="flex flex-col h-full overflow-hidden">
             {/* Message list */}
-            <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+            <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4" ref={messageListRef}>
               {messages.map(renderMessage)}
+              {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Knowledge assistant bottom sheet */}
@@ -480,29 +528,36 @@ export default function ProjectChatPage() {
             </div>
           </div>
         ) : (
-          <ResponsiveSplitPane split="vertical" minSize={300} defaultSize="70%">
-            {/* Chat column */}
-            <div className="flex flex-col h-screen">
-              <div className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto">
-                {messages.map(renderMessage)}
-              </div>
-              <div className="border-t bg-white dark:bg-gray-900/50">
-                <div className="max-w-3xl mx-auto">
-                  <EnhancedCommandInput
-                    onSend={handleSendMessage}
-                    onTyping={sendTypingIndicator}
-                    projectId={projectId}
-                    editorContent={editorContent}
-                    currentFile={currentFile}
-                    userId={user?.id}
-                  />
+          <ResponsiveSplitPane
+            orientation="vertical"
+            minSize={300}
+            defaultSize="70%"
+            left={(
+              <div className="flex flex-col h-full">
+                <div
+                  className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto"
+                  ref={messageListRef}
+                >
+                  {messages.map(renderMessage)}
+                  {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
+                  <div ref={messagesEndRef} />
+                </div>
+                <div className="border-t bg-white dark:bg-gray-900/50">
+                  <div className="max-w-3xl mx-auto">
+                    <EnhancedCommandInput
+                      onSend={handleSendMessage}
+                      onTyping={sendTypingIndicator}
+                      projectId={projectId}
+                      editorContent={editorContent}
+                      currentFile={currentFile}
+                      userId={user?.id}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {/* Assistant / knowledge panel */}
-            {showKnowledgeAssistant && desktopAssistantPanel}
-          </ResponsiveSplitPane>
+            )}
+            right={showKnowledgeAssistant ? desktopAssistantPanel : null}
+          />
         )}
       </main>
 
@@ -516,6 +571,6 @@ export default function ProjectChatPage() {
       )}
 
       {/* Root container closing tag */}
-    </ResponsivePage>
+    </div>
   );
 }

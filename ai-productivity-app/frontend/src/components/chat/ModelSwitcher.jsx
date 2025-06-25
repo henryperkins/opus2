@@ -225,7 +225,7 @@ export default function ModelSwitcher({
         </button>
 
         {isOpen && (
-          <div className="absolute top-full mt-2 right-0 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+          <div className="absolute top-full mt-2 right-0 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-80 overflow-y-auto">
             <div className="p-2">
               {availableModels.map(model => (
                 <button

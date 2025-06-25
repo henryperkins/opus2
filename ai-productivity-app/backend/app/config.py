@@ -79,9 +79,9 @@ class Settings(BaseSettings):
         / "app.db"
     )
 
-    # Default to PostgreSQL, fallback to SQLite for development
+    # Production database connection (Neon PostgreSQL)
     database_url: str = Field(
-        default="postgresql://postgres:postgres@localhost:5432/ai_productivity",
+        default="postgresql://neondb_owner:npg_5odQclNUW6Pj@ep-hidden-salad-a8jlsv5j-pooler.eastus2.azure.neon.tech/neondb?sslmode=require",
         description="Database connection URL"
     )
     database_echo: bool = False
@@ -160,7 +160,7 @@ class Settings(BaseSettings):
     # Completions.  Projects that rely on the legacy 2024-02-01 contract can
     # still override via the AZURE_OPENAI_API_VERSION environment variable.
 
-    azure_openai_api_version: str = "2024-02-15-preview"
+    azure_openai_api_version: str = "2025-04-01-preview"
 
     # Azure authentication method - can be "api_key" or "entra_id"
     azure_auth_method: str = "api_key"
@@ -173,12 +173,12 @@ class Settings(BaseSettings):
     # remains for backwards-compatibility but is deprecated and should not be
     # referenced by new code.
 
-    llm_default_model: str = Field("gpt-3.5-turbo", alias="LLM_MODEL")
+    llm_default_model: str = Field("gpt-4.1", alias="LLM_MODEL")
 
     # Deprecated – kept to avoid breaking existing environment variables /
     # database fixtures.  New code should rely on *llm_default_model*.
     llm_model: str | None = None
-    max_context_tokens: int = 8000
+    max_context_tokens: int = 200000
 
     # --- Reasoning enrichment ---------------------------------------------
     # Enable Azure Responses API *reasoning enrichment* (self_check / chain of

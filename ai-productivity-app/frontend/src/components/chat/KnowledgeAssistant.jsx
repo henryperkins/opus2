@@ -1,10 +1,13 @@
 // components/chat/KnowledgeAssistant.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { Brain, Search, X, ChevronRight, Sparkles } from 'lucide-react';
+import { Brain, Search, X, ChevronRight, Sparkles, Upload, GitBranch, Network } from 'lucide-react';
 import { useKnowledgeChat } from '../../hooks/useKnowledgeContext';
 import { knowledgeAPI } from '../../api/knowledge';
 import KnowledgeContextPanel from '../knowledge/KnowledgeContextPanel';
 import SmartKnowledgeSearch from '../knowledge/SmartKnowledgeSearch';
+import FileUpload from '../knowledge/FileUpload';
+import RepositoryConnect from '../knowledge/RepositoryConnect';
+import DependencyGraph from '../knowledge/DependencyGraph';
 
 export default function KnowledgeAssistant({
   projectId,
@@ -82,6 +85,7 @@ export default function KnowledgeAssistant({
   const [showSearch, setShowSearch] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [activeTab, setActiveTab] = useState('context'); // 'context', 'upload', 'repository', 'graph'
 
   // Update context based on chat message
   useEffect(() => {
@@ -136,6 +140,13 @@ export default function KnowledgeAssistant({
     setShowSearch(false);
   }, [addToCitations, onSuggestionApply]);
 
+  const handleFileUploadSuccess = useCallback(() => {
+    // Refresh embeddings after successful file upload
+    if (context) {
+      updateContextFromChat(message);
+    }
+  }, [context, message, updateContextFromChat]);
+
   if (!isVisible) return null;
 
   // Determine container styles based on mode
@@ -185,62 +196,148 @@ export default function KnowledgeAssistant({
 
         {!isMinimized && (
           <>
-            {/* Active Query Indicator */}
-            {activeQuery && (
-              <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-blue-700">
-                    Searching: "{activeQuery}"
-                  </span>
-                  {loading && (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-200">
+              <button
+                onClick={() => setActiveTab('context')}
+                className={`flex items-center px-4 py-2 text-sm font-medium ${
+                  activeTab === 'context'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <Search className="w-4 h-4 mr-1" />
+                Context
+              </button>
+              <button
+                onClick={() => setActiveTab('upload')}
+                className={`flex items-center px-4 py-2 text-sm font-medium ${
+                  activeTab === 'upload'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Upload
+              </button>
+              <button
+                onClick={() => setActiveTab('repository')}
+                className={`flex items-center px-4 py-2 text-sm font-medium ${
+                  activeTab === 'repository'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <GitBranch className="w-4 h-4 mr-1" />
+                Repository
+              </button>
+              <button
+                onClick={() => setActiveTab('graph')}
+                className={`flex items-center px-4 py-2 text-sm font-medium ${
+                  activeTab === 'graph'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <Network className="w-4 h-4 mr-1" />
+                Dependencies
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            <div className={containerMode === 'overlay' ? "scrollable-content" : "flex-1 overflow-auto"}>
+              {/* Context Tab */}
+              {activeTab === 'context' && (
+                <>
+                  {/* Active Query Indicator */}
+                  {activeQuery && (
+                    <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-blue-700">
+                          Searching: "{activeQuery}"
+                        </span>
+                        {loading && (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        )}
+                      </div>
+                    </div>
                   )}
+
+                  {/* Suggestions */}
+                  {suggestions.length > 0 && (
+                    <div className="p-4 border-b border-gray-200">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                        <Sparkles className="w-4 h-4 mr-1 text-yellow-500" />
+                        Smart Suggestions
+                      </h4>
+                      <div className="space-y-2">
+                        {suggestions.map((suggestion, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => onSuggestionApply(suggestion, citations)}
+                            className="w-full text-left px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Knowledge Context */}
+                  <KnowledgeContextPanel
+                    query={activeQuery}
+                    projectId={projectId}
+                    onDocumentSelect={handleDocumentSelect}
+                    onCodeSelect={handleCodeSelect}
+                    className="h-full"
+                    maxHeight={containerMode === 'overlay' ? "400px" : undefined}
+                  />
+
+                  {/* Actions */}
+                  {selectedItems && selectedItems.size > 0 && (
+                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                      <button
+                        onClick={handleApplyContext}
+                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                      >
+                        Add {selectedItems.size} item{selectedItems.size > 1 ? 's' : ''} as context
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Upload Tab */}
+              {activeTab === 'upload' && (
+                <div className="p-4">
+                  <FileUpload
+                    projectId={projectId}
+                    onSuccess={handleFileUploadSuccess}
+                  />
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Suggestions */}
-            {suggestions.length > 0 && (
-              <div className="p-4 border-b border-gray-200">
-                <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <Sparkles className="w-4 h-4 mr-1 text-yellow-500" />
-                  Smart Suggestions
-                </h4>
-                <div className="space-y-2">
-                  {suggestions.map((suggestion, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => onSuggestionApply(suggestion, citations)}
-                      className="w-full text-left px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
+              {/* Repository Tab */}
+              {activeTab === 'repository' && (
+                <div className="p-4">
+                  <RepositoryConnect
+                    projectId={projectId}
+                    onConnectSuccess={() => {
+                      // Refresh context after repository connection
+                      updateContextFromChat(message);
+                    }}
+                  />
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Knowledge Context */}
-            <KnowledgeContextPanel
-              query={activeQuery}
-              projectId={projectId}
-              onDocumentSelect={handleDocumentSelect}
-              onCodeSelect={handleCodeSelect}
-              className={containerMode === 'overlay' ? "scrollable-content" : "flex-1 overflow-auto"}
-              maxHeight={containerMode === 'overlay' ? "400px" : undefined}
-            />
-
-            {/* Actions */}
-            {selectedItems && selectedItems.size > 0 && (
-              <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-                <button
-                  onClick={handleApplyContext}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                >
-                  Add {selectedItems.size} item{selectedItems.size > 1 ? 's' : ''} as context
-                </button>
-              </div>
-            )}
+              {/* Dependencies Tab */}
+              {activeTab === 'graph' && (
+                <div className="p-4" style={{ height: containerMode === 'overlay' ? '400px' : '100%' }}>
+                  <DependencyGraph projectId={projectId} />
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
