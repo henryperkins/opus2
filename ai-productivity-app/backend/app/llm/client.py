@@ -380,7 +380,72 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     logger.info(f"  [{i + 1}] {msg.get('role', 'unknown')}: {content_preview}")
                 logger.info(f"Full Request Payload: {json.dumps(clean_responses_kwargs, indent=2)}")
 
-                response = await self.client.responses.create(**clean_responses_kwargs)
+                try:
+                    response = await self.client.responses.create(**clean_responses_kwargs)
+                except Exception as exc:  # noqa: BLE001
+                    # ------------------------------------------------------------------ #
+                    # Graceful fallback when the *Responses* deployment is missing
+                    # ------------------------------------------------------------------ #
+                    # Azure returns a **404 DeploymentNotFound** error when the selected
+                    # deployment name does not exist *for the responses endpoint*.
+                    # This is a common configuration issue – most users create only a
+                    # *chat* deployment.  Instead of bubbling the low-level error up to
+                    # the chat frontend we transparently retry the request via the
+                    # regular Chat Completions endpoint which works against the
+                    # existing deployment.  The client instance itself keeps
+                    # ``use_responses_api`` unchanged so that a correctly configured
+                    # deployment will still use the richer API on the next call.
+                    # ------------------------------------------------------------------ #
+
+                    try:
+                        from openai import NotFoundError, BadRequestError  # type: ignore
+                    except Exception:  # pragma: no cover – stubbed in CI
+                        NotFoundError = type("NotFoundError", (Exception,), {})
+                        BadRequestError = type("BadRequestError", (Exception,), {})
+
+                    # ---------------------
+                    # Deployment missing → 404
+                    # Bad *tools* schema → 400
+                    # ---------------------
+                    _is_missing_deployment = isinstance(exc, NotFoundError)
+
+                    _is_tool_schema_error = (
+                        isinstance(exc, BadRequestError)
+                        and "tools[0].type" in str(exc)
+                    )
+
+                    if (
+                        self.provider == "azure"
+                        and self.use_responses_api
+                        and (
+                            _is_missing_deployment or _is_tool_schema_error
+                        )
+                    ):
+                        logger.warning(
+                            "Responses deployment not found (%s) – falling back to Chat Completions.",
+                            exc,
+                        )
+
+                        # Prepare equivalent Chat-Completions arguments
+                        completions_kwargs = {
+                            "model": active_model,
+                            "messages": messages,
+                            "temperature": active_temperature,
+                            "stream": stream,
+                            "max_tokens": active_max_tokens,
+                        }
+                        if tools:
+                            completions_kwargs["tools"] = tools
+
+                        completions_kwargs = {
+                            k: v for k, v in completions_kwargs.items() if v is not None
+                        }
+
+                        response = await self.client.chat.completions.create(  # type: ignore[attr-defined]
+                            **completions_kwargs,
+                        )
+                    else:
+                        raise
 
                 # Log API response for debugging
                 logger.info("=== AZURE RESPONSES API RESPONSE ===")
@@ -427,6 +492,10 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
             if tools:
                 call_kwargs["tools"] = tools
+
+            # The same graceful-degradation logic we added for the Responses
+            # branch above: when *tools* is rejected by an older model we
+            # retry with the deprecated *functions* field.
 
             # ---- scrub None values so JSON null never gets sent ----------
             clean_kwargs = {k: v for k, v in call_kwargs.items() if v is not None}

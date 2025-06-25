@@ -719,9 +719,11 @@
       transform: scale(0.9);
       opacity: 0;
     }
+
     50% {
       transform: scale(1.05);
     }
+
     100% {
       transform: scale(1);
       opacity: 1;
@@ -734,15 +736,18 @@
 
   /* Modern viewport units */
   .h-screen-small {
-    height: 100svh; /* Small viewport height */
+    height: 100svh;
+    /* Small viewport height */
   }
 
   .h-screen-large {
-    height: 100lvh; /* Large viewport height */
+    height: 100lvh;
+    /* Large viewport height */
   }
 
   .h-screen-dynamic {
-    height: 100dvh; /* Dynamic viewport height */
+    height: 100dvh;
+    /* Dynamic viewport height */
   }
 
   /* Scrollbar styling */
@@ -967,8 +972,15 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.5;
+    }
   }
 
   /* Streaming message styles */
@@ -1075,18 +1087,21 @@
 
   /* Ensure sidebar is properly sized and positioned */
   .sidebar-container {
-    width: 16rem; /* 256px */
+    width: 16rem;
+    /* 256px */
     flex-shrink: 0;
   }
 
   @media (min-width: 1024px) {
     .sidebar-container {
-      width: 18rem; /* 288px */
+      width: 18rem;
+      /* 288px */
     }
   }
 
   /* Mobile sidebar styles */
   @media (max-width: 768px) {
+
     /* Fixed sidebar positioning on mobile */
     .fixed-sidebar {
       position: fixed;
@@ -1125,7 +1140,8 @@
   /* Tablet adjustments */
   @media (min-width: 768px) and (max-width: 1024px) {
     .sidebar-container {
-      width: 14rem; /* 224px - slightly narrower on tablets */
+      width: 14rem;
+      /* 224px - slightly narrower on tablets */
     }
   }
 
@@ -1139,7 +1155,8 @@
   /* Ensure proper spacing when sidebar is present */
   @media (min-width: 1024px) {
     .with-sidebar {
-      margin-left: 18rem; /* Match sidebar width */
+      margin-left: 18rem;
+      /* Match sidebar width */
     }
   }
 
@@ -1194,13 +1211,23 @@
     }
   }
 
-/* Desktop override: allow chat input to behave as normal flex item */
-@media (min-width: 769px) {
-  .chat-input-container {
-    position: static;
-    bottom: auto;
+  /* Desktop override: allow chat input to behave as normal flex item */
+  @media (min-width: 769px) {
+    .chat-input-container {
+      position: static;
+      bottom: auto;
+      /* Ensure proper stacking and prevent any layout issues */
+      z-index: 10;
+      background-color: white;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .dark .chat-input-container {
+      background-color: #111827;
+      border-top-color: #374151;
+    }
   }
-}
+
   /* Prevent layout jump on mobile */
   @media (max-width: 768px) {
     body:has(.chat-input-container:focus-within) {

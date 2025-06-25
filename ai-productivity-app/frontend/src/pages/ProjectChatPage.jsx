@@ -523,15 +523,17 @@ export default function ProjectChatPage() {
               {mobileAssistantPanel}
             </MobileBottomSheet>
 
-            {/* Input */}
-            <EnhancedCommandInput
-              onSend={handleSendMessage}
-              onTyping={sendTypingIndicator}
-              projectId={projectId}
-              editorContent={editorContent}
-              currentFile={currentFile}
-              userId={user?.id}
-            />
+            {/* Input - fixed at bottom */}
+            <div className="flex-shrink-0">
+              <EnhancedCommandInput
+                onSend={handleSendMessage}
+                onTyping={sendTypingIndicator}
+                projectId={projectId}
+                editorContent={editorContent}
+                currentFile={currentFile}
+                userId={user?.id}
+              />
+            </div>
           </div>
         ) : (
           <ResponsiveSplitPane
@@ -539,7 +541,7 @@ export default function ProjectChatPage() {
             minSize={25}
             defaultSize={`${isDesktopXL ? 60 : 70}%`}
             left={(
-              <div className="flex flex-col h-full">
+              <div className="flex flex-col h-full overflow-hidden">
                 <div
                   className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto"
                   ref={messageListRef}
@@ -548,14 +550,16 @@ export default function ProjectChatPage() {
                   {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
                   <div ref={messagesEndRef} />
                 </div>
-                <EnhancedCommandInput
-                  onSend={handleSendMessage}
-                  onTyping={sendTypingIndicator}
-                  projectId={projectId}
-                  editorContent={editorContent}
-                  currentFile={currentFile}
-                  userId={user?.id}
-                />
+                <div className="flex-shrink-0">
+                  <EnhancedCommandInput
+                    onSend={handleSendMessage}
+                    onTyping={sendTypingIndicator}
+                    projectId={projectId}
+                    editorContent={editorContent}
+                    currentFile={currentFile}
+                    userId={user?.id}
+                  />
+                </div>
               </div>
             )}
             right={showKnowledgeAssistant ? desktopAssistantPanel : null}

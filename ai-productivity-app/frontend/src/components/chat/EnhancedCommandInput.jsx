@@ -438,7 +438,7 @@ export default function EnhancedCommandInput({
           <button
             type="submit"
             disabled={isSending || !message.trim()}
-                className={`p-2 sm:p-3 rounded-lg shrink-0 transition motion-safe:hover:scale-110 motion-safe:active:scale-95 ${
+            className={`p-2 sm:p-3 rounded-lg shrink-0 transition motion-safe:hover:scale-110 motion-safe:active:scale-95 ${
               isSending || !message.trim()
                 ? 'bg-gray-200 text-gray-400'
                 : 'bg-blue-600 text-white hover:bg-blue-700'

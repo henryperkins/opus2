@@ -32,7 +32,10 @@ export function useChat(projectId, preferredSessionId = null) {
   // 1. Session bootstrap (React Query-driven approach)
   // ---------------------------------------------------
   const { data: sessionData, isLoading: sessionLoading } = useQuery({
-    queryKey: ['session', projectId, preferredSessionId],
+    // Key only by projectId so all callers share the same cache entry.
+    // Using preferredSessionId here caused cache-misses and duplicate
+    // sessions to be created every time the hook re-mounted.
+    queryKey: ['session', projectId],
     queryFn: async () => {
       if (!projectId || authLoading || !user) return null;
 

@@ -134,9 +134,29 @@ class ChatProcessor:
         websocket: WebSocket
     ):
         """Generate and stream AI response."""
-        # Get runtime configuration for context management
+        # ------------------------------------------------------------------ #
+        # Runtime configuration                                              #
+        # ------------------------------------------------------------------ #
+
+        # Retrieve the *merged* runtime configuration from the global LLM
+        # client.  Keys inside the persistent store follow *snake_case*
+        # naming (e.g. ``max_tokens``) whereas some callers – in particular
+        # the early JavaScript implementation – still use *camelCase*
+        # variants.  To guarantee backwards-compatibility we transparently
+        # support **both** spellings by first checking the canonical
+        # *snake_case* version and falling back to the legacy name.
+
         runtime_config = llm_client._get_runtime_config()
-        max_context_tokens = runtime_config.get("maxTokens", settings.max_context_tokens)
+
+        def _cfg(key_snake: str, key_camel: str, default: Any | None = None):  # noqa: ANN401
+            """Return configuration value supporting *snake* and *camel* keys."""
+
+            return runtime_config.get(key_snake, runtime_config.get(key_camel, default))
+
+        # Maximum number of **context** tokens we are willing to send to the
+        # model.  We default to the global *settings* constant when the value
+        # is not configured.
+        max_context_tokens = _cfg("max_tokens", "maxTokens", settings.max_context_tokens)
 
         # Reserve tokens for response generation (typically 30-40% of max)
         available_context_tokens = int(max_context_tokens * 0.6)
@@ -250,11 +270,11 @@ Maintain conversation context and refer to previous discussions when relevant.""
             # First non-stream call – we need body to inspect potential tool calls
             response = await llm_client.complete(
                 messages=messages,
-                temperature=runtime_config.get("temperature"),  # Use runtime config
+                temperature=_cfg("temperature", "temperature"),  # Always snake
                 stream=False,
                 tools=llm_tools.TOOL_SCHEMAS,
                 reasoning=settings.enable_reasoning,
-                max_tokens=runtime_config.get("maxTokens"),  # Use runtime config
+                max_tokens=_cfg("max_tokens", "maxTokens"),
             )
 
             # Loop while model wants to call tools - handle both API formats
@@ -295,9 +315,9 @@ Maintain conversation context and refer to previous discussions when relevant.""
                 logger.info("Sending follow-up request to LLM with tool results")
                 response = await llm_client.complete(
                     messages=messages,
-                    temperature=runtime_config.get("temperature"),  # Use runtime config
+                    temperature=_cfg("temperature", "temperature"),
                     stream=False,
-                    max_tokens=runtime_config.get("maxTokens"),  # Use runtime config
+                    max_tokens=_cfg("max_tokens", "maxTokens"),
                 )
 
             # Extract final assistant content - handle both Chat Completions and Responses API
