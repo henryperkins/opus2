@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 from fastapi import WebSocket
 import logging
@@ -257,21 +257,16 @@ Maintain conversation context and refer to previous discussions when relevant.""
                 max_tokens=runtime_config.get("maxTokens"),  # Use runtime config
             )
 
-            # Loop while model wants to call tools – guard against empty
-            # *choices* which can happen when running with the local stub
-            # client in development / test environments.
+            # Loop while model wants to call tools - handle both API formats
             tool_call_count = 0
-            while (
-                hasattr(response, "choices")
-                and response.choices  # non-empty list
-                and response.choices[0].finish_reason == "tool_calls"
-            ):
+            while self._has_tool_calls(response):
                 tool_call_count += 1
                 logger.info(f"=== TOOL CALLING ROUND {tool_call_count} ===")
 
-                for tool_call in response.choices[0].message.tool_calls:
-                    name = tool_call.name
-                    args_json = json.loads(tool_call.arguments)
+                tool_calls = self._extract_tool_calls(response)
+                for tool_call in tool_calls:
+                    name = tool_call.get('name')
+                    args_json = json.loads(tool_call.get('arguments', '{}'))
 
                     logger.info(f"Calling tool: {name}")
                     logger.info(f"Tool arguments: {json.dumps(args_json, indent=2)}")
@@ -280,11 +275,21 @@ Maintain conversation context and refer to previous discussions when relevant.""
 
                     logger.info(f"Tool {name} result: {json.dumps(result, indent=2) if isinstance(result, (dict, list)) else str(result)}")
 
-                    messages.append({
-                        "role": "tool",
-                        "name": name,
-                        "content": json.dumps(result),
-                    })
+                    # Add tool result to messages - format depends on API type
+                    if llm_client.use_responses_api:
+                        # Responses API format for tool results
+                        messages.append({
+                            "type": "function_call_output",
+                            "call_id": tool_call.get('id', 'unknown'),
+                            "output": json.dumps(result),
+                        })
+                    else:
+                        # Chat Completions API format
+                        messages.append({
+                            "role": "tool",
+                            "name": name,
+                            "content": json.dumps(result),
+                        })
 
                 # ask LLM to continue with new context
                 logger.info("Sending follow-up request to LLM with tool results")
@@ -295,15 +300,8 @@ Maintain conversation context and refer to previous discussions when relevant.""
                     max_tokens=runtime_config.get("maxTokens"),  # Use runtime config
                 )
 
-            # final assistant content
-            if hasattr(response, "choices") and response.choices:
-                final_text = response.choices[0].message.content
-            else:
-                # Fallback – the local *openai* stub or unexpected provider
-                # response.  Convert to string so the user receives *some*
-                # feedback instead of a silent failure that triggers the
-                # generic "LLM unavailable" error path below.
-                final_text = str(response)
+            # Extract final assistant content - handle both Chat Completions and Responses API
+            final_text = self._extract_response_content(response)
 
             # Log the AI response for debugging
             logger.info("=== AI RESPONSE RECEIVED ===")
@@ -370,6 +368,101 @@ Maintain conversation context and refer to previous discussions when relevant.""
             })
 
         return snippets
+
+    def _extract_response_content(self, response) -> str:
+        """Extract text content from either Chat Completions or Responses API response."""
+        try:
+            # Azure Responses API format
+            if hasattr(response, 'output_text') and response.output_text:
+                return response.output_text
+            elif hasattr(response, 'output') and response.output:
+                # Extract text from output array
+                if isinstance(response.output, list) and response.output:
+                    for output_item in response.output:
+                        if hasattr(output_item, 'content') and isinstance(output_item.content, list):
+                            for content_item in output_item.content:
+                                if hasattr(content_item, 'text'):
+                                    return content_item.text
+                                elif hasattr(content_item, 'type') and content_item.type == 'output_text':
+                                    return getattr(content_item, 'text', str(content_item))
+                        elif hasattr(output_item, 'type') and output_item.type == 'message':
+                            # Message type output
+                            if hasattr(output_item, 'content'):
+                                if isinstance(output_item.content, list) and output_item.content:
+                                    for content_part in output_item.content:
+                                        if hasattr(content_part, 'text'):
+                                            return content_part.text
+                                elif isinstance(output_item.content, str):
+                                    return output_item.content
+
+            # Standard Chat Completions API format
+            elif hasattr(response, "choices") and response.choices:
+                choice = response.choices[0]
+                if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                    return choice.message.content or ""
+
+            # Fallback for any other response format
+            logger.warning(f"Unexpected response format: {type(response)}")
+            return str(response)
+
+        except Exception as e:
+            logger.error(f"Error extracting response content: {e}", exc_info=True)
+            return "Error extracting response content"
+
+    def _has_tool_calls(self, response) -> bool:
+        """Check if response contains tool calls (handles both API formats)."""
+        try:
+            # Chat Completions API format
+            if (hasattr(response, "choices")
+                and response.choices
+                and response.choices[0].finish_reason == "tool_calls"):
+                return True
+
+            # Responses API format - check output for function calls
+            if hasattr(response, 'output') and response.output:
+                if isinstance(response.output, list):
+                    for output_item in response.output:
+                        if hasattr(output_item, 'type') and output_item.type == 'function_call':
+                            return True
+
+            return False
+        except Exception:
+            return False
+
+    def _extract_tool_calls(self, response) -> List[Dict[str, Any]]:
+        """Extract tool calls from response (handles both API formats)."""
+        tool_calls = []
+
+        try:
+            # Chat Completions API format
+            if (hasattr(response, "choices")
+                and response.choices
+                and hasattr(response.choices[0], 'message')
+                and hasattr(response.choices[0].message, 'tool_calls')
+                and response.choices[0].message.tool_calls):
+
+                for tool_call in response.choices[0].message.tool_calls:
+                    tool_calls.append({
+                        'id': getattr(tool_call, 'id', 'unknown'),
+                        'name': tool_call.name,
+                        'arguments': tool_call.arguments
+                    })
+
+            # Responses API format
+            elif hasattr(response, 'output') and response.output:
+                if isinstance(response.output, list):
+                    for output_item in response.output:
+                        if hasattr(output_item, 'type') and output_item.type == 'function_call':
+                            tool_calls.append({
+                                'id': getattr(output_item, 'call_id', 'unknown'),
+                                'name': getattr(output_item, 'name', 'unknown'),
+                                'arguments': getattr(output_item, 'arguments', '{}')
+                            })
+
+            return tool_calls
+        except Exception as e:
+            logger.error(f"Error extracting tool calls: {e}", exc_info=True)
+            return []
 
     async def _track_response_quality(self, ai_message, context: Dict, response_content: str):
         """Track response quality metrics - integrates with existing analytics."""

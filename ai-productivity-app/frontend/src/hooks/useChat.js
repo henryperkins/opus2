@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import chatAPI from '../api/chat';
 import { useAuth } from './useAuth';
 import { useWebSocketChannel } from './useWebSocketChannel';
-import { useConfig } from './useConfig';
+// import { useConfig } from './useConfig'; // Temporarily disabled - not used
 
 // -----------------------
 // Helpers & keys
@@ -22,7 +22,7 @@ const messagesKey = (sessionId) => ['messages', sessionId];
 // -----------------------
 export function useChat(projectId, preferredSessionId = null) {
   const { user, loading: authLoading } = useAuth();
-  const { config } = useConfig();
+  // const { config } = useConfig(); // Temporarily disabled - not used
   const qc = useQueryClient();
 
   const [typingUsers, setTypingUsers] = useState(new Set());
@@ -100,6 +100,35 @@ export function useChat(projectId, preferredSessionId = null) {
               return next;
             });
             break;
+          case 'ai_stream': {
+            // New backend streaming format: sends partial chunks until done=true
+            if (!data.done) {
+              // Handle in-flight chunk
+              setStreamingMessages((prev) => {
+                const map = new Map(prev);
+                const m = map.get(data.message_id) || { id: data.message_id, content: '', isStreaming: true };
+                m.content += data.content || '';
+                map.set(data.message_id, m);
+                return map;
+              });
+            } else {
+              // Stream finished, commit final assistant message
+              setStreamingMessages((prev) => {
+                const map = new Map(prev);
+                map.delete(data.message_id);
+                return map;
+              });
+              const completeMessage = data.message || {
+                id: data.message_id,
+                role: 'assistant',
+                content: data.content || '',
+                created_at: new Date().toISOString(),
+                metadata: data.metadata || {}
+              };
+              qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, completeMessage]);
+            }
+            break;
+          }
           case 'stream_chunk': {
             setStreamingMessages((prev) => {
               const map = new Map(prev);
@@ -169,9 +198,10 @@ export function useChat(projectId, preferredSessionId = null) {
       const { data } = await chatAPI.sendMessage(sessionId, payload);
       return data;
     },
-    onSuccess: (newMsg) => {
-      qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, newMsg]);
-    },
+    // Remove onSuccess - the message will be added via WebSocket broadcast
+    // onSuccess: (newMsg) => {
+    //   qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, newMsg]);
+    // },
   });
 
   const editMutation = useMutation({

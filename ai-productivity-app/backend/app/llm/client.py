@@ -255,7 +255,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         extra_kwargs: Dict[str, Any] = {
             "azure_endpoint": endpoint,
-            "api_version": getattr(settings, "azure_openai_api_version", "2024-02-15-preview"),
+            "api_version": getattr(settings, "azure_openai_api_version", "2025-04-01-preview"),
         }
 
         # Default authentication method → API key
@@ -319,30 +319,50 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         try:
             if self.use_responses_api:
-                # Azure *preview* Responses API – *system* messages need to go
-                # into the *instructions* field while the rest stays in
-                # *input* according to the official docs.  The test-suite does
-                # **not** call this branch, therefore we keep the conversion
-                # rudimentary.
+                # Azure Responses API - follows the official documentation pattern
+                # System messages go into instructions, user/assistant messages into input
 
-                # Separate system instructions from normal conversation.
                 system_instructions = None
-                input_messages: List[Dict[str, str]] = []
-                for msg in messages:
-                    if msg["role"] == "system" and system_instructions is None:
-                        system_instructions = msg["content"]
-                    else:
-                        input_messages.append(msg)
+                input_messages: List[Dict[str, Any]] = []
 
-                # Create parameters dict and remove None values
+                for msg in messages:
+                    if msg["role"] == "system":
+                        # Combine multiple system messages if present
+                        if system_instructions is None:
+                            system_instructions = msg["content"]
+                        else:
+                            system_instructions += "\n\n" + msg["content"]
+                    else:
+                        # Convert to Responses API format
+                        input_msg = {
+                            "role": msg["role"],
+                            "content": msg["content"]
+                        }
+                        # Add type field for user/assistant messages
+                        if msg["role"] in ["user", "assistant"]:
+                            input_msg["type"] = "message"
+                        input_messages.append(input_msg)
+
+                # Create parameters dict following Azure Responses API spec
                 responses_kwargs = {
                     "model": active_model,
                     "input": input_messages,
-                    "instructions": system_instructions,
                     "temperature": active_temperature,
                     "stream": stream,
-                    "max_tokens": active_max_tokens,
                 }
+
+                # Only add instructions if we have system messages
+                if system_instructions:
+                    responses_kwargs["instructions"] = system_instructions
+
+                # Only add max_tokens if specified (responses API uses max_output_tokens)
+                if active_max_tokens:
+                    responses_kwargs["max_output_tokens"] = active_max_tokens
+
+                # Add tools if provided (Responses API supports tools)
+                if tools:
+                    responses_kwargs["tools"] = tools
+
                 # Remove None values to avoid sending JSON null
                 clean_responses_kwargs = {k: v for k, v in responses_kwargs.items() if v is not None}
 
@@ -351,23 +371,35 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 logger.info(f"Model: {active_model}")
                 logger.info(f"Provider: {self.provider}")
                 logger.info(f"Temperature: {active_temperature}")
-                logger.info(f"Max Tokens: {active_max_tokens}")
+                logger.info(f"Max Output Tokens: {active_max_tokens}")
                 logger.info(f"Stream: {stream}")
                 logger.info(f"System Instructions: {system_instructions}")
                 logger.info(f"Input Messages ({len(input_messages)} total):")
                 for i, msg in enumerate(input_messages):
-                    content_preview = msg['content'][:200] + "..." if len(msg['content']) > 200 else msg['content']
-                    logger.info(f"  [{i + 1}] {msg['role']}: {content_preview}")
+                    content_preview = str(msg.get('content', ''))[:200] + "..." if len(str(msg.get('content', ''))) > 200 else str(msg.get('content', ''))
+                    logger.info(f"  [{i + 1}] {msg.get('role', 'unknown')}: {content_preview}")
                 logger.info(f"Full Request Payload: {json.dumps(clean_responses_kwargs, indent=2)}")
 
                 response = await self.client.responses.create(**clean_responses_kwargs)
 
                 # Log API response for debugging
                 logger.info("=== AZURE RESPONSES API RESPONSE ===")
-                if hasattr(response, 'output_text'):
+                if hasattr(response, 'output_text') and response.output_text:
                     logger.info(f"Response Text: {response.output_text}")
-                elif hasattr(response, 'output'):
+                elif hasattr(response, 'output') and response.output:
                     logger.info(f"Response Output: {response.output}")
+                    # Extract text from output for compatibility
+                    if isinstance(response.output, list) and response.output:
+                        for output_item in response.output:
+                            if hasattr(output_item, 'content') and isinstance(output_item.content, list):
+                                for content_item in output_item.content:
+                                    if hasattr(content_item, 'text'):
+                                        logger.info(f"Output Text: {content_item.text}")
+
+                if hasattr(response, 'usage') and response.usage:
+                    logger.info(f"Token Usage: {response.usage}")
+
+                logger.info(f"Response Status: {getattr(response, 'status', 'unknown')}")
                 logger.info(f"Full Response Object: {json.dumps(response.model_dump() if hasattr(response, 'model_dump') else str(response), indent=2)}")
 
                 return response

@@ -93,7 +93,7 @@ export default function ProjectChatPage() {
   // Knowledge, model & analytics hooks
   // ---------------------------------------------------------------------------
   const { executeCode, results: executionResults } = useCodeExecutor(projectId);
-  
+
   // Use unified context providers instead of multiple hooks
   const {
     currentModel,
@@ -101,14 +101,14 @@ export default function ProjectChatPage() {
     autoSelectModel,
     trackPerformance
   } = useModelContext();
-  
+
   const {
     addToCitations,
     clearCitations,
     currentContext,
     analyzeMessage
   } = useKnowledgeContext();
-  
+
   useResponseQualityTracking(projectId); // side-effects only
 
   // ---------------------------------------------------------------------------
@@ -207,14 +207,14 @@ export default function ProjectChatPage() {
 
     try {
       const id = await sendMessage(content, fullMeta);
-      
+
       // Track performance using unified context
       trackPerformance(chosenModel, {
         responseTime: Date.now() - start,
         inputTokens: Math.ceil(content.length / 4),
         outputTokens: 0 // Will be updated when response completes
       });
-      
+
       return id;
     } catch (err) {
       // Track error using unified context
@@ -238,10 +238,10 @@ export default function ProjectChatPage() {
   const handleInteractiveElement = useCallback(async (elementId, result) => {
     try {
       console.log('Interactive element completed:', { elementId, result });
-      
+
       // Track analytics for interactive element usage
       // TODO: Send analytics data to backend
-      
+
       // Handle post-completion actions based on element type or result
       if (result && result.type) {
         switch (result.type) {
@@ -249,36 +249,36 @@ export default function ProjectChatPage() {
             // Code execution completed, result contains output/error
             console.log('Code execution result:', result);
             break;
-            
+
           case 'form_submission':
             // Form was submitted, result contains form data
             console.log('Form submission result:', result);
             // TODO: Send form data to backend for processing
             break;
-            
+
           case 'decision_made':
             // Decision tree selection made
             console.log('Decision result:', result);
             break;
-            
+
           case 'query_built':
             // Query builder completed
             console.log('Query result:', result);
             break;
-            
+
           case 'action_triggered':
             // Action button was clicked
             console.log('Action result:', result);
             break;
-            
+
           default:
             console.log('Generic interactive element result:', result);
         }
       }
-      
+
       // Return success to indicate handling completed
       return { success: true };
-      
+
     } catch (error) {
       console.error('Interactive element handling failed:', error);
       toast.error(`Interactive element failed: ${error.message || 'Unknown error'}`);
@@ -294,19 +294,24 @@ export default function ProjectChatPage() {
     if (!showKnowledgeAssistant) {
       setShowKnowledgeAssistant(true);
     }
-    
+
     // Add citation to context
     addToCitations([citation]);
-    
+
     // TODO: Could also switch to context tab if in another tab
   }, [showKnowledgeAssistant, addToCitations]);
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  // Auto-scroll helper
+  const scrollToBottom = useCallback(() => {
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, []);
+
+  // Auto-scroll to bottom when messages or streaming updates arrive
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, streamingMessages, scrollToBottom]);
 
   // ---------------------------------------------------------------------------
   // Render helpers
@@ -371,8 +376,8 @@ export default function ProjectChatPage() {
           {/* Interactive elements */}
           {msg.interactiveElements?.length > 0 && (
             <div className="mt-4">
-              <InteractiveElements 
-                elements={msg.interactiveElements} 
+              <InteractiveElements
+                elements={msg.interactiveElements}
                 onElementComplete={handleInteractiveElement}
                 codeExecutor={handleCodeExecution}
               />
@@ -449,7 +454,7 @@ export default function ProjectChatPage() {
       <div className="text-red-500 p-2">
         DEBUG: Project: {project?.title || 'No project'}, Messages: {messages?.length || 0}
       </div>
-      
+
       {/* Page header with project info and controls */}
       <div className="bg-white/90 dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between px-4 py-3">
