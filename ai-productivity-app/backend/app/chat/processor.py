@@ -69,6 +69,28 @@ class ChatProcessor:
             message.referenced_chunks = [c['document_id'] for c in context['chunks']]
             self.db.commit()
 
+            # ------------------------------------------------------------------ #
+            # Inform all connected clients that the previously *placeholder*
+            # assistant message has been replaced by the final model output.
+            # ------------------------------------------------------------------ #
+
+            try:
+                from app.websocket.manager import connection_manager
+
+                await connection_manager.send_message(
+                    {
+                        "type": "message_update",
+                        "message_id": ai_message.id,
+                        "updates": {
+                            "content": full_response,
+                            "edited": False,
+                        },
+                    },
+                    session_id,
+                )
+            except Exception as exc:  # pragma: no cover
+                logger.warning("WebSocket update broadcast failed: %s", exc)
+
             # Create timeline event for analytics (integrates with existing timeline system)
             self.context_builder.create_timeline_event(
                 session_id=session_id,
