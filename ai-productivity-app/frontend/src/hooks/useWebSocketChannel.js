@@ -157,6 +157,7 @@ export function useWebSocketChannel({
     return () => {
       aborted = true;
       console.log(`🔌 WebSocket useEffect cleanup: closing connection to ${path}`);
+      clearTimeout(timerRef.current); // cancel pending reconnect
       close();
     };
   }, [path, protocols, retry, close, send]); // Include close and send in dependencies

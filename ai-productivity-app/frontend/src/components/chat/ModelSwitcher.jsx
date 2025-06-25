@@ -1,11 +1,12 @@
 /* eslint-disable */
 // components/chat/ModelSwitcher.jsx
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Zap, Brain, DollarSign, Check, AlertCircle } from 'lucide-react';
 import { useConfig } from '../../hooks/useConfig';
 import { useModelSelection } from '../../hooks/useModelSelect';
 
-const modelOptions = [
+// Default model options - will be enhanced by dynamic config
+const defaultModelOptions = [
   {
     id: 'gpt-4o-mini',
     name: 'GPT-4 Omni Mini',
@@ -24,6 +25,27 @@ const modelOptions = [
     cost: 'medium',
     quality: 'best',
     contextLength: 128000
+  },
+  // Azure deployment names
+  {
+    id: 'gpt-4.1',
+    name: 'GPT-4.1 (Azure)',
+    provider: 'azure',
+    speed: 'medium',
+    cost: 'medium',
+    quality: 'best',
+    contextLength: 128000,
+    recommended: true
+  },
+  {
+    id: 'o3',
+    name: 'O3 Reasoning (Azure)',
+    provider: 'azure',
+    speed: 'slow',
+    cost: 'high',
+    quality: 'best',
+    contextLength: 128000,
+    reasoning: true
   },
   {
     id: 'gpt-4-turbo',
@@ -63,7 +85,60 @@ export default function ModelSwitcher({
   const [hoveredModel, setHoveredModel] = useState(null);
   const dropdownRef = useRef(null);
 
-  const currentModelInfo = modelOptions.find(m => m.id === currentModel) || modelOptions[0];
+  // Get available models from dynamic config or fall back to defaults
+  const availableModels = React.useMemo(() => {
+    if (config?.providers) {
+      const dynamicModels = [];
+      
+      // Add OpenAI models
+      if (config.providers.openai?.chat_models) {
+        config.providers.openai.chat_models.forEach(modelId => {
+          const defaultModel = defaultModelOptions.find(m => m.id === modelId);
+          if (defaultModel) {
+            dynamicModels.push(defaultModel);
+          } else {
+            // Add unknown OpenAI models with basic info
+            dynamicModels.push({
+              id: modelId,
+              name: modelId,
+              provider: 'openai',
+              speed: 'medium',
+              cost: 'medium',
+              quality: 'good',
+              contextLength: 128000
+            });
+          }
+        });
+      }
+      
+      // Add Azure models
+      if (config.providers.azure?.chat_models) {
+        config.providers.azure.chat_models.forEach(modelId => {
+          const defaultModel = defaultModelOptions.find(m => m.id === modelId);
+          if (defaultModel) {
+            dynamicModels.push(defaultModel);
+          } else {
+            // Add unknown Azure models with basic info
+            dynamicModels.push({
+              id: modelId,
+              name: `${modelId} (Azure)`,
+              provider: 'azure',
+              speed: 'medium',
+              cost: 'medium',
+              quality: 'good',
+              contextLength: 128000
+            });
+          }
+        });
+      }
+      
+      return dynamicModels.length > 0 ? dynamicModels : defaultModelOptions;
+    }
+    
+    return defaultModelOptions;
+  }, [config]);
+
+  const currentModelInfo = availableModels.find(m => m.id === currentModel) || availableModels[0];
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -152,7 +227,7 @@ export default function ModelSwitcher({
         {isOpen && (
           <div className="absolute top-full mt-2 right-0 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
             <div className="p-2">
-              {modelOptions.map(model => (
+              {availableModels.map(model => (
                 <button
                   key={model.id}
                   onClick={() => handleModelSelect(model.id)}
@@ -224,7 +299,7 @@ export default function ModelSwitcher({
         {isOpen && (
           <div className="absolute top-full mt-2 left-0 right-0 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-y-auto">
             <div className="p-3 space-y-1">
-              {modelOptions.map(model => (
+              {availableModels.map(model => (
                 <button
                   key={model.id}
                   onClick={() => handleModelSelect(model.id)}

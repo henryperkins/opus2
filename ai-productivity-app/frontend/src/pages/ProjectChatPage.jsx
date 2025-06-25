@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 // Data hooks
@@ -46,7 +46,7 @@ import PromptManager from '../components/settings/PromptManager';
 import ResponseQuality from '../components/analytics/ResponseQuality';
 
 // Icons
-import { Brain, Settings, Search, BarChart2, Sparkles, Send } from 'lucide-react';
+import { Brain, Settings, Search, BarChart2, Sparkles } from 'lucide-react';
 
 // ----------------------------------------------------------------------------------
 // Helpers
@@ -90,7 +90,6 @@ export default function ProjectChatPage() {
     typingUsers,
     sendTypingIndicator,
     streamingMessages,
-    historyLoading,
   } = useChat(projectId, urlSessionId);
 
   // ---------------------------------------------------------------------------
@@ -98,7 +97,7 @@ export default function ProjectChatPage() {
   // ---------------------------------------------------------------------------
   const { executeCode, results: executionResults } = useCodeExecutor(projectId);
   const knowledgeChat = useKnowledgeChat(projectId);
-
+  
   // Use unified context providers instead of multiple hooks
   const {
     currentModel,
@@ -108,7 +107,7 @@ export default function ProjectChatPage() {
     loading: modelLoading,
     error: modelError
   } = useModelContext();
-
+  
   const {
     addToCitations,
     clearCitations,
@@ -116,7 +115,7 @@ export default function ProjectChatPage() {
     analyzeMessage,
     suggestions
   } = useKnowledgeContext();
-
+  
   useResponseQualityTracking(projectId); // side-effects only
 
   // ---------------------------------------------------------------------------
@@ -204,14 +203,14 @@ export default function ProjectChatPage() {
 
     try {
       const id = await sendMessage(content, fullMeta);
-
+      
       // Track performance using unified context
       trackPerformance(chosenModel, {
         responseTime: Date.now() - start,
         inputTokens: Math.ceil(content.length / 4),
         outputTokens: 0 // Will be updated when response completes
       });
-
+      
       return id;
     } catch (err) {
       // Track error using unified context
@@ -234,10 +233,10 @@ export default function ProjectChatPage() {
   const handleInteractiveElement = useCallback(async (elementId, result) => {
     try {
       console.log('Interactive element completed:', { elementId, result });
-
+      
       // Track analytics for interactive element usage
       // TODO: Send analytics data to backend
-
+      
       // Handle post-completion actions based on element type or result
       if (result && result.type) {
         switch (result.type) {
@@ -245,36 +244,36 @@ export default function ProjectChatPage() {
             // Code execution completed, result contains output/error
             console.log('Code execution result:', result);
             break;
-
+            
           case 'form_submission':
             // Form was submitted, result contains form data
             console.log('Form submission result:', result);
             // TODO: Send form data to backend for processing
             break;
-
+            
           case 'decision_made':
             // Decision tree selection made
             console.log('Decision result:', result);
             break;
-
+            
           case 'query_built':
             // Query builder completed
             console.log('Query result:', result);
             break;
-
+            
           case 'action_triggered':
             // Action button was clicked
             console.log('Action result:', result);
             break;
-
+            
           default:
             console.log('Generic interactive element result:', result);
         }
       }
-
+      
       // Return success to indicate handling completed
       return { success: true };
-
+      
     } catch (error) {
       console.error('Interactive element handling failed:', error);
       return {
@@ -331,8 +330,8 @@ export default function ProjectChatPage() {
           {/* Interactive elements */}
           {msg.interactiveElements?.length > 0 && (
             <div className="mt-4">
-              <InteractiveElements
-                elements={msg.interactiveElements}
+              <InteractiveElements 
+                elements={msg.interactiveElements} 
                 onElementComplete={handleInteractiveElement}
                 codeExecutor={handleCodeExecution}
               />
@@ -352,53 +351,6 @@ export default function ProjectChatPage() {
       </div>
     );
   };
-
-  // ---------------------------------------------------------------------------
-  // Debug logging
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    console.log('ProjectChatPage Debug:', {
-      projectId,
-      urlSessionId,
-      messagesCount: messages.length,
-      historyLoading,
-      connectionState,
-      projectLoading,
-      project: project?.title,
-      user: user?.id
-    });
-  }, [projectId, urlSessionId, messages.length, historyLoading, connectionState, projectLoading, project?.title, user?.id]);
-
-  // ---------------------------------------------------------------------------
-  // Error handling
-  // ---------------------------------------------------------------------------
-
-  if (connectionState === 'error') {
-    return (
-      <ResponsivePage className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900" padding={false}>
-        <Header className="sticky top-0 z-20 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold truncate max-w-xs sm:max-w-none">
-              {project?.title || 'Chat'}
-            </h1>
-          </div>
-        </Header>
-        <main className="flex-1 flex items-center justify-center">
-          <EmptyState
-            type="error"
-            title="Connection Error"
-            description="Unable to connect to the chat service. Please check your connection and try again."
-            action={{
-              label: 'Refresh Page',
-              onClick: () => window.location.reload()
-            }}
-          />
-        </main>
-      </ResponsivePage>
-    );
-  }
-
-  // ---------------------------------------------------------------------------
 
   // ----------------------------------------------------------------------------------
   // Early states (loading / not-found)
@@ -451,87 +403,119 @@ export default function ProjectChatPage() {
   );
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Simple header for testing */}
-      <header className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
+    <ResponsivePage className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900" padding={false}>
+      <Header className="sticky top-0 z-20 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">
-            {project?.title || 'Chat'}
-          </h1>
-          <div className="text-sm text-gray-500">
-            Connection: {connectionState} | Messages: {messages.length} | Loading: {historyLoading ? 'Yes' : 'No'}
+          <div className="flex items-center space-x-4">
+            <h1 className="text-xl font-semibold truncate max-w-xs sm:max-w-none">
+              {project.title}
+            </h1>
+            <ConnectionIndicator state={connectionState} />
+            <ModelSwitcher compact={isMobile} currentModel={currentModel} onModelChange={setModel} />
           </div>
-        </div>
-      </header>
 
-      {/* Simple main content for testing */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-4">
-          {historyLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p>Loading chat...</p>
-              </div>
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <Brain className="w-12 h-12 text-gray-400 mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Start a conversation</h2>
-              <p className="text-gray-500 mb-4">Type your message in the input box below to begin chatting with the AI assistant.</p>
-              <div className="text-sm text-gray-500">
-                <p>You can ask questions like:</p>
-                <ul className="mt-2 space-y-1 text-left">
-                  <li>• "Explain this code snippet"</li>
-                  <li>• "Help me debug this error"</li>
-                  <li>• "Generate a function to..."</li>
-                </ul>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-2xl rounded-lg px-4 py-2 ${
-                    msg.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                  }`}>
-                    <div className="text-xs opacity-75 mb-1">
-                      {msg.role === 'assistant' ? 'AI Assistant' : 'You'}
-                    </div>
-                    <div>{msg.content}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Simple input for testing */}
-        <div className="border-t bg-white dark:bg-gray-800 p-4">
           <div className="flex items-center space-x-2">
-            <input
-              type="text"
-              placeholder={historyLoading ? "Loading chat..." : "Type your message here..."}
-              disabled={historyLoading}
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-50"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && e.target.value.trim()) {
-                  handleSendMessage(e.target.value.trim());
-                  e.target.value = '';
-                }
-              }}
-            />
             <button
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-              disabled={historyLoading}
+              onClick={() => setShowKnowledgeAssistant((v) => !v)}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+              aria-label="Toggle Knowledge Assistant"
             >
-              <Send className="w-4 h-4" />
+              <Brain className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setShowSearch(true)}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+              aria-label="Knowledge Search"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setShowPromptManager(true)}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+              aria-label="Prompt Manager"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setShowAnalytics((v) => !v)}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+              aria-label="Toggle analytics view"
+            >
+              <BarChart2 className="w-5 h-5" />
             </button>
           </div>
         </div>
+      </Header>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-hidden">
+        {isMobile ? (
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Message list */}
+            <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+              {messages.map(renderMessage)}
+            </div>
+
+            {/* Knowledge assistant bottom sheet */}
+            <MobileBottomSheet
+              isOpen={showKnowledgeAssistant}
+              onClose={() => setShowKnowledgeAssistant(false)}
+              title="Knowledge Assistant"
+              initialSnap={0.6}
+              snapPoints={[0.4, 0.6, 0.9]}
+            >
+              {mobileAssistantPanel}
+            </MobileBottomSheet>
+
+            {/* Input */}
+            <div className="border-t bg-white dark:bg-gray-900 dark:border-gray-700 px-2 pt-1 pb-2" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+              <EnhancedCommandInput
+                onSend={handleSendMessage}
+                onTyping={sendTypingIndicator}
+                projectId={projectId}
+                editorContent={editorContent}
+                currentFile={currentFile}
+                userId={user?.id}
+              />
+            </div>
+          </div>
+        ) : (
+          <ResponsiveSplitPane split="vertical" minSize={300} defaultSize="70%">
+            {/* Chat column */}
+            <div className="flex flex-col h-screen">
+              <div className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto">
+                {messages.map(renderMessage)}
+              </div>
+              <div className="border-t bg-white dark:bg-gray-900/50">
+                <div className="max-w-3xl mx-auto">
+                  <EnhancedCommandInput
+                    onSend={handleSendMessage}
+                    onTyping={sendTypingIndicator}
+                    projectId={projectId}
+                    editorContent={editorContent}
+                    currentFile={currentFile}
+                    userId={user?.id}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Assistant / knowledge panel */}
+            {showKnowledgeAssistant && desktopAssistantPanel}
+          </ResponsiveSplitPane>
+        )}
       </main>
-    </div>
+
+      {/* Modals */}
+      {showSearch && (
+        <SmartKnowledgeSearch projectId={projectId} onSelect={handleSearchResultSelect} onClose={() => setShowSearch(false)} />
+      )}
+
+      {showPromptManager && (
+        <PromptManager projectId={projectId} onClose={() => setShowPromptManager(false)} />
+      )}
+
+      {/* Root container closing tag */}
+    </ResponsivePage>
   );
 }

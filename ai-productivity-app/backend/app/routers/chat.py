@@ -196,6 +196,17 @@ async def create_message(
     """Create a new message in a chat session."""
     service = ChatService(db)
 
+    # Log incoming user message for debugging
+    logger.info("=== NEW USER MESSAGE ===")
+    logger.info(f"Session ID: {session_id}")
+    logger.info(f"User ID: {current_user.id}")
+    logger.info(f"Role: {message.role}")
+    logger.info(f"Content: {message.content}")
+    logger.info(f"Code Snippets: {len(message.code_snippets)}")
+    logger.info(f"Referenced Files: {message.referenced_files}")
+    logger.info(f"Referenced Chunks: {message.referenced_chunks}")
+    logger.info(f"Applied Commands: {message.applied_commands}")
+
     # Extract metadata from the schema fields
     metadata = {
         'code_snippets': message.code_snippets,
@@ -212,15 +223,15 @@ async def create_message(
         user_id=current_user.id,
         metadata=metadata,
     )
-    
+
     # Trigger AI processing for user messages
     if msg.role == 'user':
         import asyncio
         from app.websocket.mock import MockWebSocket
-        
+
         # Create a mock WebSocket for the REST API context
         mock_websocket = MockWebSocket()
-        
+
         # Process with AI in background
         processor = ChatProcessor(db)
         asyncio.create_task(processor.process_message(
@@ -228,7 +239,7 @@ async def create_message(
             message=msg,
             websocket=mock_websocket
         ))
-    
+
     return MessageResponse.from_orm(msg)
 
 

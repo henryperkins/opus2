@@ -1,153 +1,151 @@
-# Developer Quick-Start ─ AI Productivity App
+# CLAUDE.md
 
-This short guide is aimed at **returning maintainers** who need to get back up-to-speed quickly.  It intentionally focuses on the *essentials*—where the code lives, how to run it, and which commands / environment variables you tend to forget.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> TL;DR:
-> ```bash
-> make install    # one-time, installs backend & frontend deps
-> make dev        # start both services via docker-compose
-> open http://localhost:5173  # React SPA (backend at :8000)
-> ```
+# AI Productivity App - Developer Guide
 
----
+Modern AI productivity application with React frontend and FastAPI backend, supporting chat, project management, code analysis, and knowledge management features.
 
-## 1. Repository layout
+## Quick Start
 
-```
-ai-productivity-app/
-├── backend/            ← FastAPI service (Python 3.11+)
-│   ├── app/            ← business logic & routers
-│   ├── alembic/        ← db migrations
-│   └── requirements.txt
-├── frontend/           ← React 18 + Vite SPA
-│   └── src/
-├── docker-compose.yml  ← dev stack (backend + frontend)
-├── docker-compose.prod.yml
-├── Makefile            ← common task shortcuts
-└── docs/               ← architecture & API docs (this file lives here)
-```
-
-Key backend sub-packages
-
-• `app/main.py`        – creates FastAPI app, mounts routers, CORS & lifespan
-• `app/config.py`      – pydantic-settings config (env-driven)
-• `app/database.py`    – SQLAlchemy engine, `init_db()` helper
-• `app/models/`        – declarative models (User, Project, Chat, …)
-• `app/routers/`       – REST endpoints grouped by domain (`/api/auth`, `/api/projects`, …)
-
-Frontend entry points
-
-• `npm run dev` (inside *frontend*) – Vite dev server (port 5173)
-• Production build lands in `frontend/dist` (served by nginx or similar)
-
----
-
-## 2. Common dev commands
-
-Command                  | Description
------------------------- | ----------------------------------------------
-`make install`           | Install Python & Node dependencies
-`make dev`               | docker-compose up – builds & starts stack (backend on 8000, frontend on 5173)
-`make up / make down`    | Start/stop containers in background
-`make logs`              | Tail combined compose logs
-`make test`              | Run backend *pytest* and frontend *vitest*
-`make lint`              | flake8 + mypy + eslint
-`make format`            | black + prettier
-`./start-local.sh`       | **No-Docker** workflow: local venv + Vite dev-server (handy when tweaking Python packages)
-
-> Tip: The Makefile is your friend—`make help` prints a nice coloured list.
-
----
-
-## 3. Environment variables you always forget
-
-Variable                    | Default               | Notes
---------------------------- | --------------------- | -----------------------------------------------------------
-`SECRET_KEY`                | "change-this…"        | Flask-style secret (JWT fallback)
-`INSECURE_COOKIES`          | `true` (dev)          | Set to **false** in HTTPS prod so cookies get *Secure* flag
-`DATABASE_URL`              | sqlite:///…/data/app.db | Point to Postgres in prod (`postgresql+psycopg2://…`)
-`OPENAI_API_KEY`            | ―                     | Required for LLM calls (or use Azure vars below)
-`AZURE_OPENAI_API_KEY`      | ―                     | If `llm_provider=azure`
-`AZURE_OPENAI_ENDPOINT`     | ―                     | "https://<resource>.openai.azure.com"
-
-`.env` at repo root will be auto-picked-up by `pydantic-settings`.
-
----
-
-## 4. Database basics
-
-SQLite is the default (file lives at `ai-productivity-app/data/app.db`).
-
-### Create / reset
 ```bash
-make db-reset    # drops & recreates DB using init_db()
+make install    # one-time setup (backend & frontend deps)
+make dev        # start full stack via docker-compose
+# → Frontend: http://localhost:5173
+# → Backend API: http://localhost:8000
+# → API Docs: http://localhost:8000/docs
 ```
 
-### Migrations (Alembic)
-```bash
-cd backend
-alembic upgrade head   # apply latest
-alembic revision --autogenerate -m "<msg>"  # create new migration
-```
+## Architecture Overview
 
-Alembic env imports *all* models via `app.models.*` so make sure any new model lives there.
+**Backend (FastAPI + SQLAlchemy)**
+- `backend/app/main.py` - Application entry point with middleware stack (CORS, security, correlation IDs)
+- `backend/app/config.py` - Pydantic settings with environment-driven configuration
+- `backend/app/routers/` - REST endpoints organized by domain (auth, projects, chat, code, search, etc.)
+- `backend/app/models/` - SQLAlchemy models (User, Project, ChatSession, CodeDocument, etc.) 
+- `backend/app/services/` - Business logic (chat, search, embedding, vector stores)
+- `backend/app/middleware/` - Custom middleware (security headers, rate limiting, request correlation)
+- `backend/app/websocket/` - WebSocket handlers for real-time chat functionality
 
----
+**Frontend (React 19 + Vite)**
+- `frontend/src/pages/` - Route components (Dashboard, ProjectChatPage, SearchPage, etc.)
+- `frontend/src/components/` - Reusable UI components organized by domain
+- `frontend/src/hooks/` - Custom React hooks (useChat, useWebSocket, useProjects, etc.)
+- `frontend/src/api/` - API client modules matching backend routers
+- `frontend/src/stores/` - Zustand state management (auth, chat, projects)
+- `frontend/src/contexts/` - React contexts (AuthContext, ModelContext, KnowledgeContext)
 
-## 5. Running services individually
+## Core Development Commands
 
-Backend only (without Docker):
-```bash
-cd backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
+**Container Management**
+- `make dev` - Start full development stack (builds images, runs containers)
+- `make up` / `make down` - Start/stop containers in background
+- `make logs` - View container logs
+- `make status` - Check service health status
+- `make build` - Build Docker images only
 
-Frontend only:
-```bash
-cd frontend
-npm run dev  # → http://localhost:5173
-```
+**Testing & Quality**
+- `make test` - Run all tests (backend pytest + frontend vitest)
+- `make lint` - Run all linters (flake8, mypy, eslint)
+- `make format` - Format code (black, prettier)
+- `make check` - Run lint + test (pre-commit checks)
 
-Make sure `VITE_API_URL` in `.env` or shell points to your backend (default `http://localhost:8000`).
+**Individual Commands**
+- Backend: `cd backend && python -m pytest -v --cov=app`
+- Frontend: `cd frontend && npm test` or `npm run test:coverage`
+- Single backend test: `cd backend && python -m pytest tests/test_specific.py::test_name -v`
+- Frontend test watch: `cd frontend && npm test`
 
----
+**Database Operations**
+- `make db-reset` - Drop and recreate database
+- `make db-shell` - Open SQLite shell
+- `cd backend && alembic upgrade head` - Apply migrations
+- `cd backend && alembic revision --autogenerate -m "description"` - Create migration
 
-## 6. Test strategy
+## Key Environment Variables
 
-Backend: pytest + httpx (async) located in `backend/tests` – run with `make test`.
+Place these in `.env` at repository root:
 
-Frontend: vitest + testing-library/react – `npm test` or `make test`.
+**Core Application**
+- `SECRET_KEY` / `JWT_SECRET_KEY` - Must be set (not default value) for security
+- `DATABASE_URL` - Defaults to PostgreSQL, falls back to SQLite in development
+- `INSECURE_COOKIES=true` - Required for localhost development (no HTTPS)
 
-Coverage reports appear in console; backend also generates `.coverage` & `htmlcov/`.
+**LLM Configuration**
+- `LLM_PROVIDER=openai` (default) or `azure`
+- `OPENAI_API_KEY` - Required for OpenAI provider
+- `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` - Required when using Azure
+- `LLM_MODEL=gpt-3.5-turbo` - Default model, overrideable per request
 
----
+**Vector Store (Optional)**
+- `VECTOR_STORE_TYPE=sqlite_vss` (default) or `qdrant`
+- `QDRANT_URL=http://localhost:6333` - When using Qdrant backend
 
-## 7. Useful endpoints
+## WebSocket Architecture
 
-- `GET /health`                       – simple liveness probe
-- Swagger UI: `http://localhost:8000/docs`
+The application uses WebSockets for real-time chat functionality:
 
-Domain APIs (all prefixed with `/api`):
+**Backend WebSocket Implementation**
+- `backend/app/websocket/manager.py` - WebSocket connection manager with per-session tracking
+- `backend/app/websocket/handlers.py` - Message routing and processing
+- `backend/app/routers/chat.py` - WebSocket endpoint at `/ws/sessions/{session_id}`
+- Authentication via cookie (`access_token`) or query parameter (`?token=`)
 
-Endpoint group      | Purpose
-------------------- | --------------------------------------------------
-`/auth`             | JWT cookie login, logout, register, me, reset-pw
-`/projects`         | CRUD + timeline, tags, search
-`/chat`             | Chat sessions, messages, **WebSocket** at `/ws/sessions/{id}`
-`/code`             | Repository ingestion & chunk listing (tree-sitter)
-`/search`           | Semantic / keyword search (vector store, phase-4)
+**Frontend WebSocket Hooks**
+- `frontend/src/hooks/useWebSocket.js` - Low-level WebSocket connection management
+- `frontend/src/hooks/useWebSocketChannel.js` - Channel-based WebSocket abstraction
+- `frontend/src/hooks/useChat.js` - Chat-specific WebSocket integration with message handling
 
-See `docs/API.md` for detailed JSON payloads.
+## Core Architectural Patterns
 
----
+**Backend Service Layer**
+- Services in `backend/app/services/` handle complex business logic
+- `chat_service.py` - Chat session management and message processing
+- `vector_service.py` - Embedding generation and similarity search
+- `hybrid_search.py` - Combined keyword + semantic search
+- `embedding_service.py` - Vector embedding operations
 
-## 8. Gotchas & pro-tips
+**Frontend State Management**
+- Zustand stores for global state (`authStore`, `chatStore`, `projectStore`)
+- React Query for server state management and caching
+- Context providers for feature-specific state (auth, models, knowledge)
 
-1. **Cookie auth & HTTPS** – If running behind TLS *unset* `INSECURE_COOKIES` so the `Secure` flag is applied; otherwise browsers drop the cookie.
-2. **IDE path confusion** – `app.config` builds an *absolute* SQLite URL so migrations & runtime point at the *same* file regardless of CWD.
-3. **WebSockets** – Browsers automatically include the `access_token` cookie during the WS handshake; tests fall back to `?token=` query-param.
-4. **Optional heavy deps** – Anything requiring *numpy* (e.g. embedding models) is imported lazily so core actions still work in skinny CI runners.
+**Security & Middleware Stack**
+- CORS middleware with configurable origins
+- Rate limiting via `slowapi` with Redis backend
+- Security headers and CSRF protection
+- Request correlation IDs for tracing
 
----
+## Key Integrations
 
-Happy hacking 🚀
+**Vector Search**
+- Supports both SQLite-VSS (default) and Qdrant backends
+- Embedding generation via OpenAI or Azure OpenAI
+- Hybrid search combining keyword and semantic matching
+
+**Code Analysis**
+- Tree-sitter parsing for multiple programming languages
+- Repository ingestion with Git integration
+- Chunk-based document processing for large codebases
+
+**Authentication**
+- JWT tokens stored in HTTP-only cookies
+- Session-based authentication with SQLAlchemy models
+- Support for registration, login, password reset flows
+
+## Development Workflow
+
+When adding new features:
+
+1. **Backend changes**: Add models → create migration → implement service → add router → write tests
+2. **Frontend changes**: Create API client → implement hooks → build components → add to router → write tests  
+3. **Always run**: `make lint` and `make test` before committing
+4. **Database changes**: Use Alembic migrations, never modify schema directly
+
+## Production Considerations
+
+- Set `INSECURE_COOKIES=false` for HTTPS deployments
+- Use PostgreSQL instead of SQLite for production
+- Configure proper CORS origins for your domain
+- Set strong `JWT_SECRET_KEY` (required, will fail startup if using default)
+- Consider Qdrant for production vector search at scale

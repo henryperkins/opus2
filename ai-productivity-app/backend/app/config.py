@@ -151,9 +151,16 @@ class Settings(BaseSettings):
     # The *api_version* parameter is mandatory for Azure OpenAI requests.  We
     # expose it as a setting with a sane default matching the SDK's examples
     # so users can easily pin a different version when Microsoft publishes a
-    # new stable release. Use "preview" to enable Azure Responses API.
+    # new stable release.
+    #
+    # Default bumped from **2024-02-01** → **2024-02-15-preview** to align with
+    # the version used throughout the official documentation as of June 2025.
+    # The new version unlocks *response_format=json_object* and other recent
+    # additions while remaining backwards-compatible for regular Chat
+    # Completions.  Projects that rely on the legacy 2024-02-01 contract can
+    # still override via the AZURE_OPENAI_API_VERSION environment variable.
 
-    azure_openai_api_version: str = "2024-02-01"
+    azure_openai_api_version: str = "2024-02-15-preview"
 
     # Azure authentication method - can be "api_key" or "entra_id"
     azure_auth_method: str = "api_key"

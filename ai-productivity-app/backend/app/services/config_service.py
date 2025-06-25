@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 import logging
+import re
 
 from app.models.config import RuntimeConfig, ConfigHistory, ModelConfiguration, ModelUsageMetrics
 from app.config import settings
@@ -14,28 +15,40 @@ logger = logging.getLogger(__name__)
 
 class ConfigService:
     """Service for managing persistent runtime configuration."""
-    
+
+    _CAMEL_SPLIT = re.compile(r'(?<!^)(?=[A-Z])')  # fooBar → foo_Bar
+
+    # ---------- internal helpers ------------------------------------------------
+
+    @classmethod
+    def _to_snake(cls, key: str) -> str:
+        """Convert camelCase / PascalCase to lower_snake_case."""
+        return cls._CAMEL_SPLIT.sub('_', key).lower()
+
     def __init__(self, db: Session):
         self.db = db
-    
+
     def get_config(self, key: str) -> Optional[Any]:
         """Get a configuration value by key."""
         config = self.db.query(RuntimeConfig).filter_by(key=key).first()
         return config.value if config else None
-    
+
     def get_all_config(self) -> Dict[str, Any]:
         """Get all configuration as a dictionary."""
         configs = self.db.query(RuntimeConfig).all()
         return {config.key: config.value for config in configs}
-    
-    def set_config(self, key: str, value: Any, description: str = None, 
+
+    def set_config(self, key: str, value: Any, description: str = None,
                    requires_restart: bool = False, updated_by: str = None) -> RuntimeConfig:
         """Set a configuration value, creating or updating as needed."""
-        
+
+        # Convert camelCase to snake_case
+        key = self._to_snake(key)
+
         # Get existing config if it exists
         existing = self.db.query(RuntimeConfig).filter_by(key=key).first()
         old_value = existing.value if existing else None
-        
+
         if existing:
             # Update existing configuration
             existing.value = value
@@ -55,31 +68,32 @@ class ConfigService:
                 updated_by=updated_by
             )
             self.db.add(config)
-        
+
         try:
             self.db.commit()
-            
+
             # Record configuration change in history
             self._record_history(key, old_value, value, updated_by)
-            
+
             logger.info(f"Configuration updated: {key} = {value}")
             return config
-            
+
         except IntegrityError as e:
             self.db.rollback()
             logger.error(f"Failed to update configuration {key}: {e}")
             raise
-    
-    def set_multiple_config(self, config_dict: Dict[str, Any], 
-                           updated_by: str = None) -> Dict[str, RuntimeConfig]:
+
+    def set_multiple_config(self, config_dict: Dict[str, Any],
+                            updated_by: str = None) -> Dict[str, RuntimeConfig]:
         """Set multiple configuration values in a single transaction."""
         results = {}
-        
+
         try:
-            for key, value in config_dict.items():
+            for raw_key, value in config_dict.items():
+                key = self._to_snake(raw_key)
                 existing = self.db.query(RuntimeConfig).filter_by(key=key).first()
                 old_value = existing.value if existing else None
-                
+
                 if existing:
                     existing.value = value
                     existing.updated_by = updated_by
@@ -93,77 +107,77 @@ class ConfigService:
                     )
                     self.db.add(config)
                     results[key] = config
-                
+
                 # Record in history
                 self._record_history(key, old_value, value, updated_by)
-            
+
             self.db.commit()
             logger.info(f"Multiple configurations updated: {list(config_dict.keys())}")
             return results
-            
+
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to update multiple configurations: {e}")
             raise
-    
+
     def delete_config(self, key: str, updated_by: str = None) -> bool:
         """Delete a configuration value."""
         config = self.db.query(RuntimeConfig).filter_by(key=key).first()
         if not config:
             return False
-        
+
         old_value = config.value
         self.db.delete(config)
-        
+
         try:
             self.db.commit()
-            
+
             # Record deletion in history
             self._record_history(key, old_value, None, updated_by, "Configuration deleted")
-            
+
             logger.info(f"Configuration deleted: {key}")
             return True
-            
+
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to delete configuration {key}: {e}")
             raise
-    
+
     def get_config_history(self, key: str = None, limit: int = 100) -> List[ConfigHistory]:
         """Get configuration change history."""
         query = self.db.query(ConfigHistory)
-        
+
         if key:
             query = query.filter_by(config_key=key)
-        
+
         return query.order_by(ConfigHistory.changed_at.desc()).limit(limit).all()
-    
+
     def initialize_default_config(self):
         """Initialize default configuration values from settings."""
         defaults = {
             "provider": settings.llm_provider,
             "chat_model": settings.llm_default_model or settings.llm_model or "gpt-3.5-turbo",
             "temperature": 0.7,
-            "useResponsesApi": False,
-            "maxTokens": None,
-            "topP": None,
-            "frequencyPenalty": None,
-            "presencePenalty": None,
-            "systemPrompt": None,
+            "use_responses_api": False,
+            "max_tokens": None,
+            "top_p": None,
+            "frequency_penalty": None,
+            "presence_penalty": None,
+            "system_prompt": None,
         }
-        
+
         # Only set defaults for keys that don't already exist
         existing_keys = set(config.key for config in self.db.query(RuntimeConfig).all())
-        
+
         new_configs = {}
         for key, value in defaults.items():
             if key not in existing_keys:
                 new_configs[key] = value
-        
+
         if new_configs:
             self.set_multiple_config(new_configs, updated_by="system_init")
             logger.info(f"Initialized default configurations: {list(new_configs.keys())}")
-    
+
     def _get_value_type(self, value: Any) -> str:
         """Determine the type of a configuration value."""
         if isinstance(value, bool):
@@ -176,9 +190,9 @@ class ConfigService:
             return "object"
         else:
             return "string"  # Default fallback
-    
-    def _record_history(self, key: str, old_value: Any, new_value: Any, 
-                       updated_by: str = None, reason: str = None):
+
+    def _record_history(self, key: str, old_value: Any, new_value: Any,
+                        updated_by: str = None, reason: str = None):
         """Record a configuration change in the history table."""
         try:
             history = ConfigHistory(
@@ -190,41 +204,41 @@ class ConfigService:
             )
             self.db.add(history)
             # Don't commit here - let the caller handle the transaction
-            
+
         except Exception as e:
             logger.warning(f"Failed to record config history for {key}: {e}")
-    
+
     # Model Configuration Management
-    
+
     def get_model_configuration(self, model_id: str) -> Optional[ModelConfiguration]:
         """Get detailed configuration for a specific model."""
         return self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
-    
-    def get_available_models(self, provider: Optional[str] = None, 
+
+    def get_available_models(self, provider: Optional[str] = None,
                            capabilities: Optional[List[str]] = None) -> List[ModelConfiguration]:
         """Get list of available models with optional filtering."""
         query = self.db.query(ModelConfiguration).filter(
             ModelConfiguration.is_available == True,
             ModelConfiguration.is_deprecated == False
         )
-        
+
         if provider:
             query = query.filter(ModelConfiguration.provider == provider)
-        
+
         if capabilities and self.db.bind.dialect.name == 'postgresql':
             # Use PostgreSQL JSONB operators for capability filtering
             for capability in capabilities:
                 query = query.filter(
                     text("capabilities @> :capability").bindparam(capability=f'["{capability}"]')
                 )
-        
+
         return query.order_by(ModelConfiguration.model_family, ModelConfiguration.name).all()
-    
+
     def create_model_configuration(self, model_data: Dict[str, Any]) -> ModelConfiguration:
         """Create a new model configuration."""
         model_config = ModelConfiguration(**model_data)
         self.db.add(model_config)
-        
+
         try:
             self.db.commit()
             logger.info(f"Created model configuration: {model_config.model_id}")
@@ -233,17 +247,17 @@ class ConfigService:
             self.db.rollback()
             logger.error(f"Failed to create model configuration: {e}")
             raise
-    
+
     def update_model_configuration(self, model_id: str, updates: Dict[str, Any]) -> Optional[ModelConfiguration]:
         """Update an existing model configuration."""
         model_config = self.get_model_configuration(model_id)
         if not model_config:
             return None
-        
+
         for key, value in updates.items():
             if hasattr(model_config, key):
                 setattr(model_config, key, value)
-        
+
         try:
             self.db.commit()
             logger.info(f"Updated model configuration: {model_id}")
@@ -252,8 +266,8 @@ class ConfigService:
             self.db.rollback()
             logger.error(f"Failed to update model configuration: {e}")
             raise
-    
-    def get_model_by_capabilities(self, required_capabilities: List[str], 
+
+    def get_model_by_capabilities(self, required_capabilities: List[str],
                                 provider: Optional[str] = None) -> List[ModelConfiguration]:
         """Find models that have all required capabilities."""
         if self.db.bind.dialect.name == 'postgresql':
@@ -264,18 +278,18 @@ class ConfigService:
         else:
             # Fallback for SQLite - less efficient
             capability_filter = text("1=1")  # TODO: Implement SQLite fallback
-        
+
         query = self.db.query(ModelConfiguration).filter(
             ModelConfiguration.is_available == True,
             ModelConfiguration.is_deprecated == False,
             capability_filter
         )
-        
+
         if provider:
             query = query.filter(ModelConfiguration.provider == provider)
-        
+
         return query.order_by(ModelConfiguration.avg_response_time_ms).all()
-    
+
     def get_cost_efficient_models(self, limit: int = 5) -> List[ModelConfiguration]:
         """Get most cost-efficient models based on cost per token and throughput."""
         if self.db.bind.dialect.name == 'postgresql':
@@ -295,11 +309,11 @@ class ConfigService:
                 ModelConfiguration.is_available == True,
                 ModelConfiguration.is_deprecated == False
             ).order_by(ModelConfiguration.cost_input_per_1k).limit(limit)
-        
+
         return query.all()
-    
+
     # Model Usage Metrics
-    
+
     def record_model_usage(self, model_id: str, metrics_data: Dict[str, Any]) -> ModelUsageMetrics:
         """Record usage metrics for a model."""
         usage_metrics = ModelUsageMetrics(
@@ -307,7 +321,7 @@ class ConfigService:
             **metrics_data
         )
         self.db.add(usage_metrics)
-        
+
         try:
             self.db.commit()
             logger.debug(f"Recorded usage metrics for model: {model_id}")
@@ -316,7 +330,7 @@ class ConfigService:
             self.db.rollback()
             logger.error(f"Failed to record model usage metrics: {e}")
             raise
-    
+
     def get_model_usage_metrics(self, model_id: str, days: int = 30) -> List[ModelUsageMetrics]:
         """Get usage metrics for a model over the specified time period."""
         if self.db.bind.dialect.name == 'postgresql':
@@ -329,25 +343,25 @@ class ConfigService:
             query = self.db.query(ModelUsageMetrics).filter(
                 ModelUsageMetrics.model_id == model_id
             ).order_by(ModelUsageMetrics.period_start.desc())
-        
+
         return query.all()
-    
+
     def get_model_performance_summary(self, model_id: str) -> Optional[Dict[str, Any]]:
         """Get aggregated performance summary for a model."""
         if self.db.bind.dialect.name == 'postgresql':
             # Use PostgreSQL aggregation functions
             result = self.db.execute(text("""
-                SELECT 
+                SELECT
                     AVG(avg_response_time_ms) as avg_response_time,
                     AVG(success_rate) as avg_success_rate,
                     SUM(total_requests) as total_requests,
                     SUM(total_cost) as total_cost,
                     AVG(avg_user_rating) as avg_user_rating
-                FROM model_usage_metrics 
-                WHERE model_id = :model_id 
+                FROM model_usage_metrics
+                WHERE model_id = :model_id
                 AND period_end > CURRENT_TIMESTAMP - INTERVAL '30 days'
             """), {"model_id": model_id}).fetchone()
-            
+
             if result:
                 return {
                     "avg_response_time_ms": float(result.avg_response_time) if result.avg_response_time else None,
@@ -356,5 +370,5 @@ class ConfigService:
                     "total_cost": float(result.total_cost) if result.total_cost else 0.0,
                     "avg_user_rating": float(result.avg_user_rating) if result.avg_user_rating else None
                 }
-        
+
         return None

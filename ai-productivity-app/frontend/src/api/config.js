@@ -1,7 +1,10 @@
 // api/config.js
 import client from './client';
 
-// Model configuration defaults and validators
+// ---------------------------------------------------------------------------
+// Factory helpers (keep in sync with backend pydantic models where possible)
+// ---------------------------------------------------------------------------
+
 export const createModelConfig = (data = {}) => ({
   provider: data.provider || 'openai',
   chat_model: data.chat_model || 'gpt-4o-mini',
@@ -10,7 +13,7 @@ export const createModelConfig = (data = {}) => ({
   topP: data.topP,
   frequencyPenalty: data.frequencyPenalty,
   presencePenalty: data.presencePenalty,
-  systemPrompt: data.systemPrompt
+  systemPrompt: data.systemPrompt,
 });
 
 export const createModelStats = (data = {}) => ({
@@ -18,14 +21,14 @@ export const createModelStats = (data = {}) => ({
   estimatedCost: data.estimatedCost || 0,
   averageLatency: data.averageLatency || 0,
   errorRate: data.errorRate || 0,
-  lastUsed: data.lastUsed || new Date()
+  lastUsed: data.lastUsed || new Date(),
 });
 
 export const createTestResult = (data = {}) => ({
   success: data.success || false,
   message: data.message,
   latency: data.latency,
-  error: data.error
+  error: data.error,
 });
 
 class ConfigAPI {
@@ -38,8 +41,40 @@ class ConfigAPI {
     return response.data;
   }
 
+  // ---------------------------------------------------------------------
+  // Runtime configuration updates
+  // ---------------------------------------------------------------------
   async updateModelConfig(config) {
     const response = await client.put(`${this.baseURL}/model`, config);
+
+    // The endpoint returns only the **current** section. Fetch the full
+    // configuration so we can broadcast a consistent object that matches
+    // the shape returned by GET /api/config (required by useConfig).
+    let fullConfig;
+    try {
+      const getResp = await client.get(this.baseURL);
+      fullConfig = getResp.data;
+    } catch (_) {
+      // Fallback: synthesise minimal config with just `current` so header
+      // still updates if fetching fails (e.g. due to network race).
+      fullConfig = { current: response.data.current ?? config };
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(
+          new CustomEvent('configUpdate', {
+            detail: {
+              config: fullConfig,
+              requested: true,
+            },
+          }),
+        );
+      } catch (_) {
+        /* noop */
+      }
+    }
+
     return response.data;
   }
 
@@ -50,7 +85,7 @@ class ConfigAPI {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Test failed'
+        error: error.response?.data?.detail || 'Test failed',
       };
     }
   }
@@ -74,7 +109,7 @@ class ConfigAPI {
     try {
       const response = await client.post(`${this.baseURL}/validate-key`, {
         provider,
-        apiKey
+        apiKey,
       });
       return response.data.valid;
     } catch {
@@ -90,12 +125,15 @@ class ConfigAPI {
 
 export const configAPI = new ConfigAPI();
 
-// Prompt template factories and validators
+// ---------------------------------------------------------------------------
+// Prompt template helpers (unrelated to issue but kept for backwards-compat)
+// ---------------------------------------------------------------------------
+
 export const createVariable = (data = {}) => ({
   name: data.name || '',
   description: data.description || '',
   defaultValue: data.defaultValue,
-  required: data.required || false
+  required: data.required || false,
 });
 
 export const createPromptTemplate = (data = {}) => ({
@@ -111,7 +149,7 @@ export const createPromptTemplate = (data = {}) => ({
   isDefault: data.isDefault || false,
   usageCount: data.usageCount || 0,
   createdAt: data.createdAt,
-  updatedAt: data.updatedAt
+  updatedAt: data.updatedAt,
 });
 
 class PromptsAPI {
@@ -144,12 +182,16 @@ class PromptsAPI {
   }
 
   async duplicateTemplate(id, newName) {
-    const response = await client.post(`${this.baseURL}/${id}/duplicate`, { name: newName });
+    const response = await client.post(`${this.baseURL}/${id}/duplicate`, {
+      name: newName,
+    });
     return response.data;
   }
 
   async executeTemplate(id, variables) {
-    const response = await client.post(`${this.baseURL}/${id}/execute`, { variables });
+    const response = await client.post(`${this.baseURL}/${id}/execute`, {
+      variables,
+    });
     return response.data;
   }
 
@@ -159,7 +201,9 @@ class PromptsAPI {
   }
 
   async shareTemplate(id, users) {
-    await client.post(`${this.baseURL}/${id}/share`, { users });
+    await client.post(`${this.baseURL}/${id}/share`, {
+      users,
+    });
   }
 }
 

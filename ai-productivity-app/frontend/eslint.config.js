@@ -80,9 +80,10 @@ export default [
     }
   },
   {
-    // Allow hooks to import from the API layer – they are part of the data-access
-    // abstraction, unlike UI components that should depend on hooks only.
-    files: ['**/hooks/**/*.{js,jsx}'],
+    // Allow hooks and state stores to import from the API layer – they belong
+    // to the data-access abstraction, unlike UI components that should depend
+    // on hooks/stores only.
+    files: ['**/hooks/**/*.{js,jsx}', '**/stores/**/*.{js,jsx}'],
     rules: {
       'no-restricted-imports': 'off'
     }
@@ -92,6 +93,11 @@ export default [
     languageOptions: {
       ecmaVersion: 2021,
       sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true
+        }
+      },
       globals: {
         window: 'readonly',
         document: 'readonly',

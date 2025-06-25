@@ -1,5 +1,4 @@
-import { Allotment } from 'allotment';
-import 'allotment/dist/style.css';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 // Wrapper component to match existing usage patterns
 export default function SplitPane({ 
@@ -9,41 +8,66 @@ export default function SplitPane({
   resizerStyle = {}, 
   left, 
   right, 
-  children, 
+  children,
+  autoSaveId,
+  className = "",
   ...props 
 }) {
+  const direction = split === "vertical" ? "horizontal" : "vertical";
+  const minSizePercent = typeof minSize === 'number' ? Math.max(10, (minSize / window.innerWidth) * 100) : 25;
+  const defaultSizePercent = typeof defaultSize === 'string' && defaultSize.includes('%') 
+    ? parseInt(defaultSize) 
+    : 50;
+
   // Handle legacy left/right prop pattern
   if (left && right) {
     return (
-      <Allotment split={split} {...props}>
-        <Allotment.Pane minSize={minSize}>
+      <PanelGroup 
+        direction={direction} 
+        autoSaveId={autoSaveId}
+        className={className}
+        {...props}
+      >
+        <Panel minSize={minSizePercent} defaultSize={defaultSizePercent}>
           {left}
-        </Allotment.Pane>
-        <Allotment.Pane>
+        </Panel>
+        <PanelResizeHandle className="w-2 bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors" />
+        <Panel minSize={minSizePercent}>
           {right}
-        </Allotment.Pane>
-      </Allotment>
+        </Panel>
+      </PanelGroup>
     );
   }
 
   // Handle children array pattern
   if (children && Array.isArray(children)) {
     return (
-      <Allotment split={split} {...props}>
-        <Allotment.Pane minSize={minSize}>
+      <PanelGroup 
+        direction={direction} 
+        autoSaveId={autoSaveId}
+        className={className}
+        {...props}
+      >
+        <Panel minSize={minSizePercent} defaultSize={defaultSizePercent}>
           {children[0]}
-        </Allotment.Pane>
-        <Allotment.Pane>
+        </Panel>
+        <PanelResizeHandle className="w-2 bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors" />
+        <Panel minSize={minSizePercent}>
           {children[1]}
-        </Allotment.Pane>
-      </Allotment>
+        </Panel>
+      </PanelGroup>
     );
   }
 
-  // Default behavior
+  // Default behavior - wrap single children in panels if needed
   return (
-    <Allotment split={split} {...props}>
+    <PanelGroup 
+      direction={direction} 
+      autoSaveId={autoSaveId}
+      className={className}
+      {...props}
+    >
       {children}
-    </Allotment>
+    </PanelGroup>
   );
 }

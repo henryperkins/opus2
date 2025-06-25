@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Allotment } from 'allotment';
-import 'allotment/dist/style.css';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
 
@@ -165,25 +164,33 @@ export default function ResponsiveSplitPane({
   }
 
   // Desktop view - traditional split pane
+  const direction = orientation === "vertical" ? "vertical" : "horizontal";
+  const minSizePercent = typeof minSize === 'number' ? Math.max(10, (minSize / window.innerWidth) * 100) : 25;
+  const defaultSizePercent = typeof defaultSize === 'string' && defaultSize.includes('%') 
+    ? parseInt(defaultSize) 
+    : 50;
+
   return (
     <div className={`h-full ${className}`}>
-      <Allotment
-        split={orientation === "vertical" ? "vertical" : "horizontal"}
+      <PanelGroup
+        direction={direction}
+        autoSaveId={`responsive-${orientation}-${leftTitle}-${rightTitle}`}
         {...props}
       >
         {left && (
-          <Allotment.Pane minSize={minSize} preferredSize={defaultSize}>
+          <Panel minSize={minSizePercent} defaultSize={defaultSizePercent}>
             <div className="h-full overflow-auto">
               {left}
             </div>
-          </Allotment.Pane>
+          </Panel>
         )}
-        <Allotment.Pane>
+        <PanelResizeHandle className="w-2 bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors" />
+        <Panel minSize={minSizePercent}>
           <div className="h-full overflow-auto">
             {right}
           </div>
-        </Allotment.Pane>
-      </Allotment>
+        </Panel>
+      </PanelGroup>
     </div>
   );
 }

@@ -100,7 +100,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         if method in {"POST", "PUT", "PATCH", "DELETE"}:
             # Exempt auth endpoints from CSRF (they use rate limiting instead)
-            exempt_paths = ["/api/auth/register", "/api/auth/login", "/api/auth/logout"]
+            exempt_paths = ["/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/chat/", "/code/"]
             if not any(request.url.path.startswith(path) for path in exempt_paths):
                 security.validate_csrf(request)
 

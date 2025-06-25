@@ -68,7 +68,7 @@ class ChatProcessor:
             message.referenced_files = [ref['path'] for ref in context['file_references']]
             message.referenced_chunks = [c['document_id'] for c in context['chunks']]
             self.db.commit()
-            
+
             # Create timeline event for analytics (integrates with existing timeline system)
             self.context_builder.create_timeline_event(
                 session_id=session_id,
@@ -137,10 +137,10 @@ class ChatProcessor:
         # Get runtime configuration for context management
         runtime_config = llm_client._get_runtime_config()
         max_context_tokens = runtime_config.get("maxTokens", settings.max_context_tokens)
-        
+
         # Reserve tokens for response generation (typically 30-40% of max)
         available_context_tokens = int(max_context_tokens * 0.6)
-        
+
         # Build conversation history with token management
         conversation = self.context_builder.build_conversation_context(
             session_id=session_id,
@@ -180,7 +180,7 @@ Maintain conversation context and refer to previous discussions when relevant.""
         # Add conversation history (all messages within token limit)
         for msg in conversation:
             msg_content = msg['content']
-            
+
             # Enhance message with code context if available
             if msg.get('code_snippets'):
                 code_refs = []
@@ -190,12 +190,12 @@ Maintain conversation context and refer to previous discussions when relevant.""
                         code_refs.append(f"[{lang} code included]")
                 if code_refs:
                     msg_content += f" {' '.join(code_refs)}"
-                    
+
             # Include file references for context continuity
             if msg.get('referenced_files'):
                 file_refs = ', '.join(msg['referenced_files'][:3])
                 msg_content += f" [Referenced files: {file_refs}]"
-            
+
             messages.append({
                 "role": msg['role'],
                 "content": msg_content
@@ -206,9 +206,32 @@ Maintain conversation context and refer to previous discussions when relevant.""
             "role": "user",
             "content": prompt
         })
-        
+
         # Log context information for debugging
         logger.debug(f"Built LLM context: {len(messages)} messages, {len(conversation)} conversation history, {len(context.get('chunks', []))} code chunks")
+
+        # Log detailed user input and context for debugging
+        logger.info("=== USER MESSAGE PROCESSING ===")
+        logger.info(f"Session ID: {session_id}")
+        logger.info(f"User Prompt: {prompt}")
+        logger.info(f"Context Chunks: {len(context.get('chunks', []))}")
+        logger.info(f"File References: {context.get('file_references', [])}")
+        logger.info(f"Conversation History: {len(conversation)} messages")
+        logger.info(f"Total Messages to LLM: {len(messages)}")
+
+        # Log system prompts and context
+        system_messages = [msg for msg in messages if msg['role'] == 'system']
+        logger.info(f"System Messages ({len(system_messages)} total):")
+        for i, sys_msg in enumerate(system_messages):
+            content_preview = sys_msg['content'][:300] + "..." if len(sys_msg['content']) > 300 else sys_msg['content']
+            logger.info(f"  System [{i + 1}]: {content_preview}")
+
+        # Log user conversation context
+        user_messages = [msg for msg in messages if msg['role'] == 'user']
+        logger.info(f"User Messages in Context ({len(user_messages)} total):")
+        for i, user_msg in enumerate(user_messages):
+            content_preview = user_msg['content'][:200] + "..." if len(user_msg['content']) > 200 else user_msg['content']
+            logger.info(f"  User [{i + 1}]: {content_preview}")
 
         # Create placeholder message
         ai_message = await self.chat_service.create_message(
@@ -223,7 +246,7 @@ Maintain conversation context and refer to previous discussions when relevant.""
         try:
             # Get runtime configuration for parameters
             runtime_config = llm_client._get_runtime_config()
-            
+
             # First non-stream call – we need body to inspect potential tool calls
             response = await llm_client.complete(
                 messages=messages,
@@ -237,16 +260,26 @@ Maintain conversation context and refer to previous discussions when relevant.""
             # Loop while model wants to call tools – guard against empty
             # *choices* which can happen when running with the local stub
             # client in development / test environments.
+            tool_call_count = 0
             while (
                 hasattr(response, "choices")
                 and response.choices  # non-empty list
                 and response.choices[0].finish_reason == "tool_calls"
             ):
+                tool_call_count += 1
+                logger.info(f"=== TOOL CALLING ROUND {tool_call_count} ===")
+
                 for tool_call in response.choices[0].message.tool_calls:
                     name = tool_call.name
                     args_json = json.loads(tool_call.arguments)
 
+                    logger.info(f"Calling tool: {name}")
+                    logger.info(f"Tool arguments: {json.dumps(args_json, indent=2)}")
+
                     result = await llm_tools.call_tool(name, args_json, self.db)
+
+                    logger.info(f"Tool {name} result: {json.dumps(result, indent=2) if isinstance(result, (dict, list)) else str(result)}")
+
                     messages.append({
                         "role": "tool",
                         "name": name,
@@ -254,6 +287,7 @@ Maintain conversation context and refer to previous discussions when relevant.""
                     })
 
                 # ask LLM to continue with new context
+                logger.info("Sending follow-up request to LLM with tool results")
                 response = await llm_client.complete(
                     messages=messages,
                     temperature=runtime_config.get("temperature"),  # Use runtime config
@@ -271,6 +305,12 @@ Maintain conversation context and refer to previous discussions when relevant.""
                 # generic "LLM unavailable" error path below.
                 final_text = str(response)
 
+            # Log the AI response for debugging
+            logger.info("=== AI RESPONSE RECEIVED ===")
+            logger.info(f"Session ID: {session_id}")
+            logger.info(f"Response Length: {len(final_text)} characters")
+            logger.info(f"Response Content: {final_text}")
+
             # now stream it to client (simulate streaming)
             async def _generator():  # noqa: D401
                 yield final_text
@@ -283,9 +323,16 @@ Maintain conversation context and refer to previous discussions when relevant.""
             code_snippets = self._extract_code_snippets(full_response)
             if code_snippets:
                 ai_message.code_snippets = code_snippets
+                logger.info(f"Extracted {len(code_snippets)} code snippets from response")
 
             self.db.commit()
-            
+
+            # Log final processing results
+            logger.info("=== MESSAGE PROCESSING COMPLETE ===")
+            logger.info(f"Message ID: {ai_message.id}")
+            logger.info(f"Final Response Length: {len(full_response)} characters")
+            logger.info(f"Code Snippets: {len(code_snippets) if code_snippets else 0}")
+
             # Track response quality metrics for analytics
             await self._track_response_quality(ai_message, context, full_response)
 
@@ -331,12 +378,12 @@ Maintain conversation context and refer to previous discussions when relevant.""
             has_code = bool(self._extract_code_snippets(response_content))
             has_structure = any(marker in response_content for marker in ['•', '1.', '##', '-'])
             has_citations = bool(context.get('chunks', []))
-            
+
             # Simple quality scoring
             relevance = 0.9 if has_citations else 0.7
             helpfulness = (0.3 if has_structure else 0) + (0.3 if has_code else 0) + (0.4 if len(response_content) > 200 else 0)
             completeness = min(len(response_content) / 500, 1) * 0.7 + (0.3 if has_structure else 0)
-            
+
             # This could be sent to the analytics API or stored directly
             quality_data = {
                 'message_id': ai_message.id,
@@ -351,10 +398,10 @@ Maintain conversation context and refer to previous discussions when relevant.""
                 'context_chunks': len(context.get('chunks', [])),
                 'referenced_files': len(context.get('file_references', []))
             }
-            
+
             logger.debug(f"Response quality metrics: {quality_data}")
             # TODO: Integrate with analytics API when ready for persistent storage
-            
+
         except Exception as e:
             logger.warning(f"Failed to track response quality: {e}")
 
@@ -382,7 +429,7 @@ Focus on the main topics discussed and any key outcomes."""
 
         # Get runtime configuration for summary generation
         runtime_config = llm_client._get_runtime_config()
-        
+
         response = await llm_client.complete(
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},

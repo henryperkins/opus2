@@ -6,6 +6,8 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import tailwindcss from '@tailwindcss/vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import svgr from 'vite-plugin-svgr';
+// Monaco Editor plugin removed - using direct integration
+import inject from '@rollup/plugin-inject';
 
 // ---------------------------------------------------------------------------
 // Helper: decide proxy target (Docker-aware)
@@ -25,6 +27,8 @@ export default defineConfig({
     tailwindcss(),
     tsconfigPaths(),
     svgr(),
+    // Monaco Editor configured via @monaco-editor/react directly
+    inject({ Buffer: ['buffer', 'Buffer'] }),
     splitVendorChunkPlugin(), // automatic vendor splitter
     visualizer({
       filename: 'stats.html',
@@ -46,6 +50,8 @@ export default defineConfig({
       'react-syntax-highlighter/dist/esm/languages/prism/markup',
       'react-syntax-highlighter/dist/esm/languages/prism/json',
       'react-syntax-highlighter/dist/esm/languages/prism/bash',
+      'monaco-editor',
+      'monacopilot',
     ],
   },
 
@@ -117,7 +123,8 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
 
-          if (id.includes('@monaco-editor')) return 'monaco';
+          if (id.includes('@monaco-editor') || id.includes('monaco-editor')) return 'monaco';
+          if (id.includes('monacopilot')) return 'monacopilot';
           if (/react-syntax-highlighter/.test(id)) return 'syntax';
           if (/[\\/](d3|d3-.*?)[\\/]/.test(id)) return 'd3';
           if (/react|react-dom|scheduler/.test(id)) return 'react';

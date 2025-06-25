@@ -36,32 +36,33 @@ export function useChat(projectId, preferredSessionId = null) {
     queryFn: async () => {
       if (!projectId || authLoading || !user) return null;
 
-      let sid = preferredSessionId;
+      const cached = qc.getQueryData(['session', projectId])?.id;
+      let sid = preferredSessionId ?? cached;
+
       try {
-        // First try to validate the preferred session
+        // First try to validate the preferred or cached session
         if (sid) {
           const { data } = await chatAPI.getSession(sid);
           if (data.project_id === Number(projectId)) {
             return { id: sid, ...data };
           }
-          sid = null;
         }
 
         // Create new session if needed
-        if (!sid) {
-          const { data } = await chatAPI.createSession({
-            project_id: Number(projectId),
-          });
-          return data;
-        }
+        const { data } = await chatAPI.createSession({
+          project_id: Number(projectId),
+        });
+        return data;
       } catch (error) {
         console.error('Session bootstrap error:', error);
         throw error;
       }
     },
     enabled: !!projectId && !authLoading && !!user,
-    staleTime: 5 * 60 * 1000, // 5 minutes - sessions don't change often
-    cacheTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: Infinity,
+    cacheTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const sessionId = sessionData?.id;

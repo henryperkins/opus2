@@ -1,107 +1,181 @@
-/* Header Component
- *
- * Purpose
- * -------
- * Main application header that shows:
- *  " Application title/logo
- *  " Navigation menu (if needed)
- *  " User menu for authenticated users
- *  " Login button for unauthenticated users
- */
-
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import UserMenu from '../auth/UserMenu';
 import AIProviderStatus from './AIProviderStatus';
+import ThemeToggle from './ThemeToggle';
+import { Menu, Search, FolderOpen, Clock, Home, Settings, ChevronRight } from 'lucide-react';
+import PropTypes from 'prop-types';
 
-function Header() {
+function Header({ onMenuClick, showMenuButton = false }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
+
+  // Helper to check if a path is active
+  const isActive = (path) => {
+    if (path === '/') {
+      return location.pathname === '/';
+    }
+    return location.pathname.startsWith(path);
+  };
+
+  // Generate breadcrumbs based on current path
+  const getBreadcrumbs = () => {
+    const paths = location.pathname.split('/').filter(Boolean);
+    const breadcrumbs = [{ name: 'Dashboard', path: '/' }];
+
+    if (paths.length > 0) {
+      const first = paths[0];
+      if (first === 'projects') {
+        breadcrumbs.push({ name: 'Projects', path: '/projects' });
+        if (paths[1]) {
+          breadcrumbs.push({ name: 'Project', path: `/projects/${paths[1]}` });
+          if (paths[2]) {
+            const subPages = {
+              'chat': 'Chat',
+              'files': 'Files',
+              'analytics': 'Analytics',
+              'knowledge': 'Knowledge Base'
+            };
+            breadcrumbs.push({
+              name: subPages[paths[2]] || paths[2],
+              path: location.pathname
+            });
+          }
+        }
+      } else {
+        const pageNames = {
+          'search': 'Search',
+          'timeline': 'Timeline',
+          'settings': 'Settings',
+          'profile': 'Profile',
+          'models': 'Model Settings'
+        };
+        breadcrumbs.push({
+          name: pageNames[first] || first.charAt(0).toUpperCase() + first.slice(1),
+          path: location.pathname
+        });
+      }
+    }
+
+    return breadcrumbs;
+  };
+
+  const breadcrumbs = getBreadcrumbs();
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
+      <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo/Title */}
-          <div className="flex items-center">
-            <Link to="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                  />
-                </svg>
-              </div>
-              <span className="text-xl font-semibold text-gray-900">
-                AI Productivity
-              </span>
-            </Link>
+          {/* Left side - Menu button and breadcrumbs */}
+          <div className="flex items-center flex-1">
+            {/* Mobile menu button */}
+            {showMenuButton && (
+              <button
+                onClick={onMenuClick}
+                className="p-2 -ml-2 mr-3 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
+                aria-label="Toggle sidebar"
+              >
+                <Menu className="h-6 w-6" />
+              </button>
+            )}
+
+            {/* Breadcrumbs */}
+            <nav className="flex items-center space-x-1 text-sm" aria-label="Breadcrumb">
+              {breadcrumbs.map((crumb, index) => (
+                <div key={crumb.path} className="flex items-center">
+                  {index > 0 && <ChevronRight className="w-4 h-4 text-gray-400 mx-1" />}
+                  {index === breadcrumbs.length - 1 ? (
+                    <span className="text-gray-900 dark:text-gray-100 font-medium">
+                      {crumb.name}
+                    </span>
+                  ) : (
+                    <Link
+                      to={crumb.path}
+                      className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                    >
+                      {crumb.name}
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </nav>
           </div>
 
-          {/* Navigation */}
-          {/* Full navigation for ≥md screens */}
-          <nav className="hidden md:flex space-x-8">
-            {user && (
-              <>
-                <Link
-                  to="/"
-                  className="text-gray-500 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  to="/projects"
-                  className="text-gray-500 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Projects
-                </Link>
-                <Link
-                  to="/search"
-                  className="text-gray-500 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Search
-                </Link>
-              </>
-            )}
+          {/* Center - Quick navigation (desktop only) */}
+          <nav className="hidden lg:flex items-center space-x-1 mx-6">
+            <Link
+              to="/"
+              className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                isActive('/')
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Home className="w-4 h-4" />
+              <span>Dashboard</span>
+            </Link>
+            <Link
+              to="/projects"
+              className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                isActive('/projects')
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span>Projects</span>
+            </Link>
+            <Link
+              to="/search"
+              className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                isActive('/search')
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Search className="w-4 h-4" />
+              <span>Search</span>
+            </Link>
+            <Link
+              to="/timeline"
+              className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                isActive('/timeline')
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>Timeline</span>
+            </Link>
           </nav>
 
-          {/* Condensed navigation icon(s) for <md screens */}
-          {user && (
-            <nav className="flex md:hidden items-center space-x-2">
-              <Link
-                to="/projects"
-                className="p-2 rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                aria-label="Open projects page"
-              >
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-                  />
-                </svg>
-              </Link>
-            </nav>
-          )}
-
-          {/* Right side - User menu or login */}
-          <div className="flex items-center space-x-4">
+          {/* Right side - Status, theme, and user menu */}
+          <div className="flex items-center space-x-3">
             {/* AI Provider Status */}
             <AIProviderStatus className="hidden sm:block" />
 
+            {/* Quick search button (mobile) */}
+            <Link
+              to="/search"
+              className="lg:hidden p-2 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Search"
+            >
+              <Search className="w-5 h-5" />
+            </Link>
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
+
+            {/* Settings (mobile) */}
+            <Link
+              to="/settings"
+              className="lg:hidden p-2 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </Link>
+
+            {/* User menu or login */}
             {loading ? (
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             ) : user ? (
@@ -120,5 +194,15 @@ function Header() {
     </header>
   );
 }
+
+Header.propTypes = {
+  onMenuClick: PropTypes.func,
+  showMenuButton: PropTypes.bool
+};
+
+Header.defaultProps = {
+  onMenuClick: () => {},
+  showMenuButton: false
+};
 
 export default Header;

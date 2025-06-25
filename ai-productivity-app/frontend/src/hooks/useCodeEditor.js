@@ -39,10 +39,22 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as monaco from 'monaco-editor';
+import { registerCompletion } from 'monacopilot';
 
-export function useCodeEditor({ initialCode = '', language = 'plaintext' } = {}) {
+export function useCodeEditor({ 
+  initialCode = '', 
+  language = 'plaintext',
+  enableCopilot = true,
+  copilotEndpoint = '/api/code/copilot',
+  maxContextLines = 60,
+  filename = null,
+  relatedFiles = [],
+  technologies = []
+} = {}) {
   const editorInstanceRef = useRef(null);
+  const copilotRef = useRef(null);
   const [code, setCodeState] = useState(initialCode);
+  const [copilotEnabled, setCopilotEnabled] = useState(enableCopilot);
 
   // Keep code state in sync with external edits (e.g. setCode())
   const setCode = useCallback(
@@ -71,9 +83,35 @@ export function useCodeEditor({ initialCode = '', language = 'plaintext' } = {})
       setCodeState(value);
     });
 
-    // Cleanup listener on unmount
-    return () => disposable.dispose();
-  }, [language]);
+    // Initialize Monacopilot if enabled
+    if (copilotEnabled) {
+      try {
+        copilotRef.current = registerCompletion(monaco, editor, {
+          endpoint: copilotEndpoint,
+          language,
+          trigger: 'onIdle',
+          maxContextLines,
+          filename,
+          relatedFiles,
+          technologies,
+          onError: (error) => {
+            console.warn('Monacopilot error:', error);
+          }
+        });
+      } catch (error) {
+        console.error('Failed to initialize Monacopilot:', error);
+      }
+    }
+
+    // Cleanup listeners and copilot on unmount
+    return () => {
+      disposable.dispose();
+      if (copilotRef.current) {
+        copilotRef.current.deregister();
+        copilotRef.current = null;
+      }
+    };
+  }, [language, copilotEnabled, copilotEndpoint, maxContextLines, filename, relatedFiles, technologies]);
 
   // ---------------------------------------------------------------------------
   // Helper functions
@@ -131,6 +169,18 @@ export function useCodeEditor({ initialCode = '', language = 'plaintext' } = {})
     }
   }, [language]);
 
+  // Toggle Copilot on/off
+  const toggleCopilot = useCallback(() => {
+    setCopilotEnabled(prev => !prev);
+  }, []);
+
+  // Trigger completion manually
+  const triggerCompletion = useCallback(() => {
+    if (copilotRef.current && copilotRef.current.trigger) {
+      copilotRef.current.trigger();
+    }
+  }, []);
+
   return {
     // Pass this directly: <MonacoEditor onMount={editorRef.onMount} />
     editorRef: { onMount: handleEditorMount },
@@ -148,6 +198,14 @@ export function useCodeEditor({ initialCode = '', language = 'plaintext' } = {})
         monaco.editor.setModelLanguage(model, lang);
       }
     },
+
+    // Copilot controls
+    copilotEnabled,
+    toggleCopilot,
+    triggerCompletion,
+    
+    // Access to editor instance for advanced usage
+    editorInstance: editorInstanceRef.current,
   };
 }
 

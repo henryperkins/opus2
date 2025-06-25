@@ -1,33 +1,12 @@
 /* TimelinePage.jsx – global activity log */
 
-import React, { useEffect, useState } from "react";
+// React import intentionally omitted – not required with the new JSX transform
 import { Link } from "react-router-dom";
-import { timelineAPI } from "../api/timeline";
 import TimelineEvent from "../components/projects/TimelineEvent";
-import { useAuth } from "../hooks/useAuth";
+import { useTimeline } from "../hooks/useTimeline";
 
 export default function TimelinePage() {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { user, loading: authLoading } = useAuth();
-
-  useEffect(() => {
-    if (authLoading || !user) return;
-
-    const fetchEvents = async () => {
-      try {
-        const data = await timelineAPI.list({ limit: 200 });
-        setEvents(data);
-      } catch (err) {
-        setError(err.response?.data?.detail || err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEvents();
-  }, [authLoading, user]);
+  const { events, loading, error } = useTimeline({ limit: 200 });
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">

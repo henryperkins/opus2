@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import os
 import types
+import json  # Add json import for logging
 from typing import Any, Dict, List, Sequence
 
 # ---------------------------------------------------------------------------
@@ -162,17 +163,17 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # Try to get configuration from database first
             from app.database import SessionLocal
             from app.services.config_service import ConfigService
-            
+
             with SessionLocal() as db:
                 config_service = ConfigService(db)
                 db_config = config_service.get_all_config()
-                
+
                 if db_config:
                     return db_config
-                    
+
         except Exception as e:
             logger.debug(f"Failed to load config from database: {e}")
-        
+
         try:
             # Fallback to in-memory config
             from app.routers.config import _RUNTIME_CONFIG
@@ -182,24 +183,28 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             return {
                 "provider": settings.llm_provider,
                 "chat_model": settings.llm_default_model or settings.llm_model,
-                "useResponsesApi": False,
+                "use_responses_api": False,
             }
 
     def _should_reinitialize(self, new_provider: str) -> bool:
         """Check if client needs reinitialization due to provider change."""
         return self.provider != new_provider.lower()
 
-    async def reconfigure(self, 
-                         provider: str | None = None, 
-                         model: str | None = None, 
+    async def reconfigure(self,
+                         provider: str | None = None,
+                         model: str | None = None,
                          use_responses_api: bool | None = None) -> None:
         """Dynamically reconfigure the client with new provider/model settings."""
         runtime_config = self._get_runtime_config()
-        
+
         # Use runtime config values or provided parameters
         new_provider = (provider or runtime_config.get("provider", self.provider)).lower()
         new_model = model or runtime_config.get("chat_model") or self.active_model
-        new_responses_api = use_responses_api if use_responses_api is not None else runtime_config.get("useResponsesApi", False)
+        new_responses_api = (
+            use_responses_api
+            if use_responses_api is not None
+            else runtime_config.get("use_responses_api", False)
+        )
 
         # Reinitialize client if provider changed
         if self._should_reinitialize(new_provider):
@@ -213,8 +218,8 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         # Update model and responses API settings
         self.active_model = new_model
         self.use_responses_api = new_responses_api and new_provider == "azure"
-        
-        logger.info("LLM client reconfigured - Provider: %s, Model: %s, ResponsesAPI: %s", 
+
+        logger.info("LLM client reconfigured - Provider: %s, Model: %s, ResponsesAPI: %s",
                    self.provider, self.active_model, self.use_responses_api)
 
     # ---------------------------------------------------------------------
@@ -250,7 +255,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         extra_kwargs: Dict[str, Any] = {
             "azure_endpoint": endpoint,
-            "api_version": getattr(settings, "azure_openai_api_version", "2024-02-01"),
+            "api_version": getattr(settings, "azure_openai_api_version", "2024-02-15-preview"),
         }
 
         # Default authentication method → API key
@@ -285,7 +290,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         of the available parameters.  In addition we accept arbitrary
         ``**kwargs`` via the explicit keyword arguments to stay compatible
         with future changes.
-        
+
         Parameters can be overridden at runtime from the configuration system.
         """
 
@@ -294,18 +299,18 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         # Get runtime configuration and merge with provided parameters
         runtime_config = self._get_runtime_config()
-        
+
         # Apply runtime configuration with parameter precedence
         active_model = model or runtime_config.get("chat_model") or self.active_model
         active_temperature = temperature if temperature is not None else runtime_config.get("temperature", 0.7)
-        active_max_tokens = max_tokens or runtime_config.get("maxTokens")
-        
+        active_max_tokens = max_tokens or runtime_config.get("max_tokens")
+
         # Auto-reconfigure if model/provider changed
         if active_model != self.active_model or runtime_config.get("provider", self.provider).lower() != self.provider:
             await self.reconfigure(
                 provider=runtime_config.get("provider"),
                 model=active_model,
-                use_responses_api=runtime_config.get("useResponsesApi")
+                use_responses_api=runtime_config.get("use_responses_api")
             )
 
         # Convert messages into canonical list – some callers might pass
@@ -329,14 +334,43 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     else:
                         input_messages.append(msg)
 
-                return await self.client.responses.create(
-                    model=active_model,
-                    input=input_messages,
-                    instructions=system_instructions,
-                    temperature=active_temperature,
-                    stream=stream,
-                    max_tokens=active_max_tokens,
-                )
+                # Create parameters dict and remove None values
+                responses_kwargs = {
+                    "model": active_model,
+                    "input": input_messages,
+                    "instructions": system_instructions,
+                    "temperature": active_temperature,
+                    "stream": stream,
+                    "max_tokens": active_max_tokens,
+                }
+                # Remove None values to avoid sending JSON null
+                clean_responses_kwargs = {k: v for k, v in responses_kwargs.items() if v is not None}
+
+                # Log API request for debugging
+                logger.info("=== AZURE RESPONSES API REQUEST ===")
+                logger.info(f"Model: {active_model}")
+                logger.info(f"Provider: {self.provider}")
+                logger.info(f"Temperature: {active_temperature}")
+                logger.info(f"Max Tokens: {active_max_tokens}")
+                logger.info(f"Stream: {stream}")
+                logger.info(f"System Instructions: {system_instructions}")
+                logger.info(f"Input Messages ({len(input_messages)} total):")
+                for i, msg in enumerate(input_messages):
+                    content_preview = msg['content'][:200] + "..." if len(msg['content']) > 200 else msg['content']
+                    logger.info(f"  [{i + 1}] {msg['role']}: {content_preview}")
+                logger.info(f"Full Request Payload: {json.dumps(clean_responses_kwargs, indent=2)}")
+
+                response = await self.client.responses.create(**clean_responses_kwargs)
+
+                # Log API response for debugging
+                logger.info("=== AZURE RESPONSES API RESPONSE ===")
+                if hasattr(response, 'output_text'):
+                    logger.info(f"Response Text: {response.output_text}")
+                elif hasattr(response, 'output'):
+                    logger.info(f"Response Output: {response.output}")
+                logger.info(f"Full Response Object: {json.dumps(response.model_dump() if hasattr(response, 'model_dump') else str(response), indent=2)}")
+
+                return response
 
             # -----------------------------------------------------------------
             # Regular Chat Completions (OpenAI or non-preview Azure)
@@ -362,8 +396,42 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             if tools:
                 call_kwargs["tools"] = tools
 
+            # ---- scrub None values so JSON null never gets sent ----------
+            clean_kwargs = {k: v for k, v in call_kwargs.items() if v is not None}
+
+            # Log API request for debugging
+            logger.info("=== CHAT COMPLETIONS API REQUEST ===")
+            logger.info(f"Provider: {self.provider}")
+            logger.info(f"Model: {active_model}")
+            logger.info(f"Temperature: {active_temperature}")
+            logger.info(f"Max Tokens: {active_max_tokens}")
+            logger.info(f"Stream: {stream}")
+            logger.info(f"Tools: {tools is not None}")
+            logger.info(f"Messages ({len(messages)} total):")
+            for i, msg in enumerate(messages):
+                content_preview = msg['content'][:200] + "..." if len(msg['content']) > 200 else msg['content']
+                logger.info(f"  [{i + 1}] {msg['role']}: {content_preview}")
+            logger.info(f"Full Request Payload: {json.dumps(clean_kwargs, indent=2)}")
+
             try:
-                return await self.client.chat.completions.create(**call_kwargs)
+                response = await self.client.chat.completions.create(**clean_kwargs)
+
+                # Log API response for debugging
+                logger.info("=== CHAT COMPLETIONS API RESPONSE ===")
+                if hasattr(response, "choices") and response.choices:
+                    choice = response.choices[0]
+                    logger.info(f"Finish Reason: {choice.finish_reason}")
+                    if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                        logger.info(f"Response Content: {choice.message.content}")
+                    if hasattr(choice, 'message') and hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
+                        logger.info(f"Tool Calls: {len(choice.message.tool_calls)} calls")
+                        for j, tool_call in enumerate(choice.message.tool_calls):
+                            logger.info(f"  Tool Call [{j + 1}]: {tool_call.name} with args: {tool_call.arguments}")
+                if hasattr(response, 'usage'):
+                    logger.info(f"Token Usage: {response.usage}")
+                logger.info(f"Full Response Object: {json.dumps(response.model_dump() if hasattr(response, 'model_dump') else str(response), indent=2)}")
+
+                return response
             except Exception as exc:  # noqa: BLE001 – capture BadRequest / TypeError alike
                 # 1. The newest SDK raises *TypeError* when an unexpected
                 #    keyword parameter is supplied.
@@ -385,6 +453,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     legacy_kwargs = dict(call_kwargs)
                     legacy_kwargs.pop("tools")
                     legacy_kwargs["functions"] = tools  # type: ignore[arg-type]
+                    legacy_kwargs = {k: v for k, v in legacy_kwargs.items() if v is not None}
                     return await self.client.chat.completions.create(**legacy_kwargs)
 
                 # Re-raise unchanged – caller handles logging / user feedback.

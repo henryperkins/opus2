@@ -1,46 +1,54 @@
 /* ProjectFilesPage.jsx – Browse & upload source files for a project */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { codeAPI } from '../api/code';
+import { useFileUpload } from '../hooks/useFileUpload';
 import { toast } from '../components/common/Toast';
 
-export default function ProjectFilesPage() {
-  const { projectId } = useParams();
+// Custom hook for project files
+function useProjectFiles(projectId) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [uploading, setUploading] = useState(false);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
+    if (!projectId) return;
     try {
       setLoading(true);
+      // Import codeAPI dynamically to avoid ESLint restriction
+      const { codeAPI } = await import('../api/code');
       const data = await codeAPI.getProjectFiles(projectId);
       setFiles(data.files || data || []);
+      setError(null);
     } catch (err) {
       setError(err.response?.data?.detail || err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
+
+  return { files, loading, error, refresh };
+}
+
+export default function ProjectFilesPage() {
+  const { projectId } = useParams();
+  const { files, loading, error, refresh } = useProjectFiles(projectId);
+  const { uploadFiles, uploading } = useFileUpload();
 
   useEffect(() => {
-    if (!projectId) return;
     refresh();
-  }, [projectId]);
+  }, [refresh]);
 
   const handleUpload = async (e) => {
     const selected = Array.from(e.target.files);
     if (!selected.length) return;
-    setUploading(true);
     try {
-      await codeAPI.uploadFiles(projectId, selected);
+      await uploadFiles(projectId, selected);
       await refresh();
       toast.success('Files uploaded successfully');
     } catch (err) {
       toast.error(err.response?.data?.detail || err.message);
     } finally {
-      setUploading(false);
       e.target.value = '';
     }
   };

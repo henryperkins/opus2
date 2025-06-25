@@ -5,28 +5,24 @@ import { useAuth } from '../../hooks/useAuth';
 import UserMenu from '../auth/UserMenu';
 import ThemeToggle from './ThemeToggle';
 import Sidebar from './Sidebar';
+import Header from './Header';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import useAuthStore from '../../stores/authStore';              // NEW
+import useAuthStore from '../../stores/authStore';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { ResponsivePage, ShowOnDesktop, HideOnDesktop } from '../layout/ResponsiveContainer';
 import { Menu } from 'lucide-react';
 
-// -------------------------------------------------------------------------------------------------
-// Global layout wrapper
-// -------------------------------------------------------------------------------------------------
-
 export default function Layout({ children }) {
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
-  const { preferences } = useAuthStore();                         // NEW
-  const [sidebarOpen, setSidebarOpen] = useState(
-    preferences?.sidebarPinned ?? false                           // NEW
-  );
+  const { preferences } = useAuthStore();
+  // Start with sidebar open on desktop, closed on mobile/tablet
   const { isMobile, isTablet } = useMediaQuery();
-  const layout = useResponsiveLayout();
   const isDesktop = !isMobile && !isTablet;
+  const [sidebarOpen, setSidebarOpen] = useState(isDesktop);
+  const layout = useResponsiveLayout();
 
-  // Always gate on authLoading for bulletproofness.
+  // Show loading state
   if (authLoading) {
     return (
       <div
@@ -44,19 +40,20 @@ export default function Layout({ children }) {
     );
   }
 
-  // Don't show sidebar on login page
-  const showSidebar = user && location.pathname !== '/login';
+  // Don't show sidebar on login/auth pages
+  const authPages = ['/login', '/forgot', '/reset'];
+  const isAuthPage = authPages.some(page => location.pathname.startsWith(page));
+  const showSidebar = user && !isAuthPage;
 
   if (!showSidebar) {
-    // Simple layout for login page and when user is not authenticated
+    // Simple layout for auth pages
     return (
       <div className="min-h-screen gradient-bg transition-colors duration-200 flex flex-col">
-        {/* Skip to main content link */}
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
 
-        {/* Simple header for login page */}
+        {/* Simple header for auth pages */}
         <header className="glass border-b border-white/20 dark:border-gray-700/20 transition-all duration-200 backdrop-blur-md">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
@@ -85,12 +82,10 @@ export default function Layout({ children }) {
           </div>
         </header>
 
-        {/* Main content */}
         <main id="main-content" className="flex-1" role="main">
           {children}
         </main>
 
-        {/* Footer */}
         <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <p className="text-center text-sm text-gray-500 dark:text-gray-400">
@@ -102,25 +97,28 @@ export default function Layout({ children }) {
     );
   }
 
-  // Layout with sidebar for authenticated users
+  // Main layout with sidebar for authenticated users
   return (
     <div className="min-h-screen gradient-bg transition-colors duration-200 flex">
-      {/* Skip to main content link */}
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
 
-      {/* Sidebar - adaptable based on screen size */}
+      {/* Sidebar with proper responsive behavior */}
       <Sidebar
-        isOpen={isDesktop || sidebarOpen || preferences?.sidebarPinned}  // NEW
+        isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(false)}
-        className="lg:w-72"
+        className={`
+          ${isMobile || isTablet ? 'fixed' : 'relative'}
+          ${(!isDesktop && !sidebarOpen) ? 'hidden' : ''}
+          z-40
+        `}
       />
 
       {/* Overlay for mobile/tablet when sidebar is open */}
       {!isDesktop && sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm lg:hidden z-30"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />
@@ -128,32 +126,11 @@ export default function Layout({ children }) {
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top header - now visible on all screen sizes */}
-        <header className="glass border-b border-white/20 dark:border-gray-700/20 transition-all duration-200 backdrop-blur-md flex-shrink-0 z-10">
-          <div className="px-4 sm:px-6">
-            <div className="flex justify-between items-center h-16">
-              <HideOnDesktop>
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="p-2 -ml-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
-                  aria-expanded={sidebarOpen}
-                  aria-label="Toggle sidebar"
-                  type="button"
-                >
-                  <span className="sr-only">Open sidebar</span>
-                  <Menu className="h-6 w-6" />
-                </button>
-              </HideOnDesktop>
-              <ShowOnDesktop>
-                <div className="flex-1" /> {/* Spacer for desktop */}
-              </ShowOnDesktop>
-
-              <div className="flex items-center">
-                <UserMenu />
-              </div>
-            </div>
-          </div>
-        </header>
+        {/* Use the proper Header component with navigation */}
+        <Header
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+          showMenuButton={!isDesktop}
+        />
 
         {/* Main content */}
         <main id="main-content" className="flex-1 overflow-auto" role="main">
@@ -164,7 +141,6 @@ export default function Layout({ children }) {
   );
 }
 
-// PropTypes validation
 Layout.propTypes = {
   children: PropTypes.node.isRequired
 };
