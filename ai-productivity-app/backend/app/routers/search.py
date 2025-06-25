@@ -1,21 +1,22 @@
-# backend/app/routers/search.py
 """Enhanced search API with hybrid capabilities."""
-from fastapi import APIRouter, Query, HTTPException, BackgroundTasks, Depends
 import logging
+from typing import Optional
+
+from fastapi import APIRouter, Query, HTTPException, BackgroundTasks, Depends
 
 from app.dependencies import DatabaseDep, CurrentUserRequired
 from app.services.vector_service import get_vector_service, VectorService
-# canonical implementation
 from app.services.hybrid_search import HybridSearch
 from app.services.embedding_service import EmbeddingService
+from app.services.vector_store import VectorStore
 from app.embeddings.generator import EmbeddingGenerator
 from app.schemas.search import (
     SearchRequest, SearchResponse, SearchResult,
     IndexRequest, IndexResponse
 )
-
-# Model for search history (added Phase-5)
 from app.models.search_history import SearchHistory
+from app.models.project import Project
+from app.models.code import CodeDocument
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +31,11 @@ async def search(
     request: SearchRequest,
     current_user: CurrentUserRequired,
     db: DatabaseDep,
-    vector_service: VectorService = Depends(get_vector_service)
+    vector_service: VectorService = Depends(get_vector_service)  # Keep for future use
 ):
     """Execute hybrid search across code and documents."""
     # Initialize hybrid search with the existing VectorStore while the
     # VectorService migration is still ongoing.
-    from app.services.vector_store import VectorStore
     vector_store = VectorStore()
 
     hybrid_search = HybridSearch(db, vector_store, embedding_generator)
@@ -43,7 +43,6 @@ async def search(
     # Get user's accessible projects
     if not request.project_ids:
         # Default to user's projects
-        from app.models.project import Project
         projects = db.query(Project).filter_by(owner_id=current_user.id).all()
         request.project_ids = [p.id for p in projects]
 
@@ -106,8 +105,8 @@ async def search(
 @router.get("/suggestions")
 async def get_suggestions(
     q: str = Query("", min_length=1, max_length=100),
-    current_user: CurrentUserRequired = None,
-    db: DatabaseDep = None
+    current_user: Optional[CurrentUserRequired] = None,
+    db: Optional[DatabaseDep] = None
 ):
     """Get search suggestions."""
     if len(q) < 2:
@@ -134,7 +133,7 @@ async def get_suggestions(
     # do not hit the DB with DISTINCT which is expensive on Sqlite.  We then
     # filter + de-duplicate on the python side.
     # ------------------------------------------------------------------
-    if current_user:
+    if current_user and db:
         history_rows = (
             db.query(SearchHistory.query_text)
             .filter(SearchHistory.user_id == current_user.id)
@@ -162,8 +161,8 @@ async def get_suggestions(
 @router.get("/history")
 async def get_history(
     limit: int = Query(20, ge=1, le=100),
-    current_user: CurrentUserRequired = None,
-    db: DatabaseDep = None,
+    current_user: Optional[CurrentUserRequired] = None,
+    db: Optional[DatabaseDep] = None,
 ):
     """Return the current user's recent search history (most recent first)."""
 
@@ -201,20 +200,17 @@ async def index_document(
 ):
     """Index or re-index document embeddings."""
     # Verify document access
-    from app.models.code import CodeDocument
     document = db.query(CodeDocument).filter_by(id=request.document_id).first()
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Verify project access
-    from app.models.project import Project
     project = db.query(Project).filter_by(id=document.project_id).first()
     if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Initialize embedding service
-    from app.services.vector_store import VectorStore
     vector_store = VectorStore()
     embedding_service = EmbeddingService(db, vector_store, embedding_generator)
 
@@ -251,14 +247,12 @@ async def delete_index(
 ):
     """Delete document from index."""
     # Verify access
-    from app.models.code import CodeDocument
     document = db.query(CodeDocument).filter_by(id=document_id).first()
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Initialize embedding service
-    from app.services.vector_store import VectorStore
     vector_store = VectorStore()
     embedding_service = EmbeddingService(db, vector_store, embedding_generator)
 
