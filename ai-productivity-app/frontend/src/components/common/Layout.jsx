@@ -11,6 +11,7 @@ import useAuthStore from '../../stores/authStore';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { ResponsivePage, ShowOnDesktop, HideOnDesktop } from '../layout/ResponsiveContainer';
 import { Menu } from 'lucide-react';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 export default function Layout({ children }) {
   const { user, loading: authLoading } = useAuth();
@@ -99,44 +100,67 @@ export default function Layout({ children }) {
 
   // Main layout with sidebar for authenticated users
   return (
-    <div className="min-h-screen gradient-bg transition-colors duration-200 flex">
+    <div className="min-h-screen gradient-bg transition-colors duration-200">
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
 
-      {/* Sidebar with proper responsive behavior */}
-      <Sidebar
-        isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(false)}
-        className={`
-          ${isMobile || isTablet ? 'fixed' : 'relative'}
-          ${(!isDesktop && !sidebarOpen) ? 'hidden' : ''}
-          z-40
-        `}
-      />
+      {/* Desktop: Resizable panels */}
+      {isDesktop ? (
+        <PanelGroup direction="horizontal" className="h-screen">
+          <Panel defaultSize={20} minSize={12} maxSize={35}>
+            <Sidebar
+              isOpen={true}
+              onToggle={() => {}}
+              className="h-full"
+            />
+          </Panel>
+          <PanelResizeHandle className="w-1 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors cursor-col-resize" />
+          <Panel minSize={50}>
+            <div className="flex flex-col h-full">
+              <Header
+                onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+                showMenuButton={false}
+              />
+              <main id="main-content" className="flex-1 overflow-auto" role="main">
+                {children}
+              </main>
+            </div>
+          </Panel>
+        </PanelGroup>
+      ) : (
+        // Mobile/Tablet: Drawer behavior
+        <div className="flex h-screen">
+          <Sidebar
+            isOpen={sidebarOpen}
+            onToggle={() => setSidebarOpen(false)}
+            className={`
+              fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-300
+              ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+            `}
+          />
 
-      {/* Overlay for mobile/tablet when sidebar is open */}
-      {!isDesktop && sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
+          {/* Overlay for mobile/tablet when sidebar is open */}
+          {sidebarOpen && (
+            <div
+              className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
+              onClick={() => setSidebarOpen(false)}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Main content area */}
+          <div className="flex-1 flex flex-col">
+            <Header
+              onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+              showMenuButton={true}
+            />
+            <main id="main-content" className="flex-1 overflow-auto" role="main">
+              {children}
+            </main>
+          </div>
+        </div>
       )}
-
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Use the proper Header component with navigation */}
-        <Header
-          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-          showMenuButton={!isDesktop}
-        />
-
-        {/* Main content */}
-        <main id="main-content" className="flex-1 overflow-auto" role="main">
-          {children}
-        </main>
-      </div>
     </div>
   );
 }

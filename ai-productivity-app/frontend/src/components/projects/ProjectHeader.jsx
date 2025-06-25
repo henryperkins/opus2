@@ -4,7 +4,7 @@ export default function ProjectHeader({ project }) {
   if (!project) return null;
 
   return (
-    <header className="space-y-2">
+    <div className="project-info space-y-2">
       <h1 className="text-3xl font-bold">
         {project.emoji && <span className="mr-2">{project.emoji}</span>}
         {project.title}
@@ -23,6 +23,6 @@ export default function ProjectHeader({ project }) {
           <span key={t} className="tag">{t}</span>
         ))}
       </div>
-    </header>
+    </div>
   );
 }

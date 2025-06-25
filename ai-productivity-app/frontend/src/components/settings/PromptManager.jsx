@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, Copy, Save, X, FileText, Share2, Lock } from 'luci
 // Import promptAPI from the central API configuration module
 import { promptAPI } from '../../api/config';
 import { toast } from '../common/Toast';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 const categories = [
   'Code Generation',
@@ -378,6 +379,7 @@ function TemplateEditor({
 }) {
   const [formData, setFormData] = useState(template);
   const [newVariable, setNewVariable] = useState({ name: '', description: '', required: false });
+  const { isDesktop } = useMediaQuery();
 
   const handleAddVariable = () => {
     if (!newVariable.name) return;
@@ -396,16 +398,32 @@ function TemplateEditor({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b">
-          <h3 className="text-lg font-medium">
-            {template.id ? 'Edit Template' : 'Create New Template'}
-          </h3>
-        </div>
-
-        <div className="p-6 space-y-4">
-          {/* Basic Info */}
+    <>
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 bg-black/50 z-40 ${isDesktop ? '' : ''}`}
+        onClick={onCancel}
+      />
+      
+      {/* Drawer/Modal */}
+      <div className={`fixed ${
+        isDesktop 
+          ? 'inset-y-0 right-0 w-[32rem]' 
+          : 'inset-0 flex items-center justify-center p-4'
+      } z-50`}>
+        <div className={`bg-white dark:bg-gray-900 ${
+          isDesktop 
+            ? 'h-full flex flex-col shadow-xl' 
+            : 'rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden'
+        }`}>
+          <div className="p-6 border-b">
+            <h3 className="text-lg font-medium">
+              {template.id ? 'Edit Template' : 'Create New Template'}
+            </h3>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {/* Basic Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -544,24 +562,25 @@ function TemplateEditor({
               <span className="text-sm">Make this template public</span>
             </label>
           </div>
-        </div>
-
-        <div className="p-6 border-t flex justify-end space-x-3">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-gray-700 hover:text-gray-900"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => onSave(formData)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Save Template
-          </button>
+          </div>
+          
+          <div className="p-6 border-t flex justify-end space-x-3">
+            <button
+              onClick={onCancel}
+              className="px-4 py-2 text-gray-700 hover:text-gray-900"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => onSave(formData)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Save Template
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

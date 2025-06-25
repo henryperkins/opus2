@@ -1170,4 +1170,35 @@
       overflow-x: hidden;
     }
   }
+
+  /* iOS Keyboard Support for Chat Input */
+  .chat-input-container {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  /* Ensure input stays above iOS keyboard */
+  @supports (bottom: env(safe-area-inset-bottom)) {
+    .chat-input-container {
+      bottom: env(safe-area-inset-bottom, 0);
+    }
+    
+    /* Adjust when keyboard is shown */
+    .chat-input-container:focus-within {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+  }
+
+  /* Prevent layout jump on mobile */
+  @media (max-width: 768px) {
+    body:has(.chat-input-container:focus-within) {
+      position: fixed;
+      width: 100%;
+    }
+  }
 }

@@ -192,7 +192,12 @@ The following application logic patterns and modules are essential for the corre
 - **Authentication, Sessions, and Security:**
   - Token issuance and session management logic is centralized in [`auth.py`](backend/app/routers/auth.py).
   - **SecurityHeadersMiddleware** ([`security.py`](backend/app/middleware/security.py)): Enforces required security headers and CSRF validation on every request.
-  - **CSRF Protection**: Uses `csrftoken` cookie with `X-CSRFToken` header validation (not `x-csrftoken` as some docs may indicate).
+  - **CSRF Protection**: Implements the **double-submit cookie** pattern.
+    - Cookie name: `csrftoken`
+    - Header name: `x-csrftoken` (case-insensitive – the backend lower-cases header keys before comparison, so `X-CSRFToken` sent by the browser/axios also works).
+    - The authoritative constant is `CSRF_HEADER_NAME = "x-csrftoken"` in [`backend/app/auth/security.py`](backend/app/auth/security.py).
+
+    > Historical note: earlier versions of this document claimed the header had to be `X-CSRFToken` *only*. In practice the backend treats the header in a case-insensitive manner, and the constant in code is lower-case. The wording has been updated to remove this discrepancy.
   - **CORS** ([`cors.py`](backend/app/middleware/cors.py)): Only origins allowed by `Settings.cors_origins_list` are permitted access.
   - **Rate-limiting:** Custom in-memory rate limiting via `enforce_rate_limit()` in [`security.py`](backend/app/auth/security.py).
 

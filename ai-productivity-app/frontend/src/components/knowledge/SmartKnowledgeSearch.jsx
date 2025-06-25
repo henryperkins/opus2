@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Filter, X, FileText, Code, Tag, Calendar, TrendingUp } from 'lucide-react';
 import { searchAPI } from '../../api/search';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 export default function SmartKnowledgeSearch({
   projectId,
@@ -24,6 +25,7 @@ export default function SmartKnowledgeSearch({
 
   const searchInputRef = useRef(null);
   const resultsRef = useRef(null);
+  const { isDesktop } = useMediaQuery();
 
   const debouncedQuery = useDebounce(query, 300);
 
@@ -187,15 +189,24 @@ export default function SmartKnowledgeSearch({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
+    <>
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black bg-opacity-50"
+        className="fixed inset-0 bg-black bg-opacity-50 z-40"
         onClick={onClose}
       />
 
-      {/* Search Modal */}
-      <div className="relative w-full max-w-2xl bg-white rounded-lg shadow-xl">
+      {/* Search Drawer/Modal */}
+      <div className={`fixed ${
+        isDesktop 
+          ? 'inset-y-0 right-0 w-[32rem]' 
+          : 'inset-0 flex items-start justify-center pt-16 px-4'
+      } z-50`}>
+        <div className={`${
+          isDesktop 
+            ? 'h-full bg-white dark:bg-gray-900 shadow-xl flex flex-col' 
+            : 'w-full max-w-2xl bg-white dark:bg-gray-900 rounded-lg shadow-xl'
+        }`}>
         {/* Header */}
         <div className="flex items-center space-x-3 p-4 border-b border-gray-200">
           <Search className="w-5 h-5 text-gray-400" />
@@ -264,8 +275,7 @@ export default function SmartKnowledgeSearch({
           </div>
         )}
 
-        {/* Content */}
-        <div className="max-h-96 overflow-y-auto" ref={resultsRef}>
+        <div className="flex-1 overflow-y-auto" ref={resultsRef}>
           {loading && (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -336,13 +346,13 @@ export default function SmartKnowledgeSearch({
           )}
         </div>
 
-        {/* Footer */}
         {results.length > 0 && (
-          <div className="p-3 border-t border-gray-200 bg-gray-50 text-xs text-gray-600">
+          <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-400">
             {results.length} results • Use ↑↓ to navigate, Enter to select, Esc to close
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
