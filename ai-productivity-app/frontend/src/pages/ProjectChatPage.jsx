@@ -444,14 +444,14 @@ export default function ProjectChatPage() {
   );
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 overflow-hidden">
       {/* Debug info */}
       <div className="text-red-500 p-2">
         DEBUG: Project: {project?.title || 'No project'}, Messages: {messages?.length || 0}
       </div>
       
       {/* Page header with project info and controls */}
-      <div className="sticky top-0 z-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white/90 dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-semibold truncate max-w-xs sm:max-w-none">
@@ -494,7 +494,7 @@ export default function ProjectChatPage() {
       </div>
 
       {/* Main content */}
-      <main className="flex-1 overflow-hidden min-h-0">
+      <main className="flex-1 overflow-hidden min-h-0 flex flex-col">
         {isMobile ? (
           <div className="flex flex-col h-full overflow-hidden">
             {/* Message list */}
@@ -516,16 +516,14 @@ export default function ProjectChatPage() {
             </MobileBottomSheet>
 
             {/* Input */}
-            <div className="border-t bg-white dark:bg-gray-900 dark:border-gray-700 px-2 pt-1 pb-2" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-              <EnhancedCommandInput
-                onSend={handleSendMessage}
-                onTyping={sendTypingIndicator}
-                projectId={projectId}
-                editorContent={editorContent}
-                currentFile={currentFile}
-                userId={user?.id}
-              />
-            </div>
+            <EnhancedCommandInput
+              onSend={handleSendMessage}
+              onTyping={sendTypingIndicator}
+              projectId={projectId}
+              editorContent={editorContent}
+              currentFile={currentFile}
+              userId={user?.id}
+            />
           </div>
         ) : (
           <ResponsiveSplitPane
@@ -542,18 +540,14 @@ export default function ProjectChatPage() {
                   {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
                   <div ref={messagesEndRef} />
                 </div>
-                <div className="border-t bg-white dark:bg-gray-900/50">
-                  <div className="max-w-3xl mx-auto">
-                    <EnhancedCommandInput
-                      onSend={handleSendMessage}
-                      onTyping={sendTypingIndicator}
-                      projectId={projectId}
-                      editorContent={editorContent}
-                      currentFile={currentFile}
-                      userId={user?.id}
-                    />
-                  </div>
-                </div>
+                <EnhancedCommandInput
+                  onSend={handleSendMessage}
+                  onTyping={sendTypingIndicator}
+                  projectId={projectId}
+                  editorContent={editorContent}
+                  currentFile={currentFile}
+                  userId={user?.id}
+                />
               </div>
             )}
             right={showKnowledgeAssistant ? desktopAssistantPanel : null}
@@ -563,7 +557,7 @@ export default function ProjectChatPage() {
 
       {/* Modals */}
       {showSearch && (
-        <SmartKnowledgeSearch projectId={projectId} onSelect={handleSearchResultSelect} onClose={() => setShowSearch(false)} />
+        <SmartKnowledgeSearch projectId={projectId} onResultSelect={handleSearchResultSelect} onClose={() => setShowSearch(false)} />
       )}
 
       {showPromptManager && (
