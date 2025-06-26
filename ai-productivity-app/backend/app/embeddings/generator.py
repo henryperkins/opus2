@@ -99,6 +99,7 @@ from openai import (  # pylint: disable=wrong-import-position
 # First-party helpers
 # --------------------------------------------------------------------------- #
 from sqlalchemy.orm import Session  # pylint: disable=wrong-import-position
+from sqlalchemy.ext.asyncio import AsyncSession  # pylint: disable=wrong-import-position
 
 from app.config import settings  # pylint: disable=wrong-import-position
 from app.exceptions import (  # pylint: disable=wrong-import-position
@@ -335,24 +336,32 @@ class EmbeddingGenerator:
 
         try:
             vectors = await self.generate_embeddings(inputs)
+
             for chunk, emb in zip(chunks, vectors, strict=True):
                 chunk.embedding = emb  # JSON-serialisable
                 chunk.embedding_dim = len(emb)
 
-            db.commit()
+            # Mark related documents as indexed using the already loaded relationship.
+            for chunk in chunks:
+                if chunk.document and not chunk.document.is_indexed:
+                    chunk.document.is_indexed = True
 
-            # Mark related docs as indexed
-            for doc_id in {c.document_id for c in chunks}:
-                doc = db.query("CodeDocument").filter_by(id=doc_id).first()  # type: ignore
-                if doc:
-                    doc.is_indexed = True
-            db.commit()
+            if isinstance(db, AsyncSession):
+                await db.commit()
+            else:
+                db.commit()
 
         except (EmbeddingException, VectorDimensionMismatchException):
-            db.rollback()
+            if isinstance(db, AsyncSession):
+                await db.rollback()
+            else:
+                db.rollback()
             raise
         except Exception as exc:  # pylint: disable=broad-except
-            db.rollback()
+            if isinstance(db, AsyncSession):
+                await db.rollback()
+            else:
+                db.rollback()
             sentry_sdk.capture_exception(exc)
             raise EmbeddingException(
                 "Unexpected error during embedding generation and storage",

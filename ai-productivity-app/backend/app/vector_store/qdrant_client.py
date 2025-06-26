@@ -272,9 +272,22 @@ __all__ = ["QdrantVectorStore"]
 # --------------------------------------------------------------------------- #
 # Utilities
 # --------------------------------------------------------------------------- #
-def _run_in_executor(func, *args, **kwargs):
-    """Run blocking Qdrant call in a threadpool."""
-    return anyio.to_thread.run_sync(func, *args, **kwargs)
+def _run_in_executor(func, /, *args, **kwargs):
+    """Run blocking Qdrant call in a threadpool.
+
+    ``anyio.to_thread.run_sync`` mirrors the standard library's
+    :py:meth:`asyncio.loop.run_in_executor` in that it **only** forwards
+    *positional* arguments to the target callable – keyword arguments are
+    treated as parameters of *run_sync* itself and therefore raise a
+    ``TypeError``.  The Qdrant Python client, however, makes heavy use of
+    keyword arguments (e.g. ``collection_name=…``) which means we need a
+    small shim that bundles both positional **and** keyword parameters
+    into a single *callable* that is then executed inside the thread pool.
+    """
+
+    if kwargs:
+        return anyio.to_thread.run_sync(lambda: func(*args, **kwargs))
+    return anyio.to_thread.run_sync(func, *args)
 
 
 # --------------------------------------------------------------------------- #

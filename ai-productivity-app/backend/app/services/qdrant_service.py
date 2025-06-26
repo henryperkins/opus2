@@ -35,9 +35,20 @@ logger = logging.getLogger(__name__)
 __all__ = ["QdrantService"]
 
 
-def _run_blocking(func, *args, **kwargs):
-    """Run a blocking Qdrant call inside the shared thread-pool."""
-    return anyio.to_thread.run_sync(func, *args, **kwargs)
+def _run_blocking(func, /, *args, **kwargs):
+    """Execute *func* in the global thread-pool while preserving kwargs.
+
+    ``anyio.to_thread.run_sync`` forwards *positional* arguments to the target
+    callable but will treat keyword arguments as its *own* options, raising a
+    ``TypeError`` when parameters like ``collection_name`` are supplied.
+
+    Many Qdrant client methods rely on keyword parameters, therefore we wrap
+    the invocation in a small lambda when such arguments are present.
+    """
+
+    if kwargs:
+        return anyio.to_thread.run_sync(lambda: func(*args, **kwargs))
+    return anyio.to_thread.run_sync(func, *args)
 
 
 class QdrantService:
