@@ -192,7 +192,8 @@ class ChatProcessor:
             context["rag_metadata"] = rag_metadata
 
         except Exception as exc:
-            logger.warning("Knowledge base search failed: %s", exc)
+            # Log the full exception with traceback for debugging
+            logger.error("Knowledge base search failed: %s", exc, exc_info=True)
             context["knowledge"] = ""
             context["citations"] = {}
 
@@ -201,22 +202,34 @@ class ChatProcessor:
             # (knowledge base disabled) and *real* runtime errors. Only the
             # latter should surface as a RAG error in the UI.
             # ------------------------------------------------------------- #
-            if "Knowledge service not available" in str(exc):
+            exc_str = str(exc)
+            if "Knowledge service not available" in exc_str:
                 # Gracefully degrade when KB is not configured – treat as
                 # standard mode instead of error so the UI doesn't flash a
                 # scary badge on every reply.
                 rag_metadata["rag_status"] = "inactive"
                 rag_metadata["rag_error_message"] = None
-            elif "Connection refused" in str(exc) or "[Errno 111]" in str(exc):
+            elif "Connection refused" in exc_str or "[Errno 111]" in exc_str:
                 # Service is expected but unreachable → genuine error
                 rag_metadata["rag_status"] = "error"
-                rag_metadata[
-                    "rag_error_message"
-                ] = "Knowledge base service unavailable"
-            else:
-                # Fallback for unexpected failures
+                rag_metadata["rag_error_message"] = "Knowledge base service unavailable"
+                logger.error("Qdrant connection failed: %s", exc)
+            elif "QdrantException" in type(exc).__name__:
+                # Qdrant-specific errors - preserve more context
                 rag_metadata["rag_status"] = "error"
-                rag_metadata["rag_error_message"] = "Knowledge search failed"
+                rag_metadata["rag_error_message"] = f"Search error: {exc_str[:100]}"
+                logger.error("Qdrant search error: %s", exc)
+            elif "timeout" in exc_str.lower():
+                # Timeout errors
+                rag_metadata["rag_status"] = "error"
+                rag_metadata["rag_error_message"] = "Search timeout"
+                logger.error("Knowledge search timeout: %s", exc)
+            else:
+                # Fallback for unexpected failures - preserve some context
+                rag_metadata["rag_status"] = "error"
+                error_summary = exc_str[:50] if exc_str else type(exc).__name__
+                rag_metadata["rag_error_message"] = f"Search failed: {error_summary}"
+                logger.error("Unexpected knowledge search error: %s", exc)
 
             context["rag_metadata"] = rag_metadata
 

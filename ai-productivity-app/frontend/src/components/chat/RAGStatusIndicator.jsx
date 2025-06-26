@@ -16,7 +16,9 @@ const RAG_STATUS_TYPES = {
   ACTIVE: 'active',
   STANDARD: 'standard', 
   DEGRADED: 'degraded',
-  ERROR: 'error'
+  POOR: 'poor',
+  ERROR: 'error',
+  INACTIVE: 'inactive'
 };
 
 /**
@@ -32,8 +34,8 @@ const RAGStatusIndicator = ({
   errorMessage = null,
   compact = false 
 }) => {
-  // Don't show indicator if RAG wasn't used and there's no error
-  if (!ragUsed && status !== RAG_STATUS_TYPES.ERROR) {
+  // Don't show indicator if RAG wasn't used and there's no error or inactive status
+  if (!ragUsed && status !== RAG_STATUS_TYPES.ERROR && status !== RAG_STATUS_TYPES.INACTIVE) {
     return null;
   }
 
@@ -43,8 +45,12 @@ const RAGStatusIndicator = ({
         return <Brain className="w-3 h-3" />;
       case RAG_STATUS_TYPES.DEGRADED:
         return <AlertCircle className="w-3 h-3" />;
+      case RAG_STATUS_TYPES.POOR:
+        return <AlertCircle className="w-3 h-3" />;
       case RAG_STATUS_TYPES.ERROR:
         return <AlertCircle className="w-3 h-3" />;
+      case RAG_STATUS_TYPES.INACTIVE:
+        return <Database className="w-3 h-3 opacity-50" />;
       default:
         return <Search className="w-3 h-3" />;
     }
@@ -56,8 +62,12 @@ const RAGStatusIndicator = ({
         return confidence ? getConfidenceColor(confidence) : 'text-blue-600 bg-blue-50 border-blue-200';
       case RAG_STATUS_TYPES.DEGRADED:
         return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+      case RAG_STATUS_TYPES.POOR:
+        return 'text-orange-600 bg-orange-50 border-orange-200';
       case RAG_STATUS_TYPES.ERROR:
         return 'text-red-600 bg-red-50 border-red-200';
+      case RAG_STATUS_TYPES.INACTIVE:
+        return 'text-gray-500 bg-gray-50 border-gray-200';
       default:
         return 'text-gray-600 bg-gray-50 border-gray-200';
     }
@@ -69,8 +79,12 @@ const RAGStatusIndicator = ({
         return ragUsed ? `RAG Active (${sourcesCount} source${sourcesCount !== 1 ? 's' : ''})` : 'RAG Active';
       case RAG_STATUS_TYPES.DEGRADED:
         return 'RAG Degraded';
+      case RAG_STATUS_TYPES.POOR:
+        return 'RAG Poor Quality';
       case RAG_STATUS_TYPES.ERROR:
         return 'RAG Error';
+      case RAG_STATUS_TYPES.INACTIVE:
+        return 'RAG Disabled';
       default:
         return 'Standard Response';
     }

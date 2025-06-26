@@ -359,6 +359,9 @@ class QdrantVectorStore:
         embedding: List[float],
         metadata: Dict[str, Any],
     ) -> bool:
+        # Map category to source_type for confidence scoring
+        source_type = self._map_category_to_source_type(metadata.get("category", ""))
+        
         point = PointStruct(
             id=entry_id,
             vector=embedding,
@@ -367,6 +370,7 @@ class QdrantVectorStore:
                 "title": metadata.get("title", ""),
                 "source": metadata.get("source", ""),
                 "category": metadata.get("category", ""),
+                "source_type": source_type,  # Add for confidence scoring
                 "tags": metadata.get("tags", []),
                 "project_id": metadata.get("project_id"),
                 "created_at": metadata.get("created_at", datetime.utcnow().isoformat()),
@@ -571,13 +575,63 @@ class QdrantVectorStore:
         except Exception as exc:
             logger.error(f"Code GC failed: {exc}")
         
-        # TODO: Add knowledge GC when KnowledgeDocument table is used
+        # GC knowledge collection
+        try:
+            # Get all point IDs from Qdrant knowledge collection
+            qdrant_knowledge_ids = await _run_in_executor(
+                lambda: {str(p.id) for p in self.client.scroll(
+                    collection_name=self.knowledge_collection,
+                    limit=10000,  # Get all points
+                    with_payload=False,
+                    with_vectors=False
+                )[0]}
+            )
+            
+            # Get all valid IDs from KnowledgeDocument table
+            from app.models.knowledge import KnowledgeDocument
+            with SessionLocal() as db:
+                db_knowledge_ids = {str(row[0]) for row in db.query(KnowledgeDocument.id).all()}
+            
+            # Find stale knowledge IDs
+            stale_knowledge_ids = qdrant_knowledge_ids - db_knowledge_ids
+            
+            if stale_knowledge_ids:
+                logger.info(f"Found {len(stale_knowledge_ids)} stale knowledge embeddings to remove")
+                try:
+                    from qdrant_client.models import PointIdsList
+                    await _run_in_executor(
+                        self.client.delete,
+                        collection_name=self.knowledge_collection,
+                        points_selector=PointIdsList(points=list(stale_knowledge_ids))
+                    )
+                    removed_counts["knowledge"] = len(stale_knowledge_ids)
+                    logger.info(f"Removed {len(stale_knowledge_ids)} stale knowledge embeddings")
+                except ImportError:
+                    logger.warning("PointIdsList not available, skipping knowledge GC")
+                    
+        except Exception as exc:
+            logger.error(f"Knowledge GC failed: {exc}")
         
         return removed_counts
 
     # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _map_category_to_source_type(category: str) -> str:
+        """Map knowledge category to source_type for confidence scoring."""
+        category_mapping = {
+            "documentation": "documentation",
+            "code": "code_with_tests",
+            "readme": "readme_file", 
+            "manual": "user_uploaded",
+            "api_docs": "official_docs",
+            "tutorial": "documentation",
+            "notes": "user_uploaded",
+            "auto_extracted": "auto_extracted",
+        }
+        return category_mapping.get(category.lower(), "unknown")
+
     @staticmethod
     def _build_knowledge_filter(
         project_ids: Optional[List[int]], filters: Optional[Dict[str, Any]]

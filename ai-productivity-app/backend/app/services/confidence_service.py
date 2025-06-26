@@ -216,7 +216,7 @@ class ConfidenceService:
         """
         Determine RAG status based on confidence and results.
         
-        Returns: 'active', 'degraded', 'error', or 'standard'
+        Returns: 'active', 'degraded', 'poor', 'error', or 'standard'
         """
         if error_message:
             return 'error'
@@ -226,10 +226,12 @@ class ConfidenceService:
             
         if confidence >= 0.8:
             return 'active'
-        elif confidence >= 0.5:
+        elif confidence >= 0.6:
             return 'degraded'
+        elif confidence >= 0.3:
+            return 'poor'
         else:
-            return 'degraded'
+            return 'poor'
 
     def get_confidence_explanation(self, confidence: float) -> str:
         """Get human-readable explanation of confidence level."""

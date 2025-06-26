@@ -31,6 +31,7 @@ export function useWebSocketChannel({
   onMessage,
   retry = 5,
   protocols,
+  onFallback, // optional callback fired after permanent failure to allow REST polling
 }) {
   // `state` semantics deliberately follow the naming that the rest of the
   // frontend (ConnectionIndicator, ProjectChatPage, etc.) already relies on:
@@ -40,6 +41,7 @@ export function useWebSocketChannel({
   //   UI refused to send messages. Aligning the vocabulary here fixes the
   //   "Cannot send message: Not connected to server" error.
   const [state, setState] = useState('connecting');
+  const [lastCloseEvent, setLastCloseEvent] = useState(null);
   const wsRef = useRef(null);
   const retryRef = useRef(0);
   const queueRef = useRef([]);
@@ -112,6 +114,7 @@ export function useWebSocketChannel({
       ws.onclose = (evt) => {
         if (aborted) return;
         setState('disconnected');
+        setLastCloseEvent(evt);
 
         // Enhanced logging for debugging
         console.warn(`WebSocket closed: code=${evt.code}, reason="${evt.reason}", wasClean=${evt.wasClean}`);
@@ -136,6 +139,9 @@ export function useWebSocketChannel({
         } else if (retryRef.current >= retry) {
           console.error(`WebSocket connection failed after ${retry} attempts. Giving up.`);
           setState('error');
+          if (typeof onFallback === 'function') {
+            onFallback(evt, { attempts: retryRef.current });
+          }
         } else {
           console.info('WebSocket closed normally, not retrying');
         }
@@ -155,9 +161,9 @@ export function useWebSocketChannel({
       clearTimeout(timerRef.current); // cancel pending reconnect
       close();
     };
-  }, [path, protocols, retry, close, send]); // Include close and send in dependencies
+  }, [path, protocols, retry, close, send, onFallback]); // Include close and send in dependencies
 
-  return { state, send, close, socket: wsRef.current };
+  return { state, send, close, socket: wsRef.current, lastCloseEvent };
 }
 
 // HMR: Keep WebSocket connections stable between updates

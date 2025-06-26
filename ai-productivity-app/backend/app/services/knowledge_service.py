@@ -22,9 +22,18 @@ except ModuleNotFoundError:  # pragma: no cover – lightweight fallback for CI
         """Extremely simplified tokenizer replacement."""
 
         def encode(self, text: str):  # noqa: D401 – mimic tiktoken API
-            # Approximate token count by splitting on whitespace – sufficient
-            # for context length guards in the test-suite.
-            return text.split()
+            # More conservative token estimation: ~4 chars per token with safety factor
+            # This helps avoid context overflows when tiktoken is not available
+            estimated_tokens = max(1, len(text) // 3)  # Conservative 3 chars/token
+            return list(range(estimated_tokens))  # Return dummy tokens for counting
+
+        def decode(self, tokens):  # noqa: D401 – mimic tiktoken API
+            # For fallback mode with dummy tokens, approximate text reconstruction
+            # Since we can't truly decode, return truncated version of text
+            if isinstance(tokens, list):
+                # Estimate ~3 chars per token and reconstruct placeholder text
+                return "..." + " [truncated]"
+            return str(tokens)
 
     class _TiktokenStub:  # pylint: disable=too-few-public-methods
         """Minimal subset of the tiktoken public interface."""
@@ -249,6 +258,9 @@ class KnowledgeService:
                     )
                     content_with_citation = f"{marker} {truncated_content}..."
                     context_parts.append(content_with_citation)
+                    
+                    # Update tokens_used with actual truncated size
+                    tokens_used += len(enc.encode(content_with_citation))
 
                     # Add to citation map with search metadata
                     search_data = search_lookup.get(doc.id, {})
@@ -296,11 +308,15 @@ class KnowledgeService:
             similarity_score = 1.0 - (entry_order.get(doc.id, len(entry_ids)) / len(entry_ids))
 
             # Recency score (more recent = higher score)
-            if doc.created_at:
-                now = datetime.utcnow()
-                age_days = (now - doc.created_at).days
-                # Exponential decay with 30-day half-life
-                recency_score = math.exp(-age_days / 30.0)
+            if doc.created_at and doc.created_at is not None:
+                try:
+                    now = datetime.utcnow()
+                    age_days = (now - doc.created_at).days
+                    # Exponential decay with 30-day half-life
+                    recency_score = math.exp(-age_days / 30.0)
+                except (TypeError, AttributeError):
+                    # Fallback for invalid datetime objects
+                    recency_score = 0.5
             else:
                 recency_score = 0.5  # Default for missing timestamps
 
@@ -315,7 +331,16 @@ class KnowledgeService:
         if len(tokens) <= max_tokens:
             return text
 
-        # Truncate tokens and decode back to text
+        # Check if we're using the fallback stub encoder
+        if hasattr(encoder, '__class__') and encoder.__class__.__name__ == '_EncodingStub':
+            # For fallback mode, do character-based truncation
+            # Estimate 3 chars per token as our conservative ratio
+            char_limit = max_tokens * 3
+            if len(text) <= char_limit:
+                return text
+            return text[:char_limit].rsplit(' ', 1)[0]  # Truncate at word boundary
+        
+        # Real tiktoken encoder - truncate tokens and decode back to text
         truncated_tokens = tokens[:max_tokens]
         return encoder.decode(truncated_tokens)
 
