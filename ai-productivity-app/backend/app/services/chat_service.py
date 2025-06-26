@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any, Union
 import json
 from datetime import datetime
 
@@ -13,8 +14,9 @@ from app.websocket.manager import connection_manager
 class ChatService:
     """Business logic for chat operations."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Union[Session, AsyncSession]):
         self.db = db
+        self.is_async = isinstance(db, AsyncSession)
 
     async def create_session(
         self, project_id: int, title: Optional[str] = None
@@ -25,21 +27,35 @@ class ChatService:
             title=title or f"Chat {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             is_active=True,  # Explicitly set to avoid server_default/None mismatch
         )
-        self.db.add(session)
-        self.db.commit()
-
-        # Refresh to get server defaults populated
-        self.db.refresh(session)
-
-        # Add timeline event
-        event = TimelineEvent(
-            project_id=project_id,
-            event_type="chat_created",
-            title=f"Started chat: {session.title}",
-            event_metadata={"session_id": session.id},
-        )
-        self.db.add(event)
-        self.db.commit()
+        
+        if self.is_async:
+            self.db.add(session)
+            await self.db.commit()
+            await self.db.refresh(session)
+            
+            # Add timeline event
+            event = TimelineEvent(
+                project_id=project_id,
+                event_type="chat_created",
+                title=f"Started chat: {session.title}",
+                event_metadata={"session_id": session.id},
+            )
+            self.db.add(event)
+            await self.db.commit()
+        else:
+            self.db.add(session)
+            self.db.commit()
+            self.db.refresh(session)
+            
+            # Add timeline event  
+            event = TimelineEvent(
+                project_id=project_id,
+                event_type="chat_created",
+                title=f"Started chat: {session.title}",
+                event_metadata={"session_id": session.id},
+            )
+            self.db.add(event)
+            self.db.commit()
 
         return session
 
@@ -62,13 +78,28 @@ class ChatService:
             referenced_chunks=metadata.get("referenced_chunks", []) if metadata else [],
             applied_commands=metadata.get("applied_commands", {}) if metadata else {},
         )
-        self.db.add(message)
-        self.db.commit()
-
-        # Update session timestamp
-        session = self.db.query(ChatSession).filter_by(id=session_id).first()
-        session.updated_at = datetime.utcnow()
-        self.db.commit()
+        
+        if self.is_async:
+            self.db.add(message)
+            await self.db.commit()
+            
+            # Update session timestamp
+            session_result = await self.db.execute(
+                select(ChatSession).where(ChatSession.id == session_id)
+            )
+            session = session_result.scalar_one_or_none()
+            if session:
+                session.updated_at = datetime.utcnow()
+                await self.db.commit()
+        else:
+            self.db.add(message)
+            self.db.commit()
+            
+            # Update session timestamp
+            session = self.db.query(ChatSession).filter_by(id=session_id).first()
+            if session:
+                session.updated_at = datetime.utcnow()
+                self.db.commit()
 
         # Broadcast to connected clients
         await self._broadcast_message(message)
@@ -79,11 +110,21 @@ class ChatService:
         self, message_id: int, content: str, user_id: int
     ) -> Optional[ChatMessage]:
         """Edit existing message."""
-        message = (
-            self.db.query(ChatMessage)
-            .filter_by(id=message_id, user_id=user_id, is_deleted=False)
-            .first()
-        )
+        if self.is_async:
+            result = await self.db.execute(
+                select(ChatMessage).where(
+                    ChatMessage.id == message_id,
+                    ChatMessage.user_id == user_id,
+                    ChatMessage.is_deleted == False
+                )
+            )
+            message = result.scalar_one_or_none()
+        else:
+            message = (
+                self.db.query(ChatMessage)
+                .filter_by(id=message_id, user_id=user_id, is_deleted=False)
+                .first()
+            )
 
         if not message:
             return None
@@ -96,29 +137,87 @@ class ChatService:
         message.is_edited = True
         message.edited_at = datetime.utcnow()
 
-        self.db.commit()
+        if self.is_async:
+            await self.db.commit()
+        else:
+            self.db.commit()
 
         # Broadcast update
         await self._broadcast_message_update(message)
 
         return message
 
+    async def update_message_content(
+        self, message_id: int, content: str, code_snippets: Optional[List[Dict[str, Any]]] = None
+    ) -> Optional[ChatMessage]:
+        """Update message content and code snippets (for AI messages)."""
+        if self.is_async:
+            result = await self.db.execute(
+                select(ChatMessage).where(
+                    ChatMessage.id == message_id,
+                    ChatMessage.is_deleted == False
+                )
+            )
+            message = result.scalar_one_or_none()
+        else:
+            message = (
+                self.db.query(ChatMessage)
+                .filter_by(id=message_id, is_deleted=False)
+                .first()
+            )
+
+        if not message:
+            return None
+
+        message.content = content
+        if code_snippets is not None:
+            message.code_snippets = code_snippets
+
+        if self.is_async:
+            await self.db.commit()
+        else:
+            self.db.commit()
+
+        # Broadcast update
+        await self._broadcast_message(message)
+
+        return message
+
     async def delete_message(self, message_id: int, user_id: int) -> bool:
         """Soft delete message."""
-        message = (
-            self.db.query(ChatMessage).filter_by(id=message_id, user_id=user_id).first()
-        )
+        if self.is_async:
+            result = await self.db.execute(
+                select(ChatMessage).where(
+                    ChatMessage.id == message_id,
+                    ChatMessage.user_id == user_id
+                )
+            )
+            message = result.scalar_one_or_none()
+        else:
+            message = (
+                self.db.query(ChatMessage).filter_by(id=message_id, user_id=user_id).first()
+            )
 
         if not message:
             return False
 
         message.is_deleted = True
-        self.db.commit()
+        
+        if self.is_async:
+            await self.db.commit()
+        else:
+            self.db.commit()
 
         # Broadcast deletion
-        await connection_manager.send_message(
-            {"type": "message_deleted", "message_id": message_id}, message.session_id
-        )
+        try:
+            await connection_manager.send_message(
+                {"type": "message_deleted", "message_id": message_id}, message.session_id
+            )
+        except Exception as e:
+            # Log but don't fail the deletion
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to broadcast message deletion: %s", e)
 
         return True
 
@@ -137,33 +236,45 @@ class ChatService:
 
     async def _broadcast_message(self, message: ChatMessage):
         """Broadcast new message to session."""
-        await connection_manager.send_message(
-            {
-                "type": "message",
-                "message": {
-                    "id": message.id,
-                    "content": message.content,
-                    "role": message.role,
-                    "user_id": message.user_id,
-                    "created_at": message.created_at.isoformat(),
-                    "code_snippets": message.code_snippets,
-                    "referenced_files": message.referenced_files,
+        try:
+            await connection_manager.send_message(
+                {
+                    "type": "message",
+                    "message": {
+                        "id": message.id,
+                        "content": message.content,
+                        "role": message.role,
+                        "user_id": message.user_id,
+                        "created_at": message.created_at.isoformat(),
+                        "code_snippets": message.code_snippets,
+                        "referenced_files": message.referenced_files,
+                    },
                 },
-            },
-            message.session_id,
-        )
+                message.session_id,
+            )
+        except Exception as e:
+            # Log but don't fail the operation
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to broadcast message: %s", e)
 
     async def _broadcast_message_update(self, message: ChatMessage):
         """Broadcast message edit."""
-        await connection_manager.send_message(
-            {
-                "type": "message_updated",
-                "message": {
-                    "id": message.id,
-                    "content": message.content,
-                    "edited_at": message.edited_at.isoformat(),
+        try:
+            await connection_manager.send_message(
+                {
+                    "type": "message_updated",
+                    "message": {
+                        "id": message.id,
+                        "content": message.content,
+                        "edited_at": message.edited_at.isoformat() if message.edited_at else None,
+                    },
                 },
-            },
-            message.session_id,
-        )
+                message.session_id,
+            )
+        except Exception as e:
+            # Log but don't fail the operation
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to broadcast message update: %s", e)
 

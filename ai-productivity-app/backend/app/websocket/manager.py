@@ -62,26 +62,48 @@ class ConnectionManager:
     async def send_message(self, message: dict, session_id: int):
         """Send message to all connections in a session."""
         logger.debug("Broadcasting message to session %s: %s", session_id, message)
-        if session_id in self.active_connections:
-            disconnected = []
+        
+        async with self._lock:
+            if session_id not in self.active_connections:
+                return
+            
+            # Create a copy to iterate over to avoid race conditions
+            connections = list(self.active_connections[session_id])
+        
+        disconnected = []
+        for websocket in connections:
+            try:
+                await websocket.send_json(message)
+            except Exception as e:
+                logger.error("Failed to send message to WebSocket %s: %s", id(websocket), e)
+                disconnected.append(websocket)
 
-            for websocket in self.active_connections[session_id]:
-                try:
-                    await websocket.send_json(message)
-                except Exception as e:
-                    logger.error("Failed to send message to WebSocket %s: %s", id(websocket), e)
-                    disconnected.append(websocket)
-
-            # Clean up disconnected sockets
-            for ws in disconnected:
-                self.active_connections[session_id].remove(ws)
+        # Clean up disconnected sockets
+        if disconnected:
+            async with self._lock:
+                if session_id in self.active_connections:
+                    for ws in disconnected:
+                        try:
+                            self.active_connections[session_id].remove(ws)
+                        except ValueError:
+                            # Socket already removed by another thread
+                            pass
+                    
+                    # Remove empty session
+                    if not self.active_connections[session_id]:
+                        del self.active_connections[session_id]
 
     async def broadcast_to_user(self, message: dict, user_id: int):
         """Send message to all sessions for a user."""
         logger.debug("Broadcasting message to user %s across all sessions: %s", user_id, message)
-        if user_id in self.user_sessions:
-            for session_id in self.user_sessions[user_id]:
-                await self.send_message(message, session_id)
+        
+        async with self._lock:
+            if user_id not in self.user_sessions:
+                return
+            session_ids = list(self.user_sessions[user_id])
+        
+        for session_id in session_ids:
+            await self.send_message(message, session_id)
 
     def get_session_users(self, session_id: int) -> int:
         """Get count of users in session."""
@@ -97,8 +119,11 @@ class ConnectionManager:
         
         logger.info("Broadcasting config update to all sessions: %s", config_data)
         
+        async with self._lock:
+            session_ids = list(self.active_connections.keys())
+        
         # Send to all active sessions
-        for session_id in list(self.active_connections.keys()):
+        for session_id in session_ids:
             await self.send_message(message, session_id)
 
 

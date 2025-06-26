@@ -23,6 +23,7 @@ from typing import Generator
 # ---------------------------------------------------------------------------
 
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 # Register SQLite fallbacks only when the package is importable.  The
 # *sqlalchemy.dialects.postgresql* module might be missing in minimal
@@ -62,6 +63,13 @@ engine = create_engine(
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Create async engine and session factory
+async_engine = create_async_engine(
+    settings.database_url.replace('sqlite:///', 'sqlite+aiosqlite:///').replace('postgresql://', 'postgresql+asyncpg://'),
+    echo=settings.database_echo,
+)
+AsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
+
 # Base class for all ORM models
 Base = declarative_base()
 
@@ -74,6 +82,12 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+async def get_async_db():
+    """Create an async database session."""
+    async with AsyncSessionLocal() as session:
+        yield session
 
 
 def init_db() -> None:

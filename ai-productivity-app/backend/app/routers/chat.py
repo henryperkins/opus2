@@ -232,13 +232,18 @@ async def create_message(
         # Create a mock WebSocket for the REST API context
         mock_websocket = MockWebSocket()
 
-        # Process with AI in background
-        processor = ChatProcessor(db)
-        asyncio.create_task(processor.process_message(
-            session_id=session_id,
-            message=msg,
-            websocket=mock_websocket
-        ))
+        # Process with AI in background - create async session
+        from app.database import AsyncSessionLocal
+        async def process_with_async_session():
+            async with AsyncSessionLocal() as async_db:
+                processor = ChatProcessor(async_db)
+                await processor.process_message(
+                    session_id=session_id,
+                    message=msg,
+                    websocket=mock_websocket
+                )
+        
+        asyncio.create_task(process_with_async_session())
 
     return MessageResponse.from_orm(msg)
 

@@ -375,19 +375,14 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 # Remove None values to avoid sending JSON null
                 clean_responses_kwargs = {k: v for k, v in responses_kwargs.items() if v is not None}
 
-                # Log API request for debugging
-                logger.info("=== AZURE RESPONSES API REQUEST ===")
-                logger.info(f"Model: {active_model}")
-                logger.info(f"Provider: {self.provider}")
-                logger.info(f"Temperature: {active_temperature}")
-                logger.info(f"Max Output Tokens: {active_max_tokens}")
-                logger.info(f"Stream: {stream}")
-                logger.info(f"System Instructions: {system_instructions}")
-                logger.info(f"Input Messages ({len(input_messages)} total):")
-                for i, msg in enumerate(input_messages):
-                    content_preview = str(msg.get('content', ''))[:200] + "..." if len(str(msg.get('content', ''))) > 200 else str(msg.get('content', ''))
-                    logger.info(f"  [{i + 1}] {msg.get('role', 'unknown')}: {content_preview}")
-                logger.info(f"Full Request Payload: {json.dumps(clean_responses_kwargs, indent=2)}")
+                # Log API request for debugging (only if debug logging enabled)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("=== AZURE RESPONSES API REQUEST ===")
+                    logger.debug(f"Model: {active_model}, Provider: {self.provider}")
+                    logger.debug(f"Temperature: {active_temperature}, Stream: {stream}")
+                    logger.debug(f"Input Messages: {len(input_messages)} total")
+                    # Only log full payload in debug mode
+                    logger.debug(f"Request Payload: {json.dumps(clean_responses_kwargs, indent=2)}")
 
                 try:
                     response = await self.client.responses.create(**clean_responses_kwargs)
@@ -456,25 +451,17 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     else:
                         raise
 
-                # Log API response for debugging
-                logger.info("=== AZURE RESPONSES API RESPONSE ===")
-                if hasattr(response, 'output_text') and response.output_text:
-                    logger.info(f"Response Text: {response.output_text}")
-                elif hasattr(response, 'output') and response.output:
-                    logger.info(f"Response Output: {response.output}")
-                    # Extract text from output for compatibility
-                    if isinstance(response.output, list) and response.output:
-                        for output_item in response.output:
-                            if hasattr(output_item, 'content') and isinstance(output_item.content, list):
-                                for content_item in output_item.content:
-                                    if hasattr(content_item, 'text'):
-                                        logger.info(f"Output Text: {content_item.text}")
-
-                if hasattr(response, 'usage') and response.usage:
-                    logger.info(f"Token Usage: {response.usage}")
-
-                logger.info(f"Response Status: {getattr(response, 'status', 'unknown')}")
-                logger.info(f"Full Response Object: {json.dumps(response.model_dump() if hasattr(response, 'model_dump') else str(response), indent=2)}")
+                # Log API response for debugging (only if debug logging enabled)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("=== AZURE RESPONSES API RESPONSE ===")
+                    if hasattr(response, 'usage') and response.usage:
+                        logger.debug(f"Token Usage: {response.usage}")
+                    logger.debug(f"Response Status: {getattr(response, 'status', 'unknown')}")
+                    # Only log full response in debug mode
+                    if hasattr(response, 'output_text') and response.output_text:
+                        logger.debug(f"Response Text Length: {len(response.output_text)}")
+                    elif hasattr(response, 'output') and response.output:
+                        logger.debug(f"Response Output Items: {len(response.output)}")
 
                 return response
 
@@ -509,37 +496,30 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # ---- scrub None values so JSON null never gets sent ----------
             clean_kwargs = {k: v for k, v in call_kwargs.items() if v is not None}
 
-            # Log API request for debugging
-            logger.info("=== CHAT COMPLETIONS API REQUEST ===")
-            logger.info(f"Provider: {self.provider}")
-            logger.info(f"Model: {active_model}")
-            logger.info(f"Temperature: {active_temperature}")
-            logger.info(f"Max Tokens: {active_max_tokens}")
-            logger.info(f"Stream: {stream}")
-            logger.info(f"Tools: {tools is not None}")
-            logger.info(f"Messages ({len(messages)} total):")
-            for i, msg in enumerate(messages):
-                content_preview = msg['content'][:200] + "..." if len(msg['content']) > 200 else msg['content']
-                logger.info(f"  [{i + 1}] {msg['role']}: {content_preview}")
-            logger.info(f"Full Request Payload: {json.dumps(clean_kwargs, indent=2)}")
+            # Log API request for debugging (only if debug logging enabled)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("=== CHAT COMPLETIONS API REQUEST ===")
+                logger.debug(f"Provider: {self.provider}, Model: {active_model}")
+                logger.debug(f"Temperature: {active_temperature}, Stream: {stream}")
+                logger.debug(f"Messages: {len(messages)} total, Tools: {tools is not None}")
+                # Only log full payload in debug mode
+                logger.debug(f"Request Payload: {json.dumps(clean_kwargs, indent=2)}")
 
             try:
                 response = await self.client.chat.completions.create(**clean_kwargs)
 
-                # Log API response for debugging
-                logger.info("=== CHAT COMPLETIONS API RESPONSE ===")
-                if hasattr(response, "choices") and response.choices:
-                    choice = response.choices[0]
-                    logger.info(f"Finish Reason: {choice.finish_reason}")
-                    if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
-                        logger.info(f"Response Content: {choice.message.content}")
-                    if hasattr(choice, 'message') and hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
-                        logger.info(f"Tool Calls: {len(choice.message.tool_calls)} calls")
-                        for j, tool_call in enumerate(choice.message.tool_calls):
-                            logger.info(f"  Tool Call [{j + 1}]: {tool_call.name} with args: {tool_call.arguments}")
-                if hasattr(response, 'usage'):
-                    logger.info(f"Token Usage: {response.usage}")
-                logger.info(f"Full Response Object: {json.dumps(response.model_dump() if hasattr(response, 'model_dump') else str(response), indent=2)}")
+                # Log API response for debugging (only if debug logging enabled)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("=== CHAT COMPLETIONS API RESPONSE ===")
+                    if hasattr(response, "choices") and response.choices:
+                        choice = response.choices[0]
+                        logger.debug(f"Finish Reason: {choice.finish_reason}")
+                        if hasattr(choice, 'message') and hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
+                            logger.debug(f"Tool Calls: {len(choice.message.tool_calls)} calls")
+                        if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                            logger.debug(f"Response Content Length: {len(choice.message.content or '')}")
+                    if hasattr(response, 'usage'):
+                        logger.debug(f"Token Usage: {response.usage}")
 
                 return response
             except Exception as exc:  # noqa: BLE001 – capture BadRequest / TypeError alike

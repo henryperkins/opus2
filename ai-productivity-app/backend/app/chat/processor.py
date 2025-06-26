@@ -69,50 +69,12 @@ class ChatProcessor:
     ) -> None:
         """Validate, persist and respond to a **single** user message."""
         try:
-            # One atomic transaction
-            async with self.db.begin():
-                session: ChatSession | None = await self._get_session(session_id)
-                if not session:
-                    raise ValueError("Chat session not found")
-
-                # 1. Secret scanning – redact *before* context extraction
-                await self._apply_secret_scanning(message, websocket)
-
-                # 2. Context extraction (files + vector chunks)
-                context = await self.context_builder.extract_context(
-                    message.content,
-                    session.project_id,
-                )
-                context["project_id"] = session.project_id
-
-                message.referenced_files = [
-                    ref["path"] for ref in context.get("file_references", [])
-                ]
-                message.referenced_chunks = [
-                    c["document_id"] for c in context.get("chunks", [])
-                ]
-
-                # 3. Timeline analytics
-                await self.context_builder.create_timeline_event(
-                    project_id=session.project_id,
-                    event_type="chat_message",
-                    content=message.content,
-                    referenced_files=message.referenced_files,
-                )
-
-                # 4. Slash-command execution
-                commands = await command_registry.execute_commands(
-                    message.content,
-                    context,
-                    self.db,
-                )
-                if commands:
-                    message.applied_commands = {
-                        cmd["command"]: cmd.get("prompt", cmd.get("message", ""))
-                        for cmd in commands
-                    }
-
-            # --- out of transaction: heavy LLM work happens here ------------- #
+            # Separate preparation from processing to avoid mixing transaction scopes
+            session, context, commands = await self._prepare_message_context(
+                session_id, message, websocket
+            )
+            
+            # Heavy LLM work happens outside any transaction
             if commands:
                 await self._handle_command_results(
                     session_id=session_id,
@@ -130,15 +92,66 @@ class ChatProcessor:
 
         except Exception as exc:  # pragma: no cover (captured by middleware)
             logger.error("Message processing error: %s", exc, exc_info=True)
-            await self.chat_service.create_message(
-                session_id=session_id,
-                content=f"Sorry, I hit an unexpected error: {exc}",
-                role="assistant",
-            )
+            try:
+                await self.chat_service.create_message(
+                    session_id=session_id,
+                    content=f"Sorry, I hit an unexpected error: {exc}",
+                    role="assistant",
+                )
+            except Exception as broadcast_exc:
+                logger.error("Failed to send error message: %s", broadcast_exc, exc_info=True)
 
     # ------------------------------------------------------------------ #
     # INTERNAL HELPERS – top-level workflow
     # ------------------------------------------------------------------ #
+
+    async def _prepare_message_context(
+        self, session_id: int, message: ChatMessage, websocket: WebSocket
+    ) -> tuple[ChatSession, dict, list]:
+        """Prepare message context within a single transaction."""
+        async with self.db.begin():
+            session: ChatSession | None = await self._get_session(session_id)
+            if not session:
+                raise ValueError("Chat session not found")
+
+            # 1. Secret scanning – redact *before* context extraction
+            await self._apply_secret_scanning(message, websocket)
+
+            # 2. Context extraction (files + vector chunks)
+            context = await self.context_builder.extract_context(
+                message.content,
+                session.project_id,
+            )
+            context["project_id"] = session.project_id
+
+            message.referenced_files = [
+                ref["path"] for ref in context.get("file_references", [])
+            ]
+            message.referenced_chunks = [
+                c["document_id"] for c in context.get("chunks", [])
+            ]
+
+            # 3. Timeline analytics
+            await self.context_builder.create_timeline_event(
+                project_id=session.project_id,
+                event_type="chat_message",
+                content=message.content,
+                referenced_files=message.referenced_files,
+            )
+
+            # 4. Slash-command execution
+            commands = await command_registry.execute_commands(
+                message.content,
+                context,
+                self.db,
+            )
+            if commands:
+                message.applied_commands = {
+                    cmd["command"]: cmd.get("prompt", cmd.get("message", ""))
+                    for cmd in commands
+                }
+            
+            return session, context, commands or []
 
     async def _handle_command_results(
         self,
@@ -245,9 +258,12 @@ class ChatProcessor:
         # ------------------------------------------------------------------ #
         # Persist and broadcast
         # ------------------------------------------------------------------ #
-        async with self.db.begin():
-            ai_msg.content = full_response
-            ai_msg.code_snippets = self._extract_code_snippets(full_response)
+        # Update the message using the service to avoid transaction issues
+        await self.chat_service.update_message_content(
+            message_id=ai_msg.id,
+            content=full_response,
+            code_snippets=self._extract_code_snippets(full_response)
+        )
         await self._broadcast_message_update(
             session_id=session_id,
             content=full_response,
