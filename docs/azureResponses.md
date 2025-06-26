@@ -102,7 +102,7 @@ print(response.model_dump_json(indent=2))
 
 ## Delete response
 
-By default response data is retained for 30 days. To delete a response, you can use `response.delete"("{response_id})`
+By default response data is retained for 30 days. To delete a response, you can use `client.responses.delete(response_id)`
 
 ```python
 from openai import AzureOpenAI
