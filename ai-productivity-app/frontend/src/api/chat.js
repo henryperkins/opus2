@@ -21,14 +21,16 @@ function createChatAPI() {
     // Get session history (same endpoint) – return normalised array
     getSessionHistory: async (params = {}) => {
       const { data } = await client.get('/api/chat/sessions', { params });
-      return Array.isArray(data) ? data : data?.sessions ?? [];
+      return Array.isArray(data) ? data
+        : data?.items ?? data?.sessions ?? [];
     },
 
     // Get chat sessions (alias for getSessionHistory for backward compatibility)
     // Always resolve to an array for safer call-sites
     getChatSessions: async (params = {}) => {
       const { data } = await client.get('/api/chat/sessions', { params });
-      return Array.isArray(data) ? data : data?.sessions ?? [];
+      return Array.isArray(data) ? data
+        : data?.items ?? data?.sessions ?? [];
     },
 
     // Update a session

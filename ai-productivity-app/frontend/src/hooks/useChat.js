@@ -32,14 +32,18 @@ export function useChat(projectId, preferredSessionId = null) {
   // 1. Session bootstrap (React Query-driven approach)
   // ---------------------------------------------------
   const { data: sessionData, isLoading: sessionLoading } = useQuery({
-    // Key only by projectId so all callers share the same cache entry.
-    // Using preferredSessionId here caused cache-misses and duplicate
-    // sessions to be created every time the hook re-mounted.
-    queryKey: ['session', projectId],
+    // Include *both* projectId **and** preferredSessionId in the React-Query
+    // key so navigating between different chat sessions inside the same
+    // project triggers a fresh query & cache entry.  This fixes the sidebar
+    // navigation issue where the view did not update after selecting another
+    // chat session.
+    queryKey: ['session', projectId, preferredSessionId || 'default'],
     queryFn: async () => {
       if (!projectId || authLoading || !user) return null;
 
-      const cached = qc.getQueryData(['session', projectId])?.id;
+      // Prefer the session explicitly requested via the URL.  If none is
+      // provided, fall back to a previously cached session for this project.
+      const cached = qc.getQueryData(['session', projectId, preferredSessionId || 'default'])?.id;
       let sid = preferredSessionId ?? cached;
 
       try {

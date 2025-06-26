@@ -93,6 +93,7 @@ class User(Base, TimestampMixin):
     # Relationships
     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+    prompt_templates = relationship("PromptTemplate", back_populates="user", cascade="all, delete-orphan")
 
     # Search history relationship – loaded only when explicitly queried.
     search_history = relationship(

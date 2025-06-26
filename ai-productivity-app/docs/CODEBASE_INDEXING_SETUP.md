@@ -59,6 +59,80 @@ When `VECTOR_STORE_TYPE=postgres` the `VectorStore` class will (if present) use 
 
 > ⚠️ pgvector currently requires manual index re-builds when you change `embedding_dim`.
 
+### Using `PostgresVectorService` (native **pgvector** backend)
+
+[`backend/app/services/postgres_vector_service.py`](../backend/app/services/postgres_vector_service.py) is the drop-in implementation that backs the vector store whenever
+`VECTOR_STORE_TYPE=postgres` is configured.
+It will **automatically**
+
+1. enable the `vector` extension,
+2. create the `code_embedding_vectors` table (or the name set via `POSTGRES_VECTOR_TABLE`),
+3. add a project filter index, and
+4. build an `ivfflat` index for fast cosine similarity,
+
+all **idempotently** on first use.
+
+#### 1&nbsp;&nbsp;Initialize the service (e.g. in an application start-up task)
+
+```python
+from app.services.postgres_vector_service import PostgresVectorService
+
+vector_service = PostgresVectorService()
+await vector_service.initialize()          # safe to call multiple times
+```
+
+#### 2&nbsp;&nbsp;Insert embeddings
+
+```python
+import numpy as np
+from hashlib import sha256
+
+embedding_np = np.random.rand(1536).astype("float32")   # demo – replace with real values
+
+row_ids = await vector_service.insert_embeddings(
+    [
+        {
+            "document_id": 123,
+            "chunk_id": 0,
+            "project_id": 42,
+            "vector": embedding_np,
+            "content": "def authenticate_user(request): …",
+            "content_hash": sha256(b"def authenticate_user").hexdigest(),
+            "metadata": {"path": "backend/app/auth/security.py", "lang": "python"},
+        }
+    ]
+)
+```
+
+#### 3&nbsp;&nbsp;Run a similarity search
+
+```python
+query_vec = embedding_generator.embed_query("user authentication middleware")
+results = await vector_service.search(
+    query_vector=query_vec,
+    limit=15,
+    project_ids=[42],
+    score_threshold=0.20,
+)
+for hit in results:
+    print(f"{hit['score']:.3f}", hit["content"])
+```
+
+#### 4&nbsp;&nbsp;Check basic statistics
+
+```python
+stats = await vector_service.get_stats()
+# {'backend': 'postgres',
+#  'table': 'code_embedding_vectors',
+#  'total_embeddings': 12345,
+#  'by_project': {42: 1200, 99: 50}}
+```
+
+> **Performance tip:** After large bulk inserts, run `ANALYZE` so PostgreSQL’s
+planner has accurate row counts. For repositories with **> 1 M vectors** you may
+increase the `ivfflat` `lists` parameter (see inline comments in the service)
+to improve recall at the cost of index size.
+
 ### Switching to Qdrant
 
 Set:
@@ -119,6 +193,8 @@ Behind the scenes `HybridSearch`:
 
 You can also call the **Roo CLI/IDE** tool [`codebase_search`](https://docs.roocode.com/advanced-usage/available-tools/codebase-search) which proxies to the same API.
 
+When **`VECTOR_STORE_TYPE=postgres`** is active, `codebase_search` transparently queries the **pgvector-backed** table populated by `PostgresVectorService`.
+No extra flags are needed—the CLI/IDE tool honours the server-side VectorStore configuration and returns hybrid-ranked results sourced directly from your PostgreSQL database.
 For **SQL enthusiasts** using pgvector:
 
 ```sql
@@ -155,6 +231,10 @@ A : Set `LLM_PROVIDER=openai` and populate `OPENAI_API_KEY`; remove Azure vars.
 
 **Q : Where are vectors stored?**
 A : In `data/vss.db` (SQLite) or in your Qdrant cluster when enabled.
+## Further reading
+
+For the broader design rationale, advanced configuration tips, and upcoming roadmap, see the official feature documentation:
+<https://docs.roocode.com/features/experimental/codebase-indexing>
 
 ---
 

@@ -11,6 +11,7 @@ from .import_job import ImportJob, ImportStatus
 from .chat import ChatSession, ChatMessage
 from .timeline import TimelineEvent
 from .config import RuntimeConfig, ConfigHistory
+from .prompt import PromptTemplate
 
 __all__ = [
     "Base",
@@ -29,6 +30,7 @@ __all__ = [
     "TimelineEvent",
     "RuntimeConfig",
     "ConfigHistory",
+    "PromptTemplate",
 ]
 
 # ---------------------------------------------------------------------------

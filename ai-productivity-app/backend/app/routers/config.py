@@ -235,13 +235,51 @@ async def update_model_config(
             except Exception as exc:  # pragma: no cover
                 logger.warning("LLM client reconfiguration failed: %s", exc)
 
-        # broadcast change
+        # ------------------------------------------------------------------ #
+        # Broadcast change – send the *same* structure returned by GET
+        # /api/config so the frontend hook ingests it without falling back
+        # to defaults.                                                       #
+        # ------------------------------------------------------------------ #
         try:
             from app.websocket.manager import connection_manager
 
-            await connection_manager.broadcast_config_update(
-                _merged_config(cfg_svc)
-            )
+            # Rebuild full configuration payload
+            current = _merged_config(cfg_svc)
+            camel_current = {
+                "provider": current.get("provider"),
+                "chat_model": current.get("chat_model"),
+                "useResponsesApi": current.get("use_responses_api", False),
+                "temperature": current.get("temperature", 0.7),
+                "maxTokens": current.get("max_tokens"),
+                "topP": current.get("top_p"),
+                "frequencyPenalty": current.get("frequency_penalty"),
+                "presencePenalty": current.get("presence_penalty"),
+                "systemPrompt": current.get("system_prompt"),
+            }
+
+            full_config = {
+                "providers": {
+                    "openai": {
+                        "chat_models": _OPENAI_CHAT_MODELS,
+                        "embedding_models": _OPENAI_EMBED_MODELS,
+                    },
+                    "azure": {
+                        "chat_models": _AZURE_CHAT_MODELS,
+                        "embedding_models": _AZURE_EMBED_MODELS,
+                        "api_versions": _AZURE_API_VERSIONS,
+                        "features": {
+                            "responses_api": True,
+                            "background_tasks": True,
+                            "image_generation": True,
+                            "computer_use": True,
+                            "mcp_servers": True,
+                        },
+                    },
+                },
+                "current": camel_current,
+            }
+
+            await connection_manager.broadcast_config_update(full_config)
         except Exception as exc:  # pragma: no cover
             logger.warning("WebSocket broadcast failed: %s", exc)
 
