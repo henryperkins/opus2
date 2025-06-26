@@ -84,7 +84,8 @@ export default function KnowledgeAssistant({
 
   const [showSearch, setShowSearch] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
-  const [isMinimized, setIsMinimized] = useState(false);
+  // Removed minimize functionality - always visible
+  const isMinimized = false;
   const [activeTab, setActiveTab] = useState('context'); // 'context', 'upload', 'repository', 'graph'
 
   // Update context based on chat message
@@ -166,36 +167,30 @@ export default function KnowledgeAssistant({
     <div className={containerClass}>
       {/* Main Assistant Panel */}
       <div className={panelClass}>
-        {/* Header */}
-        <div
-          className="px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white cursor-pointer"
-          onClick={() => setIsMinimized(!isMinimized)}
-        >
+        {/* Header - Always expanded */}
+        <div className="px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Brain className="w-5 h-5" />
               <span className="font-medium">Knowledge Assistant</span>
+              <div className="bg-white/20 px-2 py-0.5 rounded-full text-xs">
+                Always Active
+              </div>
             </div>
             <div className="flex items-center space-x-2">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowSearch(true);
-                }}
+                onClick={() => setShowSearch(true)}
                 className="p-1 hover:bg-white/20 rounded"
                 title="Search knowledge base"
               >
                 <Search className="w-4 h-4" />
               </button>
-              <ChevronRight className={`w-4 h-4 transition-transform ${
-                isMinimized ? '' : 'rotate-90'
-              }`} />
             </div>
           </div>
         </div>
 
-        {!isMinimized && (
-          <>
+        {/* Always show content since minimize is disabled */}
+        <>
             {/* Tab Navigation */}
             <div className="flex border-b border-gray-200">
               <button

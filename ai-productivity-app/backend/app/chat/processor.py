@@ -38,6 +38,7 @@ from ..llm import tools as llm_tools
 from ..models.chat import ChatMessage, ChatSession
 from ..services.chat_service import ChatService
 from ..services.knowledge_service import KnowledgeService
+from ..services.confidence_service import ConfidenceService
 from ..vector_store.qdrant_client import QdrantVectorStore
 from ..embeddings.generator import EmbeddingGenerator
 from ..websocket.manager import connection_manager
@@ -59,6 +60,7 @@ class ChatProcessor:
         self.db = db
         self.chat_service = ChatService(db)
         self.context_builder = ContextBuilder(db)
+        self.confidence_service = ConfidenceService()
 
         # Initialize knowledge service for knowledge base retrieval
         if not hasattr(self, "_kb"):
@@ -133,7 +135,17 @@ class ChatProcessor:
             )
             context["project_id"] = session.project_id
 
-            # 3. Knowledge base search
+            # 3. Knowledge base search with RAG tracking
+            rag_metadata = {
+                "rag_used": False,
+                "rag_confidence": None,
+                "knowledge_sources_count": 0,
+                "search_query_used": None,
+                "context_tokens_used": 0,
+                "rag_status": "standard",
+                "rag_error_message": None
+            }
+            
             try:
                 kb_hits = await self._kb.search_knowledge(
                     query=message.content,
@@ -153,13 +165,33 @@ class ChatProcessor:
                     )
                     context["knowledge"] = ctx_kb["context"]
                     context["citations"] = ctx_kb["citations"]
+                    
+                    # Update RAG metadata
+                    rag_metadata["rag_used"] = True
+                    rag_metadata["knowledge_sources_count"] = len(kb_hits)
+                    rag_metadata["search_query_used"] = message.content
+                    rag_metadata["context_tokens_used"] = len(ctx_kb["context"].split())
+                    
+                    # Calculate confidence score
+                    confidence = self.confidence_service.calculate_rag_confidence(kb_hits)
+                    rag_metadata["rag_confidence"] = confidence
+                    rag_metadata["rag_status"] = self.confidence_service.calculate_degradation_status(
+                        confidence, kb_hits
+                    )
                 else:
                     context["knowledge"] = ""
                     context["citations"] = {}
+                    
+                # Store RAG metadata in context for later use
+                context["rag_metadata"] = rag_metadata
+                    
             except Exception as exc:
                 logger.warning("Knowledge base search failed: %s", exc)
                 context["knowledge"] = ""
                 context["citations"] = {}
+                rag_metadata["rag_status"] = "error"
+                rag_metadata["rag_error_message"] = str(exc)
+                context["rag_metadata"] = rag_metadata
 
             message.referenced_files = [
                 ref["path"] for ref in context.get("file_references", [])
@@ -213,6 +245,7 @@ class ChatProcessor:
                     session_id=session_id,
                     content=cmd["message"],
                     role="assistant",
+                    rag_metadata=context.get("rag_metadata", {}),
                 )
                 full_txt = msg.content
 
@@ -237,6 +270,7 @@ class ChatProcessor:
             session_id=session_id,
             content="Generating response…",
             role="assistant",
+            rag_metadata=context.get("rag_metadata", {}),
             broadcast=False,
         )
 

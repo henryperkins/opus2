@@ -33,6 +33,7 @@ from sqlalchemy import (
     Text,
     text,
     CheckConstraint,
+    DECIMAL,
 )
 # ``sqlalchemy-utils`` is not available in the sandbox.  The package usually
 # provides *TSVectorType* – a thin wrapper around PostgreSQL's native
@@ -203,6 +204,24 @@ class ChatMessage(Base, TimestampMixin):
         comment="{command: args}",
     )
 
+    # ---------- RAG tracking fields ---------- #
+    rag_used = Column(Boolean, nullable=False, server_default=text("FALSE"))
+    rag_confidence = Column(
+        # Using DECIMAL for precise confidence scores
+        DECIMAL(precision=3, scale=2), 
+        nullable=True,
+        comment="RAG confidence score from 0.00 to 1.00"
+    )
+    knowledge_sources_count = Column(Integer, nullable=False, server_default=text("0"))
+    search_query_used = Column(Text, nullable=True)
+    context_tokens_used = Column(Integer, nullable=False, server_default=text("0"))
+    rag_status = Column(
+        String(20), 
+        nullable=True,
+        comment="RAG status: active, degraded, error, standard"
+    )
+    rag_error_message = Column(Text, nullable=True)
+
     # ---------- Edit + soft-delete flags ---------- #
     is_edited = Column(Boolean, nullable=False, server_default=text("FALSE"))
     edited_at = Column(DateTime, nullable=True)
@@ -223,6 +242,18 @@ class ChatMessage(Base, TimestampMixin):
     def _validate_role(self, _key: str, value: str) -> str:
         if value not in {"user", "assistant", "system"}:
             raise ValueError(f"Invalid role: {value!r}")
+        return value
+
+    @validates("rag_status")
+    def _validate_rag_status(self, _key: str, value: str) -> str:
+        if value is not None and value not in {"active", "degraded", "error", "standard"}:
+            raise ValueError(f"Invalid RAG status: {value!r}")
+        return value
+
+    @validates("rag_confidence")
+    def _validate_rag_confidence(self, _key: str, value: float) -> float:
+        if value is not None and (value < 0.0 or value > 1.0):
+            raise ValueError(f"RAG confidence must be between 0.0 and 1.0, got: {value}")
         return value
 
 

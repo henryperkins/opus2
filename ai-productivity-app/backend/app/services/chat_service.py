@@ -66,6 +66,7 @@ class ChatService:
         role: str,
         user_id: Optional[int] = None,
         metadata: Optional[Dict] = None,
+        rag_metadata: Optional[Dict] = None,
         broadcast: bool = True,
     ) -> ChatMessage:
         """Create and optionally broadcast new message."""
@@ -78,6 +79,14 @@ class ChatService:
             referenced_files=metadata.get("referenced_files", []) if metadata else [],
             referenced_chunks=metadata.get("referenced_chunks", []) if metadata else [],
             applied_commands=metadata.get("applied_commands", {}) if metadata else {},
+            # RAG tracking fields
+            rag_used=rag_metadata.get("rag_used", False) if rag_metadata else False,
+            rag_confidence=rag_metadata.get("rag_confidence") if rag_metadata else None,
+            knowledge_sources_count=rag_metadata.get("knowledge_sources_count", 0) if rag_metadata else 0,
+            search_query_used=rag_metadata.get("search_query_used") if rag_metadata else None,
+            context_tokens_used=rag_metadata.get("context_tokens_used", 0) if rag_metadata else 0,
+            rag_status=rag_metadata.get("rag_status") if rag_metadata else None,
+            rag_error_message=rag_metadata.get("rag_error_message") if rag_metadata else None,
         )
         
         if self.is_async:
@@ -252,6 +261,17 @@ class ChatService:
                         "created_at": message.created_at.isoformat(),
                         "code_snippets": message.code_snippets,
                         "referenced_files": message.referenced_files,
+                        "referenced_chunks": message.referenced_chunks,
+                        # RAG metadata for frontend
+                        "metadata": {
+                            "ragUsed": message.rag_used,
+                            "ragConfidence": float(message.rag_confidence) if message.rag_confidence else None,
+                            "knowledgeSourcesCount": message.knowledge_sources_count,
+                            "searchQuery": message.search_query_used,
+                            "contextTokensUsed": message.context_tokens_used,
+                            "ragStatus": message.rag_status,
+                            "ragError": message.rag_error_message,
+                        },
                     },
                 },
                 message.session_id,
