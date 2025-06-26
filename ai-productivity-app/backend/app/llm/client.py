@@ -22,7 +22,7 @@ import logging
 import os
 import types
 import json  # Add json import for logging
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Sequence, AsyncIterator
 
 # ---------------------------------------------------------------------------
 # Optional dependencies – fall back to the stub implementation installed in
@@ -283,7 +283,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         reasoning: bool | None = None,  # noqa: D401 – kept for forward compat
         max_tokens: int | None = None,
         model: str | None = None,  # Allow per-request model override
-    ) -> Any:  # noqa: ANN401 – OpenAI return type is *dynamic*
+    ) -> Any | AsyncIterator[str]:  # Returns AsyncIterator[str] when stream=True
         """Wrapper around the underlying Chat Completions / Responses API.
 
         The signature is intentionally *loose* – the backend forwards a subset
@@ -463,6 +463,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     elif hasattr(response, 'output') and response.output:
                         logger.debug(f"Response Output Items: {len(response.output)}")
 
+                # Handle streaming response
+                if stream:
+                    return self._stream_response(response)
                 return response
 
             # -----------------------------------------------------------------
@@ -521,6 +524,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     if hasattr(response, 'usage'):
                         logger.debug(f"Token Usage: {response.usage}")
 
+                # Handle streaming response
+                if stream:
+                    return self._stream_response(response)
                 return response
             except Exception as exc:  # noqa: BLE001 – capture BadRequest / TypeError alike
                 # 1. The newest SDK raises *TypeError* when an unexpected
@@ -553,6 +559,53 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # Forward exception after capturing telemetry so calling code can
             # decide how to react (retry, user-facing error, …).
             raise  # re-raise unchanged
+
+    # ------------------------------------------------------------------
+    # Streaming helpers
+    # ------------------------------------------------------------------
+
+    async def _stream_response(self, response: Any) -> AsyncIterator[str]:
+        """Convert OpenAI/Azure streaming response to string chunks."""
+        logger.debug(f"Starting stream response, use_responses_api: {self.use_responses_api}")
+        chunk_count = 0
+        
+        try:
+            if self.use_responses_api:
+                # Azure Responses API streaming
+                logger.debug("Processing Azure Responses API stream")
+                async for chunk in response:
+                    chunk_count += 1
+                    logger.debug(f"Received chunk {chunk_count}: {type(chunk)}")
+                    
+                    # Handle ResponseTextDeltaEvent from Azure Responses API
+                    if hasattr(chunk, 'delta') and chunk.delta:
+                        logger.debug(f"Yielding delta content: {chunk.delta[:50]}...")
+                        yield chunk.delta
+                    elif hasattr(chunk, 'text') and chunk.text:
+                        logger.debug(f"Yielding text content: {chunk.text[:50]}...")
+                        yield chunk.text
+                    elif hasattr(chunk, 'output') and chunk.output:
+                        for item in chunk.output:
+                            if hasattr(item, 'content') and item.content:
+                                logger.debug(f"Yielding content: {item.content[:50]}...")
+                                yield item.content
+            else:
+                # Standard Chat Completions API streaming
+                logger.debug("Processing Chat Completions API stream")
+                async for chunk in response:
+                    chunk_count += 1
+                    logger.debug(f"Received chunk {chunk_count}: {type(chunk)}")
+                    
+                    if hasattr(chunk, 'choices') and chunk.choices:
+                        choice = chunk.choices[0]
+                        if hasattr(choice, 'delta') and choice.delta:
+                            if hasattr(choice.delta, 'content') and choice.delta.content:
+                                logger.debug(f"Yielding choice content: {choice.delta.content[:50]}...")
+                                yield choice.delta.content
+        except Exception as e:
+            logger.error(f"Error in _stream_response: {e}", exc_info=True)
+            
+        logger.debug(f"Stream processing complete, processed {chunk_count} chunks")
 
     # ------------------------------------------------------------------
     # Convenience helpers used by the wider code-base

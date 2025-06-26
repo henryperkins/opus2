@@ -63,10 +63,65 @@ engine = create_engine(
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# ---------------------------------------------------------------------------
+# Async engine setup
+# ---------------------------------------------------------------------------
+# For *SQLite* we switch to the *aiosqlite* driver.  For *PostgreSQL* we use
+# *asyncpg*.  Some connection parameters that are accepted by **psycopg** (the
+# synchronous driver) – notably *sslmode* and *channel_binding* – are **not**
+# recognised by *asyncpg*.  When they are present in the DATABASE_URL SQLAlchemy
+# forwards them as keyword-arguments to `asyncpg.connect(...)` which raises
+# ``TypeError: connect() got an unexpected keyword argument 'sslmode'``.
+#
+# We therefore strip those incompatible query parameters from the **async** URL
+# and instead pass ``ssl=True`` via *connect_args* so that the connection is
+# still established over TLS when the server requires it (Neon enforces SSL by
+# default).
+# ---------------------------------------------------------------------------
+
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+
+
+def _build_async_db_url(raw_url: str) -> str:
+    """Convert the synchronous DATABASE_URL to an asyncpg / aiosqlite URL.
+
+    Removes query params unsupported by *asyncpg* (e.g. *sslmode*).
+    """
+
+    if raw_url.startswith("sqlite"):
+        return raw_url.replace("sqlite:///", "sqlite+aiosqlite:///")
+
+    if raw_url.startswith("postgresql"):
+        # Switch driver identifier
+        async_url = raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        parsed = urlparse(async_url)
+        # Drop incompatible options
+        query = dict(parse_qsl(parsed.query))
+        for key in ("sslmode", "channel_binding"):
+            query.pop(key, None)
+
+        async_url = urlunparse(
+            parsed._replace(query=urlencode(query))  # pyright: ignore[reportPrivateUsage]
+        )
+        return async_url
+
+    # Fallback: return unchanged
+    return raw_url
+
+
+async_db_url = _build_async_db_url(settings.database_url)
+
 # Create async engine and session factory
+connect_args: dict[str, object] = {}
+if async_db_url.startswith("postgresql+asyncpg"):
+    # Ensure SSL is used when connecting to Neon (no custom context required).
+    connect_args["ssl"] = True
+
 async_engine = create_async_engine(
-    settings.database_url.replace('sqlite:///', 'sqlite+aiosqlite:///').replace('postgresql://', 'postgresql+asyncpg://'),
+    async_db_url,
     echo=settings.database_echo,
+    connect_args=connect_args,
 )
 AsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
 

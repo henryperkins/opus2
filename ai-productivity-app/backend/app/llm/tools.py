@@ -21,7 +21,9 @@ from typing import Any, Dict, List, Callable
 import json
 import logging
 
+# Accept both sync & async sessions but prefer AsyncSession
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.chat.context_builder import ContextBuilder
 from app.chat.commands import ExplainCommand, GenerateTestsCommand
@@ -92,18 +94,18 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 
 
-async def _tool_file_search(args: Dict[str, Any], db: Session) -> Dict[str, Any]:
+async def _tool_file_search(args: Dict[str, Any], db: Session | AsyncSession) -> Dict[str, Any]:
     query: str = args["query"]
     project_id: int = int(args["project_id"])
     k: int = int(args.get("k", 5))
 
-    ctx_builder = ContextBuilder(db)
-    ctx = ctx_builder.extract_context(query, project_id)
+    ctx_builder = ContextBuilder(db)  # type: ignore[arg-type]
+    ctx = await ctx_builder.extract_context(query, project_id)
     chunks = ctx.get("chunks", [])[:k]
     return {"chunks": chunks}
 
 
-async def _tool_explain_code(args: Dict[str, Any], db: Session) -> Dict[str, Any]:
+async def _tool_explain_code(args: Dict[str, Any], db: Session | AsyncSession) -> Dict[str, Any]:
     location: str = args["location"].strip()
     project_id: int = int(args["project_id"])
 
@@ -119,7 +121,7 @@ async def _tool_explain_code(args: Dict[str, Any], db: Session) -> Dict[str, Any
     return {"explanation": explanation}
 
 
-async def _tool_generate_tests(args: Dict[str, Any], db: Session) -> Dict[str, Any]:
+async def _tool_generate_tests(args: Dict[str, Any], db: Session | AsyncSession) -> Dict[str, Any]:
     symbol: str = args["symbol"].strip()
     project_id: int = int(args["project_id"])
 

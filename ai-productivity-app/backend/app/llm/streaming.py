@@ -45,6 +45,11 @@ class StreamingHandler:
 
             # Send completion
             full_content = ''.join(self.buffer)
+            
+            # Ensure we don't return empty content (violates database constraint)
+            if not full_content.strip():
+                full_content = "I apologize, but I wasn't able to generate a response. Please try again."
+            
             await self.websocket.send_json({
                 'type': 'ai_stream',
                 'message_id': message_id,

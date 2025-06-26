@@ -195,11 +195,12 @@ class ChatProcessor:
         websocket: WebSocket,
     ) -> str:
         """End-to-end LLM orchestration plus streaming."""
-        # placeholder in DB
+        # placeholder in DB (don't broadcast yet - streaming will handle it)
         ai_msg = await self.chat_service.create_message(
             session_id=session_id,
             content="Generating response…",
             role="assistant",
+            broadcast=False,
         )
 
         # build prompt messages
@@ -245,7 +246,7 @@ class ChatProcessor:
         # ------------------------------------------------------------------ #
         # SECOND CALL – true streaming (no function calls left)
         # ------------------------------------------------------------------ #
-        stream = llm_client.complete(
+        stream = await llm_client.complete(
             messages=messages,
             temperature=cfg.get("temperature"),
             stream=True,
@@ -262,12 +263,8 @@ class ChatProcessor:
         await self.chat_service.update_message_content(
             message_id=ai_msg.id,
             content=full_response,
-            code_snippets=self._extract_code_snippets(full_response)
-        )
-        await self._broadcast_message_update(
-            session_id=session_id,
-            content=full_response,
-            websocket_manager=connection_manager,
+            code_snippets=self._extract_code_snippets(full_response),
+            broadcast=True  # This will be the only broadcast for this message
         )
 
         # analytics (fire-and-forget)

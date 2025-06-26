@@ -1,7 +1,23 @@
-import re
-from typing import List, Dict, Optional, Tuple
-from sqlalchemy.orm import Session
+"""Extract code & conversation context for LLM prompts (async-ready).
+
+The original implementation was synchronous and therefore incompatible with
+`AsyncSession` – calling it with `await` inside :pyclass:`ChatProcessor` raised
+
+    TypeError: object dict can't be used in 'await' expression
+
+This rewrite keeps the public API the same but makes the *database touching*
+methods truly **async** so they can be awaited from the processor while still
+re-using the helper regex logic from the earlier version.
+"""
+
+from __future__ import annotations
+
 import logging
+import re
+from typing import Any, Dict, List, Optional, Tuple
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.code import CodeDocument, CodeEmbedding
 from app.models.chat import ChatMessage
@@ -10,278 +26,273 @@ logger = logging.getLogger(__name__)
 
 
 class ContextBuilder:
-    """Extract and build context from chat messages."""
+    """Async helper that extracts relevant context for an LLM call."""
 
-    # Patterns for detecting code references
-    FILE_PATTERN = re.compile(r'(?:^|[\s`"])([a-zA-Z0-9_\-./]+\.[a-zA-Z]+)(?:[:,]?\s*(?:line\s*)?(\d+))?')
-    CODE_BLOCK_PATTERN = re.compile(r'```(\w+)?\n(.*?)```', re.DOTALL)
-    SYMBOL_PATTERN = re.compile(r'(?:function|class|def|interface|type)\s+([a-zA-Z_]\w*)')
+    FILE_PATTERN = re.compile(
+        r"(?:^|[\s`\"])([a-zA-Z0-9_\-./]+\.[a-zA-Z]+)(?:[:,]?\s*(?:line\s*)?(\d+))?"
+    )
+    CODE_BLOCK_PATTERN = re.compile(r"```(\w+)?\n(.*?)```", re.DOTALL)
+    SYMBOL_PATTERN = re.compile(r"(?:function|class|def|interface|type)\s+([a-zA-Z_]\w*)")
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
-        self.context_window = 50  # Lines around reference
+        self.context_window = 50  # lines around reference
 
-    def extract_context(self, message: str, project_id: int) -> Dict:
-        """Extract all context from a message."""
-        context = {
-            'file_references': self.extract_file_references(message),
-            'code_blocks': self.extract_code_blocks(message),
-            'symbols': self.extract_symbols(message),
-            'chunks': []
+    # ------------------------------------------------------------------ #
+    # High-level orchestration
+    # ------------------------------------------------------------------ #
+
+    async def extract_context(self, message: str, project_id: int) -> Dict[str, Any]:
+        """Return dict with file refs, detected code blocks, symbols + chunks."""
+
+        ctx: Dict[str, Any] = {
+            "file_references": self.extract_file_references(message),
+            "code_blocks": self.extract_code_blocks(message),
+            "symbols": self.extract_symbols(message),
+            "chunks": [],
         }
 
-        # Get file chunks for references
-        for file_ref in context['file_references']:
-            chunks = self.get_file_context(
+        # File reference → neighbouring chunks
+        for file_ref in ctx["file_references"]:
+            chunks = await self.get_file_context(
                 project_id,
-                file_ref['path'],
-                file_ref.get('line')
+                file_ref["path"],
+                file_ref.get("line"),
             )
-            context['chunks'].extend(chunks)
+            ctx["chunks"].extend(chunks)
 
-        # Search for symbol references
-        for symbol in context['symbols']:
-            chunks = self.search_symbol(project_id, symbol)
-            context['chunks'].extend(chunks[:3])  # Top 3 matches
+        # Symbol search
+        for symbol in ctx["symbols"]:
+            chunks = await self.search_symbol(project_id, symbol)
+            ctx["chunks"].extend(chunks[:3])
 
-        # Deduplicate chunks
-        seen = set()
-        unique_chunks = []
-        for chunk in context['chunks']:
-            key = (chunk['document_id'], chunk['start_line'])
+        # Deduplicate (document_id, start_line)
+        seen: set[Tuple[int, int]] = set()
+        uniq: List[Dict[str, Any]] = []
+        for ch in ctx["chunks"]:
+            key = (ch["document_id"], ch["start_line"])
             if key not in seen:
                 seen.add(key)
-                unique_chunks.append(chunk)
+                uniq.append(ch)
 
-        context['chunks'] = unique_chunks
-        return context
+        ctx["chunks"] = uniq
+        return ctx
 
-    def extract_file_references(self, text: str) -> List[Dict]:
-        """Extract file paths and line numbers from text."""
-        references = []
+    # ------------------------------------------------------------------ #
+    # Regex helpers (pure sync)
+    # ------------------------------------------------------------------ #
 
-        for match in self.FILE_PATTERN.finditer(text):
-            file_path = match.group(1)
-            line_num = match.group(2)
+    def extract_file_references(self, text: str) -> List[Dict[str, Any]]:
+        refs: List[Dict[str, Any]] = []
+        for m in self.FILE_PATTERN.finditer(text):
+            file_path, line_num = m.group(1), m.group(2)
+            if file_path.count(".") > 3 or file_path.startswith("http"):
+                continue  # likely a URL / false positive
+            refs.append(
+                {
+                    "path": file_path,
+                    "line": int(line_num) if line_num else None,
+                    "match": m.group(0),
+                }
+            )
+        return refs
 
-            # Skip common false positives
-            if file_path.count('.') > 3 or file_path.startswith('http'):
-                continue
-
-            references.append({
-                'path': file_path,
-                'line': int(line_num) if line_num else None,
-                'match': match.group(0)
-            })
-
-        return references
-
-    def extract_code_blocks(self, text: str) -> List[Dict]:
-        """Extract code blocks from markdown."""
-        blocks = []
-
-        for match in self.CODE_BLOCK_PATTERN.finditer(text):
-            language = match.group(1) or 'text'
-            code = match.group(2).strip()
-
-            blocks.append({
-                'language': language,
-                'code': code,
-                'length': len(code.split('\n'))
-            })
-
+    def extract_code_blocks(self, text: str) -> List[Dict[str, Any]]:
+        blocks: List[Dict[str, Any]] = []
+        for m in self.CODE_BLOCK_PATTERN.finditer(text):
+            language = m.group(1) or "text"
+            code = m.group(2).strip()
+            blocks.append({"language": language, "code": code, "length": len(code.split("\n"))})
         return blocks
 
     def extract_symbols(self, text: str) -> List[str]:
-        """Extract mentioned function/class names."""
-        symbols = []
+        symbols: set[str] = set()
+        for m in self.SYMBOL_PATTERN.finditer(text):
+            symbols.add(m.group(1))
 
-        # Direct symbol mentions
-        for match in self.SYMBOL_PATTERN.finditer(text):
-            symbols.append(match.group(1))
+        for m in re.finditer(r"`([a-zA-Z_]\w*)`", text):
+            name = m.group(1)
+            if "_" in name or (name and name[0].isupper() and name[1:].islower()):
+                symbols.add(name)
+        return list(symbols)
 
-        # Backtick mentions
-        backtick_pattern = re.compile(r'`([a-zA-Z_]\w*)`')
-        for match in backtick_pattern.finditer(text):
-            name = match.group(1)
-            # Heuristic: likely a symbol if mixed case or underscore
-            if '_' in name or (name[0].isupper() and name[1:].islower()):
-                symbols.append(name)
+    # ------------------------------------------------------------------ #
+    # Database helpers – async
+    # ------------------------------------------------------------------ #
 
-        return list(set(symbols))
-
-    def get_file_context(
+    async def get_file_context(
         self,
         project_id: int,
         file_path: str,
-        line_number: Optional[int] = None
-    ) -> List[Dict]:
-        """Get context chunks for a file reference."""
-        # Find document
-        doc = self.db.query(CodeDocument).filter_by(
-            project_id=project_id,
-            file_path=file_path
-        ).first()
+        line_number: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return embedding chunks relevant to a file/line number."""
+        # Exact match
+        stmt = select(CodeDocument).where(
+            CodeDocument.project_id == project_id, CodeDocument.file_path == file_path
+        )
+        result = await self.db.execute(stmt)
+        doc = result.scalar_one_or_none()
 
+        # Fallback: LIKE match (trailing path)
         if not doc:
-            # Try partial match
-            doc = self.db.query(CodeDocument).filter(
+            stmt = select(CodeDocument).where(
                 CodeDocument.project_id == project_id,
-                CodeDocument.file_path.like(f'%{file_path}')
-            ).first()
+                CodeDocument.file_path.like(f"%{file_path}"),
+            )
+            result = await self.db.execute(stmt)
+            doc = result.scalar_one_or_none()
 
         if not doc:
             return []
 
-        # Get relevant chunks
         if line_number:
-            # Get chunk containing line
-            chunks = self.db.query(CodeEmbedding).filter(
+            c_stmt = select(CodeEmbedding).where(
                 CodeEmbedding.document_id == doc.id,
                 CodeEmbedding.start_line <= line_number,
-                CodeEmbedding.end_line >= line_number
-            ).all()
+                CodeEmbedding.end_line >= line_number,
+            )
         else:
-            # Get first few chunks
-            chunks = self.db.query(CodeEmbedding).filter_by(
-                document_id=doc.id
-            ).order_by(CodeEmbedding.start_line).limit(3).all()
+            c_stmt = (
+                select(CodeEmbedding)
+                .where(CodeEmbedding.document_id == doc.id)
+                .order_by(CodeEmbedding.start_line)
+                .limit(3)
+            )
 
-        return [self._format_chunk(chunk) for chunk in chunks]
+        chunks = (await self.db.execute(c_stmt)).scalars().all()
+        return [self._format_chunk(ch) for ch in chunks]
 
-    def search_symbol(self, project_id: int, symbol: str) -> List[Dict]:
-        """Search for symbol in project."""
-        chunks = self.db.query(CodeEmbedding).join(CodeDocument).filter(
-            CodeDocument.project_id == project_id,
-            CodeEmbedding.symbol_name == symbol
-        ).all()
+    async def search_symbol(self, project_id: int, symbol: str) -> List[Dict[str, Any]]:
+        stmt = (
+            select(CodeEmbedding)
+            .join(CodeDocument, CodeDocument.id == CodeEmbedding.document_id)
+            .where(CodeDocument.project_id == project_id, CodeEmbedding.symbol_name == symbol)
+        )
+        result = await self.db.execute(stmt)
+        chunks = result.scalars().all()
 
         if not chunks:
-            # Try partial match
-            chunks = self.db.query(CodeEmbedding).join(CodeDocument).filter(
-                CodeDocument.project_id == project_id,
-                CodeEmbedding.symbol_name.like(f'%{symbol}%')
-            ).limit(5).all()
+            stmt = (
+                select(CodeEmbedding)
+                .join(CodeDocument, CodeDocument.id == CodeEmbedding.document_id)
+                .where(
+                    CodeDocument.project_id == project_id,
+                    CodeEmbedding.symbol_name.like(f"%{symbol}%"),
+                )
+                .limit(5)
+            )
+            result = await self.db.execute(stmt)
+            chunks = result.scalars().all()
 
-        return [self._format_chunk(chunk) for chunk in chunks]
+        return [self._format_chunk(ch) for ch in chunks]
 
-    def build_conversation_context(
+    async def build_conversation_context(
         self,
         session_id: int,
+        *,
         max_messages: int = 20,
-        max_tokens: int = 8000
-    ) -> List[Dict]:
-        """Build context from recent conversation with token management."""
-        messages = self.db.query(ChatMessage).filter_by(
-            session_id=session_id,
-            is_deleted=False
-        ).order_by(ChatMessage.created_at.desc()).limit(max_messages).all()
+        max_tokens: int = 8_000,
+    ) -> List[Dict[str, Any]]:
+        stmt = (
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id, ChatMessage.is_deleted.is_(False))
+            .order_by(ChatMessage.created_at.desc())
+            .limit(max_messages)
+        )
+        msgs = (await self.db.execute(stmt)).scalars().all()
 
-        # Build context with token counting
-        context_messages = []
-        total_tokens = 0
-
-        for msg in reversed(messages):  # Process in chronological order
-            # Estimate tokens (rough: 4 chars per token)
-            msg_tokens = len(msg.content) // 4
-
-            # Include code snippets in token count
+        ctx_msgs: List[Dict[str, Any]] = []
+        total = 0
+        for msg in reversed(msgs):
+            est = len(msg.content) // 4
             if msg.code_snippets:
-                for snippet in msg.code_snippets:
-                    if isinstance(snippet, dict) and 'code' in snippet:
-                        msg_tokens += len(snippet['code']) // 4
-
-            # Check if adding this message would exceed token limit
-            if total_tokens + msg_tokens > max_tokens and context_messages:
+                for snip in msg.code_snippets:
+                    if isinstance(snip, dict) and "code" in snip:
+                        est += len(snip["code"]) // 4
+            if ctx_msgs and total + est > max_tokens:
                 break
-
-            context_msg = {
-                'role': msg.role,
-                'content': msg.content,
-                'id': msg.id,
-                'created_at': msg.created_at.isoformat(),
-                'tokens': msg_tokens
+            entry: Dict[str, Any] = {
+                "role": msg.role,
+                "content": msg.content,
+                "id": msg.id,
+                "created_at": msg.created_at.isoformat(),
+                "tokens": est,
             }
-
-            # Include code snippets if available
             if msg.code_snippets:
-                context_msg['code_snippets'] = msg.code_snippets
-
-            # Include referenced files for context continuity
+                entry["code_snippets"] = msg.code_snippets
             if msg.referenced_files:
-                context_msg['referenced_files'] = msg.referenced_files
+                entry["referenced_files"] = msg.referenced_files
+            ctx_msgs.append(entry)
+            total += est
 
-            context_messages.append(context_msg)
-            total_tokens += msg_tokens
+        logger.debug(
+            "Built conversation context: %d messages (~%d tokens)", len(ctx_msgs), total
+        )
+        return ctx_msgs
 
-        logger.debug(f"Built conversation context: {len(context_messages)} messages, ~{total_tokens} tokens")
-        return context_messages
-
-    def get_conversation_summary(self, session_id: int, up_to_message_id: int = None) -> Optional[str]:
-        """Get a summary of earlier conversation context."""
-        query = self.db.query(ChatMessage).filter_by(
-            session_id=session_id,
-            is_deleted=False
-        ).order_by(ChatMessage.created_at)
-
+    async def get_conversation_summary(
+        self, session_id: int, up_to_message_id: Optional[int] = None
+    ) -> Optional[str]:
+        stmt = (
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id, ChatMessage.is_deleted.is_(False))
+            .order_by(ChatMessage.created_at)
+        )
         if up_to_message_id:
-            query = query.filter(ChatMessage.id < up_to_message_id)
+            stmt = stmt.where(ChatMessage.id < up_to_message_id)
 
-        older_messages = query.limit(50).all()  # Summarize up to 50 older messages
-
-        if len(older_messages) < 5:  # Not worth summarizing
+        msgs = (await self.db.execute(stmt.limit(50))).scalars().all()
+        if len(msgs) < 5:
             return None
+        topics: List[str] = []
+        for msg in msgs[-10:]:
+            if msg.role == "user" and len(msg.content) > 50:
+                topics.append(f"User asked: {msg.content[:100]}…")
+            elif msg.role == "assistant" and msg.referenced_files:
+                files = ", ".join(msg.referenced_files[:3])
+                topics.append(f"Discussed files: {files}")
+        return f"Earlier conversation context: {'; '.join(topics[:5])}" if topics else None
 
-        # Build summary of key topics and decisions
-        topics = []
-        for msg in older_messages[-10:]:  # Focus on more recent of the older messages
-            if msg.role == 'user' and len(msg.content) > 50:
-                topics.append(f"User asked about: {msg.content[:100]}...")
-            elif msg.role == 'assistant' and msg.referenced_files:
-                topics.append(f"Discussed files: {', '.join(msg.referenced_files[:3])}")
-
-        if topics:
-            return f"Earlier conversation context: {'; '.join(topics[:5])}"
-        return None
-
-    def create_timeline_event(self, project_id: int, event_type: str, content: str, referenced_files: List[str] = None):
-        """Create timeline event for analytics tracking - integrates with existing timeline system."""
+    async def create_timeline_event(
+        self,
+        *,
+        project_id: int,
+        event_type: str,
+        content: str,
+        referenced_files: Optional[List[str]] = None,
+    ) -> None:
+        """Fire-and-forget analytics entry – errors are swallowed."""
         try:
             from app.models.timeline import TimelineEvent
 
-            # Create timeline event with the specified event_type
-            event_data = {
-                'message_preview': content[:100] + '...' if len(content) > 100 else content,
-                'referenced_files_count': len(referenced_files) if referenced_files else 0,
-                'has_code_context': bool(referenced_files)
-            }
-
-            if referenced_files:
-                event_data['referenced_files'] = referenced_files[:5]  # Limit for storage
-
-            timeline_event = TimelineEvent(
+            ev = TimelineEvent(
                 project_id=project_id,
                 event_type=event_type,
-                event_data=event_data
+                title="Chat Message",
+                description=content[:200] + ("…" if len(content) > 200 else ""),
+                event_metadata={
+                    "preview": content[:100] + ("…" if len(content) > 100 else ""),
+                    "referenced_files": referenced_files or [],
+                },
             )
+            self.db.add(ev)
+            await self.db.commit()
+        except Exception:  # noqa: BLE001 – best-effort only
+            logger.debug("Timeline event creation failed", exc_info=True)
 
-            self.db.add(timeline_event)
-            self.db.commit()
-            logger.debug(f"Created timeline event for chat message with event type {event_type}")
+    # ------------------------------------------------------------------ #
+    # Formatting helpers
+    # ------------------------------------------------------------------ #
 
-        except Exception as e:
-            logger.warning(f"Failed to create timeline event: {e}")
-            # Don't fail the main conversation flow due to analytics issues
-
-    def _format_chunk(self, chunk: CodeEmbedding) -> Dict:
-        """Format chunk for context."""
+    def _format_chunk(self, chunk: CodeEmbedding) -> Dict[str, Any]:
         return {
-            'document_id': chunk.document_id,
-            'file_path': chunk.document.file_path,
-            'language': chunk.document.language,
-            'symbol_name': chunk.symbol_name,
-            'symbol_type': chunk.symbol_type,
-            'start_line': chunk.start_line,
-            'end_line': chunk.end_line,
-            'content': chunk.chunk_content
+            "document_id": chunk.document_id,
+            "file_path": chunk.document.file_path if chunk.document else None,
+            "language": chunk.document.language if chunk.document else None,
+            "symbol_name": chunk.symbol_name,
+            "symbol_type": chunk.symbol_type,
+            "start_line": chunk.start_line,
+            "end_line": chunk.end_line,
+            "content": chunk.chunk_content,
         }

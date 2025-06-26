@@ -16,7 +16,7 @@ import {
   Play,
   ExternalLink,
   FileText,
-  Code,
+  Code as CodeIcon,
   ChevronDown,
   ChevronUp,
   Table,
@@ -25,6 +25,11 @@ import {
 } from 'lucide-react';
 
 import CitationRenderer from './CitationRenderer';
+
+// Fallback icon component
+const FallbackIcon = ({ className }) => (
+  <span className={className} style={{ display: 'inline-block', width: '1rem', height: '1rem' }}>⚫</span>
+);
 
 // Initialize mermaid
 mermaid.initialize({ startOnLoad: false, theme: 'dark' });
@@ -340,7 +345,7 @@ export default function EnhancedMessageRenderer({
           {/* header */}
           <div className="flex justify-between items-center bg-gray-800 text-gray-300 px-4 py-2 rounded-t-lg">
             <span className="flex items-center gap-2 font-mono text-sm">
-              <Code className="w-4 h-4" />
+              {CodeIcon ? <CodeIcon className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />}
               {language}
             </span>
 
@@ -351,7 +356,7 @@ export default function EnhancedMessageRenderer({
                   className="p-1 hover:bg-green-600 bg-green-700 rounded"
                   title="Run code"
                 >
-                  <Play className="w-4 h-4" />
+                  {Play ? <Play className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />}
                 </button>
               )}
 
@@ -361,7 +366,7 @@ export default function EnhancedMessageRenderer({
                   className="p-1 hover:bg-blue-600 bg-blue-700 rounded"
                   title="Apply to editor"
                 >
-                  <ExternalLink className="w-4 h-4" />
+                  {ExternalLink ? <ExternalLink className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />}
                 </button>
               )}
 
@@ -371,9 +376,9 @@ export default function EnhancedMessageRenderer({
                 title="Copy code"
               >
                 {copiedBlocks.has(blockId) ? (
-                  <Check className="w-4 h-4 text-green-400" />
+                  Check ? <Check className="w-4 h-4 text-green-400" /> : <FallbackIcon className="w-4 h-4 text-green-400" />
                 ) : (
-                  <Copy className="w-4 h-4" />
+                  Copy ? <Copy className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />
                 )}
               </button>
 
@@ -384,9 +389,9 @@ export default function EnhancedMessageRenderer({
                   title={isExpanded ? 'Collapse' : 'Expand'}
                 >
                   {isExpanded ? (
-                    <ChevronUp className="w-4 h-4" />
+                    ChevronUp ? <ChevronUp className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />
                   ) : (
-                    <ChevronDown className="w-4 h-4" />
+                    ChevronDown ? <ChevronDown className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />
                   )}
                 </button>
               )}
@@ -394,19 +399,25 @@ export default function EnhancedMessageRenderer({
           </div>
 
           {/* code body */}
-          <SyntaxHighlighter
-            language={language}
-            style={oneDark}
-            customStyle={{
-              margin: 0,
-              borderTopLeftRadius: 0,
-              borderTopRightRadius: 0,
-              fontSize: '0.875rem'
-            }}
-            {...props}
-          >
-            {displayCode}
-          </SyntaxHighlighter>
+          {SyntaxHighlighter ? (
+            <SyntaxHighlighter
+              language={language}
+              style={oneDark || {}}
+              customStyle={{
+                margin: 0,
+                borderTopLeftRadius: 0,
+                borderTopRightRadius: 0,
+                fontSize: '0.875rem'
+              }}
+              {...props}
+            >
+              {displayCode}
+            </SyntaxHighlighter>
+          ) : (
+            <pre className="bg-gray-800 text-gray-100 p-4 rounded-b-lg overflow-x-auto">
+              <code className="text-sm font-mono">{displayCode}</code>
+            </pre>
+          )}
         </div>
       );
     }

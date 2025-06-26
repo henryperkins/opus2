@@ -66,8 +66,9 @@ class ChatService:
         role: str,
         user_id: Optional[int] = None,
         metadata: Optional[Dict] = None,
+        broadcast: bool = True,
     ) -> ChatMessage:
-        """Create and broadcast new message."""
+        """Create and optionally broadcast new message."""
         message = ChatMessage(
             session_id=session_id,
             content=content,
@@ -101,8 +102,9 @@ class ChatService:
                 session.updated_at = datetime.utcnow()
                 self.db.commit()
 
-        # Broadcast to connected clients
-        await self._broadcast_message(message)
+        # Broadcast to connected clients if requested
+        if broadcast:
+            await self._broadcast_message(message)
 
         return message
 
@@ -148,7 +150,8 @@ class ChatService:
         return message
 
     async def update_message_content(
-        self, message_id: int, content: str, code_snippets: Optional[List[Dict[str, Any]]] = None
+        self, message_id: int, content: str, code_snippets: Optional[List[Dict[str, Any]]] = None,
+        broadcast: bool = True
     ) -> Optional[ChatMessage]:
         """Update message content and code snippets (for AI messages)."""
         if self.is_async:
@@ -178,8 +181,9 @@ class ChatService:
         else:
             self.db.commit()
 
-        # Broadcast update
-        await self._broadcast_message(message)
+        # Broadcast update if requested
+        if broadcast:
+            await self._broadcast_message(message)
 
         return message
 
