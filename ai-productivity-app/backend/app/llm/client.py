@@ -440,7 +440,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                             "messages": messages,
                             "max_tokens": active_max_tokens,
                         }
-                        
+
                         # o3 models don't support temperature or streaming
                         if not active_model.lower().startswith("o3"):
                             completions_kwargs["temperature"] = active_temperature
@@ -448,7 +448,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                         else:
                             # o3 models don't support streaming
                             completions_kwargs["stream"] = False
-                            
+
                         if tools:
                             # Ensure tools have the required type field for Chat Completions API
                             chat_tools: List[Dict[str, Any]] = []
@@ -599,7 +599,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         """Convert OpenAI/Azure streaming response to string chunks."""
         logger.debug(f"Starting stream response, use_responses_api: {self.use_responses_api}")
         chunk_count = 0
-        
+
         try:
             if self.use_responses_api:
                 # Azure Responses API streaming
@@ -607,7 +607,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 async for chunk in response:
                     chunk_count += 1
                     logger.debug(f"Received chunk {chunk_count}: {type(chunk)}")
-                    
+
                     # Azure streaming events come in different flavours.  We
                     # purposefully *only* forward incremental “delta”
                     # fragments here – the *done* event often repeats the
@@ -646,7 +646,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 async for chunk in response:
                     chunk_count += 1
                     logger.debug(f"Received chunk {chunk_count}: {type(chunk)}")
-                    
+
                     if hasattr(chunk, 'choices') and chunk.choices:
                         choice = chunk.choices[0]
                         if hasattr(choice, 'delta') and choice.delta:
@@ -655,7 +655,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                                 yield choice.delta.content
         except Exception as e:
             logger.error(f"Error in _stream_response: {e}", exc_info=True)
-            
+
         logger.debug(f"Stream processing complete, processed {chunk_count} chunks")
 
     # ------------------------------------------------------------------
@@ -674,6 +674,17 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             {"role": "user", "content": prompt},
         ]
         return await self.complete(messages, **kwargs)
+
+    async def respond(self, *args, **kwargs):  # noqa: ANN401
+        """Compatibility shim for deprecated respond() method.
+
+        This method is deprecated and will warn when used. Use chat() instead.
+        """
+        import warnings
+        warnings.warn(
+            "`respond()` is deprecated; use `chat()`", DeprecationWarning, stacklevel=2
+        )
+        return await self.complete(*args, **kwargs)
 
     # The surrounding business-logic adds *code context* as an additional
     # *system* message to steer the model.  We simply join the snippets into a

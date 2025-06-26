@@ -26,6 +26,7 @@ from pydantic import (
     confloat,
     validator,
 )
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -222,11 +223,11 @@ async def update_model_config(
         # Validate configuration before committing
         ok, detail = await cfg_svc.validate_config(data)
         if not ok:
-            raise HTTPException(400, f"Validation failed: {detail}")
-        
+            raise HTTPException(422, f"Validation failed: {detail}")   # ➜ 422 not 500
+
         cfg_svc.set_multiple_config(data, updated_by="api_user")
         _RUNTIME_CONFIG.update(data)
-        
+
         # Invalidate cache after config update
         from app.services.config_cache import _cached
         _cached.cache_clear()
@@ -243,6 +244,9 @@ async def update_model_config(
                 )
             except Exception as exc:  # pragma: no cover
                 logger.warning("LLM client reconfiguration failed: %s", exc)
+    except IntegrityError as exc:
+        logger.warning("DB error: %s", exc)
+        raise HTTPException(409, "Duplicate/constraint violation")     # specific 4xx
 
         # ------------------------------------------------------------------ #
         # Broadcast change – send the *same* structure returned by GET
@@ -299,7 +303,7 @@ async def update_model_config(
         }
     except Exception as exc:  # pragma: no cover
         logger.error("Config update failed: %s", exc, exc_info=True)
-        raise HTTPException(500, f"Configuration update failed: {exc}") from exc
+        raise HTTPException(500, f"Configuration update failed: {str(exc)}") from exc
 
 
 # --------------------------------------------------------------------------- #

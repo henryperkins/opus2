@@ -80,11 +80,13 @@ function attachCsrf(config) {
 
 async function retryRequest(error) {
   const cfg = error.config;
-  if (!cfg || cfg.__retryCount >= 3 || !error.response) {
+  if (!cfg || cfg.__retryCount >= 3 || !error.response || cfg.__noRetry) {
     return Promise.reject(error);
   }
   const { status } = error.response;
-  if (status >= 500 && status < 600) {
+  // Only retry transient server errors, not application errors
+  const transient = [502, 503, 504];
+  if (transient.includes(status)) {
     cfg.__retryCount = (cfg.__retryCount || 0) + 1;
     const delay = 2 ** cfg.__retryCount * 100; // 100, 200, 400ms
     await new Promise((r) => setTimeout(r, delay));

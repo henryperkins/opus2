@@ -47,11 +47,28 @@ export function useWebSocketChannel({
   const queueRef = useRef([]);
   const timerRef = useRef(null);
   const onMessageRef = useRef(onMessage);
+  const messageBuffer = useRef([]);
 
   // Update the onMessage ref when it changes
   useEffect(() => {
     onMessageRef.current = onMessage;
   }, [onMessage]);
+
+  // Process buffered messages periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (messageBuffer.current.length > 0 && onMessageRef.current) {
+        const messages = messageBuffer.current.splice(0);
+        messages.forEach(data => {
+          // Create a synthetic event for compatibility
+          const syntheticEvent = { data: JSON.stringify(data) };
+          onMessageRef.current(syntheticEvent);
+        });
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const send = useCallback(
     (payload) => {
@@ -121,9 +138,20 @@ export function useWebSocketChannel({
 
       ws.onmessage = (evt) => {
         if (onMessageRef.current) {
-          // Direct message handling for better mobile performance
-          // Previous async wrapping was causing messages to not appear on mobile
-          onMessageRef.current(evt);
+          // Buffer messages for batch processing to avoid performance issues
+          try {
+            const data = JSON.parse(evt.data);
+            if (messageBuffer.current) {
+              messageBuffer.current.push(data);
+            } else {
+              // Fallback to direct processing if buffer not available
+              onMessageRef.current(evt);
+            }
+          } catch (error) {
+            console.error('Failed to parse WebSocket message:', error);
+            // Still try to process the raw event
+            onMessageRef.current(evt);
+          }
         }
       };
 

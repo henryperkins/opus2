@@ -26,7 +26,7 @@ export default function ChatLayout({
         autoSaveId="chat-layout-main"
       >
         {/* Chat/Content Area */}
-        <Panel defaultSize={70} minSize={50}>
+        <Panel defaultSize={showSidebar ? 70 : 100} minSize={50}>
           {showEditor ? (
             // Vertical split for chat + editor
             <PanelGroup

@@ -83,7 +83,7 @@ export function useChat(projectId, preferredSessionId = null) {
     isFetching: historyLoading,
   } = useQuery({
     queryKey: messagesKey(sessionId),
-    queryFn: () => chatAPI.getMessages(sessionId).then((r) => 
+    queryFn: () => chatAPI.getMessages(sessionId).then((r) =>
       r.data.map(msg => ({
         ...msg,
         metadata: transformMessageMetadata(msg.metadata)
@@ -96,8 +96,14 @@ export function useChat(projectId, preferredSessionId = null) {
   // ---------------------------------------------------
   // 3. Live WebSocket connection (managed by query key)
   // ---------------------------------------------------
+  // Memoize the WebSocket path to prevent unnecessary reconnections
+  const stablePath = useMemo(() =>
+    sessionId ? `/api/chat/ws/sessions/${sessionId}` : null,
+    [sessionId]
+  );
+
   const { state: connectionState, send } = useWebSocketChannel({
-    path: sessionId ? `/api/chat/ws/sessions/${sessionId}` : null,
+    path: stablePath,
     retry: 3, // Limit to 3 attempts with exponential backoff
     onMessage: useCallback((event) => {
       try {
@@ -105,7 +111,7 @@ export function useChat(projectId, preferredSessionId = null) {
         switch (data.type) {
           case 'message':
             qc.setQueryData(messagesKey(sessionId), (prev = []) => [
-              ...prev, 
+              ...prev,
               { ...data.message, metadata: transformMessageMetadata(data.message.metadata) }
             ]);
             break;

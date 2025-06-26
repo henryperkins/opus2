@@ -167,12 +167,15 @@ export function ModelProvider({ children }) {
         }
       });
 
-      // Update global config
-      await updateConfig({
+      // Update global config with guard against retry
+      const configPayload = {
         chat_model: model,
         provider: options.provider || state.currentProvider,
-        ...options.config
-      });
+        ...options.config,
+        __noRetry: true // Prevent infinite retry loops
+      };
+
+      await updateConfig(configPayload);
 
       // Invalidate relevant queries
       queryClient.invalidateQueries(['config']);
@@ -185,6 +188,9 @@ export function ModelProvider({ children }) {
       if (config?.current?.chat_model) {
         dispatch({ type: MODEL_ACTIONS.SET_MODEL, payload: config.current.chat_model });
       }
+
+      // Don't re-throw error to prevent auto-resubmission
+      return false;
     } finally {
       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: false });
     }
@@ -198,12 +204,15 @@ export function ModelProvider({ children }) {
       // Update local state immediately
       dispatch({ type: MODEL_ACTIONS.SET_PROVIDER, payload: provider });
 
-      // Update global config
-      await updateConfig({
+      // Update global config with guard against retry
+      const configPayload = {
         provider,
         chat_model: options.model || state.currentModel,
-        ...options.config
-      });
+        ...options.config,
+        __noRetry: true // Prevent infinite retry loops
+      };
+
+      await updateConfig(configPayload);
 
       // Invalidate relevant queries
       queryClient.invalidateQueries(['config']);
@@ -216,6 +225,9 @@ export function ModelProvider({ children }) {
       if (config?.current?.provider) {
         dispatch({ type: MODEL_ACTIONS.SET_PROVIDER, payload: config.current.provider });
       }
+
+      // Don't re-throw error to prevent auto-resubmission
+      return false;
     } finally {
       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: false });
     }
