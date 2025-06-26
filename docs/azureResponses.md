@@ -59,7 +59,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -90,7 +90,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -113,7 +113,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -136,7 +136,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -220,7 +220,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -257,7 +257,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -287,7 +287,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -351,7 +351,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -399,7 +399,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -436,7 +436,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -505,7 +505,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -551,7 +551,7 @@ To proceed with the remote MCP call, you must respond to the approval request by
 ```bash
 curl https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/responses?api-version=preview \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer$AZURE_OPENAI_AUTH_TOKEN" \
+  -H "Authorization: Bearer $AZURE_OPENAI_AUTH_TOKEN" \
   -d '{
   "model": "gpt-4.1",
   "tools": [
@@ -580,7 +580,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -623,7 +623,7 @@ curl https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/responses?api-version
                 "server_label": "github",
                 "server_url": "https://contoso.com/Azure/azure-rest-api-specs",
                 "headers": {
-                    "Authorization": "Bearer$YOUR_API_KEY"
+                    "Authorization": "Bearer $YOUR_API_KEY"
             }
         ]
     }'
@@ -638,7 +638,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview"
 )
@@ -671,7 +671,7 @@ To start a background task, set the background parameter to true in your request
 ```
 curl https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/responses?api-version=preview \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer$AZURE_OPENAI_AUTH_TOKEN" \
+  -H "Authorization: Bearer $AZURE_OPENAI_AUTH_TOKEN" \
   -d '{
     "model": "o3",
     "input": "Write me a very long story",
@@ -744,7 +744,7 @@ You can cancel an in-progress background task using the cancel endpoint. Canceli
 ```
 curl -X POST https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/responses/resp_1234567890/cancel?api-version=preview \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer$AZURE_OPENAI_AUTH_TOKEN"
+  -H "Authorization: Bearer $AZURE_OPENAI_AUTH_TOKEN"
 ```
 
 ```
@@ -826,7 +826,7 @@ Background responses currently have a higher time-to-first-token latency than sy
 ```bash
 curl https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/responses/resp_1234567890?stream=true&starting_after=42&api-version=2025-04-01-preview \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer$AZURE_OPENAI_AUTH_TOKEN"
+  -H "Authorization: Bearer $AZURE_OPENAI_AUTH_TOKEN"
 ```
 
 ## Encrypted Reasoning Items
@@ -879,7 +879,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview",
   default_headers={"x-ms-oai-image-generation-deployment":"YOUR-GPT-IMAGE1-DEPLOYMENT-NAME"}
@@ -915,7 +915,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview",
   default_headers={"x-ms-oai-image-generation-deployment":"YOUR-GPT-IMAGE1-DEPLOYMENT-NAME"}
@@ -968,7 +968,7 @@ token_provider = get_bearer_token_provider(
 )
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview",
   default_headers={"x-ms-oai-image-generation-deployment":"YOUR-GPT-IMAGE1-DEPLOYMENT-NAME"}
@@ -998,7 +998,7 @@ from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 import base64
 
 client = AzureOpenAI(
-  base_url = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+  azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com",
   azure_ad_token_provider=token_provider,
   api_version="preview",
   default_headers={"x-ms-oai-image-generation-deployment":"YOUR-GPT-IMAGE1-DEPLOYMENT-NAME"}
