@@ -60,6 +60,25 @@ def _current_user_required(
 CurrentUserOptional = Annotated[User | None, Depends(_current_user_optional)]
 CurrentUserRequired = Annotated[User, Depends(_current_user_required)]
 
+# ---------------------------------------------------------------------------
+# Temporary compatibility shim ------------------------------------------------
+# ---------------------------------------------------------------------------
+#
+# Historically the project used a ``current_user`` dependency that returned
+# the authenticated user and enforced a 401 response when the request was not
+# authenticated.  The revamped implementation now exposes two distinct
+# dependencies – *CurrentUserRequired* and *CurrentUserOptional* – to make the
+# required/optional semantics explicit at type-checking time.
+#
+# To avoid touching all call-sites at once we provide an alias so that older
+# imports (``from app.dependencies import current_user``) keep working.
+# The alias can be removed after all routers have been updated to use
+# *CurrentUserRequired* directly.
+#
+
+# noqa: N816 – keep snake_case name for backward compatibility
+current_user = CurrentUserRequired  # type: ignore
+
 ###############################################################################
 # API-key verification placeholder (Phase 3 feature)
 ###############################################################################

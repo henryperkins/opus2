@@ -161,7 +161,8 @@ class ChatProcessor:
                     ctx_kb = await self._kb.build_context(
                         entry_ids=entry_ids,
                         max_context_length=getattr(settings, 'model_ctx', 4000) - 1024,
-                        db=self.db
+                        db=self.db,
+                        search_results=kb_hits
                     )
                     context["knowledge"] = ctx_kb["context"]
                     context["citations"] = ctx_kb["citations"]

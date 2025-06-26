@@ -334,7 +334,7 @@ export default function KnowledgeAssistant({
               )}
             </div>
           </>
-        )}
+        )
       </div>
 
       {/* Search Modal */}

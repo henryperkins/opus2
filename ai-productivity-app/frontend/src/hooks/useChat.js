@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import chatAPI from '../api/chat';
 import { useAuth } from './useAuth';
 import { useWebSocketChannel } from './useWebSocketChannel';
+import { transformMessageMetadata } from '../utils/citationTransform';
 // import { useConfig } from './useConfig'; // Temporarily disabled - not used
 
 // -----------------------
@@ -82,7 +83,12 @@ export function useChat(projectId, preferredSessionId = null) {
     isFetching: historyLoading,
   } = useQuery({
     queryKey: messagesKey(sessionId),
-    queryFn: () => chatAPI.getMessages(sessionId).then((r) => r.data),
+    queryFn: () => chatAPI.getMessages(sessionId).then((r) => 
+      r.data.map(msg => ({
+        ...msg,
+        metadata: transformMessageMetadata(msg.metadata)
+      }))
+    ),
     enabled: !!sessionId && !sessionLoading,
     staleTime: 30 * 1000, // 30 seconds - messages can change frequently
   });
@@ -98,7 +104,10 @@ export function useChat(projectId, preferredSessionId = null) {
         const data = JSON.parse(event.data);
         switch (data.type) {
           case 'message':
-            qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, data.message]);
+            qc.setQueryData(messagesKey(sessionId), (prev = []) => [
+              ...prev, 
+              { ...data.message, metadata: transformMessageMetadata(data.message.metadata) }
+            ]);
             break;
           case 'typing':
             setTypingUsers((prev) => {
@@ -137,7 +146,7 @@ export function useChat(projectId, preferredSessionId = null) {
                     role: 'assistant',
                     content: finalContent,
                     created_at: new Date().toISOString(),
-                    metadata: data.metadata || {}
+                    metadata: transformMessageMetadata(data.metadata || {})
                   };
 
                   // Atomic update: add complete message and remove streaming state
@@ -177,7 +186,7 @@ export function useChat(projectId, preferredSessionId = null) {
                   role: 'assistant',
                   content: streamingMessage.content,
                   created_at: new Date().toISOString(),
-                  metadata: data.metadata || {}
+                  metadata: transformMessageMetadata(data.metadata || {})
                 };
 
                 // Atomic update: add complete message and remove streaming state

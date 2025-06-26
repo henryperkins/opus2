@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 
 import CitationRenderer from './CitationRenderer';
-import RAGStatusIndicator from './RAGStatusIndicator';
 
 // Fallback icon component
 const FallbackIcon = ({ className }) => (
@@ -460,17 +459,6 @@ export default function EnhancedMessageRenderer({
    * -------------------------------------------------------- */
   return (
     <div className="space-y-4">
-      {/* RAG Status Indicator */}
-      <RAGStatusIndicator 
-        ragUsed={messageMetadata?.ragUsed || false}
-        sourcesCount={messageMetadata?.citations?.length || 0}
-        confidence={messageMetadata?.ragConfidence}
-        searchQuery={messageMetadata?.searchQuery}
-        contextTokensUsed={messageMetadata?.contextTokensUsed}
-        status={messageMetadata?.ragStatus}
-        errorMessage={messageMetadata?.ragError}
-      />
-
       {/* Context banner */}
       {messageMetadata?.contextSummary && (
         <ContextBanner summary={messageMetadata.contextSummary} />

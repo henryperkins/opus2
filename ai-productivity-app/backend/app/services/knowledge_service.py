@@ -141,7 +141,8 @@ class KnowledgeService:
         entry_ids: List[str],
         max_context_length: int = 4000,
         model_name: str = "gpt-4",
-        db: Session = None
+        db: Session = None,
+        search_results: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Build production-grade context from knowledge entries with token limits and citations."""
         if not entry_ids or not db:
@@ -169,6 +170,12 @@ class KnowledgeService:
                 "citations": {},
                 "context_length": 0
             }
+
+        # Create lookup for search result metadata
+        search_lookup = {}
+        if search_results:
+            for result in search_results:
+                search_lookup[result.get('id')] = result
 
         # Rank entries by similarity + recency
         ranked_entries = self._rank_entries(documents, entry_ids)
@@ -200,12 +207,15 @@ class KnowledgeService:
                     content_with_citation = f"{marker} {truncated_content}..."
                     context_parts.append(content_with_citation)
 
-                    # Add to citation map
+                    # Add to citation map with search metadata
+                    search_data = search_lookup.get(doc.id, {})
                     citation_map[marker] = {
                         "id": doc.id,
                         "title": doc.title,
                         "source": doc.source or "Unknown",
-                        "lines": "truncated"
+                        "lines": "truncated",
+                        "similarity": search_data.get('score', 0.0),
+                        "source_type": search_data.get('metadata', {}).get('source_type', 'unknown')
                     }
                 break
 
@@ -213,12 +223,15 @@ class KnowledgeService:
             context_parts.append(content_with_citation)
             tokens_used += entry_tokens
 
-            # Add to citation map
+            # Add to citation map with search metadata
+            search_data = search_lookup.get(doc.id, {})
             citation_map[marker] = {
                 "id": doc.id,
                 "title": doc.title,
                 "source": doc.source or "Unknown",
-                "lines": f"1-{len(doc.content.splitlines())}"
+                "lines": f"1-{len(doc.content.splitlines())}",
+                "similarity": search_data.get('score', 0.0),
+                "source_type": search_data.get('metadata', {}).get('source_type', 'unknown')
             }
 
         final_context = "\n\n".join(context_parts)

@@ -3,6 +3,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import CodeSnippet from '../search/CodeSnippet';
 import EnhancedMessageRenderer from './EnhancedMessageRenderer';
+import RAGStatusIndicator from './RAGStatusIndicator';
 
 // Throttle scroll events to prevent performance issues
 const useThrottledCallback = (callback, delay) => {
@@ -222,6 +223,21 @@ const MessageItem = React.memo(({
             )}
           </div>
         </div>
+
+        {/* RAG Status Indicator for assistant messages */}
+        {message.role === 'assistant' && !isEditing && (
+          <div className="mb-3">
+            <RAGStatusIndicator 
+              ragUsed={message.metadata?.ragUsed || false}
+              sourcesCount={message.metadata?.citations?.length || 0}
+              confidence={message.metadata?.ragConfidence}
+              searchQuery={message.metadata?.searchQuery}
+              contextTokensUsed={message.metadata?.contextTokensUsed}
+              status={message.metadata?.ragStatus}
+              errorMessage={message.metadata?.ragError}
+            />
+          </div>
+        )}
 
         {/* Message content */}
         {isEditing ? (

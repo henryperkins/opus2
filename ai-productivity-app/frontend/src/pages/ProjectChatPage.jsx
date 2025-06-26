@@ -34,6 +34,8 @@ import EnhancedMessageRenderer from '../components/chat/EnhancedMessageRenderer'
 import InteractiveElements from '../components/chat/InteractiveElements';
 import CitationRenderer from '../components/chat/CitationRenderer';
 import ResponseTransformer from '../components/chat/ResponseTransformer';
+import RAGStatusIndicator from '../components/chat/RAGStatusIndicator';
+import SessionRAGBadge from '../components/chat/SessionRAGBadge';
 
 // Model / settings components
 import ModelSwitcher from '../components/chat/ModelSwitcher';
@@ -121,7 +123,7 @@ export default function ProjectChatPage() {
   // ---------------------------------------------------------------------------
   // Local UI state
   // ---------------------------------------------------------------------------
-  const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(false);
+  const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(true); // Always show by default
   const [showSearch, setShowSearch] = useState(false);
   const [showPromptManager, setShowPromptManager] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -367,6 +369,21 @@ export default function ProjectChatPage() {
             )}
           </div>
 
+          {/* RAG Status Indicator for assistant messages */}
+          {msg.role === 'assistant' && (
+            <div className="mb-3">
+              <RAGStatusIndicator 
+                ragUsed={msg.metadata?.ragUsed || false}
+                sourcesCount={msg.metadata?.citations?.length || 0}
+                confidence={msg.metadata?.ragConfidence}
+                searchQuery={msg.metadata?.searchQuery}
+                contextTokensUsed={msg.metadata?.contextTokensUsed}
+                status={msg.metadata?.ragStatus}
+                errorMessage={msg.metadata?.ragError}
+              />
+            </div>
+          )}
+
           {/* Body */}
           {streaming ? (
             <StreamingMessage messageId={msg.id} isStreaming={streaming.isStreaming} content={streaming.content} />
@@ -487,17 +504,16 @@ export default function ProjectChatPage() {
             <h1 className="text-xl font-semibold truncate max-w-xs sm:max-w-none">
               {project?.title || 'Loading...'}
             </h1>
-            <div>Connection: {connectionState}</div>
+            <div className="hidden md:block">Connection: {connectionState}</div>
+            
+            {/* Session-wide RAG status badge */}
+            <SessionRAGBadge messages={messages} />
           </div>
 
           <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowKnowledgeAssistant((v) => !v)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-              aria-label="Toggle Knowledge Assistant"
-            >
-              <Brain className="w-5 h-5" />
-            </button>
+            <div className="text-sm text-gray-600 dark:text-gray-400 hidden lg:block">
+              Knowledge Assistant Always Active
+            </div>
             <button
               onClick={() => setShowSearch(true)}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
@@ -543,12 +559,12 @@ export default function ProjectChatPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Knowledge assistant bottom sheet */}
+            {/* Knowledge assistant bottom sheet - Always visible on mobile */}
             <MobileBottomSheet
-              isOpen={showKnowledgeAssistant}
-              onClose={() => setShowKnowledgeAssistant(false)}
-              title="Knowledge Assistant"
-              initialSnap={0.6}
+              isOpen={true} // Always open
+              onClose={() => {}} // Disable closing
+              title="Knowledge Assistant (Always Active)"
+              initialSnap={0.4}
               snapPoints={[0.4, 0.6, 0.9]}
             >
               {mobileAssistantPanel}
@@ -662,7 +678,7 @@ export default function ProjectChatPage() {
                 </div>
               )
             )}
-            right={showKnowledgeAssistant ? desktopAssistantPanel : null}
+            right={desktopAssistantPanel} // Always show Knowledge Assistant
             leftTitle="Chat"
             rightTitle="Knowledge Assistant"
           />

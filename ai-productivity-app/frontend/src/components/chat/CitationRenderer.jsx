@@ -41,6 +41,12 @@ function Tooltip({ children, citation }) {
           </div>
 
           <p className="text-xs text-gray-600 mb-2">{citation.source.path}</p>
+          
+          {citation.source_type && (
+            <p className="text-xs text-blue-600 mb-2 capitalize">
+              Type: {citation.source_type.replace(/_/g, ' ')}
+            </p>
+          )}
 
           <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded mb-2">
             "{citation.content.slice(0, 150)}..."
@@ -64,7 +70,8 @@ Tooltip.propTypes = {
       author: PropTypes.string
     }).isRequired,
     confidence: PropTypes.number.isRequired,
-    content: PropTypes.string.isRequired
+    content: PropTypes.string.isRequired,
+    source_type: PropTypes.string
   }).isRequired
 };
 
@@ -94,7 +101,8 @@ CitationBadge.propTypes = {
       path: PropTypes.string.isRequired,
       author: PropTypes.string
     }).isRequired,
-    content: PropTypes.string.isRequired
+    content: PropTypes.string.isRequired,
+    source_type: PropTypes.string
   }).isRequired,
   onClick: PropTypes.func
 };
@@ -283,6 +291,7 @@ CitationList.propTypes = {
     }).isRequired,
     content: PropTypes.string.isRequired,
     confidence: PropTypes.number.isRequired,
+    source_type: PropTypes.string,
     context: PropTypes.shape({
       before: PropTypes.string,
       after: PropTypes.string
@@ -333,7 +342,8 @@ CitationRenderer.propTypes = {
       author: PropTypes.string
     }).isRequired,
     content: PropTypes.string.isRequired,
-    confidence: PropTypes.number.isRequired
+    confidence: PropTypes.number.isRequired,
+    source_type: PropTypes.string
   })),
   inline: PropTypes.bool,
   onCitationClick: PropTypes.func
