@@ -54,6 +54,8 @@ class SchemaAligner:
         self.force = force
         self.inspector = inspect(engine)
         self.differences = defaultdict(list)
+        # Track the current SQLAlchemy dialect (e.g. "sqlite", "postgresql")
+        self.dialect_name = engine.dialect.name.lower()
 
     def get_db_columns(self, table_name: str) -> Dict[str, Dict]:
         """Fetches a dictionary of columns for a given table from the DB."""
@@ -300,11 +302,12 @@ class SchemaAligner:
         # Fix SQLite compatibility issues
         sql_str = str(create_table_sql)
 
-        # Remove PostgreSQL-specific syntax that SQLite doesn't understand
-        # Handle the jsonb casting syntax properly
-        sql_str = sql_str.replace(" DEFAULT '[]'::jsonb", " DEFAULT '[]'")
-        sql_str = sql_str.replace(" DEFAULT '{}'::jsonb", " DEFAULT '{}'")
-        sql_str = sql_str.replace("::jsonb", "")
+        # Dialect-specific clean-ups (only needed for SQLite)
+        if self.dialect_name == "sqlite":
+            # Remove PostgreSQL-specific syntax that SQLite doesn't understand
+            sql_str = sql_str.replace(" DEFAULT '[]'::jsonb", " DEFAULT '[]'")
+            sql_str = sql_str.replace(" DEFAULT '{}'::jsonb", " DEFAULT '{}'")
+            sql_str = sql_str.replace("::jsonb", "")
 
         return sql_str
 
@@ -374,27 +377,46 @@ class SchemaAligner:
 
             orm_table = Base.metadata.tables[table_name]
 
-            # Check if we need to recreate the table for type/nullable changes
-            needs_recreation = any(diff["type"] in ["type_mismatch", "nullable_mismatch"] for diff in diffs)
+            # Determine whether we must recreate (only for SQLite)
+            needs_recreation = self.dialect_name == "sqlite" and any(
+                diff["type"] in ["type_mismatch", "nullable_mismatch"] for diff in diffs
+            )
 
             if needs_recreation:
-                # SQLite: need to recreate table via table-rebuild for type/nullable changes
+                # SQLite: recreate table via the table-rebuild pattern
                 sql_statements.extend(
                     self.build_column_recreation_sql(table_name, orm_table)
                 )
             else:
-                # Handle individual column changes that don't require recreation
+                # Non-SQLite (e.g. PostgreSQL) – generate ALTER statements
                 for diff in diffs:
                     if diff["type"] == "missing_column":
                         column = next(c for c in orm_table.columns if c.name == diff["column"])
                         col_def = self.get_column_definition(column)
-                        sql = f"ALTER TABLE {table_name} ADD COLUMN {col_def}"
+                        sql = f'ALTER TABLE "{table_name}" ADD COLUMN {col_def}'
                         sql_statements.append(("add_column", sql))
 
                     elif diff["type"] == "extra_column" and self.force:
-                        # Only drop columns in force mode
-                        sql = f"ALTER TABLE {table_name} DROP COLUMN {diff['column']}"
+                        sql = f'ALTER TABLE "{table_name}" DROP COLUMN "{diff["column"]}"'
                         sql_statements.append(("drop_column", sql))
+
+                    elif diff["type"] == "type_mismatch":
+                        column = orm_table.columns[diff["column"]]
+                        new_type_sql = column.type.compile(dialect=engine.dialect)
+                        sql = (
+                            f'ALTER TABLE "{table_name}" ALTER COLUMN "{column.name}" '
+                            f'TYPE {new_type_sql} USING "{column.name}"::{new_type_sql};'
+                        )
+                        sql_statements.append(("alter_column_type", sql))
+
+                    elif diff["type"] == "nullable_mismatch":
+                        column = orm_table.columns[diff["column"]]
+                        if column.nullable:
+                            sql = f'ALTER TABLE "{table_name}" ALTER COLUMN "{column.name}" DROP NOT NULL;'
+                            sql_statements.append(("drop_not_null", sql))
+                        else:
+                            sql = f'ALTER TABLE "{table_name}" ALTER COLUMN "{column.name}" SET NOT NULL;'
+                            sql_statements.append(("set_not_null", sql))
 
         return sql_statements
 

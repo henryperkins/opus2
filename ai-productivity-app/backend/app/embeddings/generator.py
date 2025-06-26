@@ -301,9 +301,9 @@ class EmbeddingGenerator:
         return out[0] if out else []
 
     async def generate_and_store(
-        self, chunks: List[CodeEmbedding], db: Session  # type: ignore [name-defined]
+        self, chunks: List[CodeEmbedding], db: Session, vector_store=None  # type: ignore [name-defined]
     ) -> None:
-        """Create embeddings for *chunks* and persist them in *db*."""
+        """Create embeddings for *chunks* and persist them in *db* and optionally vector store."""
         if not chunks:
             return
 

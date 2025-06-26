@@ -10,7 +10,7 @@ export const validateMessagePayload = (payload) => {
 
     // Check required fields
     requiredFields.forEach(field => {
-        if (!payload.hasOwnProperty(field)) {
+        if (!Object.prototype.hasOwnProperty.call(payload, field)) {
             errors.push(`Missing required field: ${field}`);
         }
     });

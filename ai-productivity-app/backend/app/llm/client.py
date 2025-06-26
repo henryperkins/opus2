@@ -160,25 +160,10 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
     def _get_runtime_config(self) -> Dict[str, Any]:
         """Get current runtime configuration, falling back to static settings."""
         try:
-            # Try to get configuration from database first
-            from app.database import SessionLocal
-            from app.services.config_service import ConfigService
-
-            with SessionLocal() as db:
-                config_service = ConfigService(db)
-                db_config = config_service.get_all_config()
-
-                if db_config:
-                    return db_config
-
+            from app.services.config_cache import get_config
+            return get_config()
         except Exception as e:
-            logger.debug(f"Failed to load config from database: {e}")
-
-        try:
-            # Fallback to in-memory config
-            from app.routers.config import _RUNTIME_CONFIG
-            return _RUNTIME_CONFIG
-        except ImportError:
+            logger.debug(f"Failed to load config from cache: {e}")
             # Final fallback to static settings
             return {
                 "provider": settings.llm_provider,

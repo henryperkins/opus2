@@ -1,10 +1,18 @@
 # backend/app/services/knowledge_service.py
 """Knowledge base service with Qdrant integration."""
 import logging
+import math
+from datetime import datetime
 from typing import List, Dict, Any, Optional
+
+import tiktoken
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.vector_store.qdrant_client import QdrantVectorStore
 from app.embeddings.generator import EmbeddingGenerator
+from app.models.knowledge import KnowledgeDocument
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +27,10 @@ class KnowledgeService:
     ):
         self.vector_store = vector_store
         self.embedding_generator = embedding_generator
+
+        # Context building parameters
+        self.context_alpha = getattr(settings, 'knowledge_context_alpha', 0.7)  # similarity weight
+        self.context_beta = getattr(settings, 'knowledge_context_beta', 0.3)   # recency weight
 
     async def add_knowledge_entry(
         self,
@@ -109,31 +121,129 @@ class KnowledgeService:
     async def build_context(
         self,
         entry_ids: List[str],
-        max_length: int = 4000
+        max_context_length: int = 4000,
+        model_name: str = "gpt-4",
+        db: Session = None
     ) -> Dict[str, Any]:
-        """Build context from knowledge entries."""
-        # In real implementation, fetch full entries from database
-        # For now, we'll use simplified context building
+        """Build production-grade context from knowledge entries with token limits and citations."""
+        if not entry_ids or not db:
+            return {
+                "context": "",
+                "citations": {},
+                "context_length": 0
+            }
 
+        # Get tokenizer for accurate token counting
+        try:
+            enc = tiktoken.encoding_for_model(model_name)
+        except KeyError:
+            # Fallback to a common encoding if model not found
+            enc = tiktoken.get_encoding("cl100k_base")
+
+        # Fetch full knowledge documents from database
+        stmt = select(KnowledgeDocument).where(KnowledgeDocument.id.in_(entry_ids))
+        result = await db.execute(stmt)
+        documents = result.scalars().all()
+
+        if not documents:
+            return {
+                "context": "",
+                "citations": {},
+                "context_length": 0
+            }
+
+        # Rank entries by similarity + recency
+        ranked_entries = self._rank_entries(documents, entry_ids)
+
+        # Build context with token limits
         context_parts = []
-        total_length = 0
+        citation_map = {}
+        tokens_used = 0
 
-        for entry_id in entry_ids:
-            # Simplified content fetch - in production this would
-            # fetch from the knowledge base or cache
-            entry_content = f"[Knowledge entry {entry_id}]"
+        for idx, doc in enumerate(ranked_entries):
+            # Create citation marker
+            marker = f"[{idx + 1}]"
 
-            if total_length + len(entry_content) > max_length:
+            # Prepare content with citation
+            content_with_citation = f"{marker} {doc.content}"
+
+            # Count tokens for this entry
+            entry_tokens = len(enc.encode(content_with_citation))
+
+            # Check if adding this entry would exceed limit
+            if tokens_used + entry_tokens > max_context_length:
+                # Try to fit a truncated version
+                remaining_tokens = max_context_length - tokens_used
+                if remaining_tokens > 100:  # Only truncate if we have reasonable space
+                    # Truncate content to fit
+                    truncated_content = self._truncate_to_tokens(
+                        doc.content, remaining_tokens - 10, enc  # -10 for marker and spacing
+                    )
+                    content_with_citation = f"{marker} {truncated_content}..."
+                    context_parts.append(content_with_citation)
+
+                    # Add to citation map
+                    citation_map[marker] = {
+                        "id": doc.id,
+                        "title": doc.title,
+                        "source": doc.source or "Unknown",
+                        "lines": "truncated"
+                    }
                 break
 
-            context_parts.append(entry_content)
-            total_length += len(entry_content)
+            # Add full content
+            context_parts.append(content_with_citation)
+            tokens_used += entry_tokens
+
+            # Add to citation map
+            citation_map[marker] = {
+                "id": doc.id,
+                "title": doc.title,
+                "source": doc.source or "Unknown",
+                "lines": f"1-{len(doc.content.splitlines())}"
+            }
+
+        final_context = "\n\n".join(context_parts)
+        final_tokens = len(enc.encode(final_context))
 
         return {
-            "context": "\n\n".join(context_parts),
-            "sources": entry_ids,
-            "context_length": total_length
+            "context": final_context,
+            "citations": citation_map,
+            "context_length": final_tokens
         }
+
+    def _rank_entries(self, documents: List[KnowledgeDocument], entry_ids: List[str]) -> List[KnowledgeDocument]:
+        """Rank entries by similarity score + recency."""
+        # Create a mapping for entry order (similarity score proxy)
+        entry_order = {entry_id: idx for idx, entry_id in enumerate(entry_ids)}
+
+        def rank_score(doc):
+            # Similarity score (higher index = lower similarity)
+            similarity_score = 1.0 - (entry_order.get(doc.id, len(entry_ids)) / len(entry_ids))
+
+            # Recency score (more recent = higher score)
+            if doc.created_at:
+                now = datetime.utcnow()
+                age_days = (now - doc.created_at).days
+                # Exponential decay with 30-day half-life
+                recency_score = math.exp(-age_days / 30.0)
+            else:
+                recency_score = 0.5  # Default for missing timestamps
+
+            # Weighted combination
+            return self.context_alpha * similarity_score + self.context_beta * recency_score
+
+        return sorted(documents, key=rank_score, reverse=True)
+
+    def _truncate_to_tokens(self, text: str, max_tokens: int, encoder) -> str:
+        """Truncate text to fit within token limit."""
+        tokens = encoder.encode(text)
+        if len(tokens) <= max_tokens:
+            return text
+
+        # Truncate tokens and decode back to text
+        truncated_tokens = tokens[:max_tokens]
+        return encoder.decode(truncated_tokens)
 
     async def delete_by_project(self, project_id: int):
         """Delete all entries for a project."""

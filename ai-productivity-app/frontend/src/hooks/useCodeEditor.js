@@ -45,7 +45,7 @@ export function useCodeEditor({
   initialCode = '', 
   language = 'plaintext',
   enableCopilot = true,
-  copilotEndpoint = '/api/code/copilot',
+  copilotEndpoint = '/api/v1/code/copilot',
   maxContextLines = 60,
   filename = null,
   relatedFiles = [],

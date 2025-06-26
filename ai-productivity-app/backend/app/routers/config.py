@@ -219,8 +219,17 @@ async def update_model_config(
         raise HTTPException(400, "No configuration provided")
 
     try:
+        # Validate configuration before committing
+        ok, detail = await cfg_svc.validate_config(data)
+        if not ok:
+            raise HTTPException(400, f"Validation failed: {detail}")
+        
         cfg_svc.set_multiple_config(data, updated_by="api_user")
         _RUNTIME_CONFIG.update(data)
+        
+        # Invalidate cache after config update
+        from app.services.config_cache import _cached
+        _cached.cache_clear()
 
         if {"provider", "chat_model", "use_responses_api"} & data.keys():
             # hot-reload global LLM client

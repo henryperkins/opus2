@@ -191,7 +191,39 @@ export default function ResponsiveSplitPane({
         
         {/* Only show resizer when both panels exist */}
         {left && right && (
-          <PanelResizeHandle className="w-px bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-col-resize" />
+          <PanelResizeHandle className="w-px bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-col-resize group">
+            <div 
+              className="h-full w-full flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors"
+              tabIndex={0}
+              role="separator"
+              aria-label={`Resize between ${leftTitle} and ${rightTitle}`}
+              aria-orientation={direction}
+              onKeyDown={(e) => {
+                // Allow keyboard navigation with arrow keys
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || 
+                    e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                  // Prevent default scrolling behavior
+                  e.preventDefault();
+                  // Let react-resizable-panels handle the keyboard interaction
+                }
+              }}
+            >
+              {/* Visual indicator for resize handle */}
+              <div className="opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity">
+                {direction === 'horizontal' ? (
+                  <div className="flex space-x-0.5">
+                    <div className="w-0.5 h-4 bg-gray-400 rounded-full"></div>
+                    <div className="w-0.5 h-4 bg-gray-400 rounded-full"></div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col space-y-0.5">
+                    <div className="w-4 h-0.5 bg-gray-400 rounded-full"></div>
+                    <div className="w-4 h-0.5 bg-gray-400 rounded-full"></div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </PanelResizeHandle>
         )}
         
         {right && (

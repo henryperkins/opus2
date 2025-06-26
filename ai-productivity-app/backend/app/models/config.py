@@ -219,6 +219,20 @@ class ModelConfiguration(Base):
         {"extend_existing": True},
     )
 
+    def merged_params(self, overrides: dict | None = None) -> dict:
+        """Merge default parameters with optional overrides.
+        
+        Args:
+            overrides: Optional dictionary of parameters to override defaults
+            
+        Returns:
+            Merged parameter dictionary with overrides taking precedence
+        """
+        merged = (self.default_params or {}).copy()
+        if overrides:
+            merged.update(overrides)
+        return merged
+
     def __repr__(self):
         return f"<ModelConfiguration(model_id='{self.model_id}', provider='{self.provider}')>"
 

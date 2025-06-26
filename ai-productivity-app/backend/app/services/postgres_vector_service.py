@@ -47,7 +47,6 @@ Performance tips
 
 * When you change the embedding dimension drop & recreate the index.
 
-\"\"\"
 """
 
 from __future__ import annotations
@@ -58,7 +57,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import sqlalchemy as sa
-from sqlalchemy.engine import Engine, Connection
+from sqlalchemy.engine import Engine  # Connection import removed (was unused)
 
 from app.config import settings
 from app.database import get_engine_sync  # helper that returns a *sync* engine
@@ -67,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 
 class PostgresVectorService:
-    \"\"\"pgvector implementation compatible with VectorServiceProtocol.\"\"\"
+    """pgvector implementation compatible with VectorServiceProtocol."""
 
     def __init__(self) -> None:
         self.table_name: str = getattr(
@@ -84,12 +83,12 @@ class PostgresVectorService:
     # --------------------------------------------------------------------- #
 
     async def initialize(self) -> None:  # noqa: D401
-        \"\"\"Create extension / table / indexes idempotently.\"\"\"
+        """Create extension / table / indexes idempotently."""
         with self.engine.begin() as conn:  # type: Connection
             conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector;")
 
             conn.exec_driver_sql(
-                f\"\"\"
+                f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (
                     id           SERIAL PRIMARY KEY,
                     document_id  INTEGER      NOT NULL,
@@ -101,20 +100,20 @@ class PostgresVectorService:
                     metadata     JSONB        NOT NULL,
                     created_at   TIMESTAMPTZ  DEFAULT NOW()
                 );
-                \"\"\"
+                """
             )
 
             # Normal B-tree index for filtering by project
             conn.exec_driver_sql(
-                f\"\"\"CREATE INDEX IF NOT EXISTS idx_{self.table_name}_project
-                       ON {self.table_name}(project_id);\"\"\"
+                f"""CREATE INDEX IF NOT EXISTS idx_{self.table_name}_project
+                       ON {self.table_name}(project_id);"""
             )
 
             # Approximate nearest-neighbour index (cosine distance)
             conn.exec_driver_sql(
-                f\"\"\"CREATE INDEX IF NOT EXISTS idx_{self.table_name}_ivfflat
+                f"""CREATE INDEX IF NOT EXISTS idx_{self.table_name}_ivfflat
                        ON {self.table_name}
-                       USING ivfflat (embedding vector_cosine_ops);\"\"\"
+                       USING ivfflat (embedding vector_cosine_ops);"""
             )
 
         logger.info("pgvector backend ready (table: %s)", self.table_name)
@@ -125,8 +124,9 @@ class PostgresVectorService:
 
     @staticmethod
     def _to_pgvector(vec: np.ndarray) -> str:
-        \"\"\"Convert numpy array (1-D) to pgvector literal.\"\"\"
-        return '[' + ','.join(f\"{x:.6f}\" for x in vec.tolist()) + ']'
+        """Convert numpy array (1-D) to pgvector literal."""
+        # Use str.format to avoid f-string parsing issues within generator
+        return "[" + ",".join("{:.6f}".format(x) for x in vec.tolist()) + "]"
 
     async def insert_embeddings(self, embeddings: List[Dict[str, Any]]) -> List[str]:
         row_ids: List[str] = []
@@ -134,13 +134,13 @@ class PostgresVectorService:
             for emb in embeddings:
                 row = conn.execute(
                     sa.text(
-                        f\"\"\"INSERT INTO {self.table_name}
+                        f"""INSERT INTO {self.table_name}
                                (document_id, chunk_id, project_id,
                                 embedding, content, content_hash, metadata)
                                VALUES
                                (:document_id, :chunk_id, :project_id,
                                 :embedding, :content, :content_hash, :metadata)
-                               RETURNING id\"\"\"
+                               RETURNING id"""
                     ),
                     {
                         "document_id": emb.get("document_id"),
@@ -178,7 +178,7 @@ class PostgresVectorService:
 
         sql_where = ("WHERE " + " AND ".join(where_fragments)) if where_fragments else ""
         sql = (
-            f\"\"\"SELECT id,
+            f"""SELECT id,
                          document_id,
                          chunk_id,
                          project_id,
@@ -188,7 +188,7 @@ class PostgresVectorService:
                   FROM {self.table_name}
                   {sql_where}
                   ORDER BY embedding <#> :query_vec
-                  LIMIT :limit;\"\"\"
+                  LIMIT :limit;"""
         )
 
         results: List[Dict[str, Any]] = []

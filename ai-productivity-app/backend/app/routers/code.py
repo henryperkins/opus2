@@ -18,6 +18,8 @@ import contextlib
 import io
 import textwrap
 import traceback
+import tempfile
+import os
 from typing import List
 from pydantic import BaseModel
 
@@ -35,8 +37,11 @@ from app.code_processing.chunker import SemanticChunker
 from app.code_processing.language_detector import detect_language
 from app.code_processing.parser import CodeParser
 from app.database import get_db
+from app.dependencies import current_user
 from app.models.code import CodeDocument, CodeEmbedding
 from app.models.project import Project
+from app.models.user import User
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -120,12 +125,39 @@ def _process_code_file(
 ###############################################################################
 
 
+# Allowed MIME types for security
+ALLOWED_MIME_TYPES = {
+    "text/plain",
+    "text/x-python",
+    "text/x-java-source",
+    "text/x-c",
+    "text/x-c++src",
+    "text/x-csharp",
+    "text/javascript",
+    "application/javascript",
+    "text/typescript",
+    "application/typescript",
+    "text/x-go",
+    "text/x-rust",
+    "text/html",
+    "text/css",
+    "application/json",
+    "text/yaml",
+    "text/x-yaml",
+    "application/yaml",
+    "text/xml",
+    "application/xml",
+    None,  # Some browsers don't set MIME type for text files
+}
+
+
 @router.post("/projects/{project_id}/upload")
 async def upload_code_files(  # noqa: D401, WPS211
     project_id: int,
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
     """Upload *multiple* source-code files and queue them for parsing.
 
@@ -133,52 +165,123 @@ async def upload_code_files(  # noqa: D401, WPS211
     uploads (same SHA-256 hash) are automatically ignored to save compute.
     """
 
-    # ── Authorisation guard ────────────────────────────────────────────────
+    # ── Authentication & Authorization ─────────────────────────────────────
     project = db.query(Project).filter_by(id=project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # Check if user has write access to project (simplified - in production you'd check ProjectUser role)
+    # For now, assume authenticated users can upload to any project they can see
+
     results: list[dict[str, str]] = []
 
     for upload in files:
-        raw = await upload.read()
-        content_hash = hashlib.sha256(raw).hexdigest()
+        try:
+            # ── MIME type validation ──────────────────────────────────────────
+            if upload.content_type not in ALLOWED_MIME_TYPES:
+                results.append({
+                    "file": upload.filename or "unknown",
+                    "status": "rejected",
+                    "reason": f"Unsupported MIME type: {upload.content_type}"
+                })
+                continue
 
-        existing: CodeDocument | None = (
-            db.query(CodeDocument)
-            .filter_by(
-                project_id=project_id,
-                file_path=upload.filename,
-                content_hash=content_hash,
-            )
-            .first()
-        )
+            # ── Size validation with streaming ────────────────────────────────
+            content_chunks = []
+            content_hash = hashlib.sha256()
+            total_size = 0
 
-        if existing:
-            results.append({"file": upload.filename, "status": "duplicate"})
-            continue
+            # Read file in chunks to validate size without loading all into memory
+            while True:
+                chunk = await upload.read(4096)  # 4KB chunks
+                if not chunk:
+                    break
 
-        content_decoded = raw.decode("utf-8", errors="ignore")
-        language = detect_language(upload.filename, content_decoded)
+                content_hash.update(chunk)
+                total_size += len(chunk)
+                content_chunks.append(chunk)
 
-        doc = CodeDocument(
-            project_id=project_id,
-            file_path=upload.filename,
-            file_size=len(raw),
-            content_hash=content_hash,
-            language=language,
-        )
-        db.add(doc)
-        db.commit()
+                # Check size limit
+                if total_size > settings.max_upload_size:
+                    results.append({
+                        "file": upload.filename or "unknown",
+                        "status": "rejected",
+                        "reason": f"File too large: {total_size} > {settings.max_upload_size}"
+                    })
+                    break
+            else:
+                # File size is acceptable, reconstruct content
+                raw = b''.join(content_chunks)
+                content_hash_hex = content_hash.hexdigest()
 
-        # Kick background processing – ensure tasks parameter exists in
-        # unit tests
-        if background_tasks is not None:
-            background_tasks.add_task(
-                _process_code_file, db, doc.id, content_decoded, language
-            )
+                # ── Duplicate detection by content hash only ──────────────────
+                existing: CodeDocument | None = (
+                    db.query(CodeDocument)
+                    .filter_by(content_hash=content_hash_hex)
+                    .first()
+                )
 
-        results.append({"file": upload.filename, "status": "queued"})
+                if existing:
+                    results.append({
+                        "file": upload.filename or "unknown",
+                        "status": "duplicate",
+                        "existing_file": existing.file_path
+                    })
+                    continue
+
+                # ── Store file to disk securely ───────────────────────────────
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.code') as tmp_file:
+                        tmp_file.write(raw)
+                        tmp_file.flush()
+                        stored_path = tmp_file.name
+
+                    content_decoded = raw.decode("utf-8", errors="ignore")
+                    language = detect_language(upload.filename, content_decoded)
+
+                    doc = CodeDocument(
+                        project_id=project_id,
+                        file_path=upload.filename or f"upload_{content_hash_hex[:8]}",
+                        file_size=total_size,
+                        content_hash=content_hash_hex,
+                        language=language,
+                    )
+                    db.add(doc)
+                    db.commit()
+
+                    # Clean up temporary file
+                    try:
+                        os.unlink(stored_path)
+                    except OSError:
+                        logger.warning("Failed to clean up temp file: %s", stored_path)
+
+                    # Kick background processing
+                    if background_tasks is not None:
+                        background_tasks.add_task(
+                            _process_code_file, db, doc.id, content_decoded, language
+                        )
+
+                    results.append({
+                        "file": upload.filename or "unknown",
+                        "status": "queued",
+                        "document_id": doc.id
+                    })
+
+                except Exception as storage_exc:
+                    logger.error("Failed to store file: %s", storage_exc)
+                    results.append({
+                        "file": upload.filename or "unknown",
+                        "status": "error",
+                        "reason": "Storage failure"
+                    })
+
+        except Exception as exc:
+            logger.error("Upload processing failed for %s: %s", upload.filename, exc)
+            results.append({
+                "file": upload.filename or "unknown",
+                "status": "error",
+                "reason": "Processing failure"
+            })
 
     return {"results": results}
 

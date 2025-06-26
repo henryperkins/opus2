@@ -19,7 +19,7 @@ export default function StreamingMessage({
   const contentRef = useRef(null);
   const lastUpdateRef = useRef(Date.now());
 
-  // Simulate streaming effect
+  // Efficient streaming effect with token-based approach
   useEffect(() => {
     if (!isStreaming && content === displayedContent) {
       setIsComplete(true);
@@ -34,36 +34,44 @@ export default function StreamingMessage({
       return;
     }
 
-    // Streaming simulation
-    let currentIndex = displayedContent.length;
-    const targetLength = content.length;
-
-    const streamInterval = setInterval(() => {
-      if (currentIndex >= targetLength) {
-        clearInterval(streamInterval);
-        setIsComplete(true);
-        return;
+    // Only update if content actually changed to prevent unnecessary re-renders
+    if (content !== displayedContent) {
+      // For streaming, append only new content to prevent flicker
+      const newContentLength = content.length;
+      const currentContentLength = displayedContent.length;
+      
+      if (newContentLength > currentContentLength) {
+        // Append new tokens progressively
+        const newTokens = content.substring(currentContentLength);
+        
+        // Use RAF for smooth updates
+        const animate = () => {
+          setDisplayedContent(prev => {
+            if (prev.length >= content.length) {
+              setIsComplete(true);
+              return content;
+            }
+            
+            // Append new characters with natural timing
+            const chunkSize = Math.min(3, content.length - prev.length);
+            const nextContent = content.substring(0, prev.length + chunkSize);
+            setCurrentTokens(Math.floor(nextContent.length / 4));
+            
+            // Schedule next update if more content to display
+            if (nextContent.length < content.length) {
+              setTimeout(animate, 20);
+            } else {
+              setIsComplete(true);
+            }
+            
+            return nextContent;
+          });
+        };
+        
+        animate();
       }
-
-      // Variable speed streaming for more natural feel
-      const chunkSize = Math.random() > 0.95 ? 1 : Math.floor(Math.random() * 4) + 2;
-      const nextIndex = Math.min(currentIndex + chunkSize, targetLength);
-
-      setDisplayedContent(content.substring(0, nextIndex));
-      setCurrentTokens(Math.floor(nextIndex / 4));
-      currentIndex = nextIndex;
-
-      // Auto-scroll to bottom
-      if (contentRef.current) {
-        const parent = contentRef.current.parentElement;
-        if (parent) {
-          parent.scrollTop = parent.scrollHeight;
-        }
-      }
-    }, 30);
-
-    return () => clearInterval(streamInterval);
-  }, [content, isStreaming, displayedContent]);
+    }
+  }, [content, isStreaming]);
 
   // Cursor animation
   const CursorAnimation = () => (

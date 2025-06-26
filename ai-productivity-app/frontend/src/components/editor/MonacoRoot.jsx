@@ -1,5 +1,7 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect, useRef } from 'react';
 import LoadingSpinner from '../common/LoadingSpinner';
+import { useTheme } from '../../hooks/useTheme';
+import useCodeEditor from '../../hooks/useCodeEditor';
 
 // Lazy load Monaco Editor to optimize bundle size
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
@@ -12,7 +14,7 @@ const MonacoRoot = ({
   value = '',
   defaultValue = '',
   language = 'javascript',
-  theme = 'vs-dark',
+  theme: customTheme,
   height = '400px',
   width = '100%',
   options = {},
@@ -21,8 +23,45 @@ const MonacoRoot = ({
   onValidate,
   loading: loadingComponent,
   className = '',
+  filename = null,
+  enableCopilot = true,
   ...props 
 }) => {
+  const { theme: appTheme } = useTheme();
+  const editorRef = useRef(null);
+  
+  // Use app theme if no custom theme is provided
+  const effectiveTheme = customTheme || (appTheme === 'dark' ? 'vs-dark' : 'vs-light');
+  
+  // Initialize code editor with Monacopilot
+  const { editorRef: codeEditorRef, copilotEnabled, triggerCompletion } = useCodeEditor({
+    language,
+    enableCopilot,
+    filename,
+    maxContextLines: 80
+  });
+  // Handle editor mount with proper disposal
+  const handleEditorMount = (editor, monaco) => {
+    editorRef.current = editor;
+    
+    // Call both the useCodeEditor mount handler and custom onMount
+    if (codeEditorRef.onMount) {
+      codeEditorRef.onMount(editor, monaco);
+    }
+    if (onMount) {
+      onMount(editor, monaco);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (editorRef.current) {
+        editorRef.current.dispose();
+      }
+    };
+  }, []);
+
   const defaultOptions = {
     automaticLayout: true,
     minimap: { enabled: false },
@@ -63,11 +102,11 @@ const MonacoRoot = ({
           value={value}
           defaultValue={defaultValue}
           language={language}
-          theme={theme}
+          theme={effectiveTheme}
           height={height}
           width={width}
           options={defaultOptions}
-          onMount={onMount}
+          onMount={handleEditorMount}
           onChange={onChange}
           onValidate={onValidate}
           loading={LoadingComponent}

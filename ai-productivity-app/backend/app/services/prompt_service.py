@@ -241,11 +241,26 @@ class PromptService:
             # Render the template with variables
             rendered_prompt = template.render_prompt(execute_data.variables)
             
-            # Merge model preferences
+            # Merge model preferences with ModelConfiguration defaults
             final_model_prefs = template.model_preferences.copy() if template.model_preferences else {}
             if execute_data.model_overrides:
                 override_dict = execute_data.model_overrides.dict(exclude_unset=True, by_alias=True)
                 final_model_prefs.update(override_dict)
+            
+            # Get runtime config and enhance with ModelConfiguration defaults
+            from app.services.config_service import ConfigService
+            from app.services.config_cache import get_config
+            
+            runtime_cfg = get_config()
+            config_service = ConfigService(self.db)
+            
+            # Get the model configuration for the specified model
+            model_id = final_model_prefs.get("model_id") or runtime_cfg.get("chat_model")
+            if model_id:
+                model_cfg = config_service.get_model_configuration(model_id)
+                if model_cfg:
+                    # Use merged_params to combine defaults with overrides
+                    final_model_prefs = model_cfg.merged_params(final_model_prefs)
             
             # Increment usage count
             template.increment_usage()

@@ -37,6 +37,9 @@ from ..llm.streaming import StreamingHandler
 from ..llm import tools as llm_tools
 from ..models.chat import ChatMessage, ChatSession
 from ..services.chat_service import ChatService
+from ..services.knowledge_service import KnowledgeService
+from ..vector_store.qdrant_client import QdrantVectorStore
+from ..embeddings.generator import EmbeddingGenerator
 from ..websocket.manager import connection_manager
 from .commands import command_registry
 from .context_builder import ContextBuilder
@@ -57,6 +60,12 @@ class ChatProcessor:
         self.chat_service = ChatService(db)
         self.context_builder = ContextBuilder(db)
 
+        # Initialize knowledge service for knowledge base retrieval
+        if not hasattr(self, "_kb"):
+            vs = QdrantVectorStore()
+            eg = EmbeddingGenerator()
+            self._kb = KnowledgeService(vs, eg)
+
     # --------------------------------------------------------------------- #
     # PUBLIC API
     # --------------------------------------------------------------------- #
@@ -73,7 +82,7 @@ class ChatProcessor:
             session, context, commands = await self._prepare_message_context(
                 session_id, message, websocket
             )
-            
+
             # Heavy LLM work happens outside any transaction
             if commands:
                 await self._handle_command_results(
@@ -124,6 +133,34 @@ class ChatProcessor:
             )
             context["project_id"] = session.project_id
 
+            # 3. Knowledge base search
+            try:
+                kb_hits = await self._kb.search_knowledge(
+                    query=message.content,
+                    project_ids=[session.project_id],
+                    limit=10
+                )
+
+                # Extract entry IDs for context building
+                entry_ids = [result["id"] for result in kb_hits]
+
+                # Build knowledge context with token limits
+                if entry_ids:
+                    ctx_kb = await self._kb.build_context(
+                        entry_ids=entry_ids,
+                        max_context_length=getattr(settings, 'model_ctx', 4000) - 1024,
+                        db=self.db
+                    )
+                    context["knowledge"] = ctx_kb["context"]
+                    context["citations"] = ctx_kb["citations"]
+                else:
+                    context["knowledge"] = ""
+                    context["citations"] = {}
+            except Exception as exc:
+                logger.warning("Knowledge base search failed: %s", exc)
+                context["knowledge"] = ""
+                context["citations"] = {}
+
             message.referenced_files = [
                 ref["path"] for ref in context.get("file_references", [])
             ]
@@ -150,7 +187,7 @@ class ChatProcessor:
                     cmd["command"]: cmd.get("prompt", cmd.get("message", ""))
                     for cmd in commands
                 }
-            
+
             return session, context, commands or []
 
     async def _handle_command_results(
@@ -325,6 +362,13 @@ class ChatProcessor:
             "Explain, test and refactor code. Use file paths & line numbers."
         )
         messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+
+        # Add knowledge base context as system message
+        if context.get("knowledge"):
+            messages.append({
+                "role": "system",
+                "content": f"Relevant knowledge base information:\n{context['knowledge']}"
+            })
 
         # optional conversation summary
         if len(conversation) >= 15:

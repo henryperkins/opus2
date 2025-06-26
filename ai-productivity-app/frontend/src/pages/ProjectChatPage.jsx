@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 // Data hooks
 import { useChat } from '../hooks/useChat';
@@ -38,11 +39,14 @@ import ResponseTransformer from '../components/chat/ResponseTransformer';
 import ModelSwitcher from '../components/chat/ModelSwitcher';
 import PromptManager from '../components/settings/PromptManager';
 
+// Editor components
+import MonacoRoot from '../components/editor/MonacoRoot';
+
 // Analytics
 import ResponseQuality from '../components/analytics/ResponseQuality';
 
 // Icons
-import { Brain, Settings, Search, BarChart2, Sparkles } from 'lucide-react';
+import { Brain, Settings, Search, BarChart2, Sparkles, Code2 } from 'lucide-react';
 
 // Utils
 import { toast } from '../components/common/Toast';
@@ -121,6 +125,7 @@ export default function ProjectChatPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [showPromptManager, setShowPromptManager] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showMonacoEditor, setShowMonacoEditor] = useState(false);
 
   // Editor context
   const [editorContent, setEditorContent] = useState('');
@@ -501,6 +506,15 @@ export default function ProjectChatPage() {
               <Search className="w-5 h-5" />
             </button>
             <button
+              onClick={() => setShowMonacoEditor((v) => !v)}
+              className={`p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg ${
+                showMonacoEditor ? 'bg-blue-100 dark:bg-blue-900' : ''
+              }`}
+              aria-label="Toggle Code Editor"
+            >
+              <Code2 className="w-5 h-5" />
+            </button>
+            <button
               onClick={() => setShowPromptManager(true)}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
               aria-label="Prompt Manager"
@@ -558,26 +572,95 @@ export default function ProjectChatPage() {
             minSize={25}
             defaultSize={`${isDesktopXL ? 60 : 70}%`}
             left={(
-              <div className="flex flex-col h-full overflow-hidden">
-                <div
-                  className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto"
-                  ref={messageListRef}
-                >
-                  {messages.map(renderMessage)}
-                  {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
-                  <div ref={messagesEndRef} />
+              showMonacoEditor && isDesktop ? (
+                // Vertical split for chat and Monaco editor
+                <PanelGroup direction="vertical" id="chat-monaco-layout">
+                  <Panel minSize={50} defaultSize={70}>
+                    <div className="flex flex-col h-full overflow-hidden">
+                      <div
+                        className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto"
+                        ref={messageListRef}
+                      >
+                        {messages.map(renderMessage)}
+                        {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
+                        <div ref={messagesEndRef} />
+                      </div>
+                      <div className="flex-shrink-0">
+                        <EnhancedCommandInput
+                          onSend={handleSendMessage}
+                          onTyping={sendTypingIndicator}
+                          projectId={projectId}
+                          editorContent={editorContent}
+                          currentFile={currentFile}
+                          userId={user?.id}
+                        />
+                      </div>
+                    </div>
+                  </Panel>
+                  
+                  <PanelResizeHandle className="h-px bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-row-resize group">
+                    <div 
+                      className="w-full h-full flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors"
+                      tabIndex={0}
+                      role="separator"
+                      aria-label="Resize between chat and code editor"
+                      aria-orientation="horizontal"
+                    >
+                      <div className="opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity">
+                        <div className="flex flex-col space-y-0.5">
+                          <div className="w-4 h-0.5 bg-gray-400 rounded-full"></div>
+                          <div className="w-4 h-0.5 bg-gray-400 rounded-full"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </PanelResizeHandle>
+                  
+                  <Panel defaultSize={30} minSize={20} collapsible>
+                    <div className="h-full p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">Code Editor</h3>
+                        <button
+                          onClick={() => setShowMonacoEditor(false)}
+                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+                          aria-label="Close code editor"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <MonacoRoot
+                        value={editorContent}
+                        onChange={setEditorContent}
+                        language={editorLanguage}
+                        height="calc(100% - 3rem)"
+                        filename={currentFile}
+                        enableCopilot={true}
+                      />
+                    </div>
+                  </Panel>
+                </PanelGroup>
+              ) : (
+                // Normal chat without Monaco editor
+                <div className="flex flex-col h-full overflow-hidden">
+                  <div
+                    className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto"
+                    ref={messageListRef}
+                  >
+                    {messages.map(renderMessage)}
+                    {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
+                    <div ref={messagesEndRef} />
+                  </div>
+                  <div className="flex-shrink-0">
+                    <EnhancedCommandInput
+                      onSend={handleSendMessage}
+                      onTyping={sendTypingIndicator}
+                      projectId={projectId}
+                      editorContent={editorContent}
+                      currentFile={currentFile}
+                      userId={user?.id}
+                    />
+                  </div>
                 </div>
-                <div className="flex-shrink-0">
-                  <EnhancedCommandInput
-                    onSend={handleSendMessage}
-                    onTyping={sendTypingIndicator}
-                    projectId={projectId}
-                    editorContent={editorContent}
-                    currentFile={currentFile}
-                    userId={user?.id}
-                  />
-                </div>
-              </div>
+              )
             )}
             right={showKnowledgeAssistant ? desktopAssistantPanel : null}
             leftTitle="Chat"

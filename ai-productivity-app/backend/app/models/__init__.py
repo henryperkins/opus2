@@ -1,11 +1,34 @@
-# Model package exports
+"""
+Package initializer for *app.models* (a.k.a. *backend.app.models*).
+
+Exports **all** SQLAlchemy ORM classes so callers can simply:
+
+    >>> from app.models import Project, User, ChatSession, ...
+
+It also resolves the import-path aliasing problem that can cause
+SQLAlchemy to see *two* differently-named copies of the same model
+class (e.g. ``app.models.Project`` vs ``backend.app.models.Project``).
+
+The trick is to make *both* package names point at the **same**
+module object inside ``sys.modules`` and to mirror every already-
+imported sub-module from one namespace into the other.
+
+This file must be imported early in application start-up so that **all**
+model modules are registered with SQLAlchemy *before* metadata creation.
+"""
+
+from __future__ import annotations
+
+# --------------------------------------------------------------------------- #
+# Public exports – ORM classes                                               #
+# --------------------------------------------------------------------------- #
+
 from .base import Base, TimestampMixin
 from .user import User
 from .session import Session
-# Import Phase-4 models so they are registered with SQLAlchemy before metadata
-# creation.  These imports must remain *after* Base to avoid circular deps.
 from .project import Project, ProjectStatus
 from .code import CodeDocument, CodeEmbedding
+from .embedding import EmbeddingMetadata
 from .search_history import SearchHistory
 from .import_job import ImportJob, ImportStatus
 from .chat import ChatSession, ChatMessage
@@ -14,84 +37,81 @@ from .config import RuntimeConfig, ConfigHistory
 from .prompt import PromptTemplate
 
 __all__ = [
+    # infrastructure
     "Base",
     "TimestampMixin",
+    # auth / user
     "User",
     "Session",
+    # project & code
     "Project",
     "ProjectStatus",
     "CodeDocument",
     "CodeEmbedding",
+    # embeddings / search
+    "EmbeddingMetadata",
     "SearchHistory",
     "ImportJob",
     "ImportStatus",
+    # chat
     "ChatSession",
     "ChatMessage",
+    # timeline / config
     "TimelineEvent",
     "RuntimeConfig",
     "ConfigHistory",
     "PromptTemplate",
 ]
 
-# ---------------------------------------------------------------------------
-# Import-path *aliasing* ------------------------------------------------------
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- #
+# Import-path aliasing                                                       #
+# --------------------------------------------------------------------------- #
 #
-# The test-runner collects the repository from its **root** directory which
-# places both the top-level *backend/* package *and* its child package
-# hierarchy on ``sys.path``.  Depending on the exact import order this can
-# lead to the **same** module being loaded twice – once via the canonical short
-# path (``app.models.<sub>``) and a second time via the longer
-# ``backend.app.models.<sub>`` path.  SQLAlchemy identifies ORM classes by
-# **object identity**, therefore two different *module* objects that both
-# define a ``Project`` class are interpreted as two *independent* model
-# classes.  Relationship strings such as ``relationship("Project")`` become
-# ambiguous and SQLAlchemy aborts the Mapper configuration with the infamous
-# *Multiple classes found for path "Project"* error.
+# The test-runner adds the **repository root** to ``sys.path`` which exposes
+# *both* the shorthand   ``app.models.*``   **and** the longer
+# ``backend.app.models.*`` package hierarchies.  If a given sub-module is
+# imported once via each path, Python loads two separate module objects.
 #
-# To guarantee that *all* import paths return the *same* module object we
-# publish aliases in ``sys.modules`` for both directions:  if a sub-module is
-# imported under ``app.models.<sub>`` we expose it under the corresponding
-# ``backend.app.models.<sub>`` name – and vice-versa.  This single, central
-# shim covers *every* model file without having to repeat the aliasing snippet
-# in every module.
-# ---------------------------------------------------------------------------
+# SQLAlchemy identifies ORM classes by object identity, so duplicate modules
+# create duplicate class objects and trigger:
+#
+#     sqlalchemy.exc.InvalidRequestError:
+#     Multiple classes found for path "Project" in the registry.
+#
+# To prevent that we (1) register an alias for the package itself and
+# (2) mirror every **already-imported** sub-module from one namespace
+#     into the other (both directions, just once).
+#
+# If we ever switch to *lazy* model imports we can re-introduce a meta
+# path-finder to keep the two namespaces in sync at import time, but for
+# now a one-shot sync during start-up is sufficient.
 
-from types import ModuleType as _ModuleType
-import sys as _sys
+import sys
+from types import ModuleType
 
-# Map *this* package itself first so that both base package names resolve to
-# the identical module object.
-_sys.modules.setdefault("backend.app.models", _sys.modules[__name__])
+# Point *both* package names at the same module object.
+sys.modules.setdefault("backend.app.models", sys.modules[__name__])
 
-# Mirror already-imported sub-modules of *either* path onto the counterpart.
 _PREFIX_APP = "app.models."
 _PREFIX_BACKEND = "backend.app.models."
 
 
-def _alias_submodules(prefix_from: str, prefix_to: str) -> None:  # noqa: D401
-    """Expose every module under *prefix_from* also under *prefix_to*."""
-
-    for _name, _module in list(_sys.modules.items()):
-        if not isinstance(_module, _ModuleType):  # pragma: no cover – defensive
+def _alias_submodules(prefix_from: str, prefix_to: str) -> None:
+    """Mirror every sub-module under *prefix_from* into *prefix_to*."""
+    for name, module in list(sys.modules.items()):
+        if not isinstance(module, ModuleType):      # pragma: no cover – defensive
             continue
-        if _name.startswith(prefix_from):
-            _sub = _name[len(prefix_from) :]
-            _target = prefix_to + _sub
-            if _target not in _sys.modules:
-                _sys.modules[_target] = _module
+        if name.startswith(prefix_from):
+            suffix = name[len(prefix_from) :]
+            target = prefix_to + suffix
+            if target not in sys.modules:
+                sys.modules[target] = module
 
-# Perform a one-time synchronisation for modules that have been imported up to
-# this point.
+
+# One-time bidirectional sync for everything imported *so far*.
 _alias_submodules(_PREFIX_APP, _PREFIX_BACKEND)
 _alias_submodules(_PREFIX_BACKEND, _PREFIX_APP)
 
-# ---------------------------------------------------------------------------
-# For now the *static* one-time synchronisation above is sufficient because all
-# model sub-modules are imported eagerly at application start-up.  Should we
-# ever migrate to *lazy* model loading we can revisit this and install a small
-# import hook to mirror future imports as well (see git history for a possible
-# implementation).  Removing the hook avoids the risk of subtle recursion
-# issues inside Python's import machinery.
-# ---------------------------------------------------------------------------
-
+# --------------------------------------------------------------------------- #
+# End of file                                                                 #
+# --------------------------------------------------------------------------- #

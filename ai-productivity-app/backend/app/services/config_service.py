@@ -9,6 +9,7 @@ import re
 
 from app.models.config import RuntimeConfig, ConfigHistory, ModelConfiguration, ModelUsageMetrics
 from app.config import settings
+from app.utils.crypto import encrypt_secret, decrypt_secret, is_secret_key, mask_secret_value, is_encryption_available
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +34,42 @@ class ConfigService:
         config = self.db.query(RuntimeConfig).filter_by(key=key).first()
         return config.value if config else None
 
-    def get_all_config(self) -> Dict[str, Any]:
-        """Get all configuration as a dictionary."""
+    def get_all_config(self, include_secrets: bool = True, mask_secrets: bool = False) -> Dict[str, Any]:
+        """Get all configuration as a dictionary.
+        
+        Args:
+            include_secrets: Whether to include secret values in the result
+            mask_secrets: Whether to mask secret values for display
+        """
         configs = self.db.query(RuntimeConfig).all()
-        return {config.key: config.value for config in configs}
+        result = {}
+        
+        for config in configs:
+            key = config.key
+            value = config.value
+            
+            # Handle secret values
+            if config.value_type == "secret" and value:
+                if not include_secrets:
+                    continue  # Skip secret values entirely
+                
+                try:
+                    # Decrypt the secret value
+                    decrypted_value = decrypt_secret(value)
+                    if mask_secrets:
+                        value = mask_secret_value(decrypted_value)
+                    else:
+                        value = decrypted_value
+                except Exception as e:
+                    logger.warning(f"Failed to decrypt secret for key {key}: {e}")
+                    value = "***" if mask_secrets else None
+            elif is_secret_key(key) and mask_secrets and value:
+                # Mask unencrypted secrets for display
+                value = mask_secret_value(str(value))
+            
+            result[key] = value
+        
+        return result
 
     def set_config(self, key: str, value: Any, description: str = None,
                    requires_restart: bool = False, updated_by: str = None) -> RuntimeConfig:
@@ -49,11 +82,24 @@ class ConfigService:
         existing = self.db.query(RuntimeConfig).filter_by(key=key).first()
         old_value = existing.value if existing else None
 
+        # Encrypt secret values if encryption is available
+        stored_value = value
+        value_type = self._get_value_type(value)
+        if is_secret_key(key) and isinstance(value, str) and value and is_encryption_available():
+            try:
+                stored_value = encrypt_secret(value)
+                value_type = "secret"
+                logger.debug(f"Encrypted secret value for key: {key}")
+            except Exception as e:
+                logger.warning(f"Failed to encrypt secret for key {key}: {e}")
+                # Continue with unencrypted value but log the issue
+
         if existing:
             # Update existing configuration
-            existing.value = value
+            existing.value = stored_value
             if description is not None:
                 existing.description = description
+            existing.value_type = value_type
             existing.requires_restart = requires_restart
             existing.updated_by = updated_by
             config = existing
@@ -61,8 +107,8 @@ class ConfigService:
             # Create new configuration
             config = RuntimeConfig(
                 key=key,
-                value=value,
-                value_type=self._get_value_type(value),
+                value=stored_value,
+                value_type=value_type,
                 description=description,
                 requires_restart=requires_restart,
                 updated_by=updated_by
@@ -94,15 +140,28 @@ class ConfigService:
                 existing = self.db.query(RuntimeConfig).filter_by(key=key).first()
                 old_value = existing.value if existing else None
 
+                # Encrypt secret values if encryption is available
+                stored_value = value
+                value_type = self._get_value_type(value)
+                if is_secret_key(key) and isinstance(value, str) and value and is_encryption_available():
+                    try:
+                        stored_value = encrypt_secret(value)
+                        value_type = "secret"
+                        logger.debug(f"Encrypted secret value for key: {key}")
+                    except Exception as e:
+                        logger.warning(f"Failed to encrypt secret for key {key}: {e}")
+                        # Continue with unencrypted value but log the issue
+
                 if existing:
-                    existing.value = value
+                    existing.value = stored_value
+                    existing.value_type = value_type
                     existing.updated_by = updated_by
                     results[key] = existing
                 else:
                     config = RuntimeConfig(
                         key=key,
-                        value=value,
-                        value_type=self._get_value_type(value),
+                        value=stored_value,
+                        value_type=value_type,
                         updated_by=updated_by
                     )
                     self.db.add(config)
@@ -372,3 +431,96 @@ class ConfigService:
                 }
 
         return None
+
+    # Configuration Validation
+
+    async def validate_config(self, config_dict: Dict[str, Any]) -> tuple[bool, str]:
+        """Validate a configuration by testing it with the LLM provider.
+        
+        Args:
+            config_dict: Configuration dictionary to validate
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        import asyncio
+        import time
+        from app.llm.client import LLMClient
+        
+        provider = config_dict.get("provider", "openai")
+        model = config_dict.get("chat_model", "gpt-3.5-turbo")
+        temperature = config_dict.get("temperature", 0.7)
+        max_tokens = config_dict.get("max_tokens", 50)
+        use_responses = config_dict.get("use_responses_api", False)
+
+        try:
+            client = LLMClient()
+            await client.reconfigure(
+                provider=provider,
+                model=model,
+                use_responses_api=use_responses,
+            )
+
+            # Determine which endpoint to test
+            if provider == "azure" and use_responses:
+                # Test Responses API
+                try:
+                    resp = await asyncio.wait_for(
+                        client.respond(
+                            input="Say 'test successful' briefly.",
+                            effort="low",
+                            summary="auto",
+                        ),
+                        timeout=30,
+                    )
+                    # Responses objects return text at resp.output[-1].content[0].text
+                    if hasattr(resp, "output") and resp.output:
+                        resp_text = resp.output[-1].content[0].text.strip()
+                    else:  # stub / fallback
+                        resp_text = str(resp)
+                except asyncio.TimeoutError:
+                    return False, "Responses-API test timed out after 30 seconds"
+            else:
+                # Test Chat Completions
+                try:
+                    resp = await asyncio.wait_for(
+                        client.complete(
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "Respond with 'test successful' exactly.",
+                                },
+                                {"role": "user", "content": "Ping"},
+                            ],
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            stream=False,
+                        ),
+                        timeout=30,
+                    )
+                except asyncio.TimeoutError:
+                    return False, "Chat test timed out after 30 seconds"
+
+                resp_text = (
+                    resp.choices[0].message.content.strip()
+                    if hasattr(resp, "choices")
+                    else str(resp)
+                )
+
+            # Check if response contains expected text
+            success = "test" in resp_text.lower()
+            if success:
+                return True, "Configuration validation successful"
+            else:
+                return False, f"Unexpected response from model: {resp_text[:100]}"
+
+        except Exception as exc:
+            msg = str(exc).lower()
+            if any(k in msg for k in ("api key", "unauthorized")):
+                return False, "Authentication failed - check your API key"
+            elif any(k in msg for k in ("not found", "invalid")):
+                return False, f"Invalid model: {model}"
+            elif any(k in msg for k in ("timeout", "connection")):
+                return False, "Connection failed - verify endpoint & network"
+            else:
+                return False, f"Test failed: {exc}"

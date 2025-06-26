@@ -23,7 +23,32 @@ from typing import Generator
 # ---------------------------------------------------------------------------
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+# SQLAlchemy ≥2.0 ships ``async_sessionmaker``.  Older 1.4-x series expose only
+# ``AsyncSession`` and ``create_async_engine``.  Import with graceful fallback
+# so maintenance scripts (e.g. *auto_align_db*) still run under environments
+# pinned to an earlier SQLAlchemy revision.
+try:
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession  # type: ignore
+except ImportError:  # pragma: no cover – SQLAlchemy < 2.0
+    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession  # type: ignore
+    from sqlalchemy.orm import sessionmaker as _sync_sessionmaker
+
+    # -----------------------------------------------------------------------
+    # Compatibility shim: re-export a minimal ``async_sessionmaker`` helper
+    # that mirrors the 2.0 API sufficiently for this codebase.
+    # -----------------------------------------------------------------------
+    def async_sessionmaker(
+        bind,  # noqa: D401 – signature mimics SQLAlchemy factory
+        *,
+        expire_on_commit: bool = False,
+    ):  # type: ignore
+        """Return a session factory that produces AsyncSession instances.
+
+        This stub delegates to the synchronous ``sessionmaker`` but configures
+        it with ``class_=AsyncSession`` so the returned objects provide the
+        async interface expected by callers.
+        """
+        return _sync_sessionmaker(bind=bind, class_=AsyncSession, expire_on_commit=expire_on_commit)
 
 # Register SQLite fallbacks only when the package is importable.  The
 # *sqlalchemy.dialects.postgresql* module might be missing in minimal
@@ -51,7 +76,7 @@ except ModuleNotFoundError:  # pragma: no cover – PostgreSQL dialect missing
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.config import settings
+from app.config import settings  # pylint: disable=import-error
 
 # Create engine
 engine = create_engine(
@@ -79,7 +104,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # default).
 # ---------------------------------------------------------------------------
 
-from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse  # noqa: E402
 
 
 def _build_async_db_url(raw_url: str) -> str:
@@ -155,7 +180,7 @@ def init_db() -> None:
     # core tables are always created even when optional modules cannot be
     # loaded.
 
-    from app.models import (  # noqa: F401  # pylint: disable=unused-import
+    from app.models import (  # noqa: F401  # pylint: disable=unused-import,import-error
         user,
         project,
         timeline,
@@ -185,7 +210,8 @@ def init_db() -> None:
     # reliably present while the test runner is active – and skip the table
     # creation in that case.
 
-    import sys, os
+    import sys
+    import os
 
     # Skip table creation when the module is imported as part of the **test
     # suite**.  Checking for the *pytest* module is more reliable than the
@@ -217,7 +243,8 @@ def init_db() -> None:
 # renaming files or touching the public test-suite.
 # ---------------------------------------------------------------------------
 
-import types as _types
+
+import types as _types  # noqa: E402
 
 
 def _install_transactions_submodule() -> None:  # noqa: D401 – helper
@@ -239,7 +266,7 @@ def _install_transactions_submodule() -> None:  # noqa: D401 – helper
         # Fallback to a minimal stub when the side-car file was removed.
         pass
 
-    _mod = _types.ModuleType(__name__ + ".transactions")
+    _mod = _types.ModuleType(__name__ + ".transactions")  # pylint: disable=attribute-defined-outside-init
 
     @_contextlib.contextmanager  # type: ignore[misc]
     def atomic(session: Session):  # noqa: D401 – identical signature
@@ -255,7 +282,7 @@ def _install_transactions_submodule() -> None:  # noqa: D401 – helper
 
     _mod.atomic = atomic  # type: ignore[attr-defined]
 
-    _sys.modules[_mod.__name__] = _mod
+    _sys.modules[_mod.__name__] = _mod  # pylint: disable=no-member
     setattr(_sys.modules[__name__], "transactions", _mod)
 
 

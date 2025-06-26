@@ -39,9 +39,18 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
     """
     # Startup
     init_db()
+
+    # Start embedding worker background loop
+    from app.embeddings.worker import start_background_loop
+    start_background_loop()
+
     yield
     # Shutdown
     await close_redis()  # Close Redis connection pool
+
+    # Stop embedding worker
+    from app.embeddings.worker import stop_background_loop
+    await stop_background_loop()
 
 
 # Create FastAPI application
