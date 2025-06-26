@@ -5,7 +5,7 @@
 //   • useWebSocketChannel for live streaming / updates
 //   • Optimistic mutations for edit / delete
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import chatAPI from '../api/chat';
 import { useAuth } from './useAuth';
@@ -111,10 +111,10 @@ export function useChat(projectId, preferredSessionId = null) {
                 const map = new Map(prev);
                 const m = map.get(data.message_id) || { id: data.message_id, content: '', isStreaming: true };
                 // Create new object to avoid mutation
-                const updatedMessage = { 
-                  ...m, 
+                const updatedMessage = {
+                  ...m,
                   content: m.content + (data.content || ''),
-                  lastUpdated: Date.now() 
+                  lastUpdated: Date.now()
                 };
                 map.set(data.message_id, updatedMessage);
                 return map;
@@ -124,10 +124,10 @@ export function useChat(projectId, preferredSessionId = null) {
               setStreamingMessages((prev) => {
                 const map = new Map(prev);
                 const streamingMessage = map.get(data.message_id);
-                
+
                 if (streamingMessage) {
                   const finalContent = streamingMessage.content || data.content || '';
-                  
+
                   const completeMessage = data.message || {
                     id: data.message_id,
                     role: 'assistant',
@@ -135,12 +135,12 @@ export function useChat(projectId, preferredSessionId = null) {
                     created_at: new Date().toISOString(),
                     metadata: data.metadata || {}
                   };
-                  
+
                   // Atomic update: add complete message and remove streaming state
                   qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, completeMessage]);
                   map.delete(data.message_id);
                 }
-                
+
                 return map;
               });
             }
@@ -151,10 +151,10 @@ export function useChat(projectId, preferredSessionId = null) {
             setStreamingMessages((prev) => {
               const map = new Map(prev);
               const m = map.get(data.message_id) || { id: data.message_id, content: '', isStreaming: true };
-              const updatedMessage = { 
-                ...m, 
+              const updatedMessage = {
+                ...m,
                 content: m.content + (data.chunk || ''),
-                lastUpdated: Date.now() 
+                lastUpdated: Date.now()
               };
               map.set(data.message_id, updatedMessage);
               return map;
@@ -166,7 +166,7 @@ export function useChat(projectId, preferredSessionId = null) {
             setStreamingMessages((prev) => {
               const map = new Map(prev);
               const streamingMessage = map.get(data.message_id);
-              
+
               if (streamingMessage) {
                 const completeMessage = {
                   id: data.message_id,
@@ -175,12 +175,12 @@ export function useChat(projectId, preferredSessionId = null) {
                   created_at: new Date().toISOString(),
                   metadata: data.metadata || {}
                 };
-                
+
                 // Atomic update: add complete message and remove streaming state
                 qc.setQueryData(messagesKey(sessionId), (prev = []) => [...prev, completeMessage]);
                 map.delete(data.message_id);
               }
-              
+
               return map;
             });
             break;
@@ -269,11 +269,11 @@ export function useChat(projectId, preferredSessionId = null) {
     const cleanup = () => {
       const now = Date.now();
       const staleThreshold = 5 * 60 * 1000; // 5 minutes
-      
+
       setStreamingMessages(prev => {
         const map = new Map();
         let cleaned = false;
-        
+
         for (const [id, stream] of prev) {
           // Keep messages that are still streaming or recently updated
           if (stream.isStreaming || (now - (stream.lastUpdated || 0)) < staleThreshold) {
@@ -282,15 +282,15 @@ export function useChat(projectId, preferredSessionId = null) {
             cleaned = true;
           }
         }
-        
+
         if (cleaned) {
           console.log('Cleaned up stale streaming messages');
         }
-        
+
         return map;
       });
     };
-    
+
     const interval = setInterval(cleanup, 2 * 60 * 1000); // Cleanup every 2 minutes
     return () => clearInterval(interval);
   }, []);
