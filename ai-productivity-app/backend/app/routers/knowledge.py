@@ -29,23 +29,21 @@ vector_store = None
 knowledge_service = None
 
 
-@router.on_event("startup")
-async def startup_knowledge_service():
-    """Initialize knowledge service on startup."""
+def get_knowledge_service():
+    """Get or create knowledge service instance."""
     global vector_store, knowledge_service
-
-    try:
-        vector_store = QdrantVectorStore()
-        await vector_store.init_collections()
-
-        embedding_generator = EmbeddingGenerator()
-        knowledge_service = KnowledgeService(vector_store, embedding_generator)
-
-        logger.info("Knowledge service initialized with Qdrant")
-    except Exception as e:
-        logger.error(f"Failed to initialize knowledge service: {e}")
-        # Continue with mock service for development
-        knowledge_service = None
+    
+    if knowledge_service is None:
+        try:
+            vector_store = QdrantVectorStore()
+            embedding_generator = EmbeddingGenerator()
+            knowledge_service = KnowledgeService(vector_store, embedding_generator)
+            logger.info("Knowledge service initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize knowledge service: {e}")
+            knowledge_service = None
+    
+    return knowledge_service
 
 
 @router.post("/search")
@@ -56,12 +54,14 @@ async def search_knowledge(
     """Search knowledge base for relevant entries."""
     try:
         # Use real knowledge service if available
-        if knowledge_service:
-            results = await knowledge_service.search_knowledge(
+        service = get_knowledge_service()
+        if service:
+            results = await service.search_knowledge(
                 query=request.query,
                 project_ids=request.project_ids,
                 limit=request.limit,
-                filters=request.filters.dict() if request.filters else None
+                similarity_threshold=request.similarity_threshold,
+                filters=request.filters
             )
 
             # Convert to response format

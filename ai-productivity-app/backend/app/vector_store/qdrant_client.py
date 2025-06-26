@@ -10,8 +10,30 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+# Optional Prometheus metrics support
+try:
+    from prometheus_client import Summary, Gauge, Counter
+    VECTOR_UPSERT_LAT = Summary("vector_upsert_seconds", "Qdrant upsert latency")
+    VECTOR_SEARCH_LAT = Summary("vector_search_seconds", "Qdrant search latency") 
+    VECTOR_DELETE_LAT = Summary("vector_delete_seconds", "Qdrant delete latency")
+    VECTOR_POINTS_COUNT = Gauge("vector_points_total", "Total points in Qdrant", ["collection"])
+    HAS_PROMETHEUS = True
+except ImportError:
+    # Fallback decorators that do nothing
+    def dummy_timer():
+        def decorator(func):
+            return func
+        return decorator
+    
+    VECTOR_UPSERT_LAT = dummy_timer()
+    VECTOR_SEARCH_LAT = dummy_timer()
+    VECTOR_DELETE_LAT = dummy_timer()
+    VECTOR_POINTS_COUNT = None
+    HAS_PROMETHEUS = False
 
 # ``anyio`` is a soft dependency used for *thread offloading* and coroutine
 # gathering.  The test environment may not have the real package installed –
@@ -318,11 +340,17 @@ class QdrantVectorStore:
                 "updated_at": datetime.utcnow().isoformat(),
             },
         )
+        start_time = time.time()
         result = await _run_in_executor(
             self.client.upsert,
             collection_name=self.knowledge_collection,
             points=[point],
         )
+        
+        # Record metrics
+        if HAS_PROMETHEUS:
+            VECTOR_UPSERT_LAT.observe(time.time() - start_time)
+            
         return result.status == UpdateStatus.COMPLETED  # type: ignore[attr-defined]
 
     async def add_code_embedding(
@@ -348,11 +376,17 @@ class QdrantVectorStore:
                 "content_preview": metadata.get("content", "")[:200],
             },
         )
+        start_time = time.time()
         result = await _run_in_executor(
             self.client.upsert,
             collection_name=self.code_collection,
             points=[point],
         )
+        
+        # Record metrics
+        if HAS_PROMETHEUS:
+            VECTOR_UPSERT_LAT.observe(time.time() - start_time)
+            
         return result.status == UpdateStatus.COMPLETED  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------ #
@@ -447,6 +481,54 @@ class QdrantVectorStore:
             *_stats(self.code_collection),
         )
         return dict(results)
+
+    async def gc_dangling_points(self) -> Dict[str, int]:
+        """Garbage collect dangling vector points that no longer exist in the database."""
+        from app.models.code import CodeEmbedding
+        from app.database import SessionLocal
+        
+        removed_counts = {"code": 0, "knowledge": 0}
+        
+        # GC code collection
+        try:
+            # Get all point IDs from Qdrant
+            qdrant_ids = await _run_in_executor(
+                lambda: {str(p.id) for p in self.client.scroll(
+                    collection_name=self.code_collection,
+                    limit=10000,  # Get all points
+                    with_payload=False,
+                    with_vectors=False
+                )[0]}
+            )
+            
+            # Get all valid IDs from database
+            with SessionLocal() as db:
+                db_ids = {str(row[0]) for row in db.query(CodeEmbedding.id).all()}
+            
+            # Find stale IDs
+            stale_ids = qdrant_ids - db_ids
+            
+            if stale_ids:
+                logger.info(f"Found {len(stale_ids)} stale code embeddings to remove")
+                # Import PointIdsList here to avoid circular imports
+                try:
+                    from qdrant_client.models import PointIdsList
+                    await _run_in_executor(
+                        self.client.delete,
+                        collection_name=self.code_collection,
+                        points_selector=PointIdsList(points=list(stale_ids))
+                    )
+                    removed_counts["code"] = len(stale_ids)
+                    logger.info(f"Removed {len(stale_ids)} stale code embeddings")
+                except ImportError:
+                    logger.warning("PointIdsList not available, skipping GC")
+                    
+        except Exception as exc:
+            logger.error(f"Code GC failed: {exc}")
+        
+        # TODO: Add knowledge GC when KnowledgeDocument table is used
+        
+        return removed_counts
 
     # ------------------------------------------------------------------ #
     # Internal helpers

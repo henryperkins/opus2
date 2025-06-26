@@ -2,6 +2,7 @@
 FastAPI application entry point with middleware and lifespan management.
 """
 # Standard library
+import logging
 from contextlib import asynccontextmanager
 
 # Third-party
@@ -11,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 # Local packages
 from .config import settings
 from .database import init_db
+
+logger = logging.getLogger(__name__)
 from .utils.redis_client import close_redis
 from .middleware.correlation_id import CorrelationIdMiddleware
 from .middleware.security import register_security_middleware
@@ -43,6 +46,15 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
     # Start embedding worker background loop
     from app.embeddings.worker import start_background_loop
     start_background_loop()
+
+    # Initialize Qdrant vector store
+    from app.vector_store.qdrant_client import QdrantVectorStore
+    try:
+        vector_store = QdrantVectorStore()
+        await vector_store.init_collections()
+        logger.info("Qdrant vector store initialized")
+    except Exception as exc:
+        logger.error("Failed to initialize Qdrant: %s", exc)
 
     yield
     # Shutdown

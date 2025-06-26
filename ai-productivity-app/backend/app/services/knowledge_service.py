@@ -39,7 +39,8 @@ class KnowledgeService:
         source: str,
         category: str,
         tags: List[str],
-        project_id: int
+        project_id: int,
+        db: Session = None
     ) -> str:
         """Add entry to knowledge base."""
         # Generate embedding
@@ -50,17 +51,33 @@ class KnowledgeService:
         # Create entry ID
         entry_id = f"kb_{project_id}_{hash(content)}"
 
-        # Store in vector database
+        # First, persist full document to database
+        if db:
+            knowledge_doc = KnowledgeDocument(
+                id=entry_id,
+                project_id=project_id,
+                content=content,
+                title=title,
+                source=source,
+                category=category
+            )
+            db.add(knowledge_doc)
+            db.commit()
+            logger.info(f"Persisted knowledge document to database: {entry_id}")
+
+        # Store preview in vector database with schema version
+        preview_content = content[:1000]  # Store only preview in vector store
         success = await self.vector_store.add_knowledge_entry(
             entry_id=entry_id,
-            content=content,
+            content=preview_content,
             embedding=embedding,
             metadata={
                 "title": title,
                 "source": source,
                 "category": category,
                 "tags": tags,
-                "project_id": project_id
+                "project_id": project_id,
+                "schema_version": 1  # Track schema version for future migrations
             }
         )
 
@@ -75,6 +92,7 @@ class KnowledgeService:
         query: str,
         project_ids: Optional[List[int]] = None,
         limit: int = 10,
+        similarity_threshold: float = 0.5,
         filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Search knowledge base."""
@@ -88,7 +106,7 @@ class KnowledgeService:
             query_embedding=query_embedding,
             project_ids=project_ids,
             limit=limit,
-            score_threshold=0.5,
+            score_threshold=similarity_threshold,
             filters=filters
         )
 

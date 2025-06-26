@@ -64,6 +64,7 @@ class EmbeddingWorker:
     async def _worker_loop(self) -> None:
         """Main worker loop that processes embeddings."""
         consecutive_errors = 0
+        last_gc_time = 0
 
         while self.running:
             try:
@@ -76,6 +77,18 @@ class EmbeddingWorker:
                     # No work to do, sleep for a bit
                     await asyncio.sleep(5)
                     consecutive_errors = 0
+
+                # Run garbage collection once per hour
+                import time
+                current_time = time.time()
+                if current_time - last_gc_time > 3600:  # 1 hour
+                    try:
+                        logger.info("Running vector store garbage collection")
+                        removed = await self.vector_store.gc_dangling_points()
+                        logger.info("GC completed: removed %s dangling points", removed)
+                        last_gc_time = current_time
+                    except Exception as gc_exc:
+                        logger.warning("Vector store GC failed: %s", gc_exc)
 
             except Exception:
                 logger.exception("Error in embedding worker loop")

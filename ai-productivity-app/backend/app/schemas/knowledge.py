@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 class KnowledgeSearchRequest(BaseModel):
     """Knowledge base search request."""
     query: str = Field(..., min_length=1)
-    project_id: str
+    project_ids: Optional[List[int]] = None  # Support multiple projects
     filters: Optional[Dict[str, Any]] = None
     limit: Optional[int] = Field(10, ge=1, le=100)
     similarity_threshold: Optional[float] = Field(0.5, ge=0, le=1)
