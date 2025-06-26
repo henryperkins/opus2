@@ -103,7 +103,22 @@ class ConfidenceService:
 
     def _calculate_source_quality(self, result: Dict[str, Any]) -> float:
         """Calculate confidence based on source type and metadata."""
-        source_type = result.get('source_type', 'unknown')
+        # Try to get source_type from multiple places
+        source_type = result.get('source_type')
+        
+        # Fallback 1: Check in metadata if not at top level
+        if not source_type:
+            metadata = result.get('metadata', {})
+            if isinstance(metadata, dict):
+                source_type = metadata.get('source_type')
+        
+        # Fallback 2: Infer from other fields if still missing
+        if not source_type:
+            source_type = self._infer_source_type(result)
+        
+        # Final fallback
+        if not source_type:
+            source_type = 'unknown'
         
         # Quality scores for different source types
         quality_scores = {
@@ -117,7 +132,7 @@ class ConfidenceService:
             'unknown': 0.50
         }
         
-        base_quality = quality_scores.get(source_type, 0.50)
+        base_quality = quality_scores.get(source_type.lower(), 0.50)
         
         # Adjust based on additional metadata
         metadata = result.get('metadata', {})
@@ -206,6 +221,38 @@ class ConfidenceService:
         else:
             # More confident with more feedback data
             return positive_ratio
+
+    def _infer_source_type(self, result: Dict[str, Any]) -> str:
+        """Infer source type from available result fields."""
+        metadata = result.get('metadata', {})
+        
+        # Check for code-related fields
+        if any(field in result for field in ['chunk_id', 'file_path', 'language']):
+            return 'auto_extracted'
+        
+        # Check metadata for hints
+        if isinstance(metadata, dict):
+            if metadata.get('category'):
+                category = metadata.get('category', '').lower()
+                category_mapping = {
+                    'documentation': 'documentation',
+                    'code': 'auto_extracted',
+                    'readme': 'readme_file',
+                    'manual': 'user_uploaded',
+                    'api_docs': 'official_docs',
+                    'tutorial': 'documentation',
+                    'notes': 'user_uploaded',
+                }
+                return category_mapping.get(category, 'unknown')
+            
+            if metadata.get('file_path'):
+                file_path = metadata.get('file_path', '').lower()
+                if 'readme' in file_path:
+                    return 'readme_file'
+                elif any(ext in file_path for ext in ['.md', '.rst', '.txt']):
+                    return 'documentation'
+        
+        return 'unknown'
 
     def calculate_degradation_status(
         self, 

@@ -175,9 +175,9 @@ class ChatProcessor:
                 rag_metadata["rag_used"] = True
                 rag_metadata["knowledge_sources_count"] = len(kb_hits)
                 rag_metadata["search_query_used"] = message.content
-                rag_metadata["context_tokens_used"] = len(
-                    ctx_kb["context"].split()
-                )
+                # Use unified token counting for consistency
+                from app.utils.token_counter import count_tokens
+                rag_metadata["context_tokens_used"] = count_tokens(ctx_kb["context"])
 
                 # Calculate confidence score
                 confidence = self.confidence_service.calculate_rag_confidence(kb_hits)
@@ -188,8 +188,10 @@ class ChatProcessor:
                     confidence, kb_hits
                 )
             else:
+                # No knowledge base hits - keep RAG as unused and standard status
                 context["knowledge"] = ""
                 context["citations"] = {}
+                # Don't set rag_status here - leave it as "standard" since RAG wasn't used
 
             # Store RAG metadata in context for later use
             context["rag_metadata"] = rag_metadata
@@ -204,13 +206,17 @@ class ChatProcessor:
             # Differentiate between *expected* configuration gaps
             # (knowledge base disabled) and *real* runtime errors. Only the
             # latter should surface as a RAG error in the UI.
+            # 
+            # IMPORTANT: Only set error status for genuine failures that should
+            # be shown to users. For configuration issues, keep rag_used=False
+            # and rag_status="standard" to avoid confusing UI indicators.
             # ------------------------------------------------------------- #
             exc_str = str(exc)
             if "Knowledge service not available" in exc_str:
                 # Gracefully degrade when KB is not configured – treat as
-                # standard mode instead of error so the UI doesn't flash a
-                # scary badge on every reply.
-                rag_metadata["rag_status"] = "inactive"
+                # standard mode so the UI doesn't show error indicators
+                # when RAG is simply not enabled
+                rag_metadata["rag_status"] = "standard"  # Changed from "inactive"
                 rag_metadata["rag_error_message"] = None
             elif "Connection refused" in exc_str or "[Errno 111]" in exc_str:
                 # Service is expected but unreachable → genuine error

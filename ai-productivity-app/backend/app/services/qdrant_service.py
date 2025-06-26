@@ -243,3 +243,14 @@ class QdrantService:
             "distance_metric": info.config.params.vectors.distance,
             "collection_name": self.collection_name,
         }
+
+    # ------------------------------------------------------------------ #
+    # Lifecycle management
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def shutdown(cls) -> None:
+        """Shutdown the shared thread pool executor."""
+        if cls._EXECUTOR is not None:
+            logger.info("Shutting down QdrantService thread pool executor")
+            cls._EXECUTOR.shutdown(wait=True)
+            cls._EXECUTOR = None

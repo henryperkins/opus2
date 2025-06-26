@@ -9,7 +9,7 @@ from typing import Optional, ClassVar
 
 # Third-party
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
@@ -31,20 +31,35 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------
     # Vector Store Configuration
     # -------------------------------------------------------------------
-    vector_store_type: str = Field(default="sqlite_vss", description="Vector store type: sqlite_vss or qdrant")
+    vector_store_type: str = Field(default="pgvector", description="Vector store type: pgvector only")
 
-    # Qdrant settings
-    qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant server URL")
-    qdrant_host: str = Field(default="localhost", description="Qdrant server host")
-    qdrant_port: int = Field(default=6333, description="Qdrant server port")
-    qdrant_api_key: Optional[str] = Field(default=None, description="Qdrant API key")
-    qdrant_vector_size: int = Field(default=1536, description="Vector size for embeddings")
-    qdrant_timeout: int = Field(default=30, description="Qdrant client timeout in seconds")
-    qdrant_max_workers: int = Field(default=16, description="Threadpool size for Qdrant operations")
+    @field_validator('vector_store_type')
+    @classmethod
+    def validate_vector_store_type(cls, v):
+        """Validate that only pgvector is used."""
+        if v.lower() != "pgvector":
+            raise ValueError(
+                f"Unsupported vector_store_type: {v}. "
+                "Only 'pgvector' is supported. SQLite VSS and Qdrant have been removed."
+            )
+        return v.lower()
+
+    # PostgreSQL vector settings
+    postgres_vector_table: str = Field(default="embeddings", description="Table name for pgvector embeddings")
+    embedding_vector_size: int = Field(default=1536, description="Vector size for embeddings")
 
     # Vector search settings
     vector_search_limit: int = Field(default=10, description="Default vector search result limit")
     vector_score_threshold: float = Field(default=0.7, description="Minimum similarity score threshold")
+
+    # Deprecated settings - kept for backward compatibility during migration
+    qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant server URL (deprecated)")
+    qdrant_host: str = Field(default="localhost", description="Qdrant server host (deprecated)")
+    qdrant_port: int = Field(default=6333, description="Qdrant server port (deprecated)")
+    qdrant_api_key: Optional[str] = Field(default=None, description="Qdrant API key (deprecated)")
+    qdrant_vector_size: int = Field(default=1536, description="Vector size for embeddings (deprecated)")
+    qdrant_timeout: int = Field(default=30, description="Qdrant client timeout in seconds (deprecated)")
+    qdrant_max_workers: int = Field(default=16, description="Threadpool size for Qdrant operations (deprecated)")
 
     # -------------------------------------------------------------------
     # Database

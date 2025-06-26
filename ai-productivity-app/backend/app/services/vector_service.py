@@ -54,20 +54,106 @@ class VectorService:
 
         if settings.vector_store_type.lower() == "qdrant":
             try:
-                from app.services.qdrant_service import QdrantService
-                self._backend = QdrantService(
-                    url=settings.qdrant_url
-                )
-                logger.info("Using Qdrant vector backend")
+                # Use the more complete QdrantVectorStore instead of QdrantService
+                self._backend = await self._get_qdrant_backend()
             except ImportError as e:
                 logger.warning(
-                    "Qdrant not available, falling back to SQLite VSS: %s", e
+                    "Qdrant not available, falling back to pgvector: %s", e
                 )
-                self._backend = await self._get_sqlite_backend()
+                self._backend = await self._get_pgvector_backend()
+        elif settings.vector_store_type.lower() == "pgvector":
+            self._backend = await self._get_pgvector_backend()
+        elif settings.vector_store_type.lower() == "sqlite_vss":
+            # SQLite VSS is deprecated and not fully implemented
+            raise NotImplementedError(
+                "SQLite VSS backend is deprecated and not fully implemented. "
+                "Please use 'pgvector' or 'qdrant' instead."
+            )
         else:
-            self._backend = await self._get_sqlite_backend()
+            # Default to pgvector
+            logger.info("Using default pgvector backend")
+            self._backend = await self._get_pgvector_backend()
 
         return self._backend
+
+    async def _get_qdrant_backend(self) -> VectorServiceProtocol:
+        """Get Qdrant backend with adapter."""
+        from app.vector_store.qdrant_client import QdrantVectorStore
+        
+        class QdrantVectorStoreAdapter:
+            """Adapter to make QdrantVectorStore compatible with protocol."""
+            
+            def __init__(self):
+                self.store = QdrantVectorStore()
+            
+            async def initialize(self) -> None:
+                """Initialize Qdrant collections."""
+                await self.store.init_collections()
+            
+            async def insert_embeddings(
+                self, embeddings: List[Dict[str, Any]]
+            ) -> List[str]:
+                """Insert code embeddings using Qdrant format."""
+                # Use code embedding method
+                results = []
+                for emb in embeddings:
+                    success = await self.store.add_code_embedding(
+                        chunk_id=emb["chunk_id"],
+                        embedding=emb["vector"],
+                        metadata={
+                            "document_id": emb.get("document_id"),
+                            "project_id": emb.get("project_id"),
+                            "file_path": emb.get("file_path", ""),
+                            "language": emb.get("language", ""),
+                            "symbol_name": emb.get("symbol_name", ""),
+                            "symbol_type": emb.get("symbol_type", ""),
+                            "start_line": emb.get("start_line", 0),
+                            "end_line": emb.get("end_line", 0),
+                            "content": emb.get("content", ""),
+                        }
+                    )
+                    if success:
+                        results.append(str(emb["chunk_id"]))
+                return results
+            
+            async def search(
+                self,
+                query_vector: np.ndarray,
+                limit: int = 10,
+                project_ids: Optional[List[int]] = None,
+                score_threshold: Optional[float] = None,
+            ) -> List[Dict[str, Any]]:
+                """Search using Qdrant code search."""
+                return await self.store.search_code(
+                    query_embedding=query_vector.tolist(),
+                    project_ids=project_ids,
+                    limit=limit,
+                    score_threshold=score_threshold or 0.7
+                )
+            
+            async def delete_by_document(self, document_id: int) -> None:
+                """Delete embeddings by document - not directly supported by QdrantVectorStore."""
+                # QdrantVectorStore only supports delete by project, not by document
+                # This is a limitation we need to address
+                logger.warning(f"Document-level deletion not supported by QdrantVectorStore for document {document_id}")
+            
+            async def get_stats(self) -> Dict[str, Any]:
+                """Get statistics."""
+                stats = await self.store.get_stats()
+                stats["backend"] = "qdrant"
+                return stats
+        
+        adapter = QdrantVectorStoreAdapter()
+        logger.info("Using Qdrant vector backend")
+        return adapter
+
+    async def _get_pgvector_backend(self) -> VectorServiceProtocol:
+        """Get PostgreSQL+pgvector backend."""
+        from app.services.postgres_vector_service import PostgresVectorService
+        
+        backend = PostgresVectorService()
+        logger.info("Using PostgreSQL+pgvector backend")
+        return backend
 
     async def _get_sqlite_backend(self) -> VectorServiceProtocol:
         """Get SQLite VSS backend with adapter."""
@@ -205,7 +291,7 @@ class VectorService:
         score_threshold: float = 0.5,
         filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """Search knowledge embeddings - delegates to Qdrant if available."""
+        """Search knowledge embeddings - delegates to appropriate backend."""
         # Check if we have Qdrant backend
         if settings.vector_store_type.lower() == "qdrant":
             try:
@@ -220,11 +306,12 @@ class VectorService:
                     filters=filters
                 )
             except Exception as e:
-                logger.warning(f"Qdrant knowledge search failed, falling back: {e}")
+                logger.warning(f"Qdrant knowledge search failed: {e}")
                 return []
         
-        # For SQLite VSS, return empty for now (knowledge not implemented)
-        logger.warning("Knowledge search not available with SQLite VSS backend")
+        # For pgvector and other backends, knowledge search is not yet implemented
+        # This should be extended to support knowledge in pgvector
+        logger.warning(f"Knowledge search not implemented for {settings.vector_store_type} backend")
         return []
 
     async def search_code(

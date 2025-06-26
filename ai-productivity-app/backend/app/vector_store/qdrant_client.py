@@ -615,6 +615,17 @@ class QdrantVectorStore:
         return removed_counts
 
     # ------------------------------------------------------------------ #
+    # Lifecycle management
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def shutdown(cls) -> None:
+        """Shutdown the shared thread pool executor."""
+        if cls._EXECUTOR is not None:
+            logger.info("Shutting down Qdrant thread pool executor")
+            cls._EXECUTOR.shutdown(wait=True)
+            cls._EXECUTOR = None
+
+    # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #
     @staticmethod

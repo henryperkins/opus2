@@ -113,6 +113,7 @@ class EmbeddingService:
             }
 
             vector_data.append({
+                "id": chunk.id,  # Add required id field for Qdrant
                 "vector": embedding,
                 "document_id": document.id,
                 "chunk_id": chunk.id,

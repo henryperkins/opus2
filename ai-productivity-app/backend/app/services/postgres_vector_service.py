@@ -55,12 +55,14 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+import anyio
 import numpy as np
 import sqlalchemy as sa
-from sqlalchemy.engine import Engine  # Connection import removed (was unused)
+from sqlalchemy.engine import Engine
+from pgvector.sqlalchemy import Vector
 
 from app.config import settings
-from app.database import get_engine_sync  # helper that returns a *sync* engine
+from app.database import get_engine_sync
 
 logger = logging.getLogger(__name__)
 
@@ -69,53 +71,51 @@ class PostgresVectorService:
     """pgvector implementation compatible with VectorServiceProtocol."""
 
     def __init__(self) -> None:
-        self.table_name: str = getattr(
-            settings, "postgres_vector_table", "code_embedding_vectors"
-        )
-        # We *must* use a synchronous engine because SQLAlchemy async
-        # engines do not currently support the `vector` binary format
-        # conversion without extra work.  All calls are tiny compared to
-        # network round-trip time -> sync is acceptable.
+        self.table_name: str = settings.postgres_vector_table
+        self.vector_size: int = settings.embedding_vector_size
+        # Use synchronous engine with anyio.to_thread for async compatibility
         self.engine: Engine = get_engine_sync(echo=False)
 
     # --------------------------------------------------------------------- #
     # Initialisation                                                        #
     # --------------------------------------------------------------------- #
 
-    async def initialize(self) -> None:  # noqa: D401
+    async def initialize(self) -> None:
         """Create extension / table / indexes idempotently."""
-        with self.engine.begin() as conn:  # type: Connection
-            conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector;")
+        def _setup_schema():
+            with self.engine.begin() as conn:
+                conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS pgvector;")
 
-            conn.exec_driver_sql(
-                f"""
-                CREATE TABLE IF NOT EXISTS {self.table_name} (
-                    id           SERIAL PRIMARY KEY,
-                    document_id  INTEGER      NOT NULL,
-                    chunk_id     INTEGER,
-                    project_id   INTEGER      NOT NULL,
-                    embedding    vector(1536) NOT NULL,
-                    content      TEXT         NOT NULL,
-                    content_hash TEXT         NOT NULL,
-                    metadata     JSONB        NOT NULL,
-                    created_at   TIMESTAMPTZ  DEFAULT NOW()
-                );
-                """
-            )
+                conn.exec_driver_sql(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {self.table_name} (
+                        id           SERIAL PRIMARY KEY,
+                        document_id  INTEGER      NOT NULL,
+                        chunk_id     INTEGER,
+                        project_id   INTEGER      NOT NULL,
+                        embedding    vector({self.vector_size}) NOT NULL,
+                        content      TEXT         NOT NULL,
+                        content_hash TEXT         NOT NULL,
+                        metadata     JSONB        NOT NULL,
+                        created_at   TIMESTAMPTZ  DEFAULT NOW()
+                    );
+                    """
+                )
 
-            # Normal B-tree index for filtering by project
-            conn.exec_driver_sql(
-                f"""CREATE INDEX IF NOT EXISTS idx_{self.table_name}_project
-                       ON {self.table_name}(project_id);"""
-            )
+                # Normal B-tree index for filtering by project
+                conn.exec_driver_sql(
+                    f"""CREATE INDEX IF NOT EXISTS idx_{self.table_name}_project
+                           ON {self.table_name}(project_id);"""
+                )
 
-            # Approximate nearest-neighbour index (cosine distance)
-            conn.exec_driver_sql(
-                f"""CREATE INDEX IF NOT EXISTS idx_{self.table_name}_ivfflat
-                       ON {self.table_name}
-                       USING ivfflat (embedding vector_cosine_ops);"""
-            )
+                # Approximate nearest-neighbour index (cosine distance)
+                conn.exec_driver_sql(
+                    f"""CREATE INDEX IF NOT EXISTS idx_{self.table_name}_ivfflat
+                           ON {self.table_name}
+                           USING ivfflat (embedding vector_cosine_ops);"""
+                )
 
+        await anyio.to_thread.run_sync(_setup_schema)
         logger.info("pgvector backend ready (table: %s)", self.table_name)
 
     # --------------------------------------------------------------------- #
@@ -129,31 +129,34 @@ class PostgresVectorService:
         return "[" + ",".join("{:.6f}".format(x) for x in vec.tolist()) + "]"
 
     async def insert_embeddings(self, embeddings: List[Dict[str, Any]]) -> List[str]:
-        row_ids: List[str] = []
-        with self.engine.begin() as conn:
-            for emb in embeddings:
-                row = conn.execute(
-                    sa.text(
-                        f"""INSERT INTO {self.table_name}
-                               (document_id, chunk_id, project_id,
-                                embedding, content, content_hash, metadata)
-                               VALUES
-                               (:document_id, :chunk_id, :project_id,
-                                :embedding, :content, :content_hash, :metadata)
-                               RETURNING id"""
-                    ),
-                    {
-                        "document_id": emb.get("document_id"),
-                        "chunk_id": emb.get("chunk_id"),
-                        "project_id": emb.get("project_id"),
-                        "embedding": self._to_pgvector(emb["vector"]),
-                        "content": emb.get("content", ""),
-                        "content_hash": emb.get("content_hash", ""),
-                        "metadata": json.dumps(emb, default=str),
-                    },
-                ).scalar_one()
-                row_ids.append(str(row))
-        return row_ids
+        def _insert():
+            row_ids: List[str] = []
+            with self.engine.begin() as conn:
+                for emb in embeddings:
+                    row = conn.execute(
+                        sa.text(
+                            f"""INSERT INTO {self.table_name}
+                                   (document_id, chunk_id, project_id,
+                                    embedding, content, content_hash, metadata)
+                                   VALUES
+                                   (:document_id, :chunk_id, :project_id,
+                                    :embedding, :content, :content_hash, :metadata)
+                                   RETURNING id"""
+                        ),
+                        {
+                            "document_id": emb.get("document_id"),
+                            "chunk_id": emb.get("chunk_id"),
+                            "project_id": emb.get("project_id"),
+                            "embedding": self._to_pgvector(emb["vector"]),
+                            "content": emb.get("content", ""),
+                            "content_hash": emb.get("content_hash", ""),
+                            "metadata": json.dumps(emb, default=str),
+                        },
+                    ).scalar_one()
+                    row_ids.append(str(row))
+            return row_ids
+        
+        return await anyio.to_thread.run_sync(_insert)
 
     # --------------------------------------------------------------------- #
     # Search                                                                #
@@ -169,73 +172,82 @@ class PostgresVectorService:
         if limit <= 0:
             return []
 
-        where_fragments: List[str] = []
-        params: Dict[str, Any] = {"query_vec": self._to_pgvector(query_vector), "limit": limit}
+        def _search():
+            where_fragments: List[str] = []
+            params: Dict[str, Any] = {"query_vec": self._to_pgvector(query_vector), "limit": limit}
 
-        if project_ids:
-            where_fragments.append("project_id = ANY(:pids)")
-            params["pids"] = project_ids  # psycopg2 maps list → Postgres array
+            if project_ids:
+                where_fragments.append("project_id = ANY(:pids)")
+                params["pids"] = project_ids
 
-        sql_where = ("WHERE " + " AND ".join(where_fragments)) if where_fragments else ""
-        sql = (
-            f"""SELECT id,
-                         document_id,
-                         chunk_id,
-                         project_id,
-                         content,
-                         metadata,
-                         1 - (embedding <#> :query_vec) AS score
-                  FROM {self.table_name}
-                  {sql_where}
-                  ORDER BY embedding <#> :query_vec
-                  LIMIT :limit;"""
-        )
+            sql_where = ("WHERE " + " AND ".join(where_fragments)) if where_fragments else ""
+            sql = (
+                f"""SELECT id,
+                             document_id,
+                             chunk_id,
+                             project_id,
+                             content,
+                             metadata,
+                             1 - (embedding <#> :query_vec) AS score
+                      FROM {self.table_name}
+                      {sql_where}
+                      ORDER BY embedding <#> :query_vec
+                      LIMIT :limit;"""
+            )
 
-        results: List[Dict[str, Any]] = []
-        with self.engine.begin() as conn:
-            for row in conn.execute(sa.text(sql), params):
-                score = float(row.score)
-                if score_threshold is not None and score < score_threshold:
-                    continue
-                results.append(
-                    {
-                        "id": row.id,
-                        "document_id": row.document_id,
-                        "chunk_id": row.chunk_id,
-                        "project_id": row.project_id,
-                        "content": row.content,
-                        "metadata": row.metadata,
-                        "score": score,
-                    }
-                )
-        return results
+            results: List[Dict[str, Any]] = []
+            with self.engine.begin() as conn:
+                for row in conn.execute(sa.text(sql), params):
+                    score = float(row.score)
+                    if score_threshold is not None and score < score_threshold:
+                        continue
+                    results.append(
+                        {
+                            "id": row.id,
+                            "document_id": row.document_id,
+                            "chunk_id": row.chunk_id,
+                            "project_id": row.project_id,
+                            "content": row.content,
+                            "metadata": row.metadata,
+                            "score": score,
+                        }
+                    )
+            return results
+
+        return await anyio.to_thread.run_sync(_search)
 
     # --------------------------------------------------------------------- #
     # Delete / stats                                                        #
     # --------------------------------------------------------------------- #
 
     async def delete_by_document(self, document_id: int) -> None:
-        with self.engine.begin() as conn:
-            conn.execute(
-                sa.text(f"DELETE FROM {self.table_name} WHERE document_id = :doc"),
-                {"doc": document_id},
-            )
+        def _delete():
+            with self.engine.begin() as conn:
+                conn.execute(
+                    sa.text(f"DELETE FROM {self.table_name} WHERE document_id = :doc"),
+                    {"doc": document_id},
+                )
+        
+        await anyio.to_thread.run_sync(_delete)
 
     async def get_stats(self) -> Dict[str, Any]:
-        with self.engine.begin() as conn:
-            total = conn.execute(
-                sa.text(f"SELECT COUNT(*) FROM {self.table_name}")
-            ).scalar_one()
-            by_project = dict(
-                conn.execute(
-                    sa.text(
-                        f"SELECT project_id, COUNT(*) FROM {self.table_name} GROUP BY project_id"
-                    )
-                ).fetchall()
-            )
-        return {
-            "backend": "postgres",
-            "table": self.table_name,
-            "total_embeddings": total,
-            "by_project": by_project,
-        }
+        def _get_stats():
+            with self.engine.begin() as conn:
+                total = conn.execute(
+                    sa.text(f"SELECT COUNT(*) FROM {self.table_name}")
+                ).scalar_one()
+                by_project = dict(
+                    conn.execute(
+                        sa.text(
+                            f"SELECT project_id, COUNT(*) FROM {self.table_name} GROUP BY project_id"
+                        )
+                    ).fetchall()
+                )
+            return {
+                "backend": "pgvector",
+                "table": self.table_name,
+                "total_embeddings": total,
+                "by_project": by_project,
+            }
+        
+        return await anyio.to_thread.run_sync(_get_stats)

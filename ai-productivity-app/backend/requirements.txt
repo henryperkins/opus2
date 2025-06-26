@@ -7,10 +7,10 @@ python-json-logger>=2.0
 # Database
 sqlalchemy==2.0.23
 alembic==1.13.1
-psycopg2-binary==2.9.9
+psycopg[binary]~=3.1
+pgvector~=0.2
 # Async drivers – required for SQLAlchemy asyncio engine
 asyncpg==0.29.0
-aiosqlite==0.19.0
 
 # Configuration
 python-dotenv==1.0.0
@@ -53,7 +53,7 @@ numpy==1.26.4
 openai
 azure-identity==1.15.0  # For Azure OpenAI authentication
 
-# Optional: Qdrant vector database (alternative to SQLite VSS)
+# Optional: Qdrant vector database (will be removed in PostgreSQL-only migration)
 qdrant-client==1.7.0
 
 # Optional: Prometheus metrics support for monitoring

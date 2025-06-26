@@ -195,12 +195,9 @@ class KnowledgeService:
                 "context_length": 0
             }
 
-        # Get tokenizer for accurate token counting
-        try:
-            enc = tiktoken.encoding_for_model(model_name)
-        except KeyError:
-            # Fallback to a common encoding if model not found
-            enc = tiktoken.get_encoding("cl100k_base")
+        # Use unified token counting for consistency
+        from app.utils.token_counter import get_tokenizer, count_tokens, estimate_max_context_tokens
+        enc, is_fallback = get_tokenizer(model_name)
 
         # Fetch full knowledge documents from database
         # Handle both sync and async sessions
@@ -244,23 +241,23 @@ class KnowledgeService:
             # Prepare content with citation
             content_with_citation = f"{marker} {doc.content}"
 
-            # Count tokens for this entry
-            entry_tokens = len(enc.encode(content_with_citation))
+            # Count tokens for this entry using unified counter
+            entry_tokens = count_tokens(content_with_citation, model_name)
 
             # Check if adding this entry would exceed limit
             if tokens_used + entry_tokens > max_context_length:
                 # Try to fit a truncated version
                 remaining_tokens = max_context_length - tokens_used
                 if remaining_tokens > 100:  # Only truncate if we have reasonable space
-                    # Truncate content to fit
-                    truncated_content = self._truncate_to_tokens(
-                        doc.content, remaining_tokens - 10, enc  # -10 for marker and spacing
+                    # Truncate content to fit using unified utilities
+                    truncated_content, actual_tokens = estimate_max_context_tokens(
+                        doc.content, remaining_tokens - 10, model_name  # -10 for marker and spacing
                     )
                     content_with_citation = f"{marker} {truncated_content}..."
                     context_parts.append(content_with_citation)
                     
                     # Update tokens_used with actual truncated size
-                    tokens_used += len(enc.encode(content_with_citation))
+                    tokens_used += count_tokens(content_with_citation, model_name)
 
                     # Add to citation map with search metadata
                     search_data = search_lookup.get(doc.id, {})
@@ -290,7 +287,7 @@ class KnowledgeService:
             }
 
         final_context = "\n\n".join(context_parts)
-        final_tokens = len(enc.encode(final_context))
+        final_tokens = count_tokens(final_context, model_name)
 
         return {
             "context": final_context,
