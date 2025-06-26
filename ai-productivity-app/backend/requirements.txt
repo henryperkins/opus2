@@ -8,6 +8,9 @@ python-json-logger>=2.0
 sqlalchemy==2.0.23
 alembic==1.13.1
 psycopg2-binary==2.9.9
+# Async drivers – required for SQLAlchemy asyncio engine
+asyncpg==0.29.0
+aiosqlite==0.19.0
 
 # Configuration
 python-dotenv==1.0.0

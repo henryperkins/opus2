@@ -81,7 +81,7 @@ class Settings(BaseSettings):
 
     # Production database connection (Neon PostgreSQL)
     database_url: str = Field(
-        default="postgresql://neondb_owner:npg_5odQclNUW6Pj@ep-hidden-salad-a8jlsv5j-pooler.eastus2.azure.neon.tech/neondb?sslmode=require",
+        default="postgresql://neondb_owner:npg_5odQclNUW6Pj@ep-hidden-salad-a8jlsv5j-pooler.eastus2.azure.neon.tech/neondb?sslmode=require&channel_binding=require",
         description="Database connection URL"
     )
     database_echo: bool = False
