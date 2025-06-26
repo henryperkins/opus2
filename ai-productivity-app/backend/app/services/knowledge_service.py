@@ -5,7 +5,41 @@ import math
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-import tiktoken
+# ---------------------------------------------------------------------------
+# ``tiktoken`` is an optional dependency used for accurate token counting.  In
+# minimal CI environments the wheel might be missing.  We therefore import it
+# lazily and fall back to a **very small** stub that provides the limited API
+# (`get_encoding`, `encoding_for_model`, `encode`) required by this module so
+# that the remainder of the application can still start and the unit tests can
+# run without the heavy binary dependency.
+# ---------------------------------------------------------------------------
+
+try:
+    import tiktoken  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover – lightweight fallback for CI
+
+    class _EncodingStub:  # pylint: disable=too-few-public-methods
+        """Extremely simplified tokenizer replacement."""
+
+        def encode(self, text: str):  # noqa: D401 – mimic tiktoken API
+            # Approximate token count by splitting on whitespace – sufficient
+            # for context length guards in the test-suite.
+            return text.split()
+
+    class _TiktokenStub:  # pylint: disable=too-few-public-methods
+        """Minimal subset of the tiktoken public interface."""
+
+        _enc = _EncodingStub()
+
+        @staticmethod
+        def get_encoding(_name: str):  # noqa: D401
+            return _TiktokenStub._enc
+
+        @staticmethod
+        def encoding_for_model(_model: str):  # noqa: D401
+            return _TiktokenStub._enc
+
+    tiktoken = _TiktokenStub()  # type: ignore
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 

@@ -78,11 +78,18 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings  # pylint: disable=import-error
 
-# Create engine
+# Create engine (supports both PostgreSQL and local SQLite for tests)
+#
+# In production `settings.database_url` points to the Neon PostgreSQL instance.
+# The *pytest* suite, however, overrides the environment variable to a local
+# SQLite file so that the CI run does not require network connectivity.  We
+# therefore keep the conditional `check_same_thread` flag for the SQLite path
+# while defaulting to the standard Postgres behaviour otherwise.
+
 engine = create_engine(
     settings.database_url,
     echo=settings.database_echo,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
+    connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
 )
 
 # Create session factory
@@ -112,6 +119,11 @@ def _build_async_db_url(raw_url: str) -> str:
 
     Removes query params unsupported by *asyncpg* (e.g. *sslmode*).
     """
+
+    # SQLite (used by the unit-test suite) → switch driver to *aiosqlite* so
+    # `create_async_engine()` works when the driver is available.  When the
+    # optional dependency is missing we will later detect the
+    # ``ModuleNotFoundError`` and skip async initialisation gracefully.
 
     if raw_url.startswith("sqlite"):
         return raw_url.replace("sqlite:///", "sqlite+aiosqlite:///")
