@@ -137,18 +137,61 @@ def _build_async_db_url(raw_url: str) -> str:
 
 async_db_url = _build_async_db_url(settings.database_url)
 
-# Create async engine and session factory
-connect_args: dict[str, object] = {}
-if async_db_url.startswith("postgresql+asyncpg"):
-    # Ensure SSL is used when connecting to Neon (no custom context required).
-    connect_args["ssl"] = True
+# ---------------------------------------------------------------------------
+# Async engine (optional)
+# ---------------------------------------------------------------------------
+# The production codebase employs asynchronous database operations in a few
+# background workers.  Unit-tests, however, interact solely with the *sync*
+# engine and therefore do not require the async driver to be present.  Some
+# minimal CI environments omit *aiosqlite* which causes SQLAlchemy to abort
+# during import time when we unconditionally attempt to create the async
+# engine for a SQLite URL.
+#
+# We dynamically skip async engine initialisation when the required driver is
+# unavailable.  This keeps the synchronous path unaffected while avoiding the
+# hard dependency on *aiosqlite* for tests.
+# ---------------------------------------------------------------------------
 
-async_engine = create_async_engine(
-    async_db_url,
-    echo=settings.database_echo,
-    connect_args=connect_args,
-)
-AsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
+async_engine = None  # type: ignore[assignment]
+AsyncSessionLocal = None  # type: ignore[assignment]
+
+# Only set up the async factory when an async-capable driver is present.
+try:
+    # Importing *aiosqlite* is only necessary for **SQLite** in async mode. If
+    # the module cannot be imported we fall back to disabling async support.
+    if async_db_url.startswith("sqlite+aiosqlite"):
+        import importlib
+
+        importlib.import_module("aiosqlite")  # Will raise ModuleNotFoundError if absent.
+
+    connect_args: dict[str, object] = {}
+    if async_db_url.startswith("postgresql+asyncpg"):
+        connect_args["ssl"] = True
+
+    async_engine = create_async_engine(
+        async_db_url,
+        echo=settings.database_echo,
+        connect_args=connect_args,
+    )
+    AsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)  # type: ignore[arg-type]
+
+except ModuleNotFoundError as exc:  # pragma: no cover – CI without async driver
+    # Gracefully degrade by disabling async DB helpers.
+    from types import ModuleType
+    import sys
+
+    # Expose stub so that `from app.database import async_engine` still works.
+    async_engine = None  # type: ignore[assignment]
+
+    class _AsyncStub(ModuleType):
+        """Placeholder that raises on attribute access."""
+
+        def __getattr__(self, name):  # noqa: D401
+            raise RuntimeError("Async database support not available: missing driver")
+
+    # Register dummy session factory so that optional imports succeed.
+    AsyncSessionLocal = _AsyncStub("AsyncSessionLocal")  # type: ignore[assignment]
+
 
 # Base class for all ORM models
 Base = declarative_base()

@@ -37,7 +37,9 @@ from app.code_processing.chunker import SemanticChunker
 from app.code_processing.language_detector import detect_language
 from app.code_processing.parser import CodeParser
 from app.database import get_db
-from app.dependencies import current_user
+# Use the new authentication dependency style.
+# ``get_current_user`` enforces authentication and returns the User.
+from app.dependencies import get_current_user
 from app.models.code import CodeDocument, CodeEmbedding
 from app.models.project import Project
 from app.models.user import User
@@ -157,7 +159,7 @@ async def upload_code_files(  # noqa: D401, WPS211
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(get_current_user),
 ):
     """Upload *multiple* source-code files and queue them for parsing.
 
