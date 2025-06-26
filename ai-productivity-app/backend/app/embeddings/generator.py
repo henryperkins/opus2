@@ -46,6 +46,7 @@ try:
         retry,
         stop_after_attempt,
         wait_exponential,
+        retry_if_exception_type,
     )
 except ModuleNotFoundError:  # pragma: no cover
 
@@ -67,6 +68,11 @@ except ModuleNotFoundError:  # pragma: no cover
         return None
 
     def wait_exponential(**_):  # noqa: D401
+        return None
+
+    def retry_if_exception_type(_):  # noqa: D401
+        """Stub that always retries zero times (no-op)."""
+
         return None
 
 try:
@@ -135,7 +141,7 @@ class EmbeddingGenerator:
     # ------------------------------------------------------------------ #
     def __init__(
         self,
-        model: str = "text-embedding-3-small",
+        model: str = "text-embedding-3-large",
         *,
         dimensions: Optional[int] = None,
         encoding_format: Literal["float", "base64"] = "float",
@@ -221,10 +227,14 @@ class EmbeddingGenerator:
     # ------------------------------------------------------------------ #
     # Public helpers
     # ------------------------------------------------------------------ #
+    # Retries on transient OpenAI errors (rate limit / timeout). The *retry*
+    # argument expects a *retrying predicate*, not a bare *tuple* of
+    # exceptions.  Using ``retry_if_exception_type`` ensures Tenacity treats
+    # the provided exception classes correctly.
     @retry(  # noqa: D401 – decorator docs
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry=(RateLimitError, APITimeoutError),
+        retry=retry_if_exception_type((RateLimitError, APITimeoutError)),
         reraise=True,
     )
     async def generate_embeddings(self, texts: Sequence[str]) -> List[List[float]]:
@@ -245,19 +255,19 @@ class EmbeddingGenerator:
             for idx in range(0, len(texts), self.batch_size):
                 batch = list(texts[idx: idx + self.batch_size])
 
-                resp = await self.client.embeddings.create(
-                    model=self.deployment_name,
-                    input=batch,
-                    # Only supply the new parameters when supported
-                    **(
-                        {
-                            "dimensions": self.dimensions
-                            if self._model_meta["supports_dimensions_param"]
-                            else None,
-                            "encoding_format": self.encoding_format,
-                        }
-                    ),
-                )
+                # Build kwargs for embedding creation
+                kwargs = {
+                    "model": self.deployment_name,
+                    "input": batch,
+                    "encoding_format": self.encoding_format,
+                }
+                
+                # Only include dimensions if it's specified and supported
+                if (self.dimensions is not None and 
+                    self._model_meta["supports_dimensions_param"]):
+                    kwargs["dimensions"] = self.dimensions
+                
+                resp = await self.client.embeddings.create(**kwargs)
 
                 for item in resp.data:
                     vector = (

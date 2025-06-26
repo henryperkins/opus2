@@ -41,8 +41,27 @@ except ImportError:
 # implements just the subset required by this module (``to_thread.run_sync``
 # and ``gather``).
 
+# ---------------------------------------------------------------------------
+# anyio compatibility handling
+# ---------------------------------------------------------------------------
+# ``anyio.gather`` was removed in anyio v4.  The codebase still relies on the
+# helper so we patch in a small wrapper that forwards to *asyncio.gather* when
+# a modern anyio version is installed *or* when the library is missing
+# entirely in the execution environment.
+# ---------------------------------------------------------------------------
+
+import asyncio
+
 try:
     import anyio  # type: ignore
+
+    if not hasattr(anyio, "gather"):
+        # Provide shim for newer anyio versions.
+        async def _gather(*coros):  # noqa: D401
+            return await asyncio.gather(*coros)  # type: ignore[misc]
+
+        anyio.gather = _gather  # type: ignore[attr-defined]
+
 except ModuleNotFoundError:  # pragma: no cover – skinny fallback for CI
     import asyncio
     import types as _types
@@ -56,6 +75,7 @@ except ModuleNotFoundError:  # pragma: no cover – skinny fallback for CI
         async def run_sync(func, *args, **kwargs):  # type: ignore[override]
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, func, *args, **kwargs)
+
 
     async def _gather(*coros):  # noqa: D401 – signature matches anyio.gather
         """Light-weight stand-in for *anyio.gather* using asyncio."""

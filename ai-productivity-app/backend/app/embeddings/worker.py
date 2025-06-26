@@ -224,12 +224,27 @@ def start_background_loop() -> None:
         logger.warning("Embedding worker already initialized")
         return
 
-    # Create async engine and session maker
+    # -------------------------------------------------------------------
+    # Create async engine – reuse central helper to ensure the generated URL
+    # is compatible with *asyncpg* (strip unsupported query params like
+    # ``sslmode``).
+    # -------------------------------------------------------------------
+
+    from app.database import _build_async_db_url  # local import to avoid cycle
+
+    async_db_url = _build_async_db_url(settings.database_url)
+
+    connect_args: dict[str, object] = {}
+    if async_db_url.startswith("postgresql+asyncpg"):
+        # Ensure SSL is used when connecting to Neon / Cloud Postgres.
+        connect_args["ssl"] = True
+
     engine = create_async_engine(
-        settings.database_url.replace("postgresql://", "postgresql+asyncpg://"),
+        async_db_url,
         echo=False,
         pool_size=5,
         max_overflow=10,
+        connect_args=connect_args,
     )
     session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
