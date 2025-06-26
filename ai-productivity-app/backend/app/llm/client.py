@@ -78,22 +78,64 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _is_responses_api_enabled() -> bool:
+def _is_reasoning_model(model_name: str) -> bool:
+    """Return True if the model is a reasoning model (o1/o3/o4 series).
+    
+    Reasoning models use special parameters and don't support temperature, streaming, etc.
+    """
+    if not model_name:
+        return False
+    
+    model_lower = model_name.lower()
+    reasoning_models = {
+        "o1", "o1-mini", "o1-preview", "o1-pro",
+        "o3", "o3-mini", "o3-pro",
+        "o4-mini"
+    }
+    
+    return model_lower in reasoning_models
+
+
+def _model_requires_responses_api(model_name: str) -> bool:
+    """Return True if the model requires the Responses API by default.
+    
+    Certain models like o3, gpt-4.1, and o4-mini should automatically use
+    the Responses API regardless of the global API version setting.
+    """
+    if not model_name:
+        return False
+    
+    model_lower = model_name.lower()
+    responses_api_models = {
+        "o3", "gpt-4.1", "o4-mini", "o3-mini", "o3-pro", 
+        "o1", "o1-mini", "o1-preview", "o1-pro"
+    }
+    
+    return model_lower in responses_api_models
+
+
+def _is_responses_api_enabled(model_name: str = None) -> bool:
     """Return *True* when the current configuration selects the Azure
     *Responses API* variant.
 
-    According to the Azure documentation the *preview* API-version enables the
-    new endpoint.  We keep the logic intentionally *simple* – for the purpose
-    of the unit tests we only need to distinguish two cases:
-
+    The Responses API is enabled when:
     1. provider == "azure" **and** api_version == "preview"  → Responses API
-    2. everything else                                       → Chat Completions
+    2. provider == "azure" **and** model requires Responses API by default
+    3. everything else                                       → Chat Completions
     """
-
-    return (
-        settings.llm_provider.lower() == "azure"
-        and getattr(settings, "azure_openai_api_version", "").lower() == "preview"
-    )
+    
+    if settings.llm_provider.lower() != "azure":
+        return False
+    
+    # Check if API version explicitly enables Responses API
+    api_version_enabled = getattr(settings, "azure_openai_api_version", "").lower() in {
+        "preview", "2025-04-01-preview"
+    }
+    
+    # Check if model requires Responses API by default
+    model_requires = model_name and _model_requires_responses_api(model_name)
+    
+    return api_version_enabled or model_requires
 
 
 def _sanitize_messages(messages: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -135,8 +177,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self) -> None:
         self.provider: str = settings.llm_provider.lower()
-        self.use_responses_api: bool = _is_responses_api_enabled()
-
+        
         # The active *model* (or *deployment name* in Azure terminology).  We
         # prioritise the new ``llm_default_model`` field and fall back to the
         # (deprecated) ``llm_model`` environment variable for backwards
@@ -144,6 +185,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         self.active_model: str = (
             settings.llm_default_model or settings.llm_model or "gpt-3.5-turbo"
         )
+        
+        # Determine if Responses API should be used (considers both API version and model type)
+        self.use_responses_api: bool = _is_responses_api_enabled(self.active_model)
 
         # Underlying OpenAI SDK client – differs for public vs. Azure.
         self.client: Any | None = None
@@ -202,7 +246,14 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         # Update model and responses API settings
         self.active_model = new_model
-        self.use_responses_api = new_responses_api and new_provider == "azure"
+        
+        # Determine Responses API usage: explicit setting or model-based auto-detection
+        if new_responses_api is not None:
+            # Explicit setting takes precedence
+            self.use_responses_api = new_responses_api and new_provider == "azure"
+        else:
+            # Auto-detect based on model and provider
+            self.use_responses_api = _is_responses_api_enabled(new_model) and new_provider == "azure"
 
         logger.info("LLM client reconfigured - Provider: %s, Model: %s, ResponsesAPI: %s",
                    self.provider, self.active_model, self.use_responses_api)
@@ -238,9 +289,16 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             settings.azure_openai_api_key or os.getenv("AZURE_OPENAI_API_KEY") or "test-key"
         )
 
+        # Determine API version - use preview for models that require special APIs
+        api_version = getattr(settings, "azure_openai_api_version", "2025-04-01-preview")
+        if (_model_requires_responses_api(self.active_model) or _is_reasoning_model(self.active_model)) and api_version not in {"preview", "2025-04-01-preview"}:
+            # Auto-upgrade to preview API version for models that require special handling
+            api_version = "2025-04-01-preview"
+            logger.info("Auto-upgrading to preview API version for model: %s", self.active_model)
+        
         extra_kwargs: Dict[str, Any] = {
             "azure_endpoint": endpoint,
-            "api_version": getattr(settings, "azure_openai_api_version", "2025-04-01-preview"),
+            "api_version": api_version,
         }
 
         # Default authentication method → API key
@@ -260,12 +318,14 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
     async def complete(  # noqa: PLR0913 – long but mirrors OpenAI params
         self,
-        messages: Sequence[Dict[str, Any]] | None = None,
+        messages: Sequence[Dict[str, Any]] | None = None,  # Deprecated, use input
         *,
+        input: Sequence[Dict[str, Any]] | str | None = None,  # Input can be string or message array
         temperature: float | int | None = None,
         stream: bool = False,
+        background: bool = False,  # Run as background task for long-running requests
         tools: Any | None = None,
-        reasoning: bool | None = None,  # noqa: D401 – kept for forward compat
+        reasoning: Dict[str, Any] | bool | None = None,  # Reasoning config: {"effort": "medium", "summary": "detailed"}
         max_tokens: int | None = None,
         model: str | None = None,  # Allow per-request model override
     ) -> Any | AsyncIterator[str]:  # Returns AsyncIterator[str] when stream=True
@@ -298,57 +358,106 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 use_responses_api=runtime_config.get("use_responses_api")
             )
 
-        # Convert messages into canonical list – some callers might pass
-        # tuples / generators.
-        messages = _sanitize_messages(messages or [])
+        # Unify input and messages parameters for backward compatibility
+        chat_turns = input or messages
+        if chat_turns is None:
+            raise ValueError("Either 'input' or 'messages' parameter is required")
+        
+        # Handle different input formats
+        if isinstance(chat_turns, str):
+            # Convert string input to message format
+            messages = [{"role": "user", "content": chat_turns}]
+        else:
+            # Convert messages into canonical list – some callers might pass
+            # tuples / generators.
+            messages = _sanitize_messages(chat_turns)
+        
+        # For reasoning models, convert system messages to developer messages
+        if _is_reasoning_model(active_model):
+            for msg in messages:
+                if msg["role"] == "system":
+                    msg["role"] = "developer"
 
         try:
             if self.use_responses_api:
                 # Azure Responses API - follows the official documentation pattern
-                # System messages go into instructions, user/assistant messages into input
+                
+                # Handle direct string input vs message arrays
+                if isinstance(chat_turns, str):
+                    # For direct string input, pass it directly to the Responses API
+                    responses_input = chat_turns
+                else:
+                    # For message arrays, process them into Responses API format
+                    system_instructions = None
+                    input_messages: List[Dict[str, Any]] = []
 
-                system_instructions = None
-                input_messages: List[Dict[str, Any]] = []
-
-                for msg in messages:
-                    if msg["role"] == "system":
-                        # Combine multiple system messages if present
-                        if system_instructions is None:
-                            system_instructions = msg["content"]
+                    for msg in messages:
+                        if msg["role"] == "system":
+                            # For reasoning models, system messages can become developer messages
+                            # or be combined into instructions
+                            if _is_reasoning_model(active_model):
+                                # Convert system message to developer message for reasoning models
+                                input_msg = {
+                                    "role": "developer",
+                                    "content": msg["content"],
+                                    "type": "message"
+                                }
+                                input_messages.append(input_msg)
+                            else:
+                                # For non-reasoning models, combine into instructions
+                                if system_instructions is None:
+                                    system_instructions = msg["content"]
+                                else:
+                                    system_instructions += "\n\n" + msg["content"]
                         else:
-                            system_instructions += "\n\n" + msg["content"]
-                    else:
-                        # Convert to Responses API format
-                        input_msg = {
-                            "role": msg["role"],
-                            "content": msg["content"]
-                        }
-                        # Add type field for user/assistant messages
-                        if msg["role"] in ["user", "assistant"]:
-                            input_msg["type"] = "message"
-                        input_messages.append(input_msg)
+                            # Convert to Responses API format
+                            input_msg = {
+                                "role": msg["role"],
+                                "content": msg["content"]
+                            }
+                            # Add type field for user/assistant messages
+                            if msg["role"] in ["user", "assistant", "developer"]:
+                                input_msg["type"] = "message"
+                            input_messages.append(input_msg)
+                    
+                    responses_input = input_messages
 
                 # Create parameters dict following Azure Responses API spec
                 responses_kwargs = {
                     "model": active_model,
-                    "input": input_messages,
+                    "input": responses_input,
                 }
+                
+                # Add background processing if requested
+                if background:
+                    responses_kwargs["background"] = True
 
-                # o3 models don't support temperature or streaming
-                if not active_model.lower().startswith("o3"):
+                # Handle reasoning models (o1/o3/o4) vs regular models
+                if _is_reasoning_model(active_model):
+                    # Reasoning models don't support temperature or streaming
+                    responses_kwargs["stream"] = False
+                    # Use max_output_tokens for reasoning models (Responses API uses this)
+                    if active_max_tokens:
+                        responses_kwargs["max_output_tokens"] = active_max_tokens
+                    # Add reasoning parameter if specified
+                    if reasoning:
+                        if isinstance(reasoning, dict):
+                            # Use reasoning dict directly
+                            responses_kwargs["reasoning"] = reasoning
+                        elif isinstance(reasoning, bool) and reasoning:
+                            # Default reasoning config for backward compatibility
+                            responses_kwargs["reasoning"] = {"effort": "medium"}
+                else:
+                    # Regular models support temperature and streaming
                     responses_kwargs["temperature"] = active_temperature
                     responses_kwargs["stream"] = stream
-                else:
-                    # o3 models don't support streaming
-                    responses_kwargs["stream"] = False
+                    # Use max_output_tokens for regular models
+                    if active_max_tokens:
+                        responses_kwargs["max_output_tokens"] = active_max_tokens
 
-                # Only add instructions if we have system messages
-                if system_instructions:
+                # Only add instructions if we have system messages (for message array input)
+                if not isinstance(chat_turns, str) and system_instructions:
                     responses_kwargs["instructions"] = system_instructions
-
-                # Only add max_tokens if specified (responses API uses max_output_tokens)
-                if active_max_tokens:
-                    responses_kwargs["max_output_tokens"] = active_max_tokens
 
                 # Add tools if provided (Responses API supports tools) – ensure
                 # each entry includes the mandatory "type" field ("function"
@@ -377,6 +486,13 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
                 try:
                     response = await self.client.responses.create(**clean_responses_kwargs)
+                    
+                    # Check for Responses API error field in response
+                    if hasattr(response, 'error') and response.error:
+                        error_msg = f"Responses API error: {response.error}"
+                        logger.error(error_msg)
+                        raise RuntimeError(error_msg)
+                        
                 except Exception as exc:  # noqa: BLE001
                     # ------------------------------------------------------------------ #
                     # Graceful fallback when the *Responses* deployment is missing
@@ -502,16 +618,28 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             call_kwargs: Dict[str, Any] = {
                 "model": active_model,
                 "messages": messages,
-                "max_tokens": active_max_tokens,
             }
 
-            # o3 models don't support temperature or streaming
-            if not active_model.lower().startswith("o3"):
+            # Handle reasoning models vs regular models for Chat Completions
+            if _is_reasoning_model(active_model):
+                # Reasoning models use max_completion_tokens and don't support temperature/streaming
+                call_kwargs["stream"] = False
+                if active_max_tokens:
+                    call_kwargs["max_completion_tokens"] = active_max_tokens
+                # Add reasoning parameter if specified
+                if reasoning:
+                    if isinstance(reasoning, dict):
+                        # Use reasoning dict directly
+                        call_kwargs["reasoning"] = reasoning
+                    elif isinstance(reasoning, bool) and reasoning:
+                        # Default reasoning config for backward compatibility
+                        call_kwargs["reasoning"] = {"effort": "medium"}
+            else:
+                # Regular models use max_tokens and support temperature/streaming
                 call_kwargs["temperature"] = active_temperature
                 call_kwargs["stream"] = stream
-            else:
-                # o3 models don't support streaming
-                call_kwargs["stream"] = False
+                if active_max_tokens:
+                    call_kwargs["max_tokens"] = active_max_tokens
 
             if tools:
                 # Ensure tools have the required type field for Chat Completions API

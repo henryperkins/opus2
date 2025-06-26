@@ -77,10 +77,13 @@ class ModelConfigPayload(BaseModel):
 # --------------------------------------------------------------------------- #
 # In-memory fallback (dev / CI)                                               #
 # --------------------------------------------------------------------------- #
-_DEFAULT_RESPONSES_FLAG = settings.azure_openai_api_version in {
-    "preview",
-    "2025-04-01-preview",
-}
+def _should_use_responses_api(model_name: str = None) -> bool:
+    """Determine if Responses API should be used based on API version and model."""
+    # Import here to avoid circular dependency
+    from app.llm.client import _is_responses_api_enabled
+    return _is_responses_api_enabled(model_name)
+
+_DEFAULT_RESPONSES_FLAG = _should_use_responses_api(settings.llm_default_model or settings.llm_model)
 
 _RUNTIME_CONFIG: dict[str, Any] = {
     "provider": settings.llm_provider,
@@ -104,7 +107,15 @@ def _merged_config(cfg_svc: ConfigService) -> dict[str, Any]:
         if not db_cfg:
             cfg_svc.initialize_default_config()
             db_cfg = cfg_svc.get_all_config()
-        return {**_RUNTIME_CONFIG, **db_cfg}
+        
+        merged = {**_RUNTIME_CONFIG, **db_cfg}
+        
+        # Auto-detect Responses API requirement if not explicitly set
+        if "use_responses_api" not in db_cfg:
+            current_model = merged.get("chat_model")
+            merged["use_responses_api"] = _should_use_responses_api(current_model)
+            
+        return merged
     except Exception as exc:  # pragma: no cover
         logger.warning("Falling back to in-memory config: %s", exc)
         return _RUNTIME_CONFIG
@@ -322,7 +333,7 @@ async def test_model_config(payload: ModelConfigPayload):
     use_responses = (
         payload.use_responses_api
         if payload.use_responses_api is not None
-        else _DEFAULT_RESPONSES_FLAG
+        else _should_use_responses_api(model)
     )
 
     try:
@@ -339,14 +350,36 @@ async def test_model_config(payload: ModelConfigPayload):
         if provider == "azure" and use_responses:
             # Minimal Responses-API test call
             try:
-                resp = await asyncio.wait_for(
-                    client.respond(
-                        input="Say 'test successful' briefly.",
-                        effort="low",
-                        summary="auto",
-                    ),
-                    timeout=30,
-                )
+                # Use simplified string input for reasoning models, message array for others
+                from app.llm.client import _is_reasoning_model
+                if _is_reasoning_model(model):
+                    # Reasoning models - use string input with reasoning config
+                    resp = await asyncio.wait_for(
+                        client.complete(
+                            input="Say 'test successful' briefly.",
+                            reasoning={"effort": "low", "summary": "auto"},
+                            max_tokens=max_tokens,
+                            stream=False,
+                        ),
+                        timeout=30,
+                    )
+                else:
+                    # Regular models - use message array format
+                    resp = await asyncio.wait_for(
+                        client.complete(
+                            input=[
+                                {
+                                    "role": "system",
+                                    "content": "Respond with 'test successful' exactly.",
+                                },
+                                {"role": "user", "content": "Ping"},
+                            ],
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            stream=False,
+                        ),
+                        timeout=30,
+                    )
                 # Responses objects return text at resp.output[-1].content[0].text
                 if hasattr(resp, "output") and resp.output:
                     resp_text = resp.output[-1].content[0].text.strip()

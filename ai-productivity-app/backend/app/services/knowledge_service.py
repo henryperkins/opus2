@@ -52,7 +52,7 @@ except ModuleNotFoundError:  # pragma: no cover – lightweight fallback for CI
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.vector_store.qdrant_client import QdrantVectorStore
+from app.services.vector_service import VectorService
 from app.embeddings.generator import EmbeddingGenerator
 from app.models.knowledge import KnowledgeDocument
 from app.config import settings
@@ -65,7 +65,7 @@ class KnowledgeService:
 
     def __init__(
         self,
-        vector_store: QdrantVectorStore,
+        vector_store: VectorService,
         embedding_generator: EmbeddingGenerator
     ):
         self.vector_store = vector_store

@@ -105,8 +105,12 @@ class QdrantService:
         logger.info("Created Qdrant collection '%s'", self.collection_name)
 
     # ------------------------------------------------------------------ #
-    # Upsert
+    # Insert/Upsert
     # ------------------------------------------------------------------ #
+    async def insert_embeddings(self, embeddings: List[Dict[str, Any]]) -> List[str]:
+        """Insert embeddings into the Qdrant collection (alias for upsert)."""
+        return await self.upsert(embeddings)
+    
     async def upsert(self, embeddings: List[Dict[str, Any]]) -> List[str]:
         """Upsert embeddings into the Qdrant collection.
 

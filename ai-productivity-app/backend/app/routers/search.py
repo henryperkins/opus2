@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query, HTTPException, BackgroundTasks, Depends
 
 from app.dependencies import DatabaseDep, CurrentUserRequired, CurrentUserOptional
 from app.services.vector_service import get_vector_service, VectorService, vector_service
+from app.services.vector_store import VectorStore
 from app.services.hybrid_search import HybridSearch
 from app.services.embedding_service import EmbeddingService
 from app.embeddings.generator import EmbeddingGenerator

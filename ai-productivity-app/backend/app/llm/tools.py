@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
     {
+        "type": "function",
         "name": "file_search",
         "description": "Return the most relevant code snippets for a natural-language query.",
         "parameters": {
@@ -51,6 +52,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         },
     },
     {
+        "type": "function",
         "name": "explain_code",
         "description": "Explain the purpose and behaviour of a code fragment identified by symbol name or file:line reference.",
         "parameters": {
@@ -63,6 +65,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         },
     },
     {
+        "type": "function",
         "name": "generate_tests",
         "description": "Generate unit tests for a function or class symbol.",
         "parameters": {
@@ -75,6 +78,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         },
     },
     {
+        "type": "function",
         "name": "similar_code",
         "description": "Retrieve code snippets that are embedding-similar to the provided chunk identifier.",
         "parameters": {
@@ -92,6 +96,36 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
+
+def _extract_llm_response_content(response: Any) -> str:
+    """Extract text content from LLM response (both Chat Completions and Responses API)."""
+    # Azure Responses API format
+    if hasattr(response, 'output') and response.output:
+        for item in response.output:
+            if hasattr(item, 'content') and item.content:
+                if isinstance(item.content, str):
+                    return item.content
+                # Handle structured content
+                elif isinstance(item.content, list) and item.content:
+                    text_parts = []
+                    for content_item in item.content:
+                        if hasattr(content_item, "text"):
+                            text_parts.append(content_item.text)
+                    return "\n".join(text_parts) if text_parts else str(item.content[0])
+                else:
+                    return str(item.content)
+    
+    # OpenAI Chat Completions format
+    if hasattr(response, 'choices') and response.choices:
+        return response.choices[0].message.content or ""
+    
+    # Legacy format
+    if hasattr(response, 'output_text'):
+        return response.output_text or ""
+    
+    # Fallback
+    return str(response)
 
 
 async def _tool_file_search(args: Dict[str, Any], db: Session | AsyncSession) -> Dict[str, Any]:
@@ -117,7 +151,12 @@ async def _tool_explain_code(args: Dict[str, Any], db: Session | AsyncSession) -
         return {"error": cmd_result.get("message", "Unable to generate explanation")}
 
     prompt = cmd_result["prompt"]
-    explanation = await llm_client.complete([{"role": "user", "content": prompt}], stream=False)
+    response = await llm_client.complete(
+        messages=[{"role": "user", "content": prompt}], 
+        stream=False
+    )
+    
+    explanation = _extract_llm_response_content(response)
     return {"explanation": explanation}
 
 
@@ -132,32 +171,60 @@ async def _tool_generate_tests(args: Dict[str, Any], db: Session | AsyncSession)
         return {"error": cmd_result.get("message", "Unable to create tests")}
 
     prompt = cmd_result["prompt"]
-    tests = await llm_client.complete([{"role": "user", "content": prompt}], stream=False)
+    response = await llm_client.complete(
+        messages=[{"role": "user", "content": prompt}], 
+        stream=False
+    )
+    
+    tests = _extract_llm_response_content(response)
     return {"tests": tests}
 
 
-async def _tool_similar_code(args: Dict[str, Any], db: Session) -> Dict[str, Any]:
+async def _tool_similar_code(args: Dict[str, Any], db: Session | AsyncSession) -> Dict[str, Any]:
     from app.models.code import CodeEmbedding, CodeDocument  # local import to avoid circular
+    from sqlalchemy import select
 
     chunk_id: int = int(args["chunk_id"])
     k: int = int(args.get("k", 3))
 
-    target = db.query(CodeEmbedding).filter_by(id=chunk_id).first()
-    if not target or not target.embedding:
-        return {"error": "chunk not found or embedding missing"}
+    # Handle both sync and async sessions
+    if isinstance(db, AsyncSession):
+        # Async version
+        target_stmt = select(CodeEmbedding).where(CodeEmbedding.id == chunk_id)
+        result = await db.execute(target_stmt)
+        target = result.scalar_one_or_none()
+        
+        if not target or not target.embedding:
+            return {"error": "chunk not found or embedding missing"}
 
-    # Very naive similarity: cosine on raw lists in SQL is expensive – we just
-    # return neighbouring chunks from the same document as a placeholder.
-    neighbours = (
-        db.query(CodeEmbedding)
-        .filter(
-            CodeEmbedding.document_id == target.document_id,
-            CodeEmbedding.id != target.id,
+        # Get neighbouring chunks from the same document
+        neighbours_stmt = (
+            select(CodeEmbedding)
+            .where(
+                CodeEmbedding.document_id == target.document_id,
+                CodeEmbedding.id != target.id,
+            )
+            .order_by(CodeEmbedding.start_line)
+            .limit(k)
         )
-        .order_by(CodeEmbedding.start_line)
-        .limit(k)
-        .all()
-    )
+        result = await db.execute(neighbours_stmt)
+        neighbours = result.scalars().all()
+    else:
+        # Sync version (legacy)
+        target = db.query(CodeEmbedding).filter_by(id=chunk_id).first()
+        if not target or not target.embedding:
+            return {"error": "chunk not found or embedding missing"}
+
+        neighbours = (
+            db.query(CodeEmbedding)
+            .filter(
+                CodeEmbedding.document_id == target.document_id,
+                CodeEmbedding.id != target.id,
+            )
+            .order_by(CodeEmbedding.start_line)
+            .limit(k)
+            .all()
+        )
 
     out = []
     for n in neighbours:
@@ -173,7 +240,7 @@ async def _tool_similar_code(args: Dict[str, Any], db: Session) -> Dict[str, Any
     return {"similar": out}
 
 
-_HANDLERS: Dict[str, Callable[[Dict[str, Any], Session], Any]] = {
+_HANDLERS: Dict[str, Callable[[Dict[str, Any], Session | AsyncSession], Any]] = {
     "file_search": _tool_file_search,
     "explain_code": _tool_explain_code,
     "generate_tests": _tool_generate_tests,
@@ -181,7 +248,7 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any], Session], Any]] = {
 }
 
 
-async def call_tool(name: str, arguments: Dict[str, Any], db: Session) -> Dict[str, Any]:
+async def call_tool(name: str, arguments: Dict[str, Any], db: Session | AsyncSession) -> Dict[str, Any]:
     """Execute *name* tool with *arguments* and return result."""
 
     handler = _HANDLERS.get(name)

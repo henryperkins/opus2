@@ -236,7 +236,21 @@ async def create_message(
         from app.database import AsyncSessionLocal
         async def process_with_async_session():
             async with AsyncSessionLocal() as async_db:
-                processor = ChatProcessor(async_db)
+                # Initialize knowledge service for RAG capabilities
+                knowledge_service = None
+                try:
+                    from app.services.vector_service import vector_service
+                    from app.embeddings.generator import EmbeddingGenerator
+                    from app.services.knowledge_service import KnowledgeService
+                    
+                    await vector_service.initialize()
+                    embedding_generator = EmbeddingGenerator()
+                    knowledge_service = KnowledgeService(vector_service, embedding_generator)
+                    logger.info("Knowledge service initialized for REST API chat processor")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize knowledge service for REST API: {e}")
+                
+                processor = ChatProcessor(async_db, kb=knowledge_service)
                 await processor.process_message(
                     session_id=session_id,
                     message=msg,

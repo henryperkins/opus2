@@ -177,6 +177,7 @@ class EmbeddingWorker:
                 continue
 
             embedding_data = {
+                "id": chunk.id,  # Add required ID field for Qdrant
                 "vector": chunk.embedding,
                 "document_id": chunk.document_id,
                 "project_id": chunk.document.project_id,

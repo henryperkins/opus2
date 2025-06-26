@@ -39,7 +39,6 @@ from ..models.chat import ChatMessage, ChatSession
 from ..services.chat_service import ChatService
 from ..services.knowledge_service import KnowledgeService
 from ..services.confidence_service import ConfidenceService
-from ..vector_store.qdrant_client import QdrantVectorStore
 from ..embeddings.generator import EmbeddingGenerator
 from ..websocket.manager import connection_manager
 from .commands import command_registry
@@ -649,16 +648,39 @@ class ChatProcessor:
     def _extract_response_content(response: Any) -> str:
         """Handle both Azure Responses API & OpenAI Chat formats."""
         try:
+            # Azure Responses API format
+            if hasattr(response, "output") and response.output:
+                # Log additional Responses API fields for debugging
+                if logger.isEnabledFor(logging.DEBUG):
+                    response_id = getattr(response, "id", "unknown")
+                    status = getattr(response, "status", "unknown")
+                    created_at = getattr(response, "created_at", "unknown")
+                    logger.debug(f"Responses API - ID: {response_id}, Status: {status}, Created: {created_at}")
+                    
+                    if hasattr(response, "usage"):
+                        logger.debug(f"Token usage: {response.usage}")
+
+                # Extract content from output
+                for item in response.output:
+                    if (getattr(item, "type", None) == "message" and
+                            hasattr(item, "content") and item.content):
+                        if isinstance(item.content, str):
+                            return item.content
+                        # Handle structured content (e.g., with reasoning)
+                        elif isinstance(item.content, list) and item.content:
+                            text_parts = []
+                            for content_item in item.content:
+                                if hasattr(content_item, "text"):
+                                    text_parts.append(content_item.text)
+                            return "\n".join(text_parts) if text_parts else str(item.content[0])
+                        else:
+                            return str(item.content)
+
+            # Legacy output_text field
             if getattr(response, "output_text", None):
                 return response.output_text
 
-            if hasattr(response, "output") and response.output:
-                for item in response.output:
-                    if (getattr(item, "type", None) == "message" and
-                            isinstance(item.content, str)):
-                        return item.content
-
-            # OpenAI chat
+            # OpenAI Chat Completions format
             if getattr(response, "choices", None):
                 return response.choices[0].message.content or ""
 

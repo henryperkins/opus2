@@ -26,6 +26,57 @@ class StreamingHandler:
         """Stream LLM response chunks to WebSocket."""
         self.message_id = message_id
 
+        # Defensive guard: if the caller forgot stream=True, fall back to non-streaming
+        if not hasattr(response_generator, "__aiter__"):
+            # Extract response content from non-streaming response using same logic as processor
+            full_text = ""
+            
+            # Azure Responses API format
+            if hasattr(response_generator, 'output') and response_generator.output:
+                for item in response_generator.output:
+                    if (getattr(item, "type", None) == "message" and
+                            hasattr(item, "content") and item.content):
+                        if isinstance(item.content, str):
+                            full_text = item.content
+                            break
+                        # Handle structured content (e.g., with reasoning)
+                        elif isinstance(item.content, list) and item.content:
+                            text_parts = []
+                            for content_item in item.content:
+                                if hasattr(content_item, "text"):
+                                    text_parts.append(content_item.text)
+                            full_text = "\n".join(text_parts) if text_parts else str(item.content[0])
+                            break
+                        else:
+                            full_text = str(item.content)
+                            break
+            # Legacy formats
+            elif hasattr(response_generator, 'output_text'):
+                full_text = response_generator.output_text or ""
+            elif hasattr(response_generator, 'choices') and response_generator.choices:
+                full_text = response_generator.choices[0].message.content or ""
+            else:
+                full_text = str(response_generator)
+            
+            # Ensure we don't return empty content
+            if not full_text.strip():
+                full_text = "I apologize, but I wasn't able to generate a response. Please try again."
+            
+            # Send as single complete message
+            await self.websocket.send_json({
+                'type': 'ai_stream',
+                'message_id': message_id,
+                'content': full_text,
+                'done': True,
+                'message': {
+                    'id': message_id,
+                    'content': full_text,
+                    'role': 'assistant',
+                    'created_at': datetime.now().isoformat()
+                }
+            })
+            return full_text
+
         try:
             async for chunk in response_generator:
                 self.buffer.append(chunk)
