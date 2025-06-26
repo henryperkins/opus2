@@ -1,5 +1,5 @@
 // components/chat/EnhancedMessageRenderer.jsx
-/* global navigator */
+/* eslint-env browser */
 import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter/dist/cjs/prism';
@@ -485,7 +485,11 @@ export default function EnhancedMessageRenderer({
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          <Code className="w-3 h-3 inline mr-1" />
+          {CodeIcon ? (
+            <CodeIcon className="w-3 h-3 inline mr-1" />
+          ) : (
+            <FallbackIcon className="w-3 h-3 inline mr-1" />
+          )}
           Raw
         </button>
       </div>

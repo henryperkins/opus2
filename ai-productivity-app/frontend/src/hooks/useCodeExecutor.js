@@ -110,7 +110,7 @@ export function useCodeExecutor(defaultProjectId = null) {
           resultsMap.set(correlationId, { status: 'running' });
           emitChange();
 
-          const { data } = await client.post('/code/execute', payload, {
+          const { data } = await client.post('/api/code/execute', payload, {
             signal: controller.signal,
           });
 

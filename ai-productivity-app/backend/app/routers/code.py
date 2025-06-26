@@ -14,7 +14,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import contextlib
+import io
+import textwrap
+import traceback
 from typing import List
+from pydantic import BaseModel
 
 from fastapi import (
     APIRouter,
@@ -247,3 +252,60 @@ def delete_file(file_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "deleted"}
+
+# ---------------------------------------------------------------------------
+# New: lightweight Python code execution endpoint (unsafe, dev-only)
+# ---------------------------------------------------------------------------
+#
+# NOTE: This endpoint is **NOT** suited for production use – it executes
+# arbitrary Python code inside the API worker.  It exists purely for the
+# interactive demo requirement where users can run code snippets generated
+# by the LLM.  Protect behind authentication / feature-flag in production!
+
+
+class CodeExecRequest(BaseModel):
+    """Request body for /api/code/execute."""
+    code: str
+    language: str = "python"
+    project_id: int | None = None  # reserved for future
+
+
+class CodeExecResponse(BaseModel):
+    """Response body for /api/code/execute."""
+    stdout: str
+    stderr: str
+    result_repr: str | None = None
+    success: bool
+
+
+@router.post("/execute", response_model=CodeExecResponse)
+async def execute_code(req: CodeExecRequest) -> CodeExecResponse:  # noqa: D401
+    """
+    Execute a *Python* code snippet and capture stdout / stderr.
+
+    WARNING: This runs arbitrary code inside the API worker – keep disabled
+    in production environments.
+    """
+    if req.language.lower() not in {"python", "py"}:
+        raise HTTPException(status_code=400, detail="Only Python execution supported")
+
+    stdout_buf, stderr_buf = io.StringIO(), io.StringIO()
+    local_vars: dict[str, object] = {}
+
+    try:
+        with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+            exec(textwrap.dedent(req.code), {}, local_vars)  # pylint: disable=exec-used
+        # Conventional REPL result variable (“_”) if provided
+        result_repr = repr(local_vars.get("_", None))
+        success = True
+    except Exception as exc:  # pragma: no cover
+        traceback.print_exc(file=stderr_buf)
+        result_repr = repr(exc)
+        success = False
+
+    return CodeExecResponse(
+        stdout=stdout_buf.getvalue(),
+        stderr=stderr_buf.getvalue(),
+        result_repr=result_repr,
+        success=success,
+    )
