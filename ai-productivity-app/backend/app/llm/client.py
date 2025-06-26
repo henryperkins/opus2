@@ -480,8 +480,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     elif hasattr(response, 'output') and response.output:
                         logger.debug(f"Response Output Items: {len(response.output)}")
 
-                # Handle streaming response
-                if stream:
+                # Handle streaming response - check actual stream value used in request
+                actual_stream = responses_kwargs.get("stream", False)
+                if actual_stream:
                     return self._stream_response(response)
                 return response
 
@@ -553,8 +554,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     if hasattr(response, 'usage'):
                         logger.debug(f"Token Usage: {response.usage}")
 
-                # Handle streaming response
-                if stream:
+                # Handle streaming response - check actual stream value used in request
+                actual_stream = clean_kwargs.get("stream", False)
+                if actual_stream:
                     return self._stream_response(response)
                 return response
             except Exception as exc:  # noqa: BLE001 – capture BadRequest / TypeError alike
