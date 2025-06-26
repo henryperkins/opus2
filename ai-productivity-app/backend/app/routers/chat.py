@@ -285,7 +285,7 @@ async def delete_message(
 async def websocket_endpoint(
     websocket: WebSocket,
     session_id: int,
-    db: AsyncDatabaseDep,
+    db: DatabaseDep,
 ):
     """WebSocket endpoint for real-time chat."""
     # Authenticate WebSocket connection
@@ -315,8 +315,10 @@ async def websocket_endpoint(
             await websocket.close(code=1008, reason="Invalid token")
             return
 
-        # Handle chat connection
-        await handle_chat_connection(websocket, session_id, current_user, db)
+        # Create async session for chat processing since ChatProcessor expects async
+        from app.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as async_db:
+            await handle_chat_connection(websocket, session_id, current_user, async_db)
 
     except WebSocketDisconnect:
         pass

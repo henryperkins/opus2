@@ -376,15 +376,30 @@ def _install_transactions_submodule() -> None:  # noqa: D401 – helper
 
     @_contextlib.contextmanager  # type: ignore[misc]
     def atomic(session: Session):  # noqa: D401 – identical signature
-        """Commit on success / rollback on failure."""
+        """Run block in *atomic* DB transaction even when an outer TX exists.
 
-        tx = session.begin()
-        try:
-            yield session
-            tx.commit()
-        except Exception:  # pragma: no cover  # noqa: BLE001
-            tx.rollback()
-            raise
+        Mirrors the behaviour of the fully-fledged implementation in
+        ``backend/app/database/transactions.py``.  Re-implemented here so that
+        the public shim used by legacy imports passes the test-suite.
+        """
+
+        # Reuse the same nested/outer transaction strategy as the main helper
+        if session.in_transaction():
+            nested_tx = session.begin_nested()
+            try:
+                yield session
+                nested_tx.commit()
+            except Exception:  # pragma: no cover  # noqa: BLE001
+                nested_tx.rollback()
+                raise
+        else:
+            tx = session.begin()
+            try:
+                yield session
+                tx.commit()
+            except Exception:  # pragma: no cover  # noqa: BLE001
+                tx.rollback()
+                raise
 
     _mod.atomic = atomic  # type: ignore[attr-defined]
 

@@ -65,6 +65,22 @@ export function useWebSocketChannel({
     []
   );
 
+  // ----------------------------------------------------------------------
+  // Helper: health-check polling – resolves to **true** when /api/health
+  // returns 2xx.  Keeps requests lightweight by issuing a HEAD request.
+  // ----------------------------------------------------------------------
+  async function checkBackendHealth() {
+    try {
+      const res = await fetch('/api/health', {
+        method: 'HEAD',
+        credentials: 'include',
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   const close = useCallback(() => {
     console.log(`🔌 WebSocket close() called`);
     if (wsRef.current) wsRef.current.close(1000, 'client-close');
@@ -119,22 +135,60 @@ export function useWebSocketChannel({
         // Enhanced logging for debugging
         console.warn(`WebSocket closed: code=${evt.code}, reason="${evt.reason}", wasClean=${evt.wasClean}`);
 
-        // Only retry if it's not a permanent failure or user-initiated close
-        // Code 1000 = normal closure, 1001 = going away, 1005 = no status code
-        // Code 4000-4999 = application-specific errors that shouldn't be retried
-        const shouldRetry = retryRef.current < retry &&
-          evt.code !== 1000 &&
-          evt.code !== 1001 &&
-          evt.code < 4000; // Don't retry application-specific errors
+        // ------------------------------------------------------------------
+        // Retry strategy ----------------------------------------------------
+        // ------------------------------------------------------------------
+        // We distinguish **backend restarts / transient gateway errors**
+        // from *normal* user initiated closures.  Certain close-codes signal
+        // the server went away unexpectedly (1006, 1011-1014).  In that
+        // scenario we keep retrying *indefinitely* until the health-check
+        // endpoint responds.
+        //
+        // For all other cases we fall back to the bounded `retry` counter to
+        // avoid endless loops on permanent authentication errors (4000-4999).
+        // ------------------------------------------------------------------
+
+        const isBackendRestart =
+          evt.code === 1006 || // Abnormal
+          evt.code === 1011 || // Internal error
+          evt.code === 1012 || // Service restart
+          evt.code === 1013 || // Try again later
+          evt.code === 1014;   // Bad gateway
+
+        const withinRetryBudget = retryRef.current < retry;
+
+        const shouldRetry =
+          (isBackendRestart || evt.code === 1005 || // No status
+            (evt.code >= 1000 && evt.code < 4000 && evt.code !== 1000 && evt.code !== 1001)) &&
+          (withinRetryBudget || isBackendRestart); // unlimited for restarts
 
         if (shouldRetry) {
-          // Exponential backoff with jitter: 1s, 2s, 4s, 8s, 10s max
-          const baseDelay = Math.min(10000, 1000 * Math.pow(2, retryRef.current));
-          const jitter = Math.random() * 1000; // 0-1s jitter
+          // Reset counter when we detect a backend restart so that we don't
+          // prematurely exhaust the budget.
+          if (isBackendRestart) {
+            retryRef.current = 0;
+
+            // Poll health-check before attempting to reconnect so we don't
+            // spam connection attempts during long deploys.
+            const poll = setInterval(async () => {
+              const healthy = await checkBackendHealth();
+              if (healthy) {
+                clearInterval(poll);
+                connect();
+              }
+            }, 2000);
+            return; // Exit early – will reconnect from poll
+          }
+
+          // Exponential backoff: 1s * 1.5^n with 30 s cap + jitter.
+          const baseDelay = Math.min(30000, 1000 * Math.pow(1.5, retryRef.current));
+          const jitter = Math.random() * 1000;
           const delay = baseDelay + jitter;
 
           retryRef.current += 1;
-          console.warn(`WebSocket reconnecting in ${Math.round(delay / 1000)}s (attempt ${retryRef.current}/${retry})`);
+          console.warn(
+            `WebSocket reconnecting in ${Math.round(delay / 1000)}s (attempt ${retryRef.current}${withinRetryBudget ? `/${retry}` : ''})`
+          );
           timerRef.current = setTimeout(connect, delay);
         } else if (retryRef.current >= retry) {
           console.error(`WebSocket connection failed after ${retry} attempts. Giving up.`);

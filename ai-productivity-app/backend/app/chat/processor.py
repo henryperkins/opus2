@@ -132,6 +132,12 @@ class ChatProcessor:
         )
         context["project_id"] = session.project_id
 
+        # 2a. Extract frontend context from message metadata
+        if hasattr(message, 'metadata') and message.metadata:
+            frontend_knowledge = message.metadata.get("knowledge_context", {})
+            if frontend_knowledge.get("citations"):
+                context["frontend_context"] = frontend_knowledge["citations"]
+
         # 3. Knowledge base search with RAG tracking
         rag_metadata = {
             "rag_used": False,
@@ -443,12 +449,16 @@ class ChatProcessor:
         )
         messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
 
-        # Add knowledge base context as system message
+        # -------------------------------------------------------------- #
+        # Knowledge-base context
+        # -------------------------------------------------------------- #
         if context.get("knowledge"):
-            messages.append({
-                "role": "system",
-                "content": f"Relevant knowledge base information:\n{context['knowledge']}"
-            })
+            messages.append(
+                {
+                    "role": "system",
+                    "content": self._format_knowledge_context(context),
+                }
+            )
 
         # optional conversation summary
         if len(conversation) >= 15:
@@ -488,6 +498,78 @@ class ChatProcessor:
             len(context.get("chunks", [])),
         )
         return messages, conversation
+
+    # ------------------------------------------------------------------ #
+    # Utility: format knowledge context into a well-structured markdown
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _format_knowledge_context(ctx: dict) -> str:
+        """Return a Markdown string containing KB snippets with citations.
+
+        Enhanced formatting that handles both database knowledge and frontend context.
+        Includes proper sectioning for documents and code snippets.
+        """
+        lines: list[str] = [
+            "You have access to the following knowledge base information. Use it to provide accurate, contextual responses.",
+            "",
+        ]
+
+        # Handle citations from knowledge service (backend)
+        citations: dict = ctx.get("citations", {})
+        if citations:
+            lines.extend([
+                "## Knowledge Base Results",
+                "",
+            ])
+            
+            for marker, meta in citations.items():
+                title = meta.get("title", "Document")
+                src = meta.get("source", "unknown")
+                content = meta.get("excerpt") or ctx["knowledge"].split(marker, 1)[1].strip()
+
+                lines.append(f"### {marker} {title}")
+                lines.append(f"**Source:** {src}")
+                lines.append(f"**Content:** {content}")
+                lines.append("")
+
+        # Handle direct knowledge content
+        knowledge_content = ctx.get("knowledge", "")
+        if knowledge_content and not citations:
+            lines.extend([
+                "## Relevant Information",
+                "",
+                knowledge_content,
+                "",
+            ])
+
+        # Handle structured context from frontend (user selections)
+        frontend_context = ctx.get("frontend_context", [])
+        if frontend_context:
+            lines.extend([
+                "## Selected Context Items",
+                "",
+            ])
+            
+            for idx, item in enumerate(frontend_context, 1):
+                item_type = item.get("type", "document")
+                source = item.get("source", "Unknown source")
+                content = item.get("content", "")
+                relevance = item.get("relevance", 0.0)
+
+                lines.append(f"### [{idx}] {item_type.title()} - {source}")
+                lines.append(f"**Relevance:** {relevance:.2f}")
+                
+                if item.get("language") and item_type == "code":
+                    lines.append(f"**Language:** {item['language']}")
+                    lines.append(f"```{item['language']}")
+                    lines.append(content)
+                    lines.append("```")
+                else:
+                    lines.append(f"**Content:** {content}")
+                lines.append("")
+
+        return "\n".join(lines) if len(lines) > 2 else ""
 
     async def _run_tool_calls(
         self,

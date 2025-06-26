@@ -9,6 +9,12 @@ import FileUpload from '../knowledge/FileUpload';
 import RepositoryConnect from '../knowledge/RepositoryConnect';
 import DependencyGraph from '../knowledge/DependencyGraph';
 
+// Custom styles for scrollbar (Tailwind scrollbar plugin might not be available)
+const scrollbarStyle = {
+  scrollbarWidth: 'thin',
+  scrollbarColor: '#CBD5E0 #F7FAFC',
+};
+
 export default function KnowledgeAssistant({
   projectId,
   message: incomingMessage,
@@ -152,14 +158,14 @@ export default function KnowledgeAssistant({
 
   // Determine container styles based on mode
   const containerClass = containerMode === 'overlay'
-    ? `fixed ${position === 'right' ? 'right-4' : 'left-4'} top-20 w-96 z-40`
+    ? `fixed ${position === 'right' ? 'right-2 sm:right-4' : 'left-2 sm:left-4'} top-20 w-80 sm:w-96 z-50 max-h-[calc(100vh-6rem)]`
     : 'w-full h-full flex flex-col';
 
   const panelClass = containerMode === 'overlay'
-    ? `bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden transition-all ${
-        isMinimized ? 'h-12' : 'max-h-[70vh]'
+    ? `bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden transition-all duration-300 ${
+        isMinimized ? 'h-12' : 'h-auto max-h-full'
       }`
-    : `bg-white border-t border-gray-200 overflow-hidden transition-all flex-1 ${
+    : `bg-white border-t border-gray-200 overflow-hidden transition-all duration-300 flex-1 ${
         isMinimized ? 'h-12 flex-none' : 'flex flex-col'
       }`;
 
@@ -200,55 +206,59 @@ export default function KnowledgeAssistant({
         {!isMinimized && (
           <div>
             {/* Tab Navigation */}
-            <div className="flex border-b border-gray-200">
+            <div className="flex border-b border-gray-200 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('context')}
-                className={`flex items-center px-4 py-2 text-sm font-medium ${
+                className={`flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
                   activeTab === 'context'
                     ? 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-gray-600 hover:text-gray-800'
                 }`}
               >
                 <Search className="w-4 h-4 mr-1" />
-                Context
+                <span className="hidden sm:inline">Context</span>
               </button>
               <button
                 onClick={() => setActiveTab('upload')}
-                className={`flex items-center px-4 py-2 text-sm font-medium ${
+                className={`flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
                   activeTab === 'upload'
                     ? 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-gray-600 hover:text-gray-800'
                 }`}
               >
                 <Upload className="w-4 h-4 mr-1" />
-                Upload
+                <span className="hidden sm:inline">Upload</span>
               </button>
               <button
                 onClick={() => setActiveTab('repository')}
-                className={`flex items-center px-4 py-2 text-sm font-medium ${
+                className={`flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
                   activeTab === 'repository'
                     ? 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-gray-600 hover:text-gray-800'
                 }`}
               >
                 <GitBranch className="w-4 h-4 mr-1" />
-                Repository
+                <span className="hidden sm:inline">Repository</span>
               </button>
               <button
                 onClick={() => setActiveTab('graph')}
-                className={`flex items-center px-4 py-2 text-sm font-medium ${
+                className={`flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
                   activeTab === 'graph'
                     ? 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-gray-600 hover:text-gray-800'
                 }`}
               >
                 <Network className="w-4 h-4 mr-1" />
-                Dependencies
+                <span className="hidden sm:inline">Dependencies</span>
               </button>
             </div>
 
             {/* Tab Content */}
-            <div className={containerMode === 'overlay' ? "scrollable-content" : "flex-1 overflow-auto"}>
+            <div 
+              className={containerMode === 'overlay' 
+                ? "overflow-y-auto max-h-[calc(70vh-8rem)]" 
+                : "flex-1 overflow-auto"}
+              style={containerMode === 'overlay' ? scrollbarStyle : undefined}>
               {/* Context Tab */}
               {activeTab === 'context' && (
                 <>
@@ -288,14 +298,16 @@ export default function KnowledgeAssistant({
                   )}
 
                   {/* Knowledge Context */}
-                  <KnowledgeContextPanel
-                    query={activeQuery}
-                    projectId={projectId}
-                    onDocumentSelect={handleDocumentSelect}
-                    onCodeSelect={handleCodeSelect}
-                    className="h-full"
-                    maxHeight={containerMode === 'overlay' ? "400px" : undefined}
-                  />
+                  <div className={containerMode === 'overlay' ? "max-h-96" : "flex-1"}>
+                    <KnowledgeContextPanel
+                      query={activeQuery}
+                      projectId={projectId}
+                      onDocumentSelect={handleDocumentSelect}
+                      onCodeSelect={handleCodeSelect}
+                      className="h-full"
+                      maxHeight={containerMode === 'overlay' ? "300px" : undefined}
+                    />
+                  </div>
 
                   {/* Actions */}
                   {selectedItems && selectedItems.size > 0 && (
@@ -336,7 +348,7 @@ export default function KnowledgeAssistant({
 
               {/* Dependencies Tab */}
               {activeTab === 'graph' && (
-                <div className="p-4" style={{ height: containerMode === 'overlay' ? '400px' : '100%' }}>
+                <div className={`p-4 ${containerMode === 'overlay' ? 'h-96' : 'h-full'}`}>
                   <DependencyGraph projectId={projectId} />
                 </div>
               )}

@@ -18,6 +18,36 @@ class ErrorBoundary extends Component {
     // Bind methods to ensure proper 'this' context
     this.handleRetry = this.handleRetry.bind(this);
     this.getErrorContent = this.getErrorContent.bind(this);
+
+    // Subscribe to global error handler (added in utils)
+    // We defer the dynamic import to avoid circular dep when this component
+    // is used before the handler bundle is evaluated.
+    import('../../utils/globalErrorHandler')
+      .then(({ globalErrorHandler }) => {
+        this._unsubscribe = globalErrorHandler.subscribe((errorInfo) => {
+          this.setState({
+            hasError: true,
+            error: errorInfo.error || new Error(errorInfo.message),
+            errorInfo,
+            errorType: this._categorize(errorInfo),
+          });
+        });
+      })
+      .catch(() => {});
+  }
+
+  componentWillUnmount() {
+    this._unsubscribe?.();
+  }
+
+  _categorize(errorInfo) {
+    if (errorInfo.type === 'unhandledRejection') {
+      const msg = errorInfo.error?.message || '';
+      if (msg.includes('WebSocket')) return 'websocket';
+      if (msg.includes('fetch')) return 'network';
+      if (msg.includes('AI')) return 'model';
+    }
+    return 'generic';
   }
 
   static getDerivedStateFromError(error) {

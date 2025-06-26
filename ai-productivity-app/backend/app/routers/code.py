@@ -391,6 +391,14 @@ async def execute_code(req: CodeExecRequest) -> CodeExecResponse:  # noqa: D401
     WARNING: This runs arbitrary code inside the API worker – keep disabled
     in production environments.
     """
+    # SECURITY: Disable code execution by default - extremely dangerous
+    from app.config import settings
+    if not getattr(settings, 'allow_code_execution', False):
+        raise HTTPException(
+            status_code=403, 
+            detail="Code execution is disabled for security reasons. Set ALLOW_CODE_EXECUTION=true to enable."
+        )
+    
     if req.language.lower() not in {"python", "py"}:
         raise HTTPException(status_code=400, detail="Only Python execution supported")
 

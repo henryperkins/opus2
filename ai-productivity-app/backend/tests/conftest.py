@@ -69,3 +69,48 @@ def client(db):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+# ---------------------------------------------------------------------------
+# Shared fixtures
+# ---------------------------------------------------------------------------
+# Some test modules (e.g. *test_atomic_transactions.py*) rely on ``test_user``
+# and ``test_project`` fixtures that were originally defined *locally* in other
+# test files.  When Pytest does not collect those provider modules (for
+# instance when the user runs a subset of the suite) the fixtures are missing
+# which results in a *"fixture 'test_user' not found"* error.  Moving the
+# definitions into *conftest.py* makes them available globally without having
+# to touch every individual test.
+
+from app.models.user import User  # noqa: E402 – imported late to avoid heavy deps at import time
+from app.models.project import Project  # noqa: E402
+
+
+@pytest.fixture()
+def test_user(db):  # type: ignore
+    """Return a persisted *User* record for tests that need an authenticated user."""
+
+    user = User(
+        username="testuser",
+        email="test@example.com",
+        password_hash="hashedpassword",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@pytest.fixture()
+def test_project(db, test_user):  # type: ignore
+    """Return a persisted *Project* owned by the *test_user* fixture."""
+
+    project = Project(
+        title="Test Project",
+        description="A test project",
+        owner_id=test_user.id,
+    )
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project
+

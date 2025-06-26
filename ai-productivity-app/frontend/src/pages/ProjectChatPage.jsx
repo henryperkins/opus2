@@ -476,7 +476,7 @@ export default function ProjectChatPage() {
       projectId={projectId}
       onSuggestionApply={handleSuggestionApply}
       onContextAdd={handleContextAdd}
-      containerMode="overlay"
+      containerMode="inline"
       position="right"
     />
   );

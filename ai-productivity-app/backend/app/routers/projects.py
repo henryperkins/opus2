@@ -380,3 +380,162 @@ async def unarchive_project(
         created_at=unarchived.created_at,
         updated_at=unarchived.updated_at,
     )
+
+
+# ---------------------------------------------------------------------------
+# Project-scoped search endpoints to match frontend expectations
+# ---------------------------------------------------------------------------
+
+@router.post("/{project_id}/search/documents")
+async def search_project_documents(
+    project_id: int,
+    request: dict,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep
+):
+    """Search documents within a specific project."""
+    # Verify project exists and user has access
+    project = get_project_or_404(project_id, db)
+    
+    # Import here to avoid circular imports
+    from app.schemas.search import SearchRequest, SearchResponse
+    from app.services.hybrid_search import HybridSearch
+    from app.services.vector_service import vector_service
+    from app.embeddings.generator import EmbeddingGenerator
+    
+    # Create search request with project scope
+    search_request = SearchRequest(
+        query=request.get("query", ""),
+        project_ids=[project_id],
+        search_types=["documents"],
+        limit=request.get("limit", 10),
+        filters=request.get("filters", {})
+    )
+    
+    # Execute search
+    embedding_generator = EmbeddingGenerator()
+    hybrid_search = HybridSearch(db, vector_service, embedding_generator)
+    
+    try:
+        results = await hybrid_search.search(search_request)
+        return {"results": results.results, "total": results.total}
+    except Exception as e:
+        logger.error(f"Document search failed for project {project_id}: {e}")
+        return {"results": [], "total": 0}
+
+
+@router.post("/{project_id}/search/code")
+async def search_project_code(
+    project_id: int,
+    request: dict,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep
+):
+    """Search code within a specific project."""
+    # Verify project exists and user has access
+    project = get_project_or_404(project_id, db)
+    
+    # Import here to avoid circular imports
+    from app.schemas.search import SearchRequest, SearchResponse
+    from app.services.hybrid_search import HybridSearch
+    from app.services.vector_service import vector_service
+    from app.embeddings.generator import EmbeddingGenerator
+    
+    # Create search request with project scope
+    search_request = SearchRequest(
+        query=request.get("query", ""),
+        project_ids=[project_id],
+        search_types=["code"],
+        limit=request.get("limit", 10),
+        filters=request.get("filters", {})
+    )
+    
+    # Execute search
+    embedding_generator = EmbeddingGenerator()
+    hybrid_search = HybridSearch(db, vector_service, embedding_generator)
+    
+    try:
+        results = await hybrid_search.search(search_request)
+        return {"results": results.results, "total": results.total}
+    except Exception as e:
+        logger.error(f"Code search failed for project {project_id}: {e}")
+        return {"results": [], "total": 0}
+
+
+@router.post("/{project_id}/search/hybrid")
+async def search_project_hybrid(
+    project_id: int,
+    request: dict,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep
+):
+    """Hybrid search across all content types within a specific project."""
+    # Verify project exists and user has access
+    project = get_project_or_404(project_id, db)
+    
+    # Import here to avoid circular imports
+    from app.schemas.search import SearchRequest, SearchResponse
+    from app.services.hybrid_search import HybridSearch
+    from app.services.vector_service import vector_service
+    from app.embeddings.generator import EmbeddingGenerator
+    
+    # Create search request with project scope
+    search_request = SearchRequest(
+        query=request.get("query", ""),
+        project_ids=[project_id],
+        limit=request.get("limit", 10),
+        filters=request.get("filters", {})
+    )
+    
+    # Execute search
+    embedding_generator = EmbeddingGenerator()
+    hybrid_search = HybridSearch(db, vector_service, embedding_generator)
+    
+    try:
+        results = await hybrid_search.search(search_request)
+        return {"results": results.results, "total": results.total}
+    except Exception as e:
+        logger.error(f"Hybrid search failed for project {project_id}: {e}")
+        return {"results": [], "total": 0}
+
+
+@router.post("/{project_id}/search/similar")
+async def find_similar_content(
+    project_id: int,
+    request: dict,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep
+):
+    """Find content similar to provided text within a specific project."""
+    # Verify project exists and user has access
+    project = get_project_or_404(project_id, db)
+    
+    content = request.get("content", "")
+    if not content:
+        raise HTTPException(status_code=400, detail="Content is required for similarity search")
+    
+    # Import here to avoid circular imports
+    from app.schemas.search import SearchRequest, SearchResponse
+    from app.services.hybrid_search import HybridSearch
+    from app.services.vector_service import vector_service
+    from app.embeddings.generator import EmbeddingGenerator
+    
+    # Create search request for similarity
+    search_request = SearchRequest(
+        query=content,
+        project_ids=[project_id],
+        limit=request.get("limit", 10),
+        filters=request.get("filters", {}),
+        threshold=request.get("threshold", 0.7)
+    )
+    
+    # Execute search
+    embedding_generator = EmbeddingGenerator()
+    hybrid_search = HybridSearch(db, vector_service, embedding_generator)
+    
+    try:
+        results = await hybrid_search.search(search_request)
+        return {"items": results.results, "total": results.total}
+    except Exception as e:
+        logger.error(f"Similarity search failed for project {project_id}: {e}")
+        return {"items": [], "total": 0}

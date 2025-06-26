@@ -233,39 +233,49 @@ export function KnowledgeProvider({ children }) {
   const buildContext = useCallback(() => {
     try {
       const context = [];
+      const seen = new Map(); // key -> context object (prevents duplicates)
 
-      // Add citations
-      state.citations.forEach(citation => {
-        if (citation.type === 'document') {
-          context.push({
-            type: 'document',
-            content: citation.content || citation.excerpt,
-            source: citation.filename || citation.source,
-            relevance: citation.relevance || 0.8
-          });
-        } else if (citation.type === 'code') {
-          context.push({
-            type: 'code',
-            content: citation.code || citation.content,
-            language: citation.language,
-            file_path: citation.file_path || citation.source,
-            relevance: citation.relevance || 0.8
-          });
-        }
+      // 1. Citations coming back from backend (already scored)
+      state.citations.forEach((c) => {
+        if (!c) return;
+        const key = c.id || c.source || `${c.file_path}-${c.line_start}`;
+        if (seen.has(key)) return;
+
+        const ctxItem = {
+          id: c.id,
+          type: c.type || 'document',
+          content: c.content || c.excerpt || c.code,
+          source: c.source || c.file_path || c.filename,
+          language: c.language,
+          relevance: c.relevance ?? c.score ?? 0.8,
+          metadata: { ...c.metadata },
+        };
+        seen.set(key, ctxItem);
+        context.push(ctxItem);
       });
 
-      // Add selected items
-      state.selectedItems.forEach(itemId => {
-        const item = state.searchResults.find(r => r.id === itemId);
-        if (item && !context.find(c => c.source === item.source)) {
-          context.push({
-            type: item.type || 'document',
-            content: item.content || item.excerpt,
-            source: item.source || item.filename,
-            relevance: item.relevance || 0.7
-          });
-        }
+      // 2. User-selected search results
+      state.selectedItems.forEach((itemId) => {
+        const item = state.searchResults.find((r) => r.id === itemId);
+        if (!item) return;
+        const key = item.id || item.source;
+        if (seen.has(key)) return;
+
+        const ctxItem = {
+          id: item.id,
+          type: item.type || 'document',
+          content: item.content || item.excerpt,
+          source: item.source || item.filename,
+          language: item.language,
+          relevance: item.relevance ?? item.score ?? 0.7,
+          metadata: { ...item.metadata },
+        };
+        seen.set(key, ctxItem);
+        context.push(ctxItem);
       });
+
+      // 3. Sort descending by relevance so the most important snippets appear first
+      context.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
 
       dispatch({ type: KNOWLEDGE_ACTIONS.SET_CONTEXT, payload: context });
       return context;
@@ -328,7 +338,9 @@ export function KnowledgeProvider({ children }) {
   // Clear selected items
   const clearSelectedItems = useCallback(() => {
     dispatch({ type: KNOWLEDGE_ACTIONS.SET_SELECTED_ITEMS, payload: [] });
-  }, []);
+    // ensure context rebuilds immediately
+    buildContext();
+  }, [buildContext]);
 
   // Reset error state
   const resetError = useCallback(() => {

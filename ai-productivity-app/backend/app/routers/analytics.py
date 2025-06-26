@@ -2,10 +2,11 @@
 Analytics API router for metrics tracking and reporting.
 """
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from ..database import get_db
 from ..schemas.analytics import (
@@ -18,6 +19,88 @@ from ..schemas.analytics import (
 )
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
+
+
+# Schema for batch analytics
+class BatchMetricsRequest(BaseModel):
+    metrics: List[Dict[str, Any]]
+    metadata: Dict[str, Any]
+
+
+class BatchMetricsResponse(BaseModel):
+    success: bool
+    processed_count: int
+    failed_count: int
+    message: str
+
+
+@router.post("/batch")
+async def process_batch_metrics(
+    request: BatchMetricsRequest,
+    _db: Session = Depends(get_db)
+) -> BatchMetricsResponse:
+    """Process batch analytics metrics with enhanced error handling."""
+    try:
+        processed_count = 0
+        failed_count = 0
+        
+        # Process each metric in the batch
+        for metric in request.metrics:
+            try:
+                metric_type = metric.get("type", "general")
+                
+                # Route to appropriate handler based on type
+                if metric_type == "response_quality":
+                    await _process_quality_metric(metric, _db)
+                elif metric_type == "user_interaction":
+                    await _process_interaction_metric(metric, _db)
+                elif metric_type == "error":
+                    await _process_error_metric(metric, _db)
+                else:
+                    await _process_general_metric(metric, _db)
+                    
+                processed_count += 1
+                
+            except Exception as e:
+                failed_count += 1
+                print(f"Failed to process metric: {e}")
+                
+        return BatchMetricsResponse(
+            success=True,
+            processed_count=processed_count,
+            failed_count=failed_count,
+            message=f"Processed {processed_count} metrics, {failed_count} failed"
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process batch metrics: {str(e)}"
+        ) from e
+
+
+async def _process_quality_metric(metric: Dict[str, Any], db: Session) -> None:
+    """Process a quality metric."""
+    # Store in database - simplified implementation
+    print(f"Processing quality metric: {metric.get('message_id', 'unknown')}")
+
+
+async def _process_interaction_metric(metric: Dict[str, Any], db: Session) -> None:
+    """Process an interaction metric."""
+    # Store in database - simplified implementation
+    print(f"Processing interaction metric: {metric.get('action', 'unknown')}")
+
+
+async def _process_error_metric(metric: Dict[str, Any], db: Session) -> None:
+    """Process an error metric."""
+    # Store in database - simplified implementation
+    print(f"Processing error metric: {metric.get('error', {}).get('message', 'unknown')}")
+
+
+async def _process_general_metric(metric: Dict[str, Any], db: Session) -> None:
+    """Process a general metric."""
+    # Store in database - simplified implementation
+    print(f"Processing general metric: {metric.get('timestamp', 'unknown')}")
 
 
 @router.post("/quality")
