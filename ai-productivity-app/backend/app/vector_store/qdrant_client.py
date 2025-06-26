@@ -402,6 +402,7 @@ class QdrantVectorStore:
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         search_filter = self._build_knowledge_filter(project_ids, filters)
+        start_time = time.time()
         results = await _run_in_executor(
             self.client.search,
             collection_name=self.knowledge_collection,
@@ -410,6 +411,11 @@ class QdrantVectorStore:
             limit=limit,
             score_threshold=score_threshold,
         )
+        
+        # Record metrics
+        if HAS_PROMETHEUS:
+            VECTOR_SEARCH_LAT.observe(time.time() - start_time)
+            
         return [
             {
                 "id": p.id,
@@ -429,6 +435,7 @@ class QdrantVectorStore:
         score_threshold: float = 0.7,
     ) -> List[Dict[str, Any]]:
         search_filter = self._build_code_filter(project_ids, language)
+        start_time = time.time()
         results = await _run_in_executor(
             self.client.search,
             collection_name=self.code_collection,
@@ -437,6 +444,11 @@ class QdrantVectorStore:
             limit=limit,
             score_threshold=score_threshold,
         )
+        
+        # Record metrics
+        if HAS_PROMETHEUS:
+            VECTOR_SEARCH_LAT.observe(time.time() - start_time)
+            
         return [
             {
                 "chunk_id": p.payload.get("chunk_id"),

@@ -50,6 +50,13 @@ from app.utils.redis_client import get_redis
 from app.config import settings
 import logging
 
+# Optional Prometheus metrics endpoint
+try:
+    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+    HAS_PROMETHEUS = True
+except ImportError:
+    HAS_PROMETHEUS = False
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/health", tags=["monitoring"])
@@ -329,3 +336,28 @@ async def startup_check() -> Dict[str, Any]:
         "status": "started",
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+@router.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint."""
+    if not HAS_PROMETHEUS:
+        return Response(
+            content="# Prometheus client not available\n",
+            media_type="text/plain",
+            status_code=501
+        )
+    
+    try:
+        metrics_output = generate_latest()
+        return Response(
+            content=metrics_output,
+            media_type=CONTENT_TYPE_LATEST
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate metrics: {e}")
+        return Response(
+            content=f"# Error generating metrics: {e}\n",
+            media_type="text/plain",
+            status_code=500
+        )
