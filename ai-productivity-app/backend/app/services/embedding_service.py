@@ -9,7 +9,7 @@ import logging
 from app.models.code import CodeDocument, CodeEmbedding
 from app.models.embedding import EmbeddingMetadata
 from app.embeddings.generator import EmbeddingGenerator
-from app.services.vector_store import VectorStore
+from app.services.vector_service import VectorService
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class EmbeddingService:
     def __init__(
         self,
         db: Session,
-        vector_store: VectorStore,
+        vector_store: VectorService,
         embedding_generator: EmbeddingGenerator,
     ):
         self.db = db
@@ -112,7 +112,17 @@ class EmbeddingService:
                 "end_line": chunk.end_line,
             }
 
-            vector_data.append((np.array(embedding), metadata))
+            vector_data.append({
+                "vector": embedding,
+                "document_id": document.id,
+                "chunk_id": chunk.id,
+                "project_id": document.project_id,
+                "content": chunk.chunk_content,
+                "content_hash": hashlib.sha256(
+                    chunk.chunk_content.encode()
+                ).hexdigest(),
+                **metadata
+            })
 
         # Insert into vector store
         await self.vector_store.insert_embeddings(vector_data)

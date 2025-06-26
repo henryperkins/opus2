@@ -4,10 +4,9 @@ import logging
 from fastapi import APIRouter, Query, HTTPException, BackgroundTasks, Depends
 
 from app.dependencies import DatabaseDep, CurrentUserRequired, CurrentUserOptional
-from app.services.vector_service import get_vector_service, VectorService
+from app.services.vector_service import get_vector_service, VectorService, vector_service
 from app.services.hybrid_search import HybridSearch
 from app.services.embedding_service import EmbeddingService
-from app.services.vector_store import VectorStore
 from app.embeddings.generator import EmbeddingGenerator
 from app.schemas.search import (
     SearchRequest, SearchResponse, SearchResult,
@@ -209,9 +208,9 @@ async def index_document(
     if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Initialize embedding service
-    vector_store = VectorStore()
-    embedding_service = EmbeddingService(db, vector_store, embedding_generator)
+    # Initialize embedding service with unified vector service
+    await vector_service.initialize()
+    embedding_service = EmbeddingService(db, vector_service, embedding_generator)
 
     if request.async_mode:
         # Queue for background processing
@@ -251,9 +250,9 @@ async def delete_index(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Initialize embedding service
-    vector_store = VectorStore()
-    embedding_service = EmbeddingService(db, vector_store, embedding_generator)
+    # Initialize embedding service with unified vector service
+    await vector_service.initialize()
+    embedding_service = EmbeddingService(db, vector_service, embedding_generator)
 
     # Delete embeddings
     await embedding_service.delete_document_embeddings(document_id)

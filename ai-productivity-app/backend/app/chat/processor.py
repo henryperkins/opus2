@@ -56,21 +56,12 @@ MAX_TOOL_CALL_ROUNDS = 3  # Safeguard for tool-calling LLM loops
 class ChatProcessor:
     """High-level façade for chat message ingestion and AI response generation."""
 
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, kb: KnowledgeService | None = None) -> None:
         self.db = db
         self.chat_service = ChatService(db)
         self.context_builder = ContextBuilder(db)
         self.confidence_service = ConfidenceService()
-
-        # Initialize knowledge service for knowledge base retrieval
-        if not hasattr(self, "_kb"):
-            try:
-                vs = QdrantVectorStore()
-                eg = EmbeddingGenerator()
-                self._kb = KnowledgeService(vs, eg)
-            except Exception as e:
-                logger.warning("Failed to initialize knowledge service: %s. Knowledge features disabled.", e)
-                self._kb = None
+        self._kb = kb
 
     # --------------------------------------------------------------------- #
     # PUBLIC API
@@ -83,10 +74,10 @@ class ChatProcessor:
         websocket: WebSocket,
     ) -> None:
         """Validate, persist and respond to a **single** user message."""
-        try:        # Separate preparation from processing to avoid mixing transaction scopes
-        _, context, commands = await self._prepare_message_context(
-            session_id, message, websocket
-        )
+        try:  # Separate preparation from processing to avoid mixing transaction scopes
+            _, context, commands = await self._prepare_message_context(
+                session_id, message, websocket
+            )
 
             # Heavy LLM work happens outside any transaction
             if commands:
@@ -122,7 +113,8 @@ class ChatProcessor:
     async def _prepare_message_context(
         self, session_id: int, message: ChatMessage, websocket: WebSocket
     ) -> tuple[ChatSession, dict, list]:
-        """Prepare message context within a single transaction."""
+        """Prepare message context, separating DB writes from heavy I/O."""
+        # Transaction 1: Get session, scan for secrets, and persist redactions.
         async with self.db.begin():
             session: ChatSession | None = await self._get_session(session_id)
             if not session:
@@ -130,96 +122,107 @@ class ChatProcessor:
 
             # 1. Secret scanning – redact *before* context extraction
             await self._apply_secret_scanning(message, websocket)
+            await self.db.flush()
 
-            # 2. Context extraction (files + vector chunks)
-            context = await self.context_builder.extract_context(
-                message.content,
-                session.project_id,
+        # Outside transaction: Heavy I/O for context building.
+        # 2. Context extraction (files + vector chunks)
+        context = await self.context_builder.extract_context(
+            message.content,
+            session.project_id,
+        )
+        context["project_id"] = session.project_id
+
+        # 3. Knowledge base search with RAG tracking
+        rag_metadata = {
+            "rag_used": False,
+            "rag_confidence": None,
+            "knowledge_sources_count": 0,
+            "search_query_used": None,
+            "context_tokens_used": 0,
+            "rag_status": "standard",
+            "rag_error_message": None,
+        }
+
+        try:
+            # Skip knowledge search if service is unavailable
+            if self._kb is None:
+                raise Exception("Knowledge service not available")
+
+            kb_hits = await self._kb.search_knowledge(
+                query=message.content,
+                project_ids=[session.project_id],
+                limit=10,
             )
-            context["project_id"] = session.project_id
 
-            # 3. Knowledge base search with RAG tracking
-            rag_metadata = {
-                "rag_used": False,
-                "rag_confidence": None,
-                "knowledge_sources_count": 0,
-                "search_query_used": None,
-                "context_tokens_used": 0,
-                "rag_status": "standard",
-                "rag_error_message": None
-            }
+            # Extract entry IDs for context building
+            entry_ids = [result["id"] for result in kb_hits]
 
-            try:
-                # Skip knowledge search if service is unavailable
-                if self._kb is None:
-                    raise Exception("Knowledge service not available")
+            # Build knowledge context with token limits
+            if entry_ids:
+                ctx_kb = await self._kb.build_context(
+                    entry_ids=entry_ids,
+                    max_context_length=getattr(settings, "model_ctx", 4000) - 1024,
+                    db=self.db,
+                    search_results=kb_hits,
+                )
+                context["knowledge"] = ctx_kb["context"]
+                context["citations"] = ctx_kb["citations"]
 
-                kb_hits = await self._kb.search_knowledge(
-                    query=message.content,
-                    project_ids=[session.project_id],
-                    limit=10
+                # Update RAG metadata
+                rag_metadata["rag_used"] = True
+                rag_metadata["knowledge_sources_count"] = len(kb_hits)
+                rag_metadata["search_query_used"] = message.content
+                rag_metadata["context_tokens_used"] = len(
+                    ctx_kb["context"].split()
                 )
 
-                # Extract entry IDs for context building
-                entry_ids = [result["id"] for result in kb_hits]
-
-                # Build knowledge context with token limits
-                if entry_ids:
-                    ctx_kb = await self._kb.build_context(
-                        entry_ids=entry_ids,
-                        max_context_length=getattr(settings, 'model_ctx', 4000) - 1024,
-                        db=self.db,
-                        search_results=kb_hits
-                    )
-                    context["knowledge"] = ctx_kb["context"]
-                    context["citations"] = ctx_kb["citations"]
-
-                    # Update RAG metadata
-                    rag_metadata["rag_used"] = True
-                    rag_metadata["knowledge_sources_count"] = len(kb_hits)
-                    rag_metadata["search_query_used"] = message.content
-                    rag_metadata["context_tokens_used"] = len(ctx_kb["context"].split())
-
-                    # Calculate confidence score
-                    confidence = self.confidence_service.calculate_rag_confidence(kb_hits)
-                    rag_metadata["rag_confidence"] = confidence
-                    rag_metadata["rag_status"] = self.confidence_service.calculate_degradation_status(
-                        confidence, kb_hits
-                    )
-                else:
-                    context["knowledge"] = ""
-                    context["citations"] = {}
-
-                # Store RAG metadata in context for later use
-                context["rag_metadata"] = rag_metadata
-
-            except Exception as exc:
-                logger.warning("Knowledge base search failed: %s", exc)
+                # Calculate confidence score
+                confidence = self.confidence_service.calculate_rag_confidence(kb_hits)
+                rag_metadata["rag_confidence"] = confidence
+                rag_metadata[
+                    "rag_status"
+                ] = self.confidence_service.calculate_degradation_status(
+                    confidence, kb_hits
+                )
+            else:
                 context["knowledge"] = ""
                 context["citations"] = {}
 
-                # ------------------------------------------------------------- #
-                # Differentiate between *expected* configuration gaps
-                # (knowledge base disabled) and *real* runtime errors. Only the
-                # latter should surface as a RAG error in the UI.
-                # ------------------------------------------------------------- #
-                if "Knowledge service not available" in str(exc):
-                    # Gracefully degrade when KB is not configured – treat as
-                    # standard mode instead of error so the UI doesn't flash a
-                    # scary badge on every reply.
-                    rag_metadata["rag_status"] = "inactive"
-                    rag_metadata["rag_error_message"] = None
-                elif "Connection refused" in str(exc) or "[Errno 111]" in str(exc):
-                    # Service is expected but unreachable → genuine error
-                    rag_metadata["rag_status"] = "error"
-                    rag_metadata["rag_error_message"] = "Knowledge base service unavailable"
-                else:
-                    # Fallback for unexpected failures
-                    rag_metadata["rag_status"] = "error"
-                    rag_metadata["rag_error_message"] = "Knowledge search failed"
+            # Store RAG metadata in context for later use
+            context["rag_metadata"] = rag_metadata
 
-                context["rag_metadata"] = rag_metadata
+        except Exception as exc:
+            logger.warning("Knowledge base search failed: %s", exc)
+            context["knowledge"] = ""
+            context["citations"] = {}
 
+            # ------------------------------------------------------------- #
+            # Differentiate between *expected* configuration gaps
+            # (knowledge base disabled) and *real* runtime errors. Only the
+            # latter should surface as a RAG error in the UI.
+            # ------------------------------------------------------------- #
+            if "Knowledge service not available" in str(exc):
+                # Gracefully degrade when KB is not configured – treat as
+                # standard mode instead of error so the UI doesn't flash a
+                # scary badge on every reply.
+                rag_metadata["rag_status"] = "inactive"
+                rag_metadata["rag_error_message"] = None
+            elif "Connection refused" in str(exc) or "[Errno 111]" in str(exc):
+                # Service is expected but unreachable → genuine error
+                rag_metadata["rag_status"] = "error"
+                rag_metadata[
+                    "rag_error_message"
+                ] = "Knowledge base service unavailable"
+            else:
+                # Fallback for unexpected failures
+                rag_metadata["rag_status"] = "error"
+                rag_metadata["rag_error_message"] = "Knowledge search failed"
+
+            context["rag_metadata"] = rag_metadata
+
+        # Transaction 2: Persist context references, timeline event, and command details.
+        async with self.db.begin():
+            message = await self.db.merge(message)
             message.referenced_files = [
                 ref["path"] for ref in context.get("file_references", [])
             ]
@@ -247,7 +250,7 @@ class ChatProcessor:
                     for cmd in commands
                 }
 
-            return session, context, commands or []
+        return session, context, commands or []
 
     async def _handle_command_results(
         self,
@@ -335,6 +338,7 @@ class ChatProcessor:
                 messages=messages,
                 temperature=cfg.get("temperature"),
                 stream=False,
+                tools=llm_tools.TOOL_SCHEMAS,
                 max_tokens=cfg.get("max_tokens"),
             )
 
@@ -362,12 +366,14 @@ class ChatProcessor:
             message_id=ai_msg.id,
             content=full_response,
             code_snippets=self._extract_code_snippets(full_response),
-            broadcast=True  # This will be the only broadcast for this message
+            broadcast=True,  # This will be the only broadcast for this message
         )
 
         # analytics (fire-and-forget)
         asyncio.create_task(
-            self._track_response_quality(ai_msg, context, full_response),
+            self._track_response_quality(
+                ai_msg.id, ai_msg.session_id, context, full_response
+            ),
         )
 
         return full_response
@@ -487,7 +493,10 @@ class ChatProcessor:
 
             logger.info("Calling tool %s with %s", name, args)
             try:
-                result = await llm_tools.call_tool(name, args, self.db)
+                result = await asyncio.wait_for(
+                    llm_tools.call_tool(name, args, self.db),
+                    timeout=getattr(settings, "tool_timeout", 30),
+                )
             except Exception as exc:
                 logger.error("Tool '%s' failed: %s", name, exc, exc_info=True)
                 result = {"error": str(exc)}
@@ -537,7 +546,7 @@ class ChatProcessor:
     @staticmethod
     def _extract_code_snippets(text: str) -> List[Dict[str, str]]:
         """Return a list of fenced code blocks with their languages."""
-        pattern = re.compile(r"```(\w+)?\n(.*?)```", re.DOTALL)
+        pattern = re.compile(r"```(\w+)?[ \t]*\r?\n(.*?)```", re.DOTALL)
         return [
             {"language": lang or "text", "code": code.strip()}
             for lang, code in pattern.findall(text)
@@ -620,7 +629,8 @@ class ChatProcessor:
 
     async def _track_response_quality(
         self,
-        ai_message: ChatMessage,
+        message_id: int,
+        session_id: int,
         context: Dict[str, Any],
         response_content: str,
     ) -> None:
@@ -632,17 +642,20 @@ class ChatProcessor:
 
             relevance = 0.9 if has_citations else 0.7
             helpfulness = min(
-                ((0.3 if has_structure else 0) +
-                 (0.3 if has_code else 0) +
-                 (0.4 if len(response_content) > 200 else 0)),
+                (
+                    (0.3 if has_structure else 0)
+                    + (0.3 if has_code else 0)
+                    + (0.4 if len(response_content) > 200 else 0)
+                ),
                 1.0,
             )
-            completeness = (min((len(response_content) / 500) * 0.7, 0.7) +
-                            (0.3 if has_structure else 0))
+            completeness = min(
+                (len(response_content) / 500) * 0.7, 0.7
+            ) + (0.3 if has_structure else 0)
 
             payload = {
-                "message_id": ai_message.id,
-                "session_id": ai_message.session_id,
+                "message_id": message_id,
+                "session_id": session_id,
                 "relevance": relevance,
                 "helpfulness": helpfulness,
                 "completeness": min(completeness, 1.0),

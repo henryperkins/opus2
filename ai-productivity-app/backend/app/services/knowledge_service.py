@@ -194,9 +194,18 @@ class KnowledgeService:
             enc = tiktoken.get_encoding("cl100k_base")
 
         # Fetch full knowledge documents from database
+        # Handle both sync and async sessions
         stmt = select(KnowledgeDocument).where(KnowledgeDocument.id.in_(entry_ids))
-        result = await db.execute(stmt)
-        documents = result.scalars().all()
+        
+        # Check if db is async or sync session
+        if hasattr(db, 'execute') and hasattr(db, 'commit') and not hasattr(db.__class__, '__aenter__'):
+            # Sync session - execute without await
+            result = db.execute(stmt)
+            documents = result.scalars().all()
+        else:
+            # Async session - execute with await
+            result = await db.execute(stmt)
+            documents = result.scalars().all()
 
         if not documents:
             return {

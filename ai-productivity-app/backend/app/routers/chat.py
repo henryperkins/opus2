@@ -10,7 +10,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 
-from app.dependencies import CurrentUserRequired, DatabaseDep
+from app.dependencies import CurrentUserRequired, DatabaseDep, AsyncDatabaseDep
 from app.models.chat import ChatMessage, ChatSession
 from app.schemas.chat import (
     ChatSessionCreate,
@@ -285,7 +285,7 @@ async def delete_message(
 async def websocket_endpoint(
     websocket: WebSocket,
     session_id: int,
-    db: DatabaseDep,
+    db: AsyncDatabaseDep,
 ):
     """WebSocket endpoint for real-time chat."""
     # Authenticate WebSocket connection

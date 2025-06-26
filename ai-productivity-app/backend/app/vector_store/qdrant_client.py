@@ -588,8 +588,8 @@ class QdrantVectorStore:
         if filters:
             if "category" in filters:
                 must.append(FieldCondition(key="category", match=MatchValue(value=filters["category"])))
-            for tag in filters.get("tags", []):
-                must.append(FieldCondition(key="tags", match=MatchValue(value=tag)))
+            if filters.get("tags"):
+                must.append(FieldCondition(key="tags", match=MatchAny(any=filters["tags"])))
         return Filter(must=must) if must else None
 
     @staticmethod

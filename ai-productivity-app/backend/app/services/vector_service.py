@@ -196,6 +196,101 @@ class VectorService:
         stats["configured_backend"] = settings.vector_store_type
         return stats
 
+    # Knowledge service interface methods for compatibility
+    async def search_knowledge(
+        self,
+        query_embedding: List[float],
+        project_ids: Optional[List[int]] = None,
+        limit: int = 10,
+        score_threshold: float = 0.5,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """Search knowledge embeddings - delegates to Qdrant if available."""
+        # Check if we have Qdrant backend
+        if settings.vector_store_type.lower() == "qdrant":
+            try:
+                from app.vector_store.qdrant_client import QdrantVectorStore
+                qdrant = QdrantVectorStore()
+                await qdrant.init_collections()
+                return await qdrant.search_knowledge(
+                    query_embedding=query_embedding,
+                    project_ids=project_ids,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                    filters=filters
+                )
+            except Exception as e:
+                logger.warning(f"Qdrant knowledge search failed, falling back: {e}")
+                return []
+        
+        # For SQLite VSS, return empty for now (knowledge not implemented)
+        logger.warning("Knowledge search not available with SQLite VSS backend")
+        return []
+
+    async def search_code(
+        self,
+        query_embedding: List[float],
+        project_ids: Optional[List[int]] = None,
+        language: Optional[str] = None,
+        limit: int = 10,
+        score_threshold: float = 0.5
+    ) -> List[Dict[str, Any]]:
+        """Search code embeddings - delegates to appropriate backend."""
+        # Check if we have Qdrant backend
+        if settings.vector_store_type.lower() == "qdrant":
+            try:
+                from app.vector_store.qdrant_client import QdrantVectorStore
+                qdrant = QdrantVectorStore()
+                await qdrant.init_collections()
+                return await qdrant.search_code(
+                    query_embedding=query_embedding,
+                    project_ids=project_ids,
+                    language=language,
+                    limit=limit,
+                    score_threshold=score_threshold
+                )
+            except Exception as e:
+                logger.warning(f"Qdrant code search failed, falling back to SQLite VSS: {e}")
+                
+        # Use existing SQLite VSS search
+        import numpy as np
+        query_vector = np.array(query_embedding)
+        results = await self.search(
+            query_vector=query_vector,
+            limit=limit,
+            project_ids=project_ids,
+            score_threshold=score_threshold
+        )
+        return results
+
+    async def add_knowledge_entry(
+        self,
+        entry_id: str,
+        content: str,
+        embedding: List[float],
+        metadata: Dict[str, Any]
+    ) -> bool:
+        """Add knowledge entry - delegates to Qdrant if available."""
+        # Check if we have Qdrant backend
+        if settings.vector_store_type.lower() == "qdrant":
+            try:
+                from app.vector_store.qdrant_client import QdrantVectorStore
+                qdrant = QdrantVectorStore()
+                await qdrant.init_collections()
+                return await qdrant.add_knowledge_entry(
+                    entry_id=entry_id,
+                    content=content,
+                    embedding=embedding,
+                    metadata=metadata
+                )
+            except Exception as e:
+                logger.warning(f"Qdrant knowledge add failed: {e}")
+                return False
+        
+        # For SQLite VSS, knowledge entries are not supported yet
+        logger.warning("Knowledge entries not supported with SQLite VSS backend")
+        return False
+
 
 # Global instance
 vector_service = VectorService()

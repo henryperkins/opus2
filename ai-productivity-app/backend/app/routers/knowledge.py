@@ -162,7 +162,8 @@ async def build_context(
         if service:
             context_data = await service.build_context(
                 entry_ids=request.knowledge_entries,
-                max_length=request.max_context_length
+                max_context_length=request.max_context_length,
+                db=db
             )
 
             # Mock sources for now - in production would fetch real entries
@@ -280,7 +281,8 @@ async def add_knowledge_entry(
                 source=entry.source,
                 category=entry.category,
                 tags=entry.tags,
-                project_id=1  # Default project for now
+                project_id=1,  # Default project for now
+                db=db
             )
 
             return KnowledgeResponse(

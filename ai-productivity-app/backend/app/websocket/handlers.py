@@ -1,10 +1,15 @@
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Union
 import logging
 
 from app.models.user import User
 from app.models.chat import ChatMessage
 from app.services.chat_service import ChatService
+from app.services.knowledge_service import KnowledgeService
+from app.services.vector_service import vector_service
+from app.embeddings.generator import EmbeddingGenerator
 from app.chat.processor import ChatProcessor
 from .manager import connection_manager
 
@@ -15,13 +20,24 @@ async def handle_chat_connection(
     websocket: WebSocket,
     session_id: int,
     current_user: User,
-    db: Session
+    db: Union[Session, AsyncSession]
 ):
     """Handle WebSocket connection for chat session."""
     await connection_manager.connect(websocket, session_id, current_user.id)
     logger.debug(f"User {current_user.id} connected to session {session_id}")
     chat_service = ChatService(db)
-    chat_processor = ChatProcessor(db)
+    
+    # Initialize knowledge service for RAG capabilities
+    knowledge_service = None
+    try:
+        await vector_service.initialize()
+        embedding_generator = EmbeddingGenerator()
+        knowledge_service = KnowledgeService(vector_service, embedding_generator)
+        logger.info("Knowledge service initialized for chat processor")
+    except Exception as e:
+        logger.warning(f"Failed to initialize knowledge service: {e}")
+    
+    chat_processor = ChatProcessor(db, kb=knowledge_service)
 
     try:
         # Send connection confirmation
