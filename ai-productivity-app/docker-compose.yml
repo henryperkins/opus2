@@ -18,6 +18,11 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - RENDER_SERVICE_URL=http://render-svc:8001
+      - VECTOR_STORE_TYPE=qdrant
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - DISABLE_KNOWLEDGE=false
     # Wait until the database (health-checked) is ready before the backend
     # attempts the first connection.  Redis and the render service only need
     # to be started (no explicit health-check).
@@ -48,20 +53,19 @@ services:
     networks:
       - app-network
 
-  # Optional: Qdrant vector database
-  # Uncomment to use Qdrant instead of SQLite VSS
-  # qdrant:
-  #   image: qdrant/qdrant:v1.7.4
-  #   container_name: ai-productivity-qdrant
-  #   ports:
-  #     - "6333:6333"  # HTTP API
-  #   volumes:
-  #     - ./qdrant_storage:/qdrant/storage
-  #   environment:
-  #     - QDRANT__SERVICE__HTTP_PORT=6333
-  #   restart: unless-stopped
-  #   networks:
-  #     - app-network
+  # Qdrant vector database
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: ai-productivity-qdrant
+    ports:
+      - "6333:6333"  # HTTP API
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+    restart: unless-stopped
+    networks:
+      - app-network
 
   render-svc:
     build:

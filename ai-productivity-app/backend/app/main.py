@@ -47,14 +47,13 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
     from app.embeddings.worker import start_background_loop
     start_background_loop()
 
-    # Initialize Qdrant vector store
-    from app.vector_store.qdrant_client import QdrantVectorStore
+    # Initialize vector store based on configuration
+    from app.services.vector_service import vector_service
     try:
-        vector_store = QdrantVectorStore()
-        await vector_store.init_collections()
-        logger.info("Qdrant vector store initialized")
+        await vector_service.initialize()
+        logger.info("Vector store (%s) initialized successfully", settings.vector_store_type)
     except Exception as exc:
-        logger.error("Failed to initialize Qdrant: %s", exc)
+        logger.error("Failed to initialize vector store (%s): %s", settings.vector_store_type, exc)
 
     yield
     # Shutdown

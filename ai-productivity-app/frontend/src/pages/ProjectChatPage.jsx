@@ -123,7 +123,7 @@ export default function ProjectChatPage() {
   // ---------------------------------------------------------------------------
   // Local UI state
   // ---------------------------------------------------------------------------
-  const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(true); // Always show by default
+  const [showKnowledgeAssistant, setShowKnowledgeAssistant] = useState(false); // Hidden by default, user can toggle
   const [showSearch, setShowSearch] = useState(false);
   const [showPromptManager, setShowPromptManager] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -511,9 +511,16 @@ export default function ProjectChatPage() {
           </div>
 
           <div className="flex items-center space-x-2">
-            <div className="text-sm text-gray-600 dark:text-gray-400 hidden lg:block">
-              Knowledge Assistant Always Active
-            </div>
+            <button
+              onClick={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
+              className={`p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg ${
+                showKnowledgeAssistant ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'
+              }`}
+              aria-label="Toggle Knowledge Assistant"
+              title={showKnowledgeAssistant ? 'Hide Knowledge Assistant' : 'Show Knowledge Assistant'}
+            >
+              <Brain className="w-5 h-5" />
+            </button>
             <button
               onClick={() => setShowSearch(true)}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"

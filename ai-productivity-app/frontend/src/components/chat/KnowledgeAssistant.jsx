@@ -1,6 +1,6 @@
 // components/chat/KnowledgeAssistant.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { Brain, Search, X, ChevronRight, Sparkles, Upload, GitBranch, Network } from 'lucide-react';
+import { Brain, Search, X, ChevronRight, ChevronUp, ChevronDown, Sparkles, Upload, GitBranch, Network } from 'lucide-react';
 import { useKnowledgeChat } from '../../hooks/useKnowledgeContext';
 import { knowledgeAPI } from '../../api/knowledge';
 import KnowledgeContextPanel from '../knowledge/KnowledgeContextPanel';
@@ -84,8 +84,8 @@ export default function KnowledgeAssistant({
 
   const [showSearch, setShowSearch] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
-  // Removed minimize functionality - always visible
-  const isMinimized = false;
+  // Allow minimize functionality
+  const [isMinimized, setIsMinimized] = useState(false);
   const [activeTab, setActiveTab] = useState('context'); // 'context', 'upload', 'repository', 'graph'
 
   // Update context based on chat message
@@ -174,7 +174,7 @@ export default function KnowledgeAssistant({
               <Brain className="w-5 h-5" />
               <span className="font-medium">Knowledge Assistant</span>
               <div className="bg-white/20 px-2 py-0.5 rounded-full text-xs">
-                Always Active
+                {isMinimized ? 'Minimized' : 'Active'}
               </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -185,12 +185,20 @@ export default function KnowledgeAssistant({
               >
                 <Search className="w-4 h-4" />
               </button>
+              <button
+                onClick={() => setIsMinimized(!isMinimized)}
+                className="p-1 hover:bg-white/20 rounded"
+                title={isMinimized ? 'Expand' : 'Minimize'}
+              >
+                {isMinimized ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Always show content since minimize is disabled */}
-        <>
+        {/* Show content only when not minimized */}
+        {!isMinimized && (
+          <div>
             {/* Tab Navigation */}
             <div className="flex border-b border-gray-200">
               <button
@@ -333,8 +341,8 @@ export default function KnowledgeAssistant({
                 </div>
               )}
             </div>
-          </>
-        )
+          </div>
+        )}
       </div>
 
       {/* Search Modal */}

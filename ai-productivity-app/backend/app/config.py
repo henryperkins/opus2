@@ -33,6 +33,8 @@ class Settings(BaseSettings):
 
     # Qdrant settings
     qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant server URL")
+    qdrant_host: str = Field(default="localhost", description="Qdrant server host")
+    qdrant_port: int = Field(default=6333, description="Qdrant server port")
     qdrant_api_key: Optional[str] = Field(default=None, description="Qdrant API key")
     qdrant_vector_size: int = Field(default=1536, description="Vector size for embeddings")
     qdrant_timeout: int = Field(default=30, description="Qdrant client timeout in seconds")

@@ -1,7 +1,8 @@
 # Pydantic schemas for prompt templates
-from pydantic import BaseModel, Field, validator
-from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Dict, Optional
 from datetime import datetime
+import re
 
 
 class PromptVariable(BaseModel):
@@ -11,12 +12,11 @@ class PromptVariable(BaseModel):
     required: bool = Field(False, description="Whether variable is required")
     default_value: Optional[str] = Field(None, description="Default value for variable", alias="defaultValue")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}
 
-    @validator("name")
+    @field_validator("name")
+    @classmethod
     def validate_name(cls, v):
-        import re
         if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", v):
             raise ValueError("Variable name must be a valid identifier")
         return v
@@ -30,8 +30,7 @@ class ModelPreferences(BaseModel):
     frequency_penalty: Optional[float] = Field(None, ge=-2.0, le=2.0, description="Frequency penalty", alias="frequencyPenalty")
     presence_penalty: Optional[float] = Field(None, ge=-2.0, le=2.0, description="Presence penalty", alias="presencePenalty")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}
 
 
 class PromptTemplateBase(BaseModel):
@@ -42,13 +41,13 @@ class PromptTemplateBase(BaseModel):
     system_prompt: Optional[str] = Field(None, description="System prompt for AI", alias="systemPrompt")
     user_prompt_template: str = Field(..., min_length=1, description="User prompt template", alias="userPromptTemplate")
     variables: List[PromptVariable] = Field(default_factory=list, description="Template variables")
-    model_preferences: ModelPreferences = Field(default_factory=ModelPreferences, description="Model preferences", alias="modelPreferences")
+    llm_preferences: ModelPreferences = Field(default_factory=ModelPreferences, description="Model preferences", alias="llmPreferences")
     is_public: bool = Field(False, description="Whether template is public", alias="isPublic")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True, "protected_namespaces": ()}
 
-    @validator("category")
+    @field_validator("category")
+    @classmethod
     def validate_category(cls, v):
         valid_categories = [
             "Code Generation", "Code Review", "Documentation", "Testing",
@@ -72,13 +71,13 @@ class PromptTemplateUpdate(BaseModel):
     system_prompt: Optional[str] = Field(None, description="System prompt for AI", alias="systemPrompt")
     user_prompt_template: Optional[str] = Field(None, min_length=1, description="User prompt template", alias="userPromptTemplate")
     variables: Optional[List[PromptVariable]] = Field(None, description="Template variables")
-    model_preferences: Optional[ModelPreferences] = Field(None, description="Model preferences", alias="modelPreferences")
+    llm_preferences: Optional[ModelPreferences] = Field(None, description="Model preferences", alias="llmPreferences")
     is_public: Optional[bool] = Field(None, description="Whether template is public", alias="isPublic")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True, "protected_namespaces": ()}
 
-    @validator("category")
+    @field_validator("category")
+    @classmethod
     def validate_category(cls, v):
         if v is None:
             return v
@@ -100,9 +99,7 @@ class PromptTemplateResponse(PromptTemplateBase):
     created_at: datetime = Field(..., description="Creation timestamp", alias="createdAt")
     updated_at: datetime = Field(..., description="Last update timestamp", alias="updatedAt")
 
-    class Config:
-        orm_mode = True
-        allow_population_by_field_name = True
+    model_config = {"from_attributes": True, "populate_by_name": True, "protected_namespaces": ()}
 
 
 class PromptTemplateList(BaseModel):
@@ -112,28 +109,25 @@ class PromptTemplateList(BaseModel):
     page: int = Field(1, description="Current page")
     page_size: int = Field(50, description="Page size", alias="pageSize")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}
 
 
 class PromptExecuteRequest(BaseModel):
     """Schema for executing prompt templates"""
     template_id: int = Field(..., description="Template ID", alias="templateId")
     variables: Dict[str, str] = Field(default_factory=dict, description="Variable values")
-    model_overrides: Optional[ModelPreferences] = Field(None, description="Model preference overrides", alias="modelOverrides")
+    llm_overrides: Optional[ModelPreferences] = Field(None, description="Model preference overrides", alias="llmOverrides")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True, "protected_namespaces": ()}
 
 
 class PromptExecuteResponse(BaseModel):
     """Schema for prompt execution response"""
     system_prompt: Optional[str] = Field(None, description="System prompt", alias="systemPrompt")
     user_prompt: str = Field(..., description="Rendered user prompt", alias="userPrompt")
-    model_preferences: ModelPreferences = Field(..., description="Final model preferences", alias="modelPreferences")
+    llm_preferences: ModelPreferences = Field(..., description="Final model preferences", alias="llmPreferences")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True, "protected_namespaces": ()}
 
 
 class PromptDuplicateRequest(BaseModel):
@@ -142,8 +136,7 @@ class PromptDuplicateRequest(BaseModel):
     category: Optional[str] = Field(None, description="New template category")
     is_public: Optional[bool] = Field(None, description="Whether duplicated template should be public", alias="isPublic")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}
 
 
 class PromptShareRequest(BaseModel):
@@ -151,10 +144,10 @@ class PromptShareRequest(BaseModel):
     user_ids: List[int] = Field(..., description="List of user IDs to share with", alias="userIds")
     permissions: str = Field("read", description="Permission level (read/write)")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}
 
-    @validator("permissions")
+    @field_validator("permissions")
+    @classmethod
     def validate_permissions(cls, v):
         if v not in ["read", "write"]:
             raise ValueError("Permissions must be 'read' or 'write'")
@@ -169,5 +162,4 @@ class PromptStatsResponse(BaseModel):
     avg_rating: Optional[float] = Field(None, description="Average rating", alias="avgRating")
     total_ratings: int = Field(0, description="Total number of ratings", alias="totalRatings")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}

@@ -17,32 +17,33 @@ from ..schemas.knowledge import (
     KnowledgeSearchResponse,
     KnowledgeResponse
 )
-from ..vector_store.qdrant_client import QdrantVectorStore
 from ..services.knowledge_service import KnowledgeService
+from ..services.vector_service import vector_service
 from ..embeddings.generator import EmbeddingGenerator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
 # Global service instances
-vector_store = None
 knowledge_service = None
 
 
-def get_knowledge_service():
+async def get_knowledge_service():
     """Get or create knowledge service instance."""
-    global vector_store, knowledge_service
-    
+    global knowledge_service
+
     if knowledge_service is None:
         try:
-            vector_store = QdrantVectorStore()
+            # Use the unified vector service instead of directly creating QdrantVectorStore
+            await vector_service.initialize()
             embedding_generator = EmbeddingGenerator()
-            knowledge_service = KnowledgeService(vector_store, embedding_generator)
-            logger.info("Knowledge service initialized")
+            knowledge_service = KnowledgeService(vector_service, embedding_generator)
+            logger.info("Knowledge service initialized with %s vector backend",
+                        getattr(vector_service, '_backend', 'unknown'))
         except Exception as e:
             logger.error(f"Failed to initialize knowledge service: {e}")
             knowledge_service = None
-    
+
     return knowledge_service
 
 
@@ -54,7 +55,7 @@ async def search_knowledge(
     """Search knowledge base for relevant entries."""
     try:
         # Use real knowledge service if available
-        service = get_knowledge_service()
+        service = await get_knowledge_service()
         if service:
             results = await service.search_knowledge(
                 query=request.query,
@@ -157,8 +158,9 @@ async def build_context(
     """Build optimized context from knowledge entries."""
     try:
         # Use real knowledge service if available
-        if knowledge_service:
-            context_data = await knowledge_service.build_context(
+        service = await get_knowledge_service()
+        if service:
+            context_data = await service.build_context(
                 entry_ids=request.knowledge_entries,
                 max_length=request.max_context_length
             )

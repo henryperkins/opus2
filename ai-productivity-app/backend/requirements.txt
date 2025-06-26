@@ -56,6 +56,9 @@ azure-identity==1.15.0  # For Azure OpenAI authentication
 # Optional: Qdrant vector database (alternative to SQLite VSS)
 qdrant-client==1.7.0
 
+# Optional: Prometheus metrics support for monitoring
+prometheus-client==0.19.0
+
 # WebSocket support
 # FastAPI uses starlette which supports WebSocket communication, but the
 # optional **websockets** dependency is required at runtime for proper

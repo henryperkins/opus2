@@ -24,18 +24,18 @@ class PromptService:
         self.db = db
 
     async def create_template(
-        self, 
-        template_data: PromptTemplateCreate, 
+        self,
+        template_data: PromptTemplateCreate,
         user_id: int
     ) -> PromptTemplate:
         """Create a new prompt template"""
-        
+
         # Convert model preferences to dict
-        model_prefs = template_data.model_preferences.dict(exclude_unset=True, by_alias=True) if template_data.model_preferences else {}
-        
+        llm_prefs = template_data.llm_preferences.model_dump(exclude_unset=True, by_alias=True) if template_data.llm_preferences else {}
+
         # Convert variables to dict format
-        variables = [var.dict(exclude_unset=True, by_alias=True) for var in template_data.variables]
-        
+        variables = [var.model_dump(exclude_unset=True, by_alias=True) for var in template_data.variables]
+
         template = PromptTemplate(
             name=template_data.name,
             description=template_data.description,
@@ -43,14 +43,14 @@ class PromptService:
             system_prompt=template_data.system_prompt,
             user_prompt_template=template_data.user_prompt_template,
             variables=variables,
-            model_preferences=model_prefs,
+            llm_preferences=llm_prefs,
             user_id=user_id,
             is_public=template_data.is_public,
             usage_count=0
         )
-        
+
         self.db.add(template)
-        
+
         try:
             self.db.commit()
             self.db.refresh(template)
@@ -71,10 +71,10 @@ class PromptService:
                 PromptTemplate.is_default == True
             )
         ).first()
-        
+
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
-        
+
         return template
 
     async def get_templates(
@@ -87,7 +87,7 @@ class PromptService:
         limit: int = 50
     ) -> tuple[List[PromptTemplate], int]:
         """Get templates with filtering and pagination"""
-        
+
         # Base query - user's templates plus public ones
         query = self.db.query(PromptTemplate).filter(
             or_(
@@ -96,31 +96,31 @@ class PromptService:
                 PromptTemplate.is_default == True
             )
         )
-        
+
         # Apply filters
         if category:
             query = query.filter(PromptTemplate.category == category)
-        
+
         if is_public is not None:
             query = query.filter(PromptTemplate.is_public == is_public)
-        
+
         if search:
             search_filter = or_(
                 PromptTemplate.name.ilike(f"%{search}%"),
                 PromptTemplate.description.ilike(f"%{search}%")
             )
             query = query.filter(search_filter)
-        
+
         # Get total count
         total = query.count()
-        
+
         # Apply pagination and ordering
         templates = query.order_by(
             PromptTemplate.is_default.desc(),  # Default templates first
             PromptTemplate.usage_count.desc(),  # Then by usage
             PromptTemplate.updated_at.desc()    # Then by recency
         ).offset(skip).limit(limit).all()
-        
+
         return templates, total
 
     async def update_template(
@@ -130,29 +130,29 @@ class PromptService:
         user_id: int
     ) -> PromptTemplate:
         """Update an existing template"""
-        
+
         template = self.db.query(PromptTemplate).filter(
             PromptTemplate.id == template_id,
             PromptTemplate.user_id == user_id,
             PromptTemplate.is_default == False  # Can't edit default templates
         ).first()
-        
+
         if not template:
             raise HTTPException(status_code=404, detail="Template not found or not editable")
-        
+
         # Update fields
-        update_data = template_data.dict(exclude_unset=True, by_alias=True)
-        
+        update_data = template_data.model_dump(exclude_unset=True, by_alias=True)
+
         for field, value in update_data.items():
-            if field == "modelPreferences" and value:
+            if field == "llmPreferences" and value:
                 # Convert model preferences
-                template.model_preferences = value
+                template.llm_preferences = value
             elif field == "variables" and value is not None:
                 # Convert variables list
-                template.variables = [var.dict(exclude_unset=True, by_alias=True) for var in value]
+                template.variables = [var.model_dump(exclude_unset=True, by_alias=True) for var in value]
             elif hasattr(template, field):
                 setattr(template, field, value)
-        
+
         try:
             self.db.commit()
             self.db.refresh(template)
@@ -165,16 +165,16 @@ class PromptService:
 
     async def delete_template(self, template_id: int, user_id: int) -> bool:
         """Delete a template"""
-        
+
         template = self.db.query(PromptTemplate).filter(
             PromptTemplate.id == template_id,
             PromptTemplate.user_id == user_id,
             PromptTemplate.is_default == False  # Can't delete default templates
         ).first()
-        
+
         if not template:
             raise HTTPException(status_code=404, detail="Template not found or not deletable")
-        
+
         try:
             self.db.delete(template)
             self.db.commit()
@@ -192,15 +192,15 @@ class PromptService:
         user_id: int
     ) -> PromptTemplate:
         """Duplicate an existing template"""
-        
+
         # Get the original template
         original = await self.get_template(template_id, user_id)
-        
+
         # Create new template with modified data
         new_name = duplicate_data.name or f"{original.name} (Copy)"
         new_category = duplicate_data.category or original.category
         new_is_public = duplicate_data.is_public if duplicate_data.is_public is not None else False
-        
+
         new_template = PromptTemplate(
             name=new_name,
             description=original.description,
@@ -208,15 +208,15 @@ class PromptService:
             system_prompt=original.system_prompt,
             user_prompt_template=original.user_prompt_template,
             variables=original.variables.copy() if original.variables else [],
-            model_preferences=original.model_preferences.copy() if original.model_preferences else {},
+            llm_preferences=original.llm_preferences.copy() if original.llm_preferences else {},
             user_id=user_id,
             is_public=new_is_public,
             is_default=False,  # Duplicates are never default
             usage_count=0
         )
-        
+
         self.db.add(new_template)
-        
+
         try:
             self.db.commit()
             self.db.refresh(new_template)
@@ -234,26 +234,26 @@ class PromptService:
         user_id: int
     ) -> PromptExecuteResponse:
         """Execute a template with provided variables"""
-        
+
         template = await self.get_template(template_id, user_id)
-        
+
         try:
             # Render the template with variables
             rendered_prompt = template.render_prompt(execute_data.variables)
-            
+
             # Merge model preferences with ModelConfiguration defaults
-            final_model_prefs = template.model_preferences.copy() if template.model_preferences else {}
-            if execute_data.model_overrides:
-                override_dict = execute_data.model_overrides.dict(exclude_unset=True, by_alias=True)
+            final_model_prefs = template.llm_preferences.copy() if template.llm_preferences else {}
+            if execute_data.llm_overrides:
+                override_dict = execute_data.llm_overrides.model_dump(exclude_unset=True, by_alias=True)
                 final_model_prefs.update(override_dict)
-            
+
             # Get runtime config and enhance with ModelConfiguration defaults
             from app.services.config_service import ConfigService
             from app.services.config_cache import get_config
-            
+
             runtime_cfg = get_config()
             config_service = ConfigService(self.db)
-            
+
             # Get the model configuration for the specified model
             model_id = final_model_prefs.get("model_id") or runtime_cfg.get("chat_model")
             if model_id:
@@ -261,17 +261,17 @@ class PromptService:
                 if model_cfg:
                     # Use merged_params to combine defaults with overrides
                     final_model_prefs = model_cfg.merged_params(final_model_prefs)
-            
+
             # Increment usage count
             template.increment_usage()
             self.db.commit()
-            
+
             return PromptExecuteResponse(
                 system_prompt=template.system_prompt,
                 user_prompt=rendered_prompt,
-                model_preferences=ModelPreferences(**final_model_prefs)
+                llm_preferences=ModelPreferences(**final_model_prefs)
             )
-            
+
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
@@ -280,9 +280,9 @@ class PromptService:
 
     async def get_template_stats(self, template_id: int, user_id: int) -> Dict[str, Any]:
         """Get statistics for a template"""
-        
+
         template = await self.get_template(template_id, user_id)
-        
+
         return {
             "template_id": template.id,
             "usage_count": template.usage_count,
@@ -293,7 +293,7 @@ class PromptService:
 
     async def get_categories(self, user_id: int) -> List[str]:
         """Get all categories used by user's templates"""
-        
+
         categories = self.db.query(PromptTemplate.category).filter(
             or_(
                 PromptTemplate.user_id == user_id,
@@ -301,20 +301,20 @@ class PromptService:
                 PromptTemplate.is_default == True
             )
         ).distinct().all()
-        
+
         return [cat[0] for cat in categories if cat[0]]
 
     async def seed_default_templates(self) -> None:
         """Seed the database with default templates"""
-        
+
         # Check if defaults already exist
         existing = self.db.query(PromptTemplate).filter(
             PromptTemplate.is_default == True
         ).first()
-        
+
         if existing:
             return  # Already seeded
-        
+
         default_templates = [
             {
                 "name": "Code Explainer",
@@ -343,7 +343,7 @@ class PromptService:
                     {"name": "code", "description": "Code to test", "required": True},
                     {"name": "additionalRequirements", "description": "Additional test requirements", "required": False}
                 ],
-                "model_preferences": {
+                "llm_preferences": {
                     "temperature": 0.3,
                     "maxTokens": 2048
                 },
@@ -352,11 +352,11 @@ class PromptService:
                 "user_id": 1
             }
         ]
-        
+
         for template_data in default_templates:
             template = PromptTemplate(**template_data)
             self.db.add(template)
-        
+
         try:
             self.db.commit()
             logger.info("Seeded default prompt templates")

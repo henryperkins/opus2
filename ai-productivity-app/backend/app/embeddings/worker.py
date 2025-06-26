@@ -26,7 +26,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.embeddings.generator import EmbeddingGenerator
 from app.models.code import CodeDocument, CodeEmbedding
-from app.vector_store.qdrant_client import QdrantVectorStore
+from app.services.vector_service import get_vector_service, VectorService
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +38,11 @@ class EmbeddingWorker:
         self,
         session_maker: async_sessionmaker[AsyncSession],
         generator: Optional[EmbeddingGenerator] = None,
-        vector_store: Optional[QdrantVectorStore] = None,
+        vector_store: Optional[VectorService] = None,
     ):
         self.session_maker = session_maker
         self.generator = generator or EmbeddingGenerator()
-        self.vector_store = vector_store or QdrantVectorStore()
+        self.vector_store = vector_store
         self.running = False
         self._task: Optional[asyncio.Task] = None
 
@@ -54,6 +54,12 @@ class EmbeddingWorker:
         if self.running:
             logger.warning("Embedding worker is already running")
             return
+
+        # Initialize vector service if not provided
+        if self.vector_store is None:
+            from app.services.vector_service import vector_service
+            self.vector_store = vector_service
+            await self.vector_store.initialize()
 
         self.running = True
         self._task = asyncio.create_task(self._worker_loop())
@@ -87,14 +93,19 @@ class EmbeddingWorker:
                     await asyncio.sleep(5)
                     consecutive_errors = 0
 
-                # Run garbage collection once per hour
+                # Run garbage collection once per hour (only for backends that support it)
                 import time
                 current_time = time.time()
                 if current_time - last_gc_time > 3600:  # 1 hour
                     try:
                         logger.info("Running vector store garbage collection")
-                        removed = await self.vector_store.gc_dangling_points()
-                        logger.info("GC completed: removed %s dangling points", removed)
+                        # Only run GC if the backend supports it
+                        backend = await self.vector_store._get_backend()
+                        if hasattr(backend, 'gc_dangling_points'):
+                            removed = await backend.gc_dangling_points()
+                            logger.info("GC completed: removed %s dangling points", removed)
+                        else:
+                            logger.info("Vector store backend doesn't support garbage collection")
                         last_gc_time = current_time
                     except Exception as gc_exc:
                         logger.warning("Vector store GC failed: %s", gc_exc)
@@ -134,7 +145,7 @@ class EmbeddingWorker:
                 return 0
 
             logger.info("Found %d chunks needing embeddings", len(chunks))
-            
+
             # Update queue metrics
             if HAS_PROMETHEUS and EMBEDDING_QUEUE:
                 EMBEDDING_QUEUE.set(len(chunks))
@@ -143,8 +154,8 @@ class EmbeddingWorker:
                 # Generate embeddings
                 await self.generator.generate_and_store(chunks, db, vector_store=self.vector_store)
 
-                # Store in Qdrant
-                await self._store_in_qdrant(chunks)
+                # Store in vector store
+                await self._store_in_vector_store(chunks)
 
                 # Mark parent documents as indexed when all chunks are ready
                 await self._update_document_index_status(db, chunks)
@@ -157,29 +168,34 @@ class EmbeddingWorker:
                 await db.rollback()
                 raise
 
-    async def _store_in_qdrant(self, chunks: list[CodeEmbedding]) -> None:
-        """Store embeddings in Qdrant vector store."""
+    async def _store_in_vector_store(self, chunks: list[CodeEmbedding]) -> None:
+        """Store embeddings in the configured vector store."""
+        embeddings_to_insert = []
+
         for chunk in chunks:
             if not chunk.embedding:
                 continue
 
-            metadata = {
+            embedding_data = {
+                "vector": chunk.embedding,
                 "document_id": chunk.document_id,
                 "project_id": chunk.document.project_id,
-                "file_path": chunk.document.file_path,
-                "language": chunk.document.language,
-                "symbol_name": chunk.symbol_name,
-                "symbol_type": chunk.symbol_type,
-                "start_line": chunk.start_line,
-                "end_line": chunk.end_line,
+                "chunk_id": chunk.id,
                 "content": chunk.chunk_content,
+                "content_hash": "",  # Add if needed
+                "metadata": {
+                    "file_path": chunk.document.file_path,
+                    "language": chunk.document.language,
+                    "symbol_name": chunk.symbol_name,
+                    "symbol_type": chunk.symbol_type,
+                    "start_line": chunk.start_line,
+                    "end_line": chunk.end_line,
+                }
             }
+            embeddings_to_insert.append(embedding_data)
 
-            await self.vector_store.add_code_embedding(
-                chunk_id=chunk.id,
-                embedding=chunk.embedding,
-                metadata=metadata
-            )
+        if embeddings_to_insert:
+            await self.vector_store.insert_embeddings(embeddings_to_insert)
 
     async def _update_document_index_status(
         self, db: AsyncSession, chunks: list[CodeEmbedding]

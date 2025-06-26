@@ -73,6 +73,57 @@ try:
 except ModuleNotFoundError:  # pragma: no cover – PostgreSQL dialect missing
     # Safe to ignore: the models won't import these types either.
     pass
+
+# ---------------------------------------------------------------------------
+# CheckConstraint compatibility shim for SQLite
+# ---------------------------------------------------------------------------
+# The Postgres-flavoured models include complex *CHECK* constraints that rely
+# on operators (e.g. ``~`` for regular-expression matching) and functions like
+# ``jsonb_typeof`` which SQLite does not understand.  When the unit-test suite
+# creates the schema on an in-memory SQLite database the ``CREATE TABLE``
+# statements therefore fail with: ``OperationalError: near "~": syntax
+# error``.
+#
+# To keep the declarative models untouched while still letting the tests run
+# on SQLite we register a *compiler override* that rewrites such unsupported
+# constraints to the no-op expression ``CHECK (1)``.  The override is scoped
+# to the *sqlite* dialect so production deployments running on PostgreSQL are
+# completely unaffected and retain the full data-validation guarantees.
+# ---------------------------------------------------------------------------
+
+from sqlalchemy.sql.schema import CheckConstraint  # noqa: E402 – after SQLAlchemy import
+from sqlalchemy.ext.compiler import compiles  # noqa: E402
+
+
+@compiles(CheckConstraint, "sqlite")
+def _compile_check_constraint_sqlite(element, compiler, **kwargs):  # type: ignore
+    """Render CheckConstraint for SQLite, downgrading unsupported PG syntax.
+
+    If the constraint expression contains tokens that SQLite cannot parse
+    (regular-expression operator ``~`` or the *jsonb_typeof* function) we
+    replace it with the tautology ``1`` so that table creation proceeds.
+    The *name* of the constraint (if any) is preserved to avoid duplicate
+    definitions when the metadata is reflected elsewhere during the same
+    run.
+    """
+
+    # Raw SQL expression as string – this is how CheckConstraint stores it
+    expr = str(element.sqltext)
+
+    # Tokens that are not understood by SQLite’s SQL parser
+    _UNSUPPORTED = ("~", "jsonb_typeof", "char_length")
+
+    if any(tok in expr for tok in _UNSUPPORTED):
+        expr = "1"  # downgrade to no-op
+
+    # Build the CHECK clause manually.  We cannot call into the default
+    # compiler because that would recurse into this very function again.
+    parts: list[str] = []
+    if element.name:
+        parts.append(f"CONSTRAINT {element.name}")
+    parts.append(f"CHECK ({expr})")
+    return " ".join(parts)
+
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
 

@@ -70,7 +70,43 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
             os.makedirs(os.path.dirname(lib_path), exist_ok=True)
 
             # ------------------------------------------------------------------
-            # Build the grammar bundle on-the-fly when missing
+            # Try to load languages using modern APIs first before checking for
+            # compiled shared library. This provides better fallback handling.
+            # ------------------------------------------------------------------
+
+            try:
+                # Try using tree-sitter-language-pack (modern approach)
+                import tree_sitter_language_pack
+                self.languages = {
+                    "python": tree_sitter_language_pack.get_language("python"),
+                    "javascript": tree_sitter_language_pack.get_language("javascript"),
+                    "typescript": tree_sitter_language_pack.get_language("typescript"),
+                    "tsx": tree_sitter_language_pack.get_language("tsx"),
+                }
+                logger.info("Loaded Tree-sitter languages using language pack")
+                return
+            except ImportError:
+                logger.debug("tree-sitter-language-pack not available, trying individual packages")
+
+            try:
+                # Fallback to individual language packages
+                import tree_sitter_python as tsp
+                import tree_sitter_javascript as tsjs
+                import tree_sitter_typescript as tsts
+
+                self.languages = {
+                    "python": tsp.language(),
+                    "javascript": tsjs.language(),
+                    "typescript": tsts.language(),
+                    "tsx": tsts.language(),  # TSX uses same as TypeScript
+                }
+                logger.info("Loaded Tree-sitter languages using individual packages")
+                return
+            except ImportError:
+                logger.debug("Individual tree-sitter packages not available, trying shared library")
+
+            # ------------------------------------------------------------------
+            # Build the grammar bundle on-the-fly when missing (legacy approach)
             # ------------------------------------------------------------------
             grammar_paths = [
                 "build/tree-sitter/python",
@@ -93,65 +129,26 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                     logger.info("Compiled tree-sitter grammars → %s", lib_path)
                 except Exception:  # pragma: no cover
                     logger.exception("Failed to compile tree-sitter grammars")
+
             # ------------------------------------------------------------------
-            # Abort when the shared library is still missing after the build
-            # attempt so that downstream loading does not raise an OSError.
+            # Last resort: try the old 0.19.0 API with shared library
             # ------------------------------------------------------------------
-            if not os.path.exists(lib_path):
-                logger.warning("Tree-sitter languages not found at %s", lib_path)
-                return
-
-            try:
-                # tree_sitter v0.20 removed Language.build_library. Compile
-                # only when the helper exists (≤0.19).  On newer versions we
-                # assume the shared object has been built during the Docker
-                # build stage or supplied via an external volume.
-
-                if hasattr(Language, "build_library") and grammar_paths:
-                    Language.build_library(lib_path, grammar_paths)
-
-                # Load languages using tree-sitter 0.24.0 API with language pack
+            if os.path.exists(lib_path):
                 try:
-                    # Try using tree-sitter-language-pack (modern approach)
-                    import tree_sitter_language_pack
                     self.languages = {
-                        "python": tree_sitter_language_pack.get_language("python"),
-                        "javascript": tree_sitter_language_pack.get_language("javascript"),
-                        "typescript": tree_sitter_language_pack.get_language("typescript"),
-                        "tsx": tree_sitter_language_pack.get_language("tsx"),
+                        "python": Language(lib_path, "python"),
+                        "javascript": Language(lib_path, "javascript"),
+                        "typescript": Language(lib_path, "typescript"),
+                        "tsx": Language(lib_path, "tsx"),
                     }
-                except ImportError:
-                    # Fallback to individual language packages
-                    try:
-                        import tree_sitter_python as tsp
-                        import tree_sitter_javascript as tsjs
-                        import tree_sitter_typescript as tsts
+                    logger.info("Loaded Tree-sitter languages from shared library")
+                    return
+                except Exception as ex:
+                    logger.warning("Failed to load from shared library: %s", ex)
 
-                        self.languages = {
-                            "python": tsp.language(),
-                            "javascript": tsjs.language(),
-                            "typescript": tsts.language(),
-                            "tsx": tsts.language(),  # TSX uses same as TypeScript
-                        }
-                    except ImportError as e:
-                        logger.warning("No tree-sitter language packages found: %s", e)
-                        # Last resort: try the old 0.19.0 API with shared library
-                        if os.path.exists(lib_path):
-                            try:
-                                self.languages = {
-                                    "python": Language(lib_path, "python"),
-                                    "javascript": Language(lib_path, "javascript"),
-                                    "typescript": Language(lib_path, "typescript"),
-                                    "tsx": Language(lib_path, "tsx"),
-                                }
-                            except Exception as ex:
-                                logger.warning("Failed to load from shared library: %s", ex)
-                                self.languages = {}
-                        else:
-                            self.languages = {}
-
-            except Exception:  # pragma: no cover – wide net, just log
-                logger.exception("Failed to load tree-sitter languages")
+            # If all else fails, log and continue without Tree-sitter support
+            logger.warning("Tree-sitter languages not available - parsing will use fallback mode")
+            self.languages = {}
 
         # ------------------------------------------------------------------
         # Public API

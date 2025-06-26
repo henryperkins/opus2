@@ -56,13 +56,12 @@ class VectorService:
             try:
                 from app.services.qdrant_service import QdrantService
                 self._backend = QdrantService(
-                    host=settings.qdrant_host,
-                    port=settings.qdrant_port
+                    url=settings.qdrant_url
                 )
                 logger.info("Using Qdrant vector backend")
             except ImportError as e:
                 logger.warning(
-                    f"Qdrant not available, falling back to SQLite VSS: {e}"
+                    "Qdrant not available, falling back to SQLite VSS: %s", e
                 )
                 self._backend = await self._get_sqlite_backend()
         else:

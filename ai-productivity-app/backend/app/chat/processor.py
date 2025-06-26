@@ -64,9 +64,13 @@ class ChatProcessor:
 
         # Initialize knowledge service for knowledge base retrieval
         if not hasattr(self, "_kb"):
-            vs = QdrantVectorStore()
-            eg = EmbeddingGenerator()
-            self._kb = KnowledgeService(vs, eg)
+            try:
+                vs = QdrantVectorStore()
+                eg = EmbeddingGenerator()
+                self._kb = KnowledgeService(vs, eg)
+            except Exception as e:
+                logger.warning("Failed to initialize knowledge service: %s. Knowledge features disabled.", e)
+                self._kb = None
 
     # --------------------------------------------------------------------- #
     # PUBLIC API
@@ -79,11 +83,10 @@ class ChatProcessor:
         websocket: WebSocket,
     ) -> None:
         """Validate, persist and respond to a **single** user message."""
-        try:
-            # Separate preparation from processing to avoid mixing transaction scopes
-            session, context, commands = await self._prepare_message_context(
-                session_id, message, websocket
-            )
+        try:        # Separate preparation from processing to avoid mixing transaction scopes
+        _, context, commands = await self._prepare_message_context(
+            session_id, message, websocket
+        )
 
             # Heavy LLM work happens outside any transaction
             if commands:
@@ -145,8 +148,12 @@ class ChatProcessor:
                 "rag_status": "standard",
                 "rag_error_message": None
             }
-            
+
             try:
+                # Skip knowledge search if service is unavailable
+                if self._kb is None:
+                    raise Exception("Knowledge service not available")
+
                 kb_hits = await self._kb.search_knowledge(
                     query=message.content,
                     project_ids=[session.project_id],
@@ -166,13 +173,13 @@ class ChatProcessor:
                     )
                     context["knowledge"] = ctx_kb["context"]
                     context["citations"] = ctx_kb["citations"]
-                    
+
                     # Update RAG metadata
                     rag_metadata["rag_used"] = True
                     rag_metadata["knowledge_sources_count"] = len(kb_hits)
                     rag_metadata["search_query_used"] = message.content
                     rag_metadata["context_tokens_used"] = len(ctx_kb["context"].split())
-                    
+
                     # Calculate confidence score
                     confidence = self.confidence_service.calculate_rag_confidence(kb_hits)
                     rag_metadata["rag_confidence"] = confidence
@@ -182,16 +189,35 @@ class ChatProcessor:
                 else:
                     context["knowledge"] = ""
                     context["citations"] = {}
-                    
+
                 # Store RAG metadata in context for later use
                 context["rag_metadata"] = rag_metadata
-                    
+
             except Exception as exc:
                 logger.warning("Knowledge base search failed: %s", exc)
                 context["knowledge"] = ""
                 context["citations"] = {}
-                rag_metadata["rag_status"] = "error"
-                rag_metadata["rag_error_message"] = str(exc)
+
+                # ------------------------------------------------------------- #
+                # Differentiate between *expected* configuration gaps
+                # (knowledge base disabled) and *real* runtime errors. Only the
+                # latter should surface as a RAG error in the UI.
+                # ------------------------------------------------------------- #
+                if "Knowledge service not available" in str(exc):
+                    # Gracefully degrade when KB is not configured – treat as
+                    # standard mode instead of error so the UI doesn't flash a
+                    # scary badge on every reply.
+                    rag_metadata["rag_status"] = "inactive"
+                    rag_metadata["rag_error_message"] = None
+                elif "Connection refused" in str(exc) or "[Errno 111]" in str(exc):
+                    # Service is expected but unreachable → genuine error
+                    rag_metadata["rag_status"] = "error"
+                    rag_metadata["rag_error_message"] = "Knowledge base service unavailable"
+                else:
+                    # Fallback for unexpected failures
+                    rag_metadata["rag_status"] = "error"
+                    rag_metadata["rag_error_message"] = "Knowledge search failed"
+
                 context["rag_metadata"] = rag_metadata
 
             message.referenced_files = [
@@ -527,7 +553,7 @@ class ChatProcessor:
             if hasattr(response, "output") and response.output:
                 for item in response.output:
                     if (getattr(item, "type", None) == "message" and
-                        isinstance(item.content, str)):
+                            isinstance(item.content, str)):
                         return item.content
 
             # OpenAI chat
@@ -548,7 +574,7 @@ class ChatProcessor:
     def _has_tool_calls(response: Any) -> bool:
         try:
             if (getattr(response, "choices", None) and
-                getattr(response.choices[0], "finish_reason", None) == "tool_calls"):
+                    getattr(response.choices[0], "finish_reason", None) == "tool_calls"):
                 return True
 
             if hasattr(response, "output") and response.output:

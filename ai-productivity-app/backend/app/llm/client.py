@@ -562,18 +562,38 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     chunk_count += 1
                     logger.debug(f"Received chunk {chunk_count}: {type(chunk)}")
                     
-                    # Handle ResponseTextDeltaEvent from Azure Responses API
+                    # Azure streaming events come in different flavours.  We
+                    # purposefully *only* forward incremental “delta”
+                    # fragments here – the *done* event often repeats the
+                    # full response which would lead to duplicated content
+                    # on the consumer side.  Other event types like
+                    # ``ResponseOutputItem...`` are handled separately
+                    # below.
+
+                    # ResponseTextDeltaEvent → incremental token fragment
                     if hasattr(chunk, 'delta') and chunk.delta:
-                        logger.debug(f"Yielding delta content: {chunk.delta[:50]}...")
+                        logger.debug(
+                            "Yielding delta content: %s...",
+                            chunk.delta[:50],
+                        )
                         yield chunk.delta
-                    elif hasattr(chunk, 'text') and chunk.text:
-                        logger.debug(f"Yielding text content: {chunk.text[:50]}...")
-                        yield chunk.text
+
+                    # ResponseOutputItemDoneEvent → list of output items –
+                    # stream the *content* field when present.
                     elif hasattr(chunk, 'output') and chunk.output:
                         for item in chunk.output:
                             if hasattr(item, 'content') and item.content:
-                                logger.debug(f"Yielding content: {item.content[:50]}...")
+                                logger.debug(
+                                    "Yielding content: %s...",
+                                    item.content[:50],
+                                )
                                 yield item.content
+
+                    # ``ResponseTextDoneEvent`` and similar *completion*
+                    # events include the *full* text again.  We skip those to
+                    # avoid sending duplicates – the cumulative *buffer* in
+                    # ``StreamingHandler`` already contains the complete
+                    # response after receiving all deltas.
             else:
                 # Standard Chat Completions API streaming
                 logger.debug("Processing Chat Completions API stream")
