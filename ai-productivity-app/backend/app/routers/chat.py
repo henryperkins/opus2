@@ -174,7 +174,7 @@ async def get_messages(
 ):
     """Get messages for a chat session."""
     service = ChatService(db)
-    messages = service.get_session_messages(session_id, limit, before_id)
+    messages = await service.get_session_messages(session_id, limit, before_id)
     return [MessageResponse.from_orm(msg) for msg in messages]
 
 

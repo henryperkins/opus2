@@ -332,9 +332,15 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 responses_kwargs = {
                     "model": active_model,
                     "input": input_messages,
-                    "temperature": active_temperature,
-                    "stream": stream,
                 }
+
+                # o3 models don't support temperature or streaming
+                if not active_model.lower().startswith("o3"):
+                    responses_kwargs["temperature"] = active_temperature
+                    responses_kwargs["stream"] = stream
+                else:
+                    # o3 models don't support streaming
+                    responses_kwargs["stream"] = False
 
                 # Only add instructions if we have system messages
                 if system_instructions:
@@ -403,15 +409,28 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                         and "tools[0].type" in str(exc)
                     )
 
+                    # Detect 400 responses complaining about unsupported
+                    # sampling parameters (e.g. "Unsupported parameter:
+                    # 'temperature' is not supported with this model.").
+                    _is_parameter_unsupported_error = False
+
+                    if isinstance(exc, BadRequestError):
+                        msg_lc = str(exc).lower()
+                        if (
+                            "unsupported parameter" in msg_lc
+                            and "is not supported with this model" in msg_lc
+                        ):
+                            _is_parameter_unsupported_error = True
+
                     if (
                         self.provider == "azure"
                         and self.use_responses_api
                         and (
-                            _is_missing_deployment or _is_tool_schema_error
+                            _is_missing_deployment or _is_tool_schema_error or _is_parameter_unsupported_error
                         )
                     ):
                         logger.warning(
-                            "Responses deployment not found (%s) – falling back to Chat Completions.",
+                            "Responses API error (%s) – falling back to Chat Completions.",
                             exc,
                         )
 
@@ -419,12 +438,25 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                         completions_kwargs = {
                             "model": active_model,
                             "messages": messages,
-                            "temperature": active_temperature,
-                            "stream": stream,
                             "max_tokens": active_max_tokens,
                         }
+                        
+                        # o3 models don't support temperature or streaming
+                        if not active_model.lower().startswith("o3"):
+                            completions_kwargs["temperature"] = active_temperature
+                            completions_kwargs["stream"] = stream
+                        else:
+                            # o3 models don't support streaming
+                            completions_kwargs["stream"] = False
+                            
                         if tools:
-                            completions_kwargs["tools"] = tools
+                            # Ensure tools have the required type field for Chat Completions API
+                            chat_tools: List[Dict[str, Any]] = []
+                            for t in tools:
+                                t_copy = dict(t)
+                                t_copy.setdefault("type", "function")
+                                chat_tools.append(t_copy)
+                            completions_kwargs["tools"] = chat_tools
 
                         completions_kwargs = {
                             k: v for k, v in completions_kwargs.items() if v is not None
@@ -469,13 +501,25 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             call_kwargs: Dict[str, Any] = {
                 "model": active_model,
                 "messages": messages,
-                "temperature": active_temperature,
-                "stream": stream,
                 "max_tokens": active_max_tokens,
             }
 
+            # o3 models don't support temperature or streaming
+            if not active_model.lower().startswith("o3"):
+                call_kwargs["temperature"] = active_temperature
+                call_kwargs["stream"] = stream
+            else:
+                # o3 models don't support streaming
+                call_kwargs["stream"] = False
+
             if tools:
-                call_kwargs["tools"] = tools
+                # Ensure tools have the required type field for Chat Completions API
+                chat_tools: List[Dict[str, Any]] = []
+                for t in tools:
+                    t_copy = dict(t)
+                    t_copy.setdefault("type", "function")
+                    chat_tools.append(t_copy)
+                call_kwargs["tools"] = chat_tools
 
             # The same graceful-degradation logic we added for the Responses
             # branch above: when *tools* is rejected by an older model we

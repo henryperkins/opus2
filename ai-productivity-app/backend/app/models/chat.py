@@ -218,7 +218,7 @@ class ChatMessage(Base, TimestampMixin):
     rag_status = Column(
         String(20), 
         nullable=True,
-        comment="RAG status: active, degraded, error, standard"
+        comment="RAG status: active, degraded, error, inactive, standard"
     )
     rag_error_message = Column(Text, nullable=True)
 
@@ -246,7 +246,12 @@ class ChatMessage(Base, TimestampMixin):
 
     @validates("rag_status")
     def _validate_rag_status(self, _key: str, value: str) -> str:
-        if value is not None and value not in {"active", "degraded", "error", "standard"}:
+        # "inactive" indicates that the knowledge-base feature is turned off
+        # for the deployment. The processor uses this status explicitly when
+        # it detects that the knowledge service is unavailable, so we must
+        # accept it here.
+        allowed_statuses = {"active", "degraded", "error", "inactive", "standard"}
+        if value is not None and value not in allowed_statuses:
             raise ValueError(f"Invalid RAG status: {value!r}")
         return value
 

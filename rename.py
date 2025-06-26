@@ -157,7 +157,19 @@ def rename_and_wrap(
             src.rename(dst)
             log(f"Renamed '{src}' → '{dst}'")
 
-            original_text = dst.read_text(encoding="utf-8")
+            try:
+                original_text = dst.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                # Try other common encodings
+                for encoding in ['latin-1', 'cp1252', 'iso-8859-1']:
+                    try:
+                        original_text = dst.read_text(encoding=encoding)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    # If all encodings fail, read as binary and decode with error handling
+                    original_text = dst.read_bytes().decode('utf-8', errors='replace')
             language = EXTENSIONS[ext]
             fenced = f"```{language}\n{original_text}\n```"
 
