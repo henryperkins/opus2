@@ -505,7 +505,7 @@ export default function EnhancedMessageRenderer({
               onCitationClick={onCitationClick}
             />
           ) : (
-            <div className="prose prose-sm dark:prose-invert max-w-none">
+            <div className="message-content max-w-none">
               <ReactMarkdown
                 components={components}
                 remarkPlugins={[remarkGfm, remarkMath]}

@@ -17,7 +17,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/prompts", tags=["prompts"])
+# Align with other API routers by using the "/api" prefix so that the
+# frontend can reach the endpoints at `/api/prompts/*`.
+router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
 
 @router.post("/", response_model=PromptTemplateResponse)

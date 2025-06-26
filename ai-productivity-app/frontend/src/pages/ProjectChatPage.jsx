@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 // Data hooks
 import { useChat } from '../hooks/useChat';
@@ -16,12 +15,13 @@ import { useKnowledgeContext } from '../contexts/KnowledgeContext';
 // UI and utility hooks
 import useMediaQuery from '../hooks/useMediaQuery';
 
+// Layout components
+import ChatLayout from '../components/chat/ChatLayout';
+import ChatHeader from '../components/chat/ChatHeader';
+
 // Common components
-import ResponsiveSplitPane from '../components/common/ResponsiveSplitPane';
-import MobileBottomSheet from '../components/common/MobileBottomSheet';
 import SkeletonLoader from '../components/common/SkeletonLoader';
 import EmptyState from '../components/common/EmptyState';
-import ConnectionIndicator from '../components/common/ConnectionIndicator';
 
 // Knowledge-related components
 import SmartKnowledgeSearch from '../components/knowledge/SmartKnowledgeSearch';
@@ -48,7 +48,7 @@ import MonacoRoot from '../components/editor/MonacoRoot';
 import ResponseQuality from '../components/analytics/ResponseQuality';
 
 // Icons
-import { Brain, Settings, Search, BarChart2, Sparkles, Code2 } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 // Utils
 import { toast } from '../components/common/Toast';
@@ -80,10 +80,6 @@ export default function ProjectChatPage() {
   // Global state & responsive helpers
   // ---------------------------------------------------------------------------
   const user = useUser();
-  const { isMobile, matchesQuery } = useMediaQuery();
-
-  // Detect very large desktop screens (≥ 1536px)
-  const isDesktopXL = matchesQuery('(min-width: 1536px)');
 
   // ---------------------------------------------------------------------------
   // Project + chat data
@@ -316,7 +312,7 @@ export default function ProjectChatPage() {
     if (messageListRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = messageListRef.current;
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 100; // Within 100px of bottom
-      
+
       if (isNearBottom) {
         messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
       }
@@ -372,7 +368,7 @@ export default function ProjectChatPage() {
           {/* RAG Status Indicator for assistant messages */}
           {msg.role === 'assistant' && (
             <div className="mb-3">
-              <RAGStatusIndicator 
+              <RAGStatusIndicator
                 ragUsed={msg.metadata?.ragUsed || false}
                 sourcesCount={msg.metadata?.citations?.length || 0}
                 confidence={msg.metadata?.ragConfidence}
@@ -429,13 +425,13 @@ export default function ProjectChatPage() {
   const renderMessage = useCallback((msg) => {
     const streaming = streamingMessages.get(msg.id);
     const executionResult = executionResults.get(msg.id);
-    
+
     return (
-      <MessageItem 
-        key={msg.id} 
-        msg={msg} 
-        streaming={streaming} 
-        executionResult={executionResult} 
+      <MessageItem
+        key={msg.id}
+        msg={msg}
+        streaming={streaming}
+        executionResult={executionResult}
       />
     );
   }, [streamingMessages, executionResults, handleCitationClick, handleCodeExecution, handleCodeApply, handleInteractiveElement, showAnalytics]);
@@ -469,239 +465,93 @@ export default function ProjectChatPage() {
   // Main render
   // ----------------------------------------------------------------------------------
 
-
-  // Create assistant panels for different contexts
-  const desktopAssistantPanel = (
-    <KnowledgeAssistant
-      projectId={projectId}
-      onSuggestionApply={handleSuggestionApply}
-      onContextAdd={handleContextAdd}
-      containerMode="inline"
-      position="right"
-    />
-  );
-
-  const mobileAssistantPanel = (
-    <KnowledgeAssistant
-      projectId={projectId}
-      onSuggestionApply={handleSuggestionApply}
-      onContextAdd={handleContextAdd}
-      containerMode="inline"
-    />
-  );
-
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 overflow-hidden">
-      {/* Debug info */}
-      <div className="text-red-500 p-2">
-        DEBUG: Project: {project?.title || 'No project'}, Messages: {messages?.length || 0}
-      </div>
+      {/* Chat Header */}
+      <ChatHeader
+        project={project}
+        connectionState={connectionState}
+        messages={messages}
+        showKnowledgeAssistant={showKnowledgeAssistant}
+        showEditor={showMonacoEditor}
+        onToggleKnowledge={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
+        onToggleEditor={() => setShowMonacoEditor(!showMonacoEditor)}
+        onOpenSearch={() => setShowSearch(true)}
+        onOpenPromptManager={() => setShowPromptManager(true)}
+        onToggleAnalytics={() => setShowAnalytics(v => !v)}
+      />
 
-      {/* Page header with project info and controls */}
-      <div className="bg-white/90 dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-semibold truncate max-w-xs sm:max-w-none">
-              {project?.title || 'Loading...'}
-            </h1>
-            <div className="hidden md:block">Connection: {connectionState}</div>
-            
-            {/* Session-wide RAG status badge */}
-            <SessionRAGBadge messages={messages} />
+      {/* Main Layout */}
+      <ChatLayout
+        showSidebar={showKnowledgeAssistant}
+        showEditor={showMonacoEditor}
+        onSidebarClose={() => setShowKnowledgeAssistant(false)}
+        onEditorClose={() => setShowMonacoEditor(false)}
+        sidebar={
+          <KnowledgeAssistant
+            projectId={projectId}
+            onSuggestionApply={handleSuggestionApply}
+            onContextAdd={handleContextAdd}
+            containerMode="inline"
+          />
+        }
+        editor={
+          <div className="h-full p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Code Editor</h3>
+            </div>
+            <MonacoRoot
+              value={editorContent}
+              onChange={setEditorContent}
+              language={editorLanguage}
+              height="100%"
+              className="min-h-[200px]"
+              filename={currentFile}
+              enableCopilot={true}
+            />
           </div>
-
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
-              className={`p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg ${
-                showKnowledgeAssistant ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'
-              }`}
-              aria-label="Toggle Knowledge Assistant"
-              title={showKnowledgeAssistant ? 'Hide Knowledge Assistant' : 'Show Knowledge Assistant'}
-            >
-              <Brain className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setShowSearch(true)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-              aria-label="Knowledge Search"
-            >
-              <Search className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setShowMonacoEditor((v) => !v)}
-              className={`p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg ${
-                showMonacoEditor ? 'bg-blue-100 dark:bg-blue-900' : ''
-              }`}
-              aria-label="Toggle Code Editor"
-            >
-              <Code2 className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setShowPromptManager(true)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-              aria-label="Prompt Manager"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setShowAnalytics((v) => !v)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-              aria-label="Toggle analytics view"
-            >
-              <BarChart2 className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <main className="flex-1 overflow-hidden min-h-0 flex flex-col">
-        {isMobile ? (
-          <div className="flex flex-col h-full overflow-hidden">
-            {/* Message list */}
-            <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4" ref={messageListRef}>
+        }
+      >
+        {/* Chat Interface */}
+        <div className="flex flex-col h-full">
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4" ref={messageListRef}>
+            <div className="max-w-3xl mx-auto space-y-4">
               {messages.map(renderMessage)}
               {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
               <div ref={messagesEndRef} />
             </div>
-
-            {/* Knowledge assistant bottom sheet - Always visible on mobile */}
-            <MobileBottomSheet
-              isOpen={true} // Always open
-              onClose={() => {}} // Disable closing
-              title="Knowledge Assistant (Always Active)"
-              initialSnap={0.4}
-              snapPoints={[0.4, 0.6, 0.9]}
-            >
-              {mobileAssistantPanel}
-            </MobileBottomSheet>
-
-            {/* Input - fixed at bottom */}
-            <div className="flex-shrink-0">
-              <EnhancedCommandInput
-                onSend={handleSendMessage}
-                onTyping={sendTypingIndicator}
-                projectId={projectId}
-                editorContent={editorContent}
-                currentFile={currentFile}
-                userId={user?.id}
-              />
-            </div>
           </div>
-        ) : (
-          <ResponsiveSplitPane
-            orientation="vertical"
-            minSize={25}
-            defaultSize={`${isDesktopXL ? 60 : 70}%`}
-            left={(
-              showMonacoEditor && isDesktop ? (
-                // Vertical split for chat and Monaco editor
-                <PanelGroup direction="vertical" id="chat-monaco-layout">
-                  <Panel minSize={50} defaultSize={70}>
-                    <div className="flex flex-col h-full overflow-hidden">
-                      <div
-                        className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto"
-                        ref={messageListRef}
-                      >
-                        {messages.map(renderMessage)}
-                        {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
-                        <div ref={messagesEndRef} />
-                      </div>
-                      <div className="flex-shrink-0">
-                        <EnhancedCommandInput
-                          onSend={handleSendMessage}
-                          onTyping={sendTypingIndicator}
-                          projectId={projectId}
-                          editorContent={editorContent}
-                          currentFile={currentFile}
-                          userId={user?.id}
-                        />
-                      </div>
-                    </div>
-                  </Panel>
-                  
-                  <PanelResizeHandle className="h-px bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-row-resize group">
-                    <div 
-                      className="w-full h-full flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors"
-                      tabIndex={0}
-                      role="separator"
-                      aria-label="Resize between chat and code editor"
-                      aria-orientation="horizontal"
-                    >
-                      <div className="opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity">
-                        <div className="flex flex-col space-y-0.5">
-                          <div className="w-4 h-0.5 bg-gray-400 rounded-full"></div>
-                          <div className="w-4 h-0.5 bg-gray-400 rounded-full"></div>
-                        </div>
-                      </div>
-                    </div>
-                  </PanelResizeHandle>
-                  
-                  <Panel defaultSize={30} minSize={20} collapsible>
-                    <div className="h-full p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold">Code Editor</h3>
-                        <button
-                          onClick={() => setShowMonacoEditor(false)}
-                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
-                          aria-label="Close code editor"
-                        >
-                          ×
-                        </button>
-                      </div>
-                      <MonacoRoot
-                        value={editorContent}
-                        onChange={setEditorContent}
-                        language={editorLanguage}
-                        height="calc(100% - 3rem)"
-                        filename={currentFile}
-                        enableCopilot={true}
-                      />
-                    </div>
-                  </Panel>
-                </PanelGroup>
-              ) : (
-                // Normal chat without Monaco editor
-                <div className="flex flex-col h-full overflow-hidden">
-                  <div
-                    className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto"
-                    ref={messageListRef}
-                  >
-                    {messages.map(renderMessage)}
-                    {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
-                    <div ref={messagesEndRef} />
-                  </div>
-                  <div className="flex-shrink-0">
-                    <EnhancedCommandInput
-                      onSend={handleSendMessage}
-                      onTyping={sendTypingIndicator}
-                      projectId={projectId}
-                      editorContent={editorContent}
-                      currentFile={currentFile}
-                      userId={user?.id}
-                    />
-                  </div>
-                </div>
-              )
-            )}
-            right={desktopAssistantPanel} // Always show Knowledge Assistant
-            leftTitle="Chat"
-            rightTitle="Knowledge Assistant"
-          />
-        )}
-      </main>
+
+          {/* Input - Always visible */}
+          <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-4">
+            <EnhancedCommandInput
+              onSend={handleSendMessage}
+              onTyping={sendTypingIndicator}
+              projectId={projectId}
+              editorContent={editorContent}
+              currentFile={currentFile}
+              userId={user?.id}
+            />
+          </div>
+        </div>
+      </ChatLayout>
 
       {/* Modals */}
       {showSearch && (
-        <SmartKnowledgeSearch projectId={projectId} onResultSelect={handleSearchResultSelect} onClose={() => setShowSearch(false)} />
+        <SmartKnowledgeSearch
+          projectId={projectId}
+          onResultSelect={handleSearchResultSelect}
+          onClose={() => setShowSearch(false)}
+        />
       )}
 
       {showPromptManager && (
-        <PromptManager projectId={projectId} onClose={() => setShowPromptManager(false)} />
+        <PromptManager
+          projectId={projectId}
+          onClose={() => setShowPromptManager(false)}
+        />
       )}
-
-      {/* Root container closing tag */}
     </div>
   );
 }

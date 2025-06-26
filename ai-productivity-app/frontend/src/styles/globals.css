@@ -1213,6 +1213,7 @@
 
   /* Desktop override: allow chat input to behave as normal flex item */
   @media (min-width: 769px) {
+
     /* Reset positioning for both normal and :focus-within states */
     .chat-input-container,
     .chat-input-container:focus-within {
@@ -1244,3 +1245,535 @@
     }
   }
 }
+
+/* ===============================================
+   SIMPLIFIED CHAT LAYOUT STYLES
+   =============================================== */
+
+/* Chat Layout - Mobile First Approach */
+.chat-layout {
+  @apply h-full flex flex-col;
+}
+
+/* Panel Visibility - CSS-based responsive */
+@media (max-width: 767px) {
+
+  /* Hide desktop panels on mobile */
+  .panel-desktop {
+    display: none !important;
+  }
+}
+
+/* Chat Input - Simple sticky positioning */
+.chat-input {
+  @apply sticky bottom-0 z-10 bg-white dark:bg-gray-900;
+  @apply border-t border-gray-200 dark:border-gray-700;
+}
+
+/* Mobile Drawer - Better than complex bottom sheet */
+.mobile-drawer {
+  @apply fixed inset-x-0 bottom-0 z-50;
+  @apply bg-white dark:bg-gray-800;
+  @apply transform transition-transform duration-300 ease-out;
+  @apply rounded-t-xl shadow-xl;
+}
+
+.mobile-drawer.open {
+  @apply translate-y-0;
+}
+
+.mobile-drawer.closed {
+  @apply translate-y-full;
+}
+
+/* Touch-friendly targets */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Remove complex iOS keyboard handling - not needed with sticky */
+@media (max-width: 768px) {
+  .chat-container {
+    height: 100vh;
+    height: 100dvh;
+    /* Use dynamic viewport height */
+  }
+
+  /* Prevent zoom on input focus */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Panel resize handles with better visual feedback */
+.panel-resize-handle {
+  @apply bg-gray-300 dark:bg-gray-600;
+  @apply hover:bg-blue-500 dark:hover:bg-blue-500;
+  @apply transition-colors;
+  position: relative;
+}
+
+.panel-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.panel-resize-handle:hover::after {
+  opacity: 0.6;
+}
+
+/* Simplified responsive utilities */
+@media (min-width: 769px) {
+  .desktop-only {
+    display: block;
+  }
+
+  .mobile-only {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none;
+  }
+
+  .mobile-only {
+    display: block;
+  }
+}
+
+/* Focus management for accessibility */
+.focus-visible:focus {
+  @apply outline-2 outline-offset-2 outline-blue-600;
+}
+
+/* Smooth scrolling for chat messages */
+.chat-messages {
+  scroll-behavior: smooth;
+}
+
+/* Prevent text selection during drag operations */
+.dragging {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ========================================================================
+   Chat Component Utilities
+   ======================================================================== */
+
+/* Chat message utilities */
+.chat-message {
+  @apply max-w-3xl mx-auto px-4 py-2;
+}
+
+.chat-bubble {
+  @apply rounded-lg p-4 shadow-sm;
+}
+
+/* Chat input container - responsive sticky positioning */
+.chat-input-container {
+  @apply sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700;
+}
+
+/* Remove fixed positioning on desktop for better layout flow */
+@media (min-width: 768px) {
+  .chat-input-container {
+    @apply relative;
+  }
+}
+
+/* Streaming text cursor animation */
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.streaming-cursor {
+  @apply inline-block w-2 h-4 bg-blue-600 ml-1;
+  animation: pulse 1s infinite;
+}
+
+@keyframes blink {
+
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Message content styling */
+.message-content {
+  @apply max-w-none text-gray-900 dark:text-gray-100;
+}
+
+.message-content pre {
+  @apply bg-gray-100 dark:bg-gray-800 rounded p-3 overflow-x-auto;
+}
+
+.message-content code {
+  @apply bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm;
+}
+
+/* Citation badges - CSS-only tooltips */
+.citation-badge {
+  @apply relative inline-block cursor-pointer;
+  @apply bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300;
+  @apply px-2 py-1 rounded-full text-xs font-medium;
+  @apply hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors;
+}
+
+.citation-badge:hover .citation-tooltip {
+  @apply block;
+}
+
+.citation-tooltip {
+  @apply hidden absolute bottom-full left-1/2 transform -translate-x-1/2;
+  @apply bg-gray-900 text-white text-xs rounded p-2 mb-1 z-50;
+  @apply max-w-xs whitespace-normal shadow-lg;
+  @apply animate-fade-in;
+}
+
+/* Citation tooltip arrow */
+.citation-tooltip::after {
+  content: '';
+  @apply absolute top-full left-1/2 transform -translate-x-1/2;
+  @apply border-4 border-transparent border-t-gray-900;
+}
+
+/* RAG status indicator */
+.rag-indicator {
+  @apply inline-flex items-center gap-1 text-xs;
+  @apply text-green-600 dark:text-green-400;
+}
+
+.rag-indicator-dot {
+  @apply w-2 h-2 rounded-full bg-green-500;
+  @apply animate-pulse;
+}
+
+/* Message actions grid */
+.message-actions {
+  @apply grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 pt-3;
+  @apply border-t border-gray-200 dark:border-gray-700;
+}
+
+.message-action-btn {
+  @apply text-xs p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700;
+  @apply transition-colors cursor-pointer;
+  @apply flex items-center justify-center gap-1;
+}
+
+/* Line clamp utility for text truncation */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Knowledge panel styles */
+.knowledge-panel {
+  @apply bg-white dark:bg-gray-800;
+  @apply border-l border-gray-200 dark:border-gray-700;
+}
+
+/* Mobile: Full screen modal */
+@media (max-width: 768px) {
+  .knowledge-panel {
+    @apply fixed inset-0 z-50;
+  }
+}
+
+/* Knowledge panel animations */
+.knowledge-panel-enter {
+  @apply opacity-0 transform translate-y-4;
+}
+
+.knowledge-panel-enter-active {
+  @apply opacity-100 transform translate-y-0 transition-all duration-200;
+}
+
+.knowledge-panel-exit {
+  @apply opacity-100 transform translate-y-0;
+}
+
+.knowledge-panel-exit-active {
+  @apply opacity-0 transform translate-y-4 transition-all duration-200;
+}
+
+/* Mobile drawer improvements */
+.mobile-drawer {
+  @apply fixed inset-x-0 bottom-0 z-50;
+  @apply bg-white dark:bg-gray-800;
+  @apply transform transition-transform duration-300 ease-out;
+  @apply rounded-t-xl shadow-xl;
+  max-height: 80vh;
+}
+
+.mobile-drawer.open {
+  @apply translate-y-0;
+}
+
+.mobile-drawer.closed {
+  @apply translate-y-full;
+}
+
+/* Drawer handle */
+.drawer-handle {
+  @apply w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full;
+  @apply mx-auto mb-2;
+}
+
+/* Command suggestions styling */
+.command-suggestions {
+  @apply bg-white dark:bg-gray-800 rounded-lg shadow-lg;
+  @apply border border-gray-200 dark:border-gray-700;
+  @apply max-h-60 overflow-y-auto;
+}
+
+.command-suggestion {
+  @apply px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700;
+  @apply border-l-2 border-transparent hover:border-blue-500;
+  @apply transition-all duration-150 cursor-pointer;
+  @apply flex items-center justify-between;
+}
+
+.command-suggestion-key {
+  @apply text-xs text-gray-500 dark:text-gray-400;
+}
+
+/* Model switcher styles */
+.model-switcher {
+  @apply relative inline-block;
+}
+
+/* Native select on mobile */
+@media (max-width: 768px) {
+  .model-switcher select {
+    @apply w-full p-2 pr-8 border rounded-lg appearance-none;
+    @apply bg-white dark:bg-gray-800;
+    @apply border-gray-300 dark:border-gray-600;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem;
+  }
+}
+
+/* Desktop dropdown */
+@media (min-width: 769px) {
+  .model-dropdown {
+    @apply absolute right-0 mt-2 w-64 rounded-lg shadow-lg;
+    @apply bg-white dark:bg-gray-800;
+    @apply border border-gray-200 dark:border-gray-700;
+    @apply z-50 py-1;
+  }
+
+  .model-option {
+    @apply px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700;
+    @apply cursor-pointer transition-colors;
+  }
+
+  .model-option-selected {
+    @apply bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400;
+  }
+}
+
+/* File upload area */
+.file-upload-area {
+  @apply border-2 border-dashed border-gray-300 dark:border-gray-600;
+  @apply rounded-lg p-8 text-center;
+  @apply hover:border-blue-400 dark:hover:border-blue-500;
+  @apply transition-colors cursor-pointer;
+}
+
+.file-upload-area.dragging {
+  @apply border-blue-500 bg-blue-50 dark:bg-blue-900/20;
+}
+
+/* Search results */
+.search-result {
+  @apply p-3 hover:bg-gray-50 dark:hover:bg-gray-700;
+  @apply border-b border-gray-200 dark:border-gray-700;
+  @apply cursor-pointer transition-colors;
+}
+
+.search-result-title {
+  @apply font-medium text-gray-900 dark:text-gray-100;
+  @apply line-clamp-1;
+}
+
+.search-result-snippet {
+  @apply text-sm text-gray-600 dark:text-gray-400;
+  @apply line-clamp-2 mt-1;
+}
+
+/* Keyboard shortcut styling */
+kbd {
+  @apply inline-block px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700;
+  @apply text-xs font-mono rounded border border-gray-300 dark:border-gray-600;
+  @apply shadow-sm;
+}
+
+/* Status badges */
+.status-badge {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.status-badge-success {
+  @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400;
+}
+
+.status-badge-warning {
+  @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400;
+}
+
+.status-badge-error {
+  @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400;
+}
+
+/* Loading skeleton for messages */
+.message-skeleton {
+  @apply animate-pulse;
+}
+
+.message-skeleton-bubble {
+  @apply bg-gray-200 dark:bg-gray-700 rounded-lg h-20 mb-4;
+}
+
+.message-skeleton-line {
+  @apply bg-gray-200 dark:bg-gray-700 rounded h-4 mb-2;
+}
+
+/* Responsive chat grid */
+.chat-grid {
+  @apply grid grid-cols-1 md:grid-cols-[1fr_300px] lg:grid-cols-[300px_1fr_300px];
+  @apply gap-0 h-full;
+}
+
+/* Responsive visibility utilities */
+.show-mobile {
+  @apply block md:hidden;
+}
+
+.show-tablet {
+  @apply hidden md:block lg:hidden;
+}
+
+.show-desktop {
+  @apply hidden lg:block;
+}
+
+/* Touch gesture hints */
+.swipe-hint {
+  @apply absolute bottom-4 left-1/2 transform -translate-x-1/2;
+  @apply text-xs text-gray-500 dark:text-gray-400;
+  @apply animate-bounce;
+}
+
+/* Message timestamp */
+.message-timestamp {
+  @apply text-xs text-gray-500 dark:text-gray-400;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+
+.group:hover .message-timestamp {
+  opacity: 1;
+}
+
+/* Code block enhancements */
+.code-block {
+  @apply relative;
+}
+
+.code-block-header {
+  @apply flex items-center justify-between px-3 py-1;
+  @apply bg-gray-200 dark:bg-gray-700 rounded-t;
+  @apply text-xs text-gray-600 dark:text-gray-400;
+}
+
+.code-block-copy {
+  @apply p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-600;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+
+.code-block:hover .code-block-copy {
+  opacity: 1;
+}
+
+/* Error message styling */
+.error-message {
+  @apply bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800;
+  @apply text-red-700 dark:text-red-400 rounded-lg p-3;
+  @apply flex items-start gap-2;
+}
+
+/* Success message styling */
+.success-message {
+  @apply bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800;
+  @apply text-green-700 dark:text-green-400 rounded-lg p-3;
+  @apply flex items-start gap-2;
+}
+
+/* Interactive element states */
+.interactive-hover {
+  @apply hover:bg-gray-100 dark:hover:bg-gray-700;
+  @apply hover:shadow-sm transition-all duration-150;
+  @apply cursor-pointer rounded;
+}
+
+.interactive-active {
+  @apply active:scale-95 transition-transform duration-75;
+}
+
+/* Smooth height transitions for collapsible content */
+.collapsible {
+  @apply overflow-hidden transition-all duration-300;
+}
+
+.collapsible-closed {
+  @apply max-h-0;
+}
+
+.collapsible-open {
+  @apply max-h-96;
+}
+
+/* ========================================================================
+   End Chat Component Utilities
+   ======================================================================== */

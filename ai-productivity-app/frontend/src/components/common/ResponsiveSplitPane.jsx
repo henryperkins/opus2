@@ -208,17 +208,17 @@ export default function ResponsiveSplitPane({
                 }
               }}
             >
-              {/* Visual indicator for resize handle */}
-              <div className="opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity">
+              {/* Visual indicator for resize handle - always visible on touch devices */}
+              <div className="opacity-30 md:opacity-0 md:group-hover:opacity-100 group-focus:opacity-100 transition-opacity">
                 {direction === 'horizontal' ? (
                   <div className="flex space-x-0.5">
-                    <div className="w-0.5 h-4 bg-gray-400 rounded-full"></div>
-                    <div className="w-0.5 h-4 bg-gray-400 rounded-full"></div>
+                    <div className="w-0.5 h-4 bg-gray-500 dark:bg-gray-400 rounded-full"></div>
+                    <div className="w-0.5 h-4 bg-gray-500 dark:bg-gray-400 rounded-full"></div>
                   </div>
                 ) : (
                   <div className="flex flex-col space-y-0.5">
-                    <div className="w-4 h-0.5 bg-gray-400 rounded-full"></div>
-                    <div className="w-4 h-0.5 bg-gray-400 rounded-full"></div>
+                    <div className="w-4 h-0.5 bg-gray-500 dark:bg-gray-400 rounded-full"></div>
+                    <div className="w-4 h-0.5 bg-gray-500 dark:bg-gray-400 rounded-full"></div>
                   </div>
                 )}
               </div>

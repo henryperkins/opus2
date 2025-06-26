@@ -49,7 +49,7 @@ async def handle_chat_connection(
         logger.debug("Sent connection confirmation")
 
         # Send recent messages
-        recent_messages = chat_service.get_session_messages(
+        recent_messages = await chat_service.get_session_messages(
             session_id, limit=20
         )
         await websocket.send_json({

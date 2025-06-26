@@ -1,62 +1,40 @@
 import { useState, useEffect } from 'react';
 
 /**
- * Custom hook for responsive design and media query handling
- * Returns current breakpoint and helper functions for responsive behavior
+ * Simplified media query hook - CSS-first responsive design
+ * Eliminates complex JavaScript layout calculations
  */
 export const useMediaQuery = () => {
-    const [windowSize, setWindowSize] = useState({
-        width: typeof window !== 'undefined' ? window.innerWidth : 0,
-        height: typeof window !== 'undefined' ? window.innerHeight : 0,
-    });
-
-    const [breakpoint, setBreakpoint] = useState('desktop');
+    const [isMobile, setIsMobile] = useState(false);
+    const [isTablet, setIsTablet] = useState(false);
+    const [isDesktop, setIsDesktop] = useState(true);
 
     useEffect(() => {
-        const handleResize = () => {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
+        const updateBreakpoints = () => {
+            const mobile = window.matchMedia('(max-width: 768px)').matches;
+            const tablet = window.matchMedia('(min-width: 769px) and (max-width: 1024px)').matches;
+            const desktop = window.matchMedia('(min-width: 1025px)').matches;
 
-            setWindowSize({ width, height });
-
-            // Tailwind CSS breakpoints
-            if (width < 640) {
-                setBreakpoint('mobile');
-            } else if (width < 768) {
-                setBreakpoint('sm');
-            } else if (width < 1024) {
-                setBreakpoint('tablet');
-            } else if (width < 1280) {
-                setBreakpoint('desktop');
-            } else {
-                setBreakpoint('xl');
-            }
+            setIsMobile(mobile);
+            setIsTablet(tablet);
+            setIsDesktop(desktop);
         };
 
         // Set initial values
-        handleResize();
+        updateBreakpoints();
 
         // Add event listener
-        window.addEventListener('resize', handleResize);
+        window.addEventListener('resize', updateBreakpoints);
 
         // Cleanup
-        return () => window.removeEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', updateBreakpoints);
     }, []);
 
-    const isMobile = breakpoint === 'mobile';
-    // Consider "sm" (small) as part of tablet range for convenience
-    const isTablet = ['tablet', 'sm'].includes(breakpoint);
-    const isDesktop = breakpoint === 'desktop' || breakpoint === 'xl';
-    const isTouchDevice = isMobile || isTablet;
-
     return {
-        windowSize,
-        breakpoint,
         isMobile,
         isTablet,
         isDesktop,
-        isTouchDevice,
-        // Helper functions
+        // Helper function for custom queries
         matchesQuery: (query) => {
             if (typeof window === 'undefined') return false;
             return window.matchMedia(query).matches;

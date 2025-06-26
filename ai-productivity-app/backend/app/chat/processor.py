@@ -132,11 +132,9 @@ class ChatProcessor:
         )
         context["project_id"] = session.project_id
 
-        # 2a. Extract frontend context from message metadata
-        if hasattr(message, 'metadata') and message.metadata:
-            frontend_knowledge = message.metadata.get("knowledge_context", {})
-            if frontend_knowledge.get("citations"):
-                context["frontend_context"] = frontend_knowledge["citations"]
+        # 2a. Frontend context is now handled through structured fields
+        # The metadata from WebSocket is decomposed into referenced_files, referenced_chunks, etc.
+        # during message creation in ChatService.create_message()
 
         # 3. Knowledge base search with RAG tracking
         rag_metadata = {

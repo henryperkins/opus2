@@ -1,7 +1,4 @@
-/* eslint-disable */
-// components/chat/StreamingMessage.jsx
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Loader, StopCircle, RefreshCw } from 'lucide-react';
 
 export default function StreamingMessage({
@@ -73,25 +70,16 @@ export default function StreamingMessage({
     }
   }, [content, isStreaming]);
 
-  // Cursor animation
+  // Cursor animation - using CSS instead of Framer Motion
   const CursorAnimation = () => (
-    <motion.span
-      className="inline-block w-2 h-4 bg-blue-500 ml-0.5"
-      animate={{ opacity: [1, 0] }}
-      transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
-    />
+    <span className="streaming-cursor inline-block w-2 h-4 bg-blue-500 ml-0.5" />
   );
 
-  // Token counter animation
+  // Token counter - simplified without animation
   const TokenCounter = () => (
-    <motion.div
-      className="text-xs text-gray-500 mt-2"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.5 }}
-    >
+    <div className="text-xs text-gray-500 mt-2 fade-in">
       {currentTokens} tokens {isStreaming && '(streaming...)'}
-    </motion.div>
+    </div>
   );
 
   // Streaming indicator
@@ -105,64 +93,46 @@ export default function StreamingMessage({
 
   return (
     <div className="relative">
-      <AnimatePresence>
-        {isStreaming && !isComplete && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <StreamingIndicator />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Streaming indicator */}
+      {isStreaming && !isComplete && (
+        <div className="streaming-indicator">
+          <StreamingIndicator />
+        </div>
+      )}
 
-      <div ref={contentRef} className="prose prose-sm max-w-none">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-        >
+      <div ref={contentRef} className="message-content max-w-none">
+        <div className="fade-in">
           {displayedContent}
           {isStreaming && !isComplete && <CursorAnimation />}
-        </motion.div>
+        </div>
       </div>
 
       {showTokenCount && displayedContent && <TokenCounter />}
 
       {/* Action buttons */}
-      <AnimatePresence>
-        {(isStreaming || isComplete) && (
-          <motion.div
-            className="flex items-center space-x-2 mt-3"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ delay: 0.3 }}
-          >
-            {isStreaming && !isComplete && onStop && (
-              <button
-                onClick={onStop}
-                className="flex items-center space-x-1 px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-              >
-                <StopCircle className="w-3 h-3" />
-                <span>Stop</span>
-              </button>
-            )}
+      {(isStreaming || isComplete) && (
+        <div className="flex items-center space-x-2 mt-3 fade-in">
+          {isStreaming && !isComplete && onStop && (
+            <button
+              onClick={onStop}
+              className="flex items-center space-x-1 px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+            >
+              <StopCircle className="w-3 h-3" />
+              <span>Stop</span>
+            </button>
+          )}
 
-            {isComplete && onRetry && (
-              <button
-                onClick={onRetry}
-                className="flex items-center space-x-1 px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span>Regenerate</span>
-              </button>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {isComplete && onRetry && (
+            <button
+              onClick={onRetry}
+              className="flex items-center space-x-1 px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Regenerate</span>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

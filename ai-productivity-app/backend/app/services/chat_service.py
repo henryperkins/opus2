@@ -234,18 +234,31 @@ class ChatService:
 
         return True
 
-    def get_session_messages(
+    async def get_session_messages(
         self, session_id: int, limit: int = 50, before_id: Optional[int] = None
     ) -> List[ChatMessage]:
         """Get messages with pagination."""
-        query = self.db.query(ChatMessage).filter_by(
-            session_id=session_id, is_deleted=False
-        )
+        if self.is_async:
+            query = select(ChatMessage).where(
+                ChatMessage.session_id == session_id,
+                ChatMessage.is_deleted == False
+            )
+            
+            if before_id:
+                query = query.where(ChatMessage.id < before_id)
+            
+            query = query.order_by(ChatMessage.id.desc()).limit(limit)
+            result = await self.db.execute(query)
+            return result.scalars().all()
+        else:
+            query = self.db.query(ChatMessage).filter_by(
+                session_id=session_id, is_deleted=False
+            )
 
-        if before_id:
-            query = query.filter(ChatMessage.id < before_id)
+            if before_id:
+                query = query.filter(ChatMessage.id < before_id)
 
-        return query.order_by(ChatMessage.id.desc()).limit(limit).all()
+            return query.order_by(ChatMessage.id.desc()).limit(limit).all()
 
     async def _broadcast_message(self, message: ChatMessage):
         """Broadcast new message to session."""

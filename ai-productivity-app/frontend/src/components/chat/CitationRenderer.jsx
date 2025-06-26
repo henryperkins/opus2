@@ -309,7 +309,7 @@ export default function CitationRenderer({
 }) {
   if (inline) {
     return (
-      <div className="prose prose-sm max-w-none">
+      <div className="message-content max-w-none">
         <p>{parseTextWithCitations(text, citations, onCitationClick)}</p>
       </div>
     );
@@ -317,7 +317,7 @@ export default function CitationRenderer({
 
   return (
     <div className="space-y-4">
-      <div className="prose prose-sm max-w-none">
+      <div className="message-content max-w-none">
         <p>{parseTextWithCitations(text, citations, onCitationClick)}</p>
       </div>
 
