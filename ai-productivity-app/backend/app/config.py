@@ -31,18 +31,29 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------
     # Vector Store Configuration
     # -------------------------------------------------------------------
-    vector_store_type: str = Field(default="pgvector", description="Vector store type: pgvector only")
+    vector_store_type: str = Field(
+        default="pgvector",
+        description="Vector store backend. Supported: 'pgvector', 'qdrant'"
+    )
 
-    @field_validator('vector_store_type')
+    @field_validator("vector_store_type")
     @classmethod
-    def validate_vector_store_type(cls, v):
-        """Validate that only pgvector is used."""
-        if v.lower() != "pgvector":
+    def validate_vector_store_type(cls, v: str) -> str:
+        """Ensure *vector_store_type* is one of the supported backends.
+
+        We currently support two storage layers:
+        • pgvector – native PostgreSQL extension (default)
+        • qdrant  – external high-performance vector database
+        The legacy *sqlite_vss* backend has been removed.
+        """
+        allowed = {"pgvector", "qdrant"}
+        v_lower = v.lower()
+        if v_lower not in allowed:
             raise ValueError(
                 f"Unsupported vector_store_type: {v}. "
-                "Only 'pgvector' is supported. SQLite VSS and Qdrant have been removed."
+                "Supported values are: pgvector, qdrant."
             )
-        return v.lower()
+        return v_lower
 
     # PostgreSQL vector settings
     postgres_vector_table: str = Field(default="embeddings", description="Table name for pgvector embeddings")

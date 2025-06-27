@@ -510,9 +510,16 @@ def _install_passlib_stub():
 
         def verify(self, plain_password, hashed_password):
             """Verify password."""
-            if hashed_password.startswith("sha256$"):
-                hashed_password = hashed_password.split("$", 1)[1]
-            return self.hash(plain_password) == hashed_password
+            # The stubbed *hash()* method prefixes the SHA-256 digest with the
+            # literal string ``sha256$`` when the *bcrypt* scheme is
+            # requested.  To compare two passwords we therefore normalise
+            # **both** values by stripping the optional prefix before the
+            # constant-time comparison.
+
+            def _normalise(val: str) -> str:
+                return val.split("$", 1)[1] if val.startswith("sha256$") else val
+
+            return _normalise(self.hash(plain_password)) == _normalise(hashed_password)
 
     passlib_mod = _types.ModuleType("passlib")
     context_mod = _types.ModuleType("passlib.context")

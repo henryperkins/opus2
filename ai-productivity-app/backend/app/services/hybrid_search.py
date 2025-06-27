@@ -1,13 +1,13 @@
 # backend/app/services/hybrid_search.py
 """Unified hybrid search combining vector, keyword, and structural search."""
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 import asyncio
 from sqlalchemy.orm import Session
 import numpy as np
 import logging
 import hashlib
 
-from app.services.vector_store import VectorStore
+from app.services.vector_service import VectorService
 from app.services.keyword_search import KeywordSearch
 from app.services.structural_search import StructuralSearch
 from app.embeddings.generator import EmbeddingGenerator
@@ -21,11 +21,11 @@ class HybridSearch:
     def __init__(
         self,
         db: Session,
-        vector_store: VectorStore,
+        vector_service: VectorService,
         embedding_generator: Optional[EmbeddingGenerator] = None,
     ):
         self.db = db
-        self.vector_store = vector_store
+        self.vector_service = vector_service
         self.embedding_generator = embedding_generator
         self.keyword_search = KeywordSearch(db)
         self.structural_search = StructuralSearch(db)
@@ -97,8 +97,8 @@ class HybridSearch:
                 return []
 
             # Search vector store
-            results = await self.vector_store.search(
-                np.array(query_embedding),
+            results = await self.vector_service.search(
+                query_vector=np.array(query_embedding),
                 limit=limit * 2,  # Get more for filtering
                 project_ids=project_ids,
             )

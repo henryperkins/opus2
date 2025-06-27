@@ -5,7 +5,6 @@ from fastapi import APIRouter, Query, HTTPException, BackgroundTasks, Depends
 
 from app.dependencies import DatabaseDep, CurrentUserRequired, CurrentUserOptional
 from app.services.vector_service import get_vector_service, VectorService, vector_service
-from app.services.vector_store import VectorStore
 from app.services.hybrid_search import HybridSearch
 from app.services.embedding_service import EmbeddingService
 from app.embeddings.generator import EmbeddingGenerator
@@ -33,11 +32,8 @@ async def search(
     vector_service: VectorService = Depends(get_vector_service)  # Keep for future use
 ):
     """Execute hybrid search across code and documents."""
-    # Initialize hybrid search with the existing VectorStore while the
-    # VectorService migration is still ongoing.
-    vector_store = VectorStore()
-
-    hybrid_search = HybridSearch(db, vector_store, embedding_generator)
+    # Initialize hybrid search with the pgvector-only VectorService
+    hybrid_search = HybridSearch(db, vector_service, embedding_generator)
 
     # Get user's accessible projects
     if not request.project_ids:

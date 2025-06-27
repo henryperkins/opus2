@@ -129,6 +129,58 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings  # pylint: disable=import-error
 
+# ---------------------------------------------------------------------------
+# Helper: automatically select the "psycopg" driver when psycopg2 is missing
+# ---------------------------------------------------------------------------
+# SQLAlchemy defaults to the *psycopg2* driver for PostgreSQL URLs that do not
+# explicitly specify a driver identifier (i.e. start with the bare
+# ``postgresql://`` scheme).  The project, however, depends on *psycopg*
+# (psycopg **version 3**) which exposes its driver under the identifier
+# ``psycopg``.  When *psycopg2* is not installed SQLAlchemy aborts at import
+# time with:
+#
+#     ModuleNotFoundError: No module named 'psycopg2'
+#
+# To provide a smoother out-of-the-box experience we detect this situation and
+# transparently rewrite the URL to ``postgresql+psycopg://`` when the
+# *psycopg* package **is** available.  Production deployments that wish to use
+# an alternative driver can still do so by explicitly embedding the desired
+# identifier in the *DATABASE_URL* environment variable.
+# ---------------------------------------------------------------------------
+
+
+def _autoselect_postgres_driver(raw_url: str) -> str:
+    """Return *raw_url* unchanged or with an explicit psycopg driver.
+
+    If the URL targets PostgreSQL, lacks an explicit driver and *psycopg2* is
+    unavailable while *psycopg* is importable we switch to the modern psycopg
+    driver.
+    """
+
+    if not raw_url.startswith("postgresql://"):
+        return raw_url  # not a PostgreSQL URL – nothing to change
+
+    # An explicit driver (e.g. ``postgresql+asyncpg://``) is indicated by a
+    # plus-sign in the scheme part.  Leave such URLs untouched so users can
+    # opt-in to their preferred driver.
+    if "+" in raw_url.split("://", 1)[0]:
+        return raw_url
+
+    try:
+        import psycopg2  # type: ignore  # noqa: F401 – probe for availability
+        return raw_url  # psycopg2 present → keep default
+    except ModuleNotFoundError:
+        try:
+            import psycopg  # type: ignore  # noqa: F401 – modern driver present?
+        except ModuleNotFoundError:
+            # Neither driver installed – the subsequent create_engine() call
+            # will raise a helpful ImportError on its own.
+            return raw_url
+        else:
+            # Switch to the explicit *psycopg* driver identifier
+            return raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+
 # Create engine (supports both PostgreSQL and local SQLite for tests)
 #
 # In production `settings.database_url` points to the Neon PostgreSQL instance.
@@ -137,10 +189,12 @@ from app.config import settings  # pylint: disable=import-error
 # therefore keep the conditional `check_same_thread` flag for the SQLite path
 # while defaulting to the standard Postgres behaviour otherwise.
 
+_sync_database_url = _autoselect_postgres_driver(settings.database_url)
+
 engine = create_engine(
-    settings.database_url,
+    _sync_database_url,
     echo=settings.database_echo,
-    connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
+    connect_args={"check_same_thread": False} if _sync_database_url.startswith("sqlite") else {},
 )
 
 # Create session factory
@@ -198,6 +252,9 @@ def _build_async_db_url(raw_url: str) -> str:
     return raw_url
 
 
+# Derive the asynchronous connection URL from the *original* settings value so
+# that we always target the *asyncpg* driver irrespective of the synchronous
+# driver selected above.
 async_db_url = _build_async_db_url(settings.database_url)
 
 # ---------------------------------------------------------------------------
@@ -420,3 +477,28 @@ def check_db_connection() -> bool:
         return True
     except Exception:  # pragma: no cover  # noqa: BLE001
         return False
+
+
+# ---------------------------------------------------------------------------
+# Public helper: get_engine_sync
+# ---------------------------------------------------------------------------
+# Some modules import ``app.database.get_engine_sync`` which was removed in a
+# previous refactor.  The helper simply returns the already-initialised
+# *synchronous* SQLAlchemy engine.  The optional ``echo`` parameter is kept to
+# avoid breaking call-sites that previously forwarded the flag – changing the
+# logging configuration after engine creation is a no-op so we ignore the
+# argument.
+# ---------------------------------------------------------------------------
+
+
+def get_engine_sync(*, echo: bool | None = None):  # noqa: D401
+    """Return the global synchronous SQLAlchemy engine.
+
+    Parameters
+    ----------
+    echo:
+        Ignored.  Present only for backwards-compatibility.
+    """
+
+    _ = echo  # parameter kept for signature compatibility
+    return engine
