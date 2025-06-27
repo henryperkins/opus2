@@ -2,7 +2,7 @@
 // components/settings/ModelConfiguration.jsx
 import React, { useState, useEffect } from 'react';
 import { Settings, AlertCircle, Check, RefreshCw } from 'lucide-react';
-import { useConfig } from '../../hooks/useConfig';
+import { useConfigOptimized } from '../../hooks/useConfigOptimized';
 import { configAPI } from '../../api/config';
 import { toast } from '../common/Toast';
 import client from '../../api/client';
@@ -12,7 +12,7 @@ import { modelPresets, modelInfo } from '../../utils/modelConfigs';
 
 
 export default function ModelConfiguration() {
-  const { config, loading, error, refetch } = useConfig();
+  const { config, loading, error, refetch } = useConfigOptimized();
   const [modelConfig, setModelConfig] = useState({
     provider: 'openai',
     model: 'gpt-4o-mini',

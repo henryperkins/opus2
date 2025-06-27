@@ -238,6 +238,7 @@ async def update_model_config(
         # Validate configuration before committing
         ok, detail = await cfg_svc.validate_config(data)
         if not ok:
+            logger.warning(f"Config validation failed: {detail}")
             raise HTTPException(422, f"Validation failed: {detail}")   # ➜ 422 not 500
 
         cfg_svc.set_multiple_config(data, updated_by="api_user")
@@ -259,10 +260,6 @@ async def update_model_config(
                 )
             except Exception as exc:  # pragma: no cover
                 logger.warning("LLM client reconfiguration failed: %s", exc)
-    except IntegrityError as exc:
-        logger.warning("DB error: %s", exc)
-        raise HTTPException(409, "Duplicate/constraint violation")     # specific 4xx
-
         # ------------------------------------------------------------------ #
         # Broadcast change – send the *same* structure returned by GET
         # /api/config so the frontend hook ingests it without falling back
@@ -316,9 +313,22 @@ async def update_model_config(
             "message": "Model configuration updated",
             "current": _merged_config(cfg_svc),
         }
+
+    except IntegrityError as exc:
+        logger.warning("DB error: %s", exc)
+        raise HTTPException(409, "Duplicate/constraint violation")     # specific 4xx
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is to preserve status codes
+        raise
+    except UnboundLocalError as exc:
+        logger.error(f"Variable scope error in validation: {exc}", exc_info=True)
+        raise HTTPException(422, f"Validation failed: Configuration error - {exc}") from exc
+    except ValueError as exc:
+        logger.error(f"Invalid configuration value: {exc}", exc_info=True)
+        raise HTTPException(422, f"Invalid configuration: {exc}") from exc
     except Exception as exc:  # pragma: no cover
-        logger.error("Config update failed: %s", exc, exc_info=True)
-        raise HTTPException(500, f"Configuration update failed: {str(exc)}") from exc
+        logger.error("Unexpected error during config update: %s", exc, exc_info=True)
+        raise HTTPException(500, f"Internal server error during configuration update") from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -358,7 +368,7 @@ async def test_model_config(payload: ModelConfigPayload):
                 from app.llm.client import _is_reasoning_model
                 if _is_reasoning_model(model):
                     # Reasoning models - use string input with reasoning config for Responses API
-                    reasoning_effort = data.get('reasoning_effort', "high")
+                    reasoning_effort = payload.reasoning_effort or "high"
                     resp = await asyncio.wait_for(
                         client.complete(
                             input="Say 'test successful' briefly.",

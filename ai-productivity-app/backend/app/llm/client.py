@@ -382,15 +382,16 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             if self.use_responses_api:
                 # Azure Responses API - follows the official documentation pattern
                 
+                # Initialize variables outside conditional scope to prevent UnboundLocalError
+                input_messages: List[Dict[str, Any]] = []
+                system_instructions: str | None = None
+                
                 # Handle direct string input vs message arrays
                 if isinstance(chat_turns, str):
                     # For direct string input, pass it directly to the Responses API
                     responses_input = chat_turns
                 else:
                     # For message arrays, process them into Responses API format
-                    system_instructions = None
-                    input_messages: List[Dict[str, Any]] = []
-
                     for msg in messages:
                         if msg["role"] == "system":
                             # For reasoning models, system messages can become developer messages

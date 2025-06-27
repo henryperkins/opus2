@@ -2,7 +2,7 @@
 import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import PropTypes from 'prop-types';
-import { useConfig } from '../hooks/useConfig';
+import { useConfigOptimized } from '../hooks/useConfigOptimized';
 
 // Model context for unified state management
 const ModelContext = createContext();
@@ -130,7 +130,7 @@ function modelReducer(state, action) {
 export function ModelProvider({ children }) {
   const [state, dispatch] = useReducer(modelReducer, initialState);
   const queryClient = useQueryClient();
-  const { config, updateConfig } = useConfig();
+  const { config, updateConfig } = useConfigOptimized();
 
   // Sync with global config on mount and config changes
   useEffect(() => {

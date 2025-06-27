@@ -2,7 +2,7 @@
 // components/chat/ModelSwitcher.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Zap, Brain, DollarSign, Check, AlertCircle } from 'lucide-react';
-import { useConfig } from '../../hooks/useConfig';
+import { useConfigOptimized } from '../../hooks/useConfigOptimized';
 import { useModelSelection } from '../../hooks/useModelSelect';
 
 // Default model options - will be enhanced by dynamic config
@@ -72,7 +72,7 @@ export default function ModelSwitcher({
   compact = false,
   showCost = true
 }) {
-  const { config } = useConfig();
+  const { config } = useConfigOptimized();
   const {
     currentModel,
     setModel,

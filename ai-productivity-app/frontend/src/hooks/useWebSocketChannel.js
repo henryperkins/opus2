@@ -10,7 +10,8 @@
  *   • optional custom onMessage handler
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import debounce from 'lodash.debounce';
 
 function buildWsUrl(path) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -32,6 +33,7 @@ export function useWebSocketChannel({
   retry = 5,
   protocols,
   onFallback, // optional callback fired after permanent failure to allow REST polling
+  debounceMs = 100, // Add debouncing to prevent rapid reconnections
 }) {
   // `state` semantics deliberately follow the naming that the rest of the
   // frontend (ConnectionIndicator, ProjectChatPage, etc.) already relies on:
@@ -104,20 +106,60 @@ export function useWebSocketChannel({
     clearTimeout(timerRef.current);
   }, []);
 
+  // Enhanced memoization with connection stability tracking
+  const connectionKey = useMemo(() => {
+    // Include state to prevent reconnection during stable connections
+    const key = JSON.stringify({ path, protocols: protocols || [], retry });
+    console.log(`🔌 WebSocket connection key updated: ${key}`);
+    return key;
+  }, [path, protocols, retry]);
+
+  // Track connection stability to prevent unnecessary reconnections
+  const connectionStable = useRef(false);
+  const lastSuccessfulPath = useRef(null);
+
+  // Create debounced connect function to prevent rapid reconnections
+  const debouncedConnect = useCallback(
+    debounce((connectFn) => {
+      if (connectFn) connectFn();
+    }, debounceMs),
+    [debounceMs]
+  );
+
+  // Enhanced connection reuse logic
+  const shouldReuseConnection = useCallback((newPath) => {
+    const currentWs = wsRef.current;
+    if (!currentWs) return false;
+    
+    const isConnected = currentWs.readyState === WebSocket.OPEN;
+    const isSamePath = lastSuccessfulPath.current === newPath;
+    const isStable = connectionStable.current;
+    
+    if (isConnected && isSamePath && isStable) {
+      console.log(`🔌 WebSocket: reusing stable connection to ${newPath}`);
+      return true;
+    }
+    
+    return false;
+  }, []);
+
   useEffect(() => {
     let aborted = false;
 
     if (!path) {
       setState('disconnected');
+      connectionStable.current = false;
+      lastSuccessfulPath.current = null;
       return () => { };
     }
 
-    // Guard: prevent duplicate connections during HMR
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log(`🔌 WebSocket: reusing existing connection to ${path}`);
+    // Enhanced connection reuse with stability tracking
+    if (shouldReuseConnection(path)) {
       return () => { };
     }
 
+    // Reset stability on new connection attempts
+    connectionStable.current = false;
     console.log(`🔌 WebSocket useEffect: setting up connection to ${path}`);
 
     function connect() {
@@ -131,6 +173,18 @@ export function useWebSocketChannel({
         console.log(`WebSocket connected: ${ws.url}`);
         retryRef.current = 0;
         setState('connected');
+        
+        // Track successful connection for stability
+        lastSuccessfulPath.current = path;
+        
+        // Mark connection as stable after a brief delay
+        setTimeout(() => {
+          if (!aborted && ws.readyState === WebSocket.OPEN) {
+            connectionStable.current = true;
+            console.log(`🔌 WebSocket marked as stable: ${path}`);
+          }
+        }, 1000);
+        
         // flush queue
         queueRef.current.forEach((m) => send(m));
         queueRef.current = [];
@@ -159,6 +213,9 @@ export function useWebSocketChannel({
         if (aborted) return;
         setState('disconnected');
         setLastCloseEvent(evt);
+        
+        // Reset stability tracking on closure
+        connectionStable.current = false;
 
         // Enhanced logging for debugging
         console.warn(`WebSocket closed: code=${evt.code}, reason="${evt.reason}", wasClean=${evt.wasClean}`);
@@ -235,15 +292,24 @@ export function useWebSocketChannel({
       };
     }
 
-    connect();
+    // Use debounced connection to prevent rapid reconnections during development
+    debouncedConnect(connect);
 
     return () => {
       aborted = true;
       console.log(`🔌 WebSocket useEffect cleanup: closing connection to ${path}`);
       clearTimeout(timerRef.current); // cancel pending reconnect
+      debouncedConnect.cancel(); // Cancel any pending debounced connections
+      
+      // Reset stability tracking on cleanup
+      connectionStable.current = false;
+      if (lastSuccessfulPath.current === path) {
+        lastSuccessfulPath.current = null;
+      }
+      
       close();
     };
-  }, [path, protocols, retry, close, send, onFallback]); // Include close and send in dependencies
+  }, [connectionKey, debouncedConnect, close]); // Use memoized connection key instead of individual params
 
   return { state, send, close, socket: wsRef.current, lastCloseEvent };
 }
