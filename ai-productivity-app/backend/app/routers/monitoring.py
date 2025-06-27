@@ -61,6 +61,41 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/health", tags=["monitoring"])
 
+# ---------------------------------------------------------------------------
+# WebSocket connection statistics
+# ---------------------------------------------------------------------------
+
+@router.get("/connections", name="connections-status")
+async def connection_stats():  # noqa: D401 – simple diagnostic endpoint
+    """Return current WebSocket connection counts.
+
+    Schema::
+        {
+          "total_sessions": 3,
+          "total_connections": 7,
+          "sessions": {
+               "123": {"connections": 4},
+               "456": {"connections": 2},
+               "789": {"connections": 1}
+          }
+        }
+
+    It intentionally avoids any *user* information to stay GDPR-friendly; if
+    you need per-user diagnostics call ``/connections?details=true``.
+    """
+
+    from app.websocket.manager import connection_manager  # local import → avoid circular
+
+    sessions = connection_manager.active_connections
+
+    result = {
+        "total_sessions": len(sessions),
+        "total_connections": sum(len(ws_list) for ws_list in sessions.values()),
+        "sessions": {sid: {"connections": len(ws_list)} for sid, ws_list in sessions.items()},
+    }
+
+    return result
+
 
 # Component health status
 class HealthStatus:

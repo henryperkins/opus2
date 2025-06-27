@@ -125,14 +125,18 @@ class ChatService:
                 select(ChatMessage).where(
                     ChatMessage.id == message_id,
                     ChatMessage.user_id == user_id,
-                    ChatMessage.is_deleted == False
+                    ChatMessage.is_deleted.is_(False)
                 )
             )
             message = result.scalar_one_or_none()
         else:
             message = (
                 self.db.query(ChatMessage)
-                .filter_by(id=message_id, user_id=user_id, is_deleted=False)
+                .filter(
+                    ChatMessage.id == message_id,
+                    ChatMessage.user_id == user_id,
+                    ChatMessage.is_deleted.is_(False),
+                )
                 .first()
             )
 
@@ -236,47 +240,82 @@ class ChatService:
     async def get_session_messages(
         self, session_id: int, limit: int = 50, before_id: Optional[int] = None
     ) -> List[ChatMessage]:
-        """Get messages with pagination."""
+        """Return up to *limit* most recent messages for *session_id*.
+
+        Behaviour:
+        • When *before_id* is ``None`` (initial page load) the **latest**
+          ``limit`` messages are returned so the user always sees the most
+          recent conversation after a reload.
+        • When *before_id* is provided (pagination while scrolling **up**) we
+          fetch the next *older* batch.  The consumer expects messages in
+          chronological order (old → new) therefore the slice is first ordered
+          *descending* to efficiently grab the window and then reversed before
+          returning.
+        """
+
+        # In Postgres a boolean column is always stored as the *real* boolean
+        # type so we can use a straight *is False* comparison.  Legacy support
+        # for the SQLite string literal `'FALSE'` has been dropped because the
+        # application now runs exclusively on PostgreSQL (Neon).  Keeping the
+        # check would create an implicit cast in Postgres and hurt index
+        # usage.
+        not_deleted_filter = ChatMessage.is_deleted.is_(False)
+
+        def _reverse_if_needed(rows):
+            """Helper to ensure ascending chronological order."""
+            # Rows are reversed **only** when they were fetched in DESC order.
+            return list(reversed(rows))
+
         if self.is_async:
-            # ------------------------------------------------------------------
-            # SQLite quirk: Boolean ``FALSE`` values declared via
-            # ``server_default=text("FALSE")`` end up as the *string* ``'FALSE'``
-            # rather than the integer ``0``.  This causes the strict
-            # ``== False`` comparison to miss all rows and the frontend sees
-            # “Sent 0 recent messages...”.
-            #
-            # Accept both representations to stay database-agnostic.
-            # ------------------------------------------------------------------
-            query = select(ChatMessage).where(
+            base_query = select(ChatMessage).where(
                 ChatMessage.session_id == session_id,
-                or_(
-                    ChatMessage.is_deleted == False,          # real boolean false
-                    ChatMessage.is_deleted == 'FALSE',        # string fallback (SQLite)
-                )
+                not_deleted_filter,
             )
 
-            if before_id:
-                query = query.where(ChatMessage.id < before_id)
+            if before_id is None:
+                # Latest page – order DESC to grab most recent, then reverse
+                # to maintain chronological order.
+                query = (
+                    base_query.order_by(ChatMessage.created_at.desc())
+                    .limit(limit)
+                )
+                result = await self.db.execute(query)
+                rows = result.scalars().all()
+                return _reverse_if_needed(rows)
 
-            query = query.order_by(ChatMessage.created_at.asc()).limit(limit)
-            result = await self.db.execute(query)
-            return result.scalars().all()
-        else:
+            # Pagination – fetch messages **older** than *before_id*.
             query = (
-                self.db.query(ChatMessage)
-                .filter(ChatMessage.session_id == session_id)
-                .filter(
-                    or_(
-                        ChatMessage.is_deleted == False,
-                        ChatMessage.is_deleted == 'FALSE',
-                    )
-                )
+                base_query.where(ChatMessage.id < before_id)
+                .order_by(ChatMessage.created_at.desc())
+                .limit(limit)
             )
+            result = await self.db.execute(query)
+            rows = result.scalars().all()
+            return _reverse_if_needed(rows)
 
-            if before_id:
-                query = query.filter(ChatMessage.id < before_id)
+        # ---------------------- synchronous (non-async) path -----------------
 
-            return query.order_by(ChatMessage.created_at.asc()).limit(limit).all()
+        base_query = (
+            self.db.query(ChatMessage)
+            .filter(ChatMessage.session_id == session_id)
+            .filter(not_deleted_filter)
+        )
+
+        if before_id is None:
+            rows = (
+                base_query.order_by(ChatMessage.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            return _reverse_if_needed(rows)
+
+        rows = (
+            base_query.filter(ChatMessage.id < before_id)
+            .order_by(ChatMessage.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return _reverse_if_needed(rows)
 
     async def _broadcast_message(self, message: ChatMessage):
         """Broadcast new message to session."""
