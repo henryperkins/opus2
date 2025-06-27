@@ -667,21 +667,22 @@ class ChatProcessor:
                     if hasattr(response, "usage"):
                         logger.debug(f"Token usage: {response.usage}")
 
-                # Extract content from output
+                # Extract content from output - handle o3 model responses
                 for item in response.output:
-                    if (getattr(item, "type", None) == "message" and
-                            hasattr(item, "content") and item.content):
-                        if isinstance(item.content, str):
-                            return item.content
-                        # Handle structured content (e.g., with reasoning)
-                        elif isinstance(item.content, list) and item.content:
-                            text_parts = []
-                            for content_item in item.content:
-                                if hasattr(content_item, "text"):
-                                    text_parts.append(content_item.text)
-                            return "\n".join(text_parts) if text_parts else str(item.content[0])
-                        else:
-                            return str(item.content)
+                    if hasattr(item, "type") and item.type == "message":
+                        if hasattr(item, "content"):
+                            if isinstance(item.content, list):
+                                # Handle list of content items
+                                text_parts = []
+                                for content_item in item.content:
+                                    if hasattr(content_item, "text"):
+                                        text_parts.append(content_item.text)
+                                return " ".join(text_parts)
+                            else:
+                                return str(item.content)
+                        elif hasattr(item, "text"):
+                            # Direct text attribute
+                            return item.text
 
             # Legacy output_text field
             if getattr(response, "output_text", None):

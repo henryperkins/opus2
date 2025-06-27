@@ -395,10 +395,38 @@ async def test_model_config(payload: ModelConfigPayload):
                         ),
                         timeout=30,
                     )
-                # Responses objects return text at resp.output[-1].content[0].text
+                # Handle reasoning model responses with improved extraction
                 if hasattr(resp, "output") and resp.output:
-                    resp_text = resp.output[-1].content[0].text.strip()
-                else:  # stub / fallback
+                    try:
+                        last_output = resp.output[-1]
+                        if hasattr(last_output, "type") and last_output.type == "reasoning":
+                            # This is a reasoning output - skip it and look for message output
+                            for output_item in resp.output:
+                                if hasattr(output_item, "type") and output_item.type == "message":
+                                    if hasattr(output_item, "content"):
+                                        if isinstance(output_item.content, list) and len(output_item.content) > 0:
+                                            resp_text = output_item.content[0].text.strip()
+                                        else:
+                                            resp_text = str(output_item.content)
+                                        break
+                            else:
+                                # No message output found
+                                resp_text = "No message output in response"
+                        else:
+                            # Try standard extraction
+                            if hasattr(last_output, "content"):
+                                if isinstance(last_output.content, list) and len(last_output.content) > 0:
+                                    resp_text = last_output.content[0].text.strip()
+                                else:
+                                    resp_text = str(last_output.content)
+                            elif hasattr(last_output, "text"):
+                                resp_text = last_output.text.strip()
+                            else:
+                                resp_text = str(last_output)
+                    except Exception as e:
+                        logger.warning(f"Failed to extract response text: {e}")
+                        resp_text = str(resp)
+                else:
                     resp_text = str(resp)
             except asyncio.TimeoutError:
                 return {

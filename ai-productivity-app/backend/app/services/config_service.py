@@ -475,10 +475,22 @@ class ConfigService:
                         ),
                         timeout=30,
                     )
-                    # Responses objects return text at resp.output[-1].content[0].text
+                    # Handle different response structures for reasoning models
                     if hasattr(resp, "output") and resp.output:
-                        resp_text = resp.output[-1].content[0].text.strip()
-                    else:  # stub / fallback
+                        last_output = resp.output[-1]
+                        if hasattr(last_output, 'content'):
+                            # Standard response structure
+                            if isinstance(last_output.content, list) and len(last_output.content) > 0:
+                                resp_text = last_output.content[0].text.strip()
+                            else:
+                                resp_text = str(last_output.content)
+                        elif hasattr(last_output, 'text'):
+                            # Direct text attribute
+                            resp_text = last_output.text.strip()
+                        else:
+                            # Fallback to string representation
+                            resp_text = str(last_output)
+                    else:
                         resp_text = str(resp)
                 except asyncio.TimeoutError:
                     return False, "Responses-API test timed out after 30 seconds"

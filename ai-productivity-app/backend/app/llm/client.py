@@ -401,7 +401,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         # For reasoning models, convert system messages to developer messages
         if _is_reasoning_model(active_model):
             for msg in messages:
-                if msg["role"] == "system":
+                if msg.get("role") == "system":
                     msg["role"] = "developer"
 
         try:
