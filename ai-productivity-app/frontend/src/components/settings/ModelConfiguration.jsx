@@ -22,9 +22,9 @@ export default function ModelConfiguration() {
     frequencyPenalty: 0,
     presencePenalty: 0,
     systemPrompt: '',
-    responseFormat: 'text'
-    ,
-    useResponsesApi: false
+    responseFormat: 'text',
+    useResponsesApi: false,
+    reasoningEffort: 'high'
   });
 
   const [selectedPreset, setSelectedPreset] = useState('balanced');
@@ -105,7 +105,8 @@ export default function ModelConfiguration() {
         frequencyPenalty: modelConfig.frequencyPenalty,
         presencePenalty: modelConfig.presencePenalty,
         systemPrompt: modelConfig.systemPrompt,
-        useResponsesApi: modelConfig.useResponsesApi
+        useResponsesApi: modelConfig.useResponsesApi,
+        reasoning_effort: modelConfig.reasoningEffort
       });
       toast.success('Model configuration saved successfully');
       if (refetch) await refetch();
@@ -427,6 +428,25 @@ export default function ModelConfiguration() {
                   <option value="markdown">Markdown</option>
                   <option value="json">JSON</option>
                 </select>
+              </div>
+
+              {/* Reasoning Effort Level */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reasoning Effort Level
+                </label>
+                <select
+                  value={modelConfig.reasoningEffort}
+                  onChange={(e) => setModelConfig({ ...modelConfig, reasoningEffort: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2"
+                >
+                  <option value="low">Low - Fast responses</option>
+                  <option value="medium">Medium - Balanced speed/quality</option>
+                  <option value="high">High - Best quality (default)</option>
+                </select>
+                <p className="text-sm text-gray-500 mt-1">
+                  Controls how much reasoning the model applies. Higher levels provide better quality but slower responses.
+                </p>
               </div>
             </>
           )}

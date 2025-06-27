@@ -17,6 +17,7 @@ class ModelConfig(BaseModel):
     presence_penalty: Optional[float] = Field(0.0, ge=-2, le=2)
     stop_sequences: Optional[List[str]] = None
     system_prompt: Optional[str] = None
+    reasoning_effort: Optional[str] = Field("high", pattern=r"^(low|medium|high)$")
     custom_params: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(protected_namespaces=())

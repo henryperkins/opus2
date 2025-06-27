@@ -465,11 +465,13 @@ class ConfigService:
             if provider == "azure" and use_responses:
                 # Test Responses API
                 try:
+                    reasoning_effort = config_dict.get("reasoning_effort", "high")
                     resp = await asyncio.wait_for(
-                        client.respond(
+                        client.complete(
                             input="Say 'test successful' briefly.",
-                            effort="low",
-                            summary="auto",
+                            reasoning={"effort": reasoning_effort, "summary": "auto"},
+                            max_tokens=max_tokens,
+                            stream=False,
                         ),
                         timeout=30,
                     )

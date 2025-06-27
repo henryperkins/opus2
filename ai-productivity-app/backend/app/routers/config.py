@@ -60,11 +60,15 @@ class ModelConfigPayload(BaseModel):
 
     # Toggle Responses API (camelCase externally)
     use_responses_api: bool | None = Field(None, alias="useResponsesApi")
+    
+    # Reasoning effort level for o-series models
+    reasoning_effort: str | None = Field(None, pattern=r"^(low|medium|high)$")
 
     class Config:
         populate_by_name = True
 
     @validator("provider")
+    @classmethod
     def _normalise_provider(cls, v):  # noqa: N805
         if v is None:
             return v
@@ -353,11 +357,12 @@ async def test_model_config(payload: ModelConfigPayload):
                 # Use simplified string input for reasoning models, message array for others
                 from app.llm.client import _is_reasoning_model
                 if _is_reasoning_model(model):
-                    # Reasoning models - use string input with reasoning config
+                    # Reasoning models - use string input with reasoning config for Responses API
+                    reasoning_effort = data.get('reasoning_effort', "high")
                     resp = await asyncio.wait_for(
                         client.complete(
                             input="Say 'test successful' briefly.",
-                            reasoning={"effort": "low", "summary": "auto"},
+                            reasoning={"effort": reasoning_effort, "summary": "auto"},
                             max_tokens=max_tokens,
                             stream=False,
                         ),
