@@ -138,16 +138,37 @@ def _is_responses_api_enabled(model_name: str = None) -> bool:
     return api_version_enabled or model_requires
 
 
-def _sanitize_messages(messages: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
+def _sanitize_messages(messages: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Ensure *messages* are JSON serialisable and in the canonical format the
     OpenAI SDK expects.  The helper **does not** perform any advanced
     validation – it simply converts the sequence to a *list* and casts the
     *role* / *content* values to ``str``.
+    
+    Also handles Azure Responses API format messages which may have 'type' instead of 'role'.
     """
 
-    out: List[Dict[str, str]] = []
+    out: List[Dict[str, Any]] = []
     for msg in messages:
-        out.append({"role": str(msg["role"]), "content": str(msg["content"])})
+        # Handle Azure Responses API tool result format
+        if msg.get("type") == "function_call_output":
+            # This is a tool result for Azure Responses API - keep as is
+            out.append(msg)
+        elif "role" in msg and "content" in msg:
+            # Standard OpenAI Chat API format
+            out.append({"role": str(msg["role"]), "content": str(msg["content"])})
+        elif "role" in msg:
+            # Message with role but may have other fields (tool calls, etc.)
+            sanitized = {"role": str(msg["role"])}
+            if "content" in msg:
+                sanitized["content"] = str(msg["content"])
+            # Preserve other fields for tool calls
+            for key in ["tool_calls", "name", "tool_call_id"]:
+                if key in msg:
+                    sanitized[key] = msg[key]
+            out.append(sanitized)
+        else:
+            # Unknown format - try to preserve structure
+            out.append(msg)
     return out
 
 
@@ -370,7 +391,12 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         else:
             # Convert messages into canonical list – some callers might pass
             # tuples / generators.
-            messages = _sanitize_messages(chat_turns)
+            # For Azure Responses API, we need to handle function_call_output differently
+            if self.use_responses_api:
+                # Keep original format for Azure Responses API processing
+                messages = list(chat_turns)
+            else:
+                messages = _sanitize_messages(chat_turns)
         
         # For reasoning models, convert system messages to developer messages
         if _is_reasoning_model(active_model):
@@ -393,7 +419,11 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 else:
                     # For message arrays, process them into Responses API format
                     for msg in messages:
-                        if msg["role"] == "system":
+                        # Handle function call output messages (tool results)
+                        if msg.get("type") == "function_call_output":
+                            # Tool result - pass through as-is for Azure Responses API
+                            input_messages.append(msg)
+                        elif "role" in msg and msg["role"] == "system":
                             # For reasoning models, system messages can become developer messages
                             # or be combined into instructions
                             if _is_reasoning_model(active_model):
@@ -410,16 +440,19 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                                     system_instructions = msg["content"]
                                 else:
                                     system_instructions += "\n\n" + msg["content"]
-                        else:
+                        elif "role" in msg:
                             # Convert to Responses API format
                             input_msg = {
                                 "role": msg["role"],
-                                "content": msg["content"]
+                                "content": msg.get("content", "")
                             }
                             # Add type field for user/assistant messages
                             if msg["role"] in ["user", "assistant", "developer"]:
                                 input_msg["type"] = "message"
                             input_messages.append(input_msg)
+                        else:
+                            # Unknown message format - try to preserve it
+                            input_messages.append(msg)
                     
                     responses_input = input_messages
 

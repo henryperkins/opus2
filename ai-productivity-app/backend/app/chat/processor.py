@@ -113,15 +113,14 @@ class ChatProcessor:
         self, session_id: int, message: ChatMessage, websocket: WebSocket
     ) -> tuple[ChatSession, dict, list]:
         """Prepare message context, separating DB writes from heavy I/O."""
-        # Transaction 1: Get session, scan for secrets, and persist redactions.
-        async with self.db.begin():
-            session: ChatSession | None = await self._get_session(session_id)
-            if not session:
-                raise ValueError("Chat session not found")
+        # Get session and scan for secrets (within existing session context)
+        session: ChatSession | None = await self._get_session(session_id)
+        if not session:
+            raise ValueError("Chat session not found")
 
-            # 1. Secret scanning – redact *before* context extraction
-            await self._apply_secret_scanning(message, websocket)
-            await self.db.flush()
+        # 1. Secret scanning – redact *before* context extraction
+        await self._apply_secret_scanning(message, websocket)
+        await self.db.flush()
 
         # Outside transaction: Heavy I/O for context building.
         # 2. Context extraction (files + vector chunks)
@@ -242,35 +241,37 @@ class ChatProcessor:
 
             context["rag_metadata"] = rag_metadata
 
-        # Transaction 2: Persist context references, timeline event, and command details.
-        async with self.db.begin():
-            message = await self.db.merge(message)
-            message.referenced_files = [
-                ref["path"] for ref in context.get("file_references", [])
-            ]
-            message.referenced_chunks = [
-                c["document_id"] for c in context.get("chunks", [])
-            ]
+        # Persist context references, timeline event, and command details.
+        message = await self.db.merge(message)
+        message.referenced_files = [
+            ref["path"] for ref in context.get("file_references", [])
+        ]
+        message.referenced_chunks = [
+            c["document_id"] for c in context.get("chunks", [])
+        ]
 
-            # 3. Timeline analytics
-            await self.context_builder.create_timeline_event(
-                project_id=session.project_id,
-                event_type="chat_message",
-                content=message.content,
-                referenced_files=message.referenced_files,
-            )
+        # 3. Timeline analytics
+        await self.context_builder.create_timeline_event(
+            project_id=session.project_id,
+            event_type="chat_message",
+            content=message.content,
+            referenced_files=message.referenced_files,
+        )
 
-            # 4. Slash-command execution
-            commands = await command_registry.execute_commands(
-                message.content,
-                context,
-                self.db,
-            )
-            if commands:
-                message.applied_commands = {
-                    cmd["command"]: cmd.get("prompt", cmd.get("message", ""))
-                    for cmd in commands
-                }
+        # 4. Slash-command execution
+        commands = await command_registry.execute_commands(
+            message.content,
+            context,
+            self.db,
+        )
+        if commands:
+            message.applied_commands = {
+                cmd["command"]: cmd.get("prompt", cmd.get("message", ""))
+                for cmd in commands
+            }
+
+        # Commit the changes
+        await self.db.commit()
 
         return session, context, commands or []
 

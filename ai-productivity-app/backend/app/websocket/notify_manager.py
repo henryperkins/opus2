@@ -7,6 +7,10 @@ from datetime import datetime
 from fastapi import WebSocket
 import logging
 
+# Import connection limit from the chat ConnectionManager to keep a single
+# source of truth for DoS-guard settings.
+from .manager import MAX_CONNECTIONS_PER_USER
+
 from app.config import settings
 from app.middleware.correlation_id import get_request_id
 
@@ -112,9 +116,24 @@ class EnhancedNotifyManager:
         )
 
     async def connect(self, websocket: WebSocket, user_id: int):
-        """Accept WebSocket connection."""
-        await websocket.accept()
+        """Accept WebSocket connection with per-user connection cap.
+
+        Aligns with ``ConnectionManager`` to prevent resource-exhaustion
+        attacks via the notifications channel.
+        """
         async with self._connection_lock:
+            existing = len(self.connections.get(user_id, set()))
+            if existing >= MAX_CONNECTIONS_PER_USER:
+                await websocket.close(code=4000, reason="Connection limit exceeded")
+                logger.warning(
+                    "Rejected notification WebSocket %s for user %s – limit %s",
+                    id(websocket),
+                    user_id,
+                    MAX_CONNECTIONS_PER_USER,
+                )
+                return
+            # Accept after ensuring limit is not exceeded
+            await websocket.accept()
             self.connections[user_id].add(websocket)
         logger.info(f"User {user_id} connected via WebSocket")
 
