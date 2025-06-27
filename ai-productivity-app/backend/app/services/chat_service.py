@@ -1,13 +1,12 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from typing import List, Optional, Dict, Any, Union
-import json
 from datetime import datetime
 
 from app.models.chat import ChatSession, ChatMessage
 from app.models.timeline import TimelineEvent
-from app.schemas.chat import MessageCreate, MessageUpdate
+# Pydantic request models are not required inside the service layer
 from app.websocket.manager import connection_manager
 
 
@@ -27,12 +26,12 @@ class ChatService:
             title=title or f"Chat {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             is_active=True,  # Explicitly set to avoid server_default/None mismatch
         )
-        
+
         if self.is_async:
             self.db.add(session)
             await self.db.commit()
             await self.db.refresh(session)
-            
+
             # Add timeline event
             event = TimelineEvent(
                 project_id=project_id,
@@ -46,8 +45,8 @@ class ChatService:
             self.db.add(session)
             self.db.commit()
             self.db.refresh(session)
-            
-            # Add timeline event  
+
+            # Add timeline event
             event = TimelineEvent(
                 project_id=project_id,
                 event_type="chat_created",
@@ -88,11 +87,11 @@ class ChatService:
             rag_status=rag_metadata.get("rag_status") if rag_metadata else None,
             rag_error_message=rag_metadata.get("rag_error_message") if rag_metadata else None,
         )
-        
+
         if self.is_async:
             self.db.add(message)
             await self.db.commit()
-            
+
             # Update session timestamp
             session_result = await self.db.execute(
                 select(ChatSession).where(ChatSession.id == session_id)
@@ -104,7 +103,7 @@ class ChatService:
         else:
             self.db.add(message)
             self.db.commit()
-            
+
             # Update session timestamp
             session = self.db.query(ChatSession).filter_by(id=session_id).first()
             if session:
@@ -215,7 +214,7 @@ class ChatService:
             return False
 
         message.is_deleted = True
-        
+
         if self.is_async:
             await self.db.commit()
         else:
@@ -239,20 +238,39 @@ class ChatService:
     ) -> List[ChatMessage]:
         """Get messages with pagination."""
         if self.is_async:
+            # ------------------------------------------------------------------
+            # SQLite quirk: Boolean ``FALSE`` values declared via
+            # ``server_default=text("FALSE")`` end up as the *string* ``'FALSE'``
+            # rather than the integer ``0``.  This causes the strict
+            # ``== False`` comparison to miss all rows and the frontend sees
+            # “Sent 0 recent messages...”.
+            #
+            # Accept both representations to stay database-agnostic.
+            # ------------------------------------------------------------------
             query = select(ChatMessage).where(
                 ChatMessage.session_id == session_id,
-                ChatMessage.is_deleted == False
+                or_(
+                    ChatMessage.is_deleted == False,          # real boolean false
+                    ChatMessage.is_deleted == 'FALSE',        # string fallback (SQLite)
+                )
             )
-            
+
             if before_id:
                 query = query.where(ChatMessage.id < before_id)
-            
+
             query = query.order_by(ChatMessage.created_at.asc()).limit(limit)
             result = await self.db.execute(query)
             return result.scalars().all()
         else:
-            query = self.db.query(ChatMessage).filter_by(
-                session_id=session_id, is_deleted=False
+            query = (
+                self.db.query(ChatMessage)
+                .filter(ChatMessage.session_id == session_id)
+                .filter(
+                    or_(
+                        ChatMessage.is_deleted == False,
+                        ChatMessage.is_deleted == 'FALSE',
+                    )
+                )
             )
 
             if before_id:

@@ -56,11 +56,45 @@ export function useChat(projectId, preferredSessionId = null) {
           }
         }
 
-        // Create new session if needed
-        const { data } = await chatAPI.createSession({
-          project_id: Number(projectId),
-        });
-        return data;
+        // ------------------------------------------------------------------
+        // Fallback: no valid session ID – try to reuse the most recent one
+        // ------------------------------------------------------------------
+        try {
+          const recent = await chatAPI.getChatSessions({
+            project_id: Number(projectId),
+            limit: 1,
+            offset: 0,
+            is_active: true,
+          });
+          if (Array.isArray(recent) && recent.length > 0) {
+            // Persist in React-Query cache to avoid another lookup
+            qc.setQueryData(
+              ['session', projectId, preferredSessionId || 'default'],
+              recent[0]
+            );
+            return recent[0];
+          }
+        } catch (listErr) {
+          // Non-fatal – will create a brand-new session below
+          console.warn('No existing sessions found, creating a new one', listErr);
+        }
+
+        // ------------------------------------------------------------------
+        // Create new session as a last resort – but **only** when the caller
+        // explicitly requested a specific session (i.e. a URL with
+        // `/sessions/:id`).  When the chat *list* view is open we do NOT want
+        // to create an empty throw-away session every time the page renders.
+        // ------------------------------------------------------------------
+        if (preferredSessionId !== null) {
+          const { data } = await chatAPI.createSession({
+            project_id: Number(projectId),
+          });
+          return data;
+        }
+
+        // No session context required – return *null* so the caller can render
+        // the chat list or wait until the user explicitly opens / creates one.
+        return null;
       } catch (error) {
         console.error('Session bootstrap error:', error);
         throw error;
@@ -86,7 +120,7 @@ export function useChat(projectId, preferredSessionId = null) {
     queryFn: () => chatAPI.getMessages(sessionId).then((r) =>
       r.data.map(msg => ({
         ...msg,
-        metadata: transformMessageMetadata(msg.metadata)
+        metadata: transformMessageMetadata(msg.metadata || {})
       }))
     ),
     enabled: !!sessionId && !sessionLoading,
@@ -111,7 +145,7 @@ export function useChat(projectId, preferredSessionId = null) {
         switch (data.type) {
           case 'message_history':
             // Handle initial message history from WebSocket connection
-            qc.setQueryData(messagesKey(sessionId), () => 
+            qc.setQueryData(messagesKey(sessionId), () =>
               data.messages.map(msg => ({
                 ...msg,
                 metadata: transformMessageMetadata(msg.metadata || {})
