@@ -10,9 +10,24 @@ export default {
     './index.html',
     './src/**/*.{js,jsx,ts,tsx}',
   ],
-  // Theme configuration is now in CSS via @theme
-  // Dark mode uses prefers-color-scheme by default in v4
+
+  // -------------------------------------------------------------------------
+  // Dark mode configuration
+  // -------------------------------------------------------------------------
+  // Tailwind CSS v4 defaults to using the `prefers-color-scheme` media query
+  // for the `dark:` variant.  However, the application provides an explicit
+  // theme toggle (see `useTheme` + `ThemeToggle`), which relies on adding a
+  // `dark` **class** to the <html> element.  To make those utilities work we
+  // must opt-in to class-based dark mode.
+  //
+  // Ref: https://tailwindcss.com/docs/dark-mode#class-strategy
+  // -------------------------------------------------------------------------
+  darkMode: 'class',
+
+  // -------------------------------------------------------------------------
+  // Plugins – keep minimal, extend as required.
+  // -------------------------------------------------------------------------
   plugins: [
-    // Add plugins as needed
+    // Add Tailwind plugins here
   ],
 };

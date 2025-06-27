@@ -4,6 +4,7 @@
 // scheme.
 
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import useAuthStore from '../stores/authStore';
 import PropTypes from 'prop-types';
 
 const ThemeContext = createContext({
@@ -16,17 +17,60 @@ export function ThemeProvider({ children }) {
   // ---------------------------------------------------------------------------
   // Initial state – prefer localStorage, fall back to system preference.
   // ---------------------------------------------------------------------------
+  /* -------------------------------------------------------------------------
+   * Theme source of truth
+   * ------------------------------------------------------------------------
+   * 1. We first try to read the preference from the Zustand auth store so the
+   *    user-selected theme survives across devices/browsers (the store itself
+   *    is persisted via `zustand/middleware/persist`).
+   * 2. If the store has no preference we fall back to localStorage (legacy –
+   *    kept for backward compatibility so existing users keep their choice).
+   * 3. Finally we fall back to the system preference.
+   */
+
+  const { preferences, setPreference } = useAuthStore();
+
+  // Helper to map preference -> actual theme string (light | dark)
+  const getSystemTheme = () =>
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
   const [theme, setThemeState] = useState(() => {
     if (typeof window === 'undefined') return 'light';
+
+    const prefFromStore = preferences?.theme;
+    if (prefFromStore === 'light' || prefFromStore === 'dark') {
+      return prefFromStore;
+    }
+
+    if (prefFromStore === 'auto') {
+      return getSystemTheme();
+    }
 
     const saved = localStorage.getItem('theme');
     if (saved === 'light' || saved === 'dark') return saved;
 
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-    return 'light';
+    return getSystemTheme();
   });
+
+  // ---------------------------------------------------------------------------
+  // React to external preference updates (e.g. Settings page) -----------------
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const pref = preferences?.theme;
+
+    if (pref === 'light' || pref === 'dark') {
+      if (pref !== theme) {
+        setTheme(pref);
+      }
+    }
+
+    if (pref === 'auto') {
+      const sys = getSystemTheme();
+      if (sys !== theme) {
+        setTheme(sys);
+      }
+    }
+  }, [preferences?.theme]);
 
   // ---------------------------------------------------------------------------
   // Helper to apply the theme to the <html> element and meta tag.
@@ -50,6 +94,8 @@ export function ThemeProvider({ children }) {
       if (newTheme !== 'light' && newTheme !== 'dark') return;
 
       setThemeState(newTheme);
+      // Persist both in Zustand store and localStorage for backward compat.
+      setPreference('theme', newTheme);
       localStorage.setItem('theme', newTheme);
       applyTheme(newTheme);
     },
@@ -57,11 +103,6 @@ export function ThemeProvider({ children }) {
   );
 
   // Convenience toggle ---------------------------------------------------------
-  // Note: our `setTheme` helper expects the **next theme value**, not a
-  // function updater.  Passing a function previously resulted in the guard
-  // clause (`newTheme !== 'light' && newTheme !== 'dark'`) short-circuiting
-  // the update, so the toggle never actually changed the theme.  Compute the
-  // next theme explicitly instead.
   const toggleTheme = useCallback(() => {
     const next = theme === 'light' ? 'dark' : 'light';
     setTheme(next);
@@ -77,8 +118,9 @@ export function ThemeProvider({ children }) {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
     const handleChange = (e) => {
-      const savedTheme = localStorage.getItem('theme');
-      if (!savedTheme) {
+      // Only update when user preference is set to "auto" (or unset).
+      const pref = preferences?.theme;
+      if (!pref || pref === 'auto') {
         setTheme(e.matches ? 'dark' : 'light');
       }
     };
