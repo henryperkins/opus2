@@ -67,6 +67,11 @@ class VectorService:
         stats["configured_backend"] = "pgvector"
         return stats
 
+    async def _get_backend(self) -> PostgresVectorService:
+        """Get the backend instance for internal operations."""
+        await self.initialize()
+        return self._backend
+
     # Legacy compatibility methods for knowledge operations
     async def search_knowledge(
         self,

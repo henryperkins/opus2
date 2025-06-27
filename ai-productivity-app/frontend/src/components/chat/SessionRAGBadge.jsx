@@ -8,6 +8,15 @@ const SessionRAGBadge = ({ messages = [], className = '' }) => {
   // Calculate session-wide RAG statistics
   const ragStats = React.useMemo(() => {
     const assistantMessages = messages.filter(msg => msg.role === 'assistant');
+    
+    // Debug logging to understand message structure
+    if (assistantMessages.length > 0) {
+      console.log('SessionRAGBadge: Assistant messages:', assistantMessages.map(msg => ({
+        id: msg.id,
+        content: msg.content?.substring(0, 50) + '...',
+        metadata: msg.metadata
+      })));
+    }
 
     if (assistantMessages.length === 0) {
       return {
@@ -21,7 +30,7 @@ const SessionRAGBadge = ({ messages = [], className = '' }) => {
 
     // Only count messages where RAG was actually used (ragUsed is true)
     const ragActiveMessages = assistantMessages.filter(msg =>
-      msg.metadata?.ragUsed === true && msg.metadata?.ragConfidence > 0
+      msg.metadata?.ragUsed === true
     );
 
     // Calculate total confidence only from messages where RAG was actually used

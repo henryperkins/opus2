@@ -109,6 +109,15 @@ export function useChat(projectId, preferredSessionId = null) {
       try {
         const data = JSON.parse(event.data);
         switch (data.type) {
+          case 'message_history':
+            // Handle initial message history from WebSocket connection
+            qc.setQueryData(messagesKey(sessionId), () => 
+              data.messages.map(msg => ({
+                ...msg,
+                metadata: transformMessageMetadata(msg.metadata || {})
+              }))
+            );
+            break;
           case 'message':
             qc.setQueryData(messagesKey(sessionId), (prev = []) => [
               ...prev,

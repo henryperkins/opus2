@@ -273,3 +273,10 @@ Index(
     ChatMessage.created_at.desc(),  # type: ignore[attr-defined]
 )
 
+# Quick retrieval of messages in chronological order (ascending - for chat display)
+Index(
+    "ix_chat_messages_session_created_asc",
+    ChatMessage.session_id,
+    ChatMessage.created_at.asc(),  # type: ignore[attr-defined]
+)
+

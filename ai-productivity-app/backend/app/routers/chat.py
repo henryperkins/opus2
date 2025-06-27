@@ -163,7 +163,6 @@ async def delete_session(
 
 @router.get(
     "/sessions/{session_id}/messages",
-    response_model=List[MessageResponse],
 )
 async def get_messages(
     session_id: int,
@@ -175,7 +174,25 @@ async def get_messages(
     """Get messages for a chat session."""
     service = ChatService(db)
     messages = await service.get_session_messages(session_id, limit, before_id)
-    return [MessageResponse.from_orm(msg) for msg in messages]
+    
+    # Transform messages to include metadata in the format expected by frontend
+    response_messages = []
+    for msg in messages:
+        msg_dict = MessageResponse.from_orm(msg).dict()
+        
+        # Add metadata object with RAG information to match WebSocket format
+        msg_dict['metadata'] = {
+            'ragUsed': msg.rag_used,
+            'ragConfidence': float(msg.rag_confidence) if msg.rag_confidence else None,
+            'knowledgeSourcesCount': msg.knowledge_sources_count,
+            'searchQuery': msg.search_query_used,
+            'contextTokensUsed': msg.context_tokens_used,
+            'ragStatus': msg.rag_status,
+            'ragError': msg.rag_error_message,
+        }
+        response_messages.append(msg_dict)
+    
+    return response_messages
 
 
 # ---------------------------------------------------------------------------

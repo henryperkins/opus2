@@ -247,7 +247,7 @@ class ChatService:
             if before_id:
                 query = query.where(ChatMessage.id < before_id)
             
-            query = query.order_by(ChatMessage.id.desc()).limit(limit)
+            query = query.order_by(ChatMessage.created_at.asc()).limit(limit)
             result = await self.db.execute(query)
             return result.scalars().all()
         else:
@@ -258,7 +258,7 @@ class ChatService:
             if before_id:
                 query = query.filter(ChatMessage.id < before_id)
 
-            return query.order_by(ChatMessage.id.desc()).limit(limit).all()
+            return query.order_by(ChatMessage.created_at.asc()).limit(limit).all()
 
     async def _broadcast_message(self, message: ChatMessage):
         """Broadcast new message to session."""

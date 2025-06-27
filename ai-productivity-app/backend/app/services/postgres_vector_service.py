@@ -163,7 +163,7 @@ class PostgresVectorService:
         """Create extension / table / indexes idempotently."""
         def _setup_schema():
             with self.engine.begin() as conn:
-                conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS pgvector;")
+                conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector;")
 
                 conn.exec_driver_sql(
                     f"""
@@ -330,3 +330,11 @@ class PostgresVectorService:
             }
         
         return await anyio.to_thread.run_sync(_get_stats)
+
+    async def gc_dangling_points(self) -> int:
+        """Garbage collection for dangling points.
+        
+        PostgreSQL automatically handles cleanup, so this is a no-op.
+        Returns 0 to indicate no action was needed.
+        """
+        return 0

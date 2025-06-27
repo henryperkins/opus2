@@ -54,7 +54,7 @@ async def handle_chat_connection(
         )
         await websocket.send_json({
             'type': 'message_history',
-            'messages': [serialize_message(m) for m in reversed(recent_messages)],
+            'messages': [serialize_message(m) for m in recent_messages],
         })
         logger.debug(
             "Sent %d recent messages to user %s",
@@ -149,5 +149,15 @@ def serialize_message(message: ChatMessage) -> dict:
         'code_snippets': message.code_snippets or [],
         'referenced_files': message.referenced_files or [],
         'referenced_chunks': message.referenced_chunks or [],
-        'applied_commands': message.applied_commands or {}
+        'applied_commands': message.applied_commands or {},
+        # Include RAG metadata to match REST API format
+        'metadata': {
+            'ragUsed': message.rag_used,
+            'ragConfidence': float(message.rag_confidence) if message.rag_confidence else None,
+            'knowledgeSourcesCount': message.knowledge_sources_count,
+            'searchQuery': message.search_query_used,
+            'contextTokensUsed': message.context_tokens_used,
+            'ragStatus': message.rag_status,
+            'ragError': message.rag_error_message,
+        }
     }

@@ -153,6 +153,15 @@ class MessageResponse(BaseModel):
     edited_at: Optional[datetime] = None
     created_at: datetime
 
+    # RAG metadata fields
+    rag_used: bool = Field(default=False)
+    rag_confidence: Optional[float] = None
+    knowledge_sources_count: int = Field(default=0)
+    search_query_used: Optional[str] = None
+    context_tokens_used: int = Field(default=0)
+    rag_status: Optional[str] = None
+    rag_error_message: Optional[str] = None
+
     @field_validator('is_edited', mode='before')
     def validate_is_edited(cls, v):
         """Convert None to False for is_edited field."""
