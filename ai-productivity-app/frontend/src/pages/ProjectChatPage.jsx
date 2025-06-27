@@ -53,6 +53,11 @@ import { Sparkles } from 'lucide-react';
 // Utils
 import { toast } from '../components/common/Toast';
 
+// Chat list component
+import ProjectChatList from '../components/chat/ProjectChatList';
+import { Link } from 'react-router-dom';
+import LoadingSpinner from '../components/common/LoadingSpinner';
+
 // ----------------------------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------------------------
@@ -457,6 +462,33 @@ export default function ProjectChatPage() {
           description="The requested project could not be found or you don't have access to it."
           action={{ label: 'Back to Projects', onClick: () => navigate('/projects') }}
         />
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------------------------------------
+  // If no sessionId in URL, show the chat list
+  // ----------------------------------------------------------------------------------
+  if (!urlSessionId) {
+    return (
+      <div className="h-full bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-4xl mx-auto p-6">
+          {/* Project Header */}
+          <div className="mb-6">
+            <Link 
+              to={`/projects/${projectId}`}
+              className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 mb-2 inline-block"
+            >
+              ← Back to Project
+            </Link>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {project?.name || 'Project'} - Chats
+            </h1>
+          </div>
+
+          {/* Chat List */}
+          <ProjectChatList projectId={projectId} project={project} />
+        </div>
       </div>
     );
   }
