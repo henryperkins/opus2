@@ -127,7 +127,8 @@ export function AuthProvider({ children }) {
       await authAPI.logout();
     } finally {
       endSession();
-      queryClient.setQueryData(['me'], null);
+      // Clear all React Query cache to prevent cross-account data leaks
+      queryClient.clear();
     }
   }, [endSession, queryClient]);
 

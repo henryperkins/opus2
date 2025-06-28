@@ -280,17 +280,23 @@ export default function KnowledgePanel({
 
   const handleResultSelect = useCallback((result) => {
     // Handle search result selection
-    console.log('Selected result:', result);
+    if (import.meta.env.DEV) {
+      console.log('Result selected:', result.id || result.title);
+    }
   }, []);
 
   const handleUploadSuccess = useCallback(() => {
     // Handle successful upload
-    console.log('Upload successful');
+    if (import.meta.env.DEV) {
+      console.log('Upload successful');
+    }
   }, []);
 
   const handleItemSelect = useCallback((item) => {
     // Handle recent item selection
-    console.log('Selected item:', item);
+    if (import.meta.env.DEV) {
+      console.log('Item selected:', item.id || item.title);
+    }
   }, []);
 
   if (!isOpen) return null;

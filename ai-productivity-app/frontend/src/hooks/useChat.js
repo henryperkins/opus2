@@ -153,10 +153,17 @@ export function useChat(projectId, preferredSessionId = null) {
             );
             break;
           case 'message':
-            qc.setQueryData(messagesKey(sessionId), (prev = []) => [
-              ...prev,
-              { ...data.message, metadata: transformMessageMetadata(data.message.metadata) }
-            ]);
+            qc.setQueryData(messagesKey(sessionId), (prev = []) => {
+              // Check if message already exists to prevent duplicates from streaming
+              const messageExists = prev.some(msg => msg.id === data.message.id);
+              if (messageExists) {
+                return prev; // Skip duplicate
+              }
+              return [
+                ...prev,
+                { ...data.message, metadata: transformMessageMetadata(data.message.metadata) }
+              ];
+            });
             break;
           case 'typing':
             setTypingUsers((prev) => {

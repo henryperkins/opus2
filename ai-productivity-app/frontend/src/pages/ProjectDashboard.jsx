@@ -105,7 +105,9 @@ export default function ProjectDashboard() {
   };
 
   const handleProjectCreated = (project) => {
-    console.log('handleProjectCreated called with project:', project);
+    if (import.meta.env.DEV) {
+      console.log('Project created:', project.name || project.id);
+    }
     setShowCreateModal(false);
     fetchProjects();
   };

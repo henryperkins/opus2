@@ -188,7 +188,11 @@ export default function SearchPage() {
                   results={results}
                   query={query}
                   loading={loading}
-                  onFileClick={(file) => console.log('Open file:', file)}
+                  onFileClick={(file) => {
+                    if (import.meta.env.DEV) {
+                      console.log('Open file:', file.path || file.name);
+                    }
+                  }}
                 />
               </div>
             </div>

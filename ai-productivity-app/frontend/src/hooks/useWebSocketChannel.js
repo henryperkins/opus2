@@ -31,6 +31,7 @@ export function useWebSocketChannel({
   path,
   onMessage,
   retry = 5,
+  maxRetries = 50, // Absolute maximum to prevent unbounded reconnections
   protocols,
   onFallback, // optional callback fired after permanent failure to allow REST polling
   debounceMs = 100, // Add debouncing to prevent rapid reconnections
@@ -46,6 +47,7 @@ export function useWebSocketChannel({
   const [lastCloseEvent, setLastCloseEvent] = useState(null);
   const wsRef = useRef(null);
   const retryRef = useRef(0);
+  const globalRetryRef = useRef(0); // Track total reconnection attempts
   const queueRef = useRef([]);
   const timerRef = useRef(null);
   const onMessageRef = useRef(onMessage);
@@ -61,10 +63,15 @@ export function useWebSocketChannel({
     const interval = setInterval(() => {
       if (messageBuffer.current.length > 0 && onMessageRef.current) {
         const messages = messageBuffer.current.splice(0);
-        messages.forEach(data => {
-          // Create a synthetic event for compatibility
-          const syntheticEvent = { data: JSON.stringify(data) };
-          onMessageRef.current(syntheticEvent);
+        messages.forEach((data, index) => {
+          try {
+            // Create a synthetic event for compatibility
+            const syntheticEvent = { data: JSON.stringify(data) };
+            onMessageRef.current(syntheticEvent);
+          } catch (error) {
+            console.error(`Failed to process buffered message at index ${index}:`, error);
+            // Continue processing remaining messages instead of breaking
+          }
         });
       }
     }, 100);
@@ -119,8 +126,8 @@ export function useWebSocketChannel({
   const lastSuccessfulPath = useRef(null);
 
   // Create debounced connect function to prevent rapid reconnections
-  const debouncedConnect = useCallback(
-    debounce((connectFn) => {
+  const debouncedConnect = useMemo(
+    () => debounce((connectFn) => {
       if (connectFn) connectFn();
     }, debounceMs),
     [debounceMs]
@@ -172,6 +179,7 @@ export function useWebSocketChannel({
       ws.onopen = () => {
         console.log(`WebSocket connected: ${ws.url}`);
         retryRef.current = 0;
+        globalRetryRef.current = 0; // Reset global counter on successful connection
         setState('connected');
         
         // Track successful connection for stability
@@ -199,12 +207,20 @@ export function useWebSocketChannel({
               messageBuffer.current.push(data);
             } else {
               // Fallback to direct processing if buffer not available
-              onMessageRef.current(evt);
+              try {
+                onMessageRef.current(evt);
+              } catch (handlerError) {
+                console.error('Failed to process WebSocket message in direct fallback:', handlerError);
+              }
             }
           } catch (error) {
             console.error('Failed to parse WebSocket message:', error);
             // Still try to process the raw event
-            onMessageRef.current(evt);
+            try {
+              onMessageRef.current(evt);
+            } catch (handlerError) {
+              console.error('Failed to process WebSocket message in handler:', handlerError);
+            }
           }
         }
       };
@@ -241,11 +257,13 @@ export function useWebSocketChannel({
           evt.code === 1014;   // Bad gateway
 
         const withinRetryBudget = retryRef.current < retry;
+        const withinGlobalLimit = globalRetryRef.current < maxRetries;
 
         const shouldRetry =
           (isBackendRestart || evt.code === 1005 || // No status
             (evt.code >= 1000 && evt.code < 4000 && evt.code !== 1000 && evt.code !== 1001)) &&
-          (withinRetryBudget || isBackendRestart); // unlimited for restarts
+          (withinRetryBudget || isBackendRestart) &&
+          withinGlobalLimit; // Always respect global limit
 
         if (shouldRetry) {
           // Reset counter when we detect a backend restart so that we don't
@@ -271,18 +289,20 @@ export function useWebSocketChannel({
           const delay = baseDelay + jitter;
 
           retryRef.current += 1;
+          globalRetryRef.current += 1;
           console.warn(
-            `WebSocket reconnecting in ${Math.round(delay / 1000)}s (attempt ${retryRef.current}${withinRetryBudget ? `/${retry}` : ''})`
+            `WebSocket reconnecting in ${Math.round(delay / 1000)}s (attempt ${retryRef.current}${withinRetryBudget ? `/${retry}` : ''}, global: ${globalRetryRef.current}/${maxRetries})`
           );
           timerRef.current = setTimeout(connect, delay);
-        } else if (retryRef.current >= retry) {
-          console.error(`WebSocket connection failed after ${retry} attempts. Giving up.`);
+        } else {
+          const reason = !withinGlobalLimit 
+            ? `global retry limit (${maxRetries}) exceeded`
+            : `retry limit (${retry}) exceeded`;
+          console.error(`WebSocket connection failed: ${reason}. Giving up.`);
           setState('error');
           if (typeof onFallback === 'function') {
-            onFallback(evt, { attempts: retryRef.current });
+            onFallback(evt, { attempts: retryRef.current, globalAttempts: globalRetryRef.current });
           }
-        } else {
-          console.info('WebSocket closed normally, not retrying');
         }
       };
 

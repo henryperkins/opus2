@@ -113,6 +113,18 @@ export function useCodeEditor({
     };
   }, [language, copilotEnabled, copilotEndpoint, maxContextLines, filename, relatedFiles, technologies]);
 
+  // Cleanup effect to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (editorInstanceRef.current) {
+        const model = editorInstanceRef.current.getModel();
+        if (model) {
+          model.dispose();
+        }
+      }
+    };
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Helper functions
   // ---------------------------------------------------------------------------

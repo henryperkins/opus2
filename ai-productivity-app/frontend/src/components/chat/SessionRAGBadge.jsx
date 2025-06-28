@@ -9,13 +9,9 @@ const SessionRAGBadge = ({ messages = [], className = '' }) => {
   const ragStats = React.useMemo(() => {
     const assistantMessages = messages.filter(msg => msg.role === 'assistant');
     
-    // Debug logging to understand message structure
-    if (assistantMessages.length > 0) {
-      console.log('SessionRAGBadge: Assistant messages:', assistantMessages.map(msg => ({
-        id: msg.id,
-        content: msg.content?.substring(0, 50) + '...',
-        metadata: msg.metadata
-      })));
+    // Debug logging to understand message structure (development only)
+    if (import.meta.env.DEV && assistantMessages.length > 0) {
+      console.log('SessionRAGBadge: Message count:', assistantMessages.length);
     }
 
     if (assistantMessages.length === 0) {

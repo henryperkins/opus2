@@ -252,7 +252,9 @@ export default function ProjectChatPage() {
 
   const handleInteractiveElement = useCallback(async (elementId, result) => {
     try {
-      console.log('Interactive element completed:', { elementId, result });
+      if (import.meta.env.DEV) {
+        console.log('Interactive element completed:', elementId);
+      }
 
       // Track analytics for interactive element usage
       // TODO: Send analytics data to backend
@@ -262,32 +264,44 @@ export default function ProjectChatPage() {
         switch (result.type) {
           case 'code_execution':
             // Code execution completed, result contains output/error
-            console.log('Code execution result:', result);
+            if (import.meta.env.DEV) {
+              console.log('Code execution completed');
+            }
             break;
 
           case 'form_submission':
             // Form was submitted, result contains form data
-            console.log('Form submission result:', result);
+            if (import.meta.env.DEV) {
+              console.log('Form submission completed');
+            }
             // TODO: Send form data to backend for processing
             break;
 
           case 'decision_made':
             // Decision tree selection made
-            console.log('Decision result:', result);
+            if (import.meta.env.DEV) {
+              console.log('Decision completed');
+            }
             break;
 
           case 'query_built':
             // Query builder completed
-            console.log('Query result:', result);
+            if (import.meta.env.DEV) {
+              console.log('Query built');
+            }
             break;
 
           case 'action_triggered':
             // Action button was clicked
-            console.log('Action result:', result);
+            if (import.meta.env.DEV) {
+              console.log('Action triggered');
+            }
             break;
 
           default:
-            console.log('Generic interactive element result:', result);
+            if (import.meta.env.DEV) {
+              console.log('Interactive element completed');
+            }
         }
       }
 

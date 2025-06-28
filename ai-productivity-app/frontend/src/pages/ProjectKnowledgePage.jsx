@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import RepositoryConnect from '../components/knowledge/RepositoryConnect';
 import FileUpload from '../components/knowledge/FileUpload';
 import KnowledgeContextPanel from '../components/knowledge/KnowledgeContextPanel';
+import PageErrorBoundary from '../components/common/PageErrorBoundary';
 
 // -----------------------------------------------------------------------------
 // ProjectKnowledgePage – central hub for everything "Knowledge Base" related to
@@ -18,7 +19,7 @@ import KnowledgeContextPanel from '../components/knowledge/KnowledgeContextPanel
 // /projects/:id/knowledge no longer yields a 404.
 // -----------------------------------------------------------------------------
 
-export default function ProjectKnowledgePage() {
+function ProjectKnowledgePageCore() {
   const { projectId } = useParams();
 
   const [query, setQuery] = useState('');
@@ -70,5 +71,14 @@ export default function ProjectKnowledgePage() {
         />
       </section>
     </main>
+  );
+}
+
+// Wrap with error boundary to prevent SPA crashes  
+export default function ProjectKnowledgePage() {
+  return (
+    <PageErrorBoundary pageName="Project Knowledge">
+      <ProjectKnowledgePageCore />
+    </PageErrorBoundary>
   );
 }

@@ -65,6 +65,20 @@ const MonacoRoot = forwardRef(({
   const handleEditorMount = (editor, monaco) => {
     editorRef.current = editor;
     
+    // Disable TypeScript worker for large files to prevent excessive memory usage
+    if (shouldVirtualize && (language === 'typescript' || language === 'javascript')) {
+      monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: true,
+        noSyntaxValidation: true,
+        noSuggestionDiagnostics: true
+      });
+      monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: true,
+        noSyntaxValidation: true,
+        noSuggestionDiagnostics: true
+      });
+    }
+    
     // Call both the useCodeEditor mount handler and custom onMount
     if (codeEditorRef.onMount) {
       codeEditorRef.onMount(editor, monaco);
@@ -79,6 +93,10 @@ const MonacoRoot = forwardRef(({
     return () => {
       if (editorRef.current) {
         editorRef.current.dispose();
+      }
+      // Dispose all models to prevent memory leaks when opening many files
+      if (typeof window !== 'undefined' && window.monaco?.editor) {
+        window.monaco.editor.getModels().forEach(model => model.dispose());
       }
     };
   }, []);
@@ -217,6 +235,6 @@ const MonacoRoot = forwardRef(({
       </EditorErrorBoundary>
     </div>
   );
-};
+});
 
 export default MonacoRoot;

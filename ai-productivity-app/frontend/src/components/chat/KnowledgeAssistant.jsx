@@ -8,6 +8,7 @@ import SmartKnowledgeSearch from '../knowledge/SmartKnowledgeSearch';
 import FileUpload from '../knowledge/FileUpload';
 import RepositoryConnect from '../knowledge/RepositoryConnect';
 import DependencyGraph from '../knowledge/DependencyGraph';
+import PageErrorBoundary from '../common/PageErrorBoundary';
 
 // Custom styles for scrollbar (Tailwind scrollbar plugin might not be available)
 const scrollbarStyle = {
@@ -15,7 +16,7 @@ const scrollbarStyle = {
   scrollbarColor: '#CBD5E0 #F7FAFC',
 };
 
-export default function KnowledgeAssistant({
+function KnowledgeAssistantCore({
   projectId,
   message: incomingMessage,
   onSuggestionApply,
@@ -401,4 +402,13 @@ function generateSuggestions(context, message) {
   }
 
   return suggestions.slice(0, 3); // Max 3 suggestions
+}
+
+// Wrap with error boundary to prevent SPA crashes
+export default function KnowledgeAssistant(props) {
+  return (
+    <PageErrorBoundary pageName="Knowledge Assistant">
+      <KnowledgeAssistantCore {...props} />
+    </PageErrorBoundary>
+  );
 }

@@ -87,10 +87,28 @@ export function useKnowledgeChat(projectId, userSettings = {}, knowledgeAPI = nu
           docs,
           settings
         );
-        return { contextualisedQuery: contextualised, documents: docs };
+        // Separate documents and code snippets for UI compatibility
+        const relevantDocs = docs.filter(doc => doc.type === 'document' || !doc.type);
+        const codeSnippets = docs.filter(doc => doc.type === 'code');
+        
+        return { 
+          contextualisedQuery: contextualised, 
+          documents: docs,
+          relevantDocs,
+          codeSnippets
+        };
       }
 
-      return { contextualisedQuery: query, documents: docs };
+      // Separate documents and code snippets for UI compatibility
+      const relevantDocs = docs.filter(doc => doc.type === 'document' || !doc.type);
+      const codeSnippets = docs.filter(doc => doc.type === 'code');
+      
+      return { 
+        contextualisedQuery: query, 
+        documents: docs,
+        relevantDocs,
+        codeSnippets
+      };
     },
     [settings, analyzeMutation, retrieveMutation, addToCitations, knowledgeAPI]
   );

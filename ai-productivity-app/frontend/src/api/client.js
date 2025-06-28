@@ -133,9 +133,9 @@ client.interceptors.response.use(
 
     // Handle auth errors globally
     if (response && response.status === 401) {
-      // Clear React-Query cache for user immediately (race-free) and emit event
+      // Clear all React-Query cache to prevent cross-account data leaks
       if (queryClient) {
-        queryClient.setQueryData(['me'], null);
+        queryClient.clear();
       }
       window.dispatchEvent(new CustomEvent('auth:logout'));
     }
