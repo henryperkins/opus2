@@ -135,6 +135,10 @@ export default function ProjectChatPage() {
   const [editorLanguage, setEditorLanguage] = useState('python');
   const [currentFile, setCurrentFile] = useState();
 
+  // Ref to access Monaco editor imperatively
+  const monacoRef = useRef(null);
+  const [panelSizes, setPanelSizes] = useState([]);
+
   // Refs for auto-scroll
   const messagesEndRef = useRef(null);
   const messageListRef = useRef(null);
@@ -329,6 +333,15 @@ export default function ProjectChatPage() {
     scrollToBottom();
   }, [messages, streamingMessages, scrollToBottom]);
 
+  // Debounced re-layout of Monaco editor when its container size changes and editor is visible
+  useEffect(() => {
+    if (!showMonacoEditor) return;
+    const handler = setTimeout(() => {
+      monacoRef.current?.layout();
+    }, 150); // 150ms debounce, adjust as needed
+    return () => clearTimeout(handler);
+  }, [showMonacoEditor, panelSizes]);
+
   // ---------------------------------------------------------------------------
   // Render helpers
   // ---------------------------------------------------------------------------
@@ -519,6 +532,7 @@ export default function ProjectChatPage() {
         showEditor={showMonacoEditor}
         onSidebarClose={() => setShowKnowledgeAssistant(false)}
         onEditorClose={() => setShowMonacoEditor(false)}
+        onLayout={setPanelSizes}
         sidebar={
           <KnowledgeAssistant
             projectId={projectId}
@@ -533,6 +547,7 @@ export default function ProjectChatPage() {
               <h3 className="text-lg font-semibold">Code Editor</h3>
             </div>
             <MonacoRoot
+              ref={monacoRef}
               value={editorContent}
               onChange={setEditorContent}
               language={editorLanguage}

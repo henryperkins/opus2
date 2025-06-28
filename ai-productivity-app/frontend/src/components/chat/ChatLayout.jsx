@@ -15,7 +15,8 @@ export default function ChatLayout({
   onSidebarToggle,
   onEditorToggle,
   onSidebarClose,
-  onEditorClose
+  onEditorClose,
+  onLayout
 }) {
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
@@ -24,6 +25,7 @@ export default function ChatLayout({
         direction="horizontal"
         className="flex-1"
         autoSaveId="chat-layout-main"
+        onLayout={onLayout}
       >
         {/* Chat/Content Area */}
         <Panel id="content" order={1} defaultSize={showSidebar ? 70 : 100} minSize={50}>
