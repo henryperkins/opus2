@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import LoadingSpinner from '../common/LoadingSpinner';
 import { useTheme } from '../../hooks/useTheme';
 import useCodeEditor from '../../hooks/useCodeEditor';
@@ -10,7 +10,7 @@ const MonacoEditor = lazy(() => import('@monaco-editor/react'));
  * Monaco Editor wrapper with lazy loading and error boundary
  * This component handles loading states and provides a consistent interface
  */
-const MonacoRoot = ({ 
+const MonacoRoot = forwardRef(({
   value = '',
   defaultValue = '',
   language = 'javascript',
@@ -26,9 +26,14 @@ const MonacoRoot = ({
   filename = null,
   enableCopilot = true,
   ...props 
-}) => {
+}, ref) => {
   const { theme: appTheme } = useTheme();
   const editorRef = useRef(null);
+
+  // Expose imperative API to parent components
+  useImperativeHandle(ref, () => ({
+    layout: () => editorRef.current?.layout(),
+  }));
   
   // Use app theme if no custom theme is provided
   const effectiveTheme = customTheme || (appTheme === 'dark' ? 'vs-dark' : 'vs-light');
