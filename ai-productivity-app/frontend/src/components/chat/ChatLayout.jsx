@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Brain, X } from 'lucide-react';
 
@@ -17,6 +17,30 @@ export default function ChatLayout({
   onSidebarClose,
   onEditorClose
 }) {
+  const editorGroupRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storageKey = 'react-resizable-panels:chat-editor-vertical';
+
+    if (showEditor) {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          const entry = Object.values(parsed)[0];
+          if (entry && Array.isArray(entry.layout) && entry.layout[1] === 0) {
+            editorGroupRef.current?.setLayout([65, 35]);
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+    } else {
+      localStorage.removeItem(storageKey);
+    }
+  }, [showEditor]);
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
       {/* Main horizontal layout */}
@@ -32,6 +56,7 @@ export default function ChatLayout({
             <PanelGroup
               direction="vertical"
               autoSaveId="chat-editor-vertical"
+              ref={editorGroupRef}
             >
               <Panel defaultSize={65} minSize={30}>
                 {children}
