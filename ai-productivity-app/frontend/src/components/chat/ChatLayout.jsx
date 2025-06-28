@@ -26,14 +26,14 @@ export default function ChatLayout({
         autoSaveId="chat-layout-main"
       >
         {/* Chat/Content Area */}
-        <Panel defaultSize={showSidebar ? 70 : 100} minSize={50}>
+        <Panel id="content" order={1} defaultSize={showSidebar ? 70 : 100} minSize={50}>
           {showEditor ? (
             // Vertical split for chat + editor
             <PanelGroup
               direction="vertical"
               autoSaveId="chat-editor-vertical"
             >
-              <Panel defaultSize={65} minSize={30}>
+              <Panel id="chat" order={1} defaultSize={65} minSize={30}>
                 {children}
               </Panel>
 
@@ -43,7 +43,7 @@ export default function ChatLayout({
                 </div>
               </PanelResizeHandle>
 
-              <Panel defaultSize={35} minSize={20}>
+              <Panel id="editor" order={2} defaultSize={35} minSize={20}>
                 <div className="h-full relative">
                   {/* Close button for editor */}
                   {onEditorClose && (
@@ -74,6 +74,8 @@ export default function ChatLayout({
             </PanelResizeHandle>
 
             <Panel
+              id="sidebar"
+              order={2}
               defaultSize={30}
               minSize={20}
               maxSize={40}
