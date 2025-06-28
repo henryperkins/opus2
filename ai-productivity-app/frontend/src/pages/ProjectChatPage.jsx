@@ -333,9 +333,13 @@ export default function ProjectChatPage() {
     scrollToBottom();
   }, [messages, streamingMessages, scrollToBottom]);
 
-  // Re-layout Monaco editor when its container size changes
+  // Debounced re-layout of Monaco editor when its container size changes and editor is visible
   useEffect(() => {
-    monacoRef.current?.layout();
+    if (!showMonacoEditor) return;
+    const handler = setTimeout(() => {
+      monacoRef.current?.layout();
+    }, 150); // 150ms debounce, adjust as needed
+    return () => clearTimeout(handler);
   }, [showMonacoEditor, panelSizes]);
 
   // ---------------------------------------------------------------------------
