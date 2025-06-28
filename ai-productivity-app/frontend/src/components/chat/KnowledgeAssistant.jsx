@@ -158,7 +158,7 @@ export default function KnowledgeAssistant({
 
   // Determine container styles based on mode
   const containerClass = containerMode === 'overlay'
-    ? `fixed ${position === 'right' ? 'right-2 sm:right-4' : 'left-2 sm:left-4'} top-20 w-80 sm:w-96 z-50 max-h-[calc(100vh-6rem)]`
+    ? `fixed ${position === 'right' ? 'right-2 sm:right-4' : 'left-2 sm:left-4'} top-20 w-80 sm:w-96 z-50 max-h-[calc(var(--dvh)-6rem)]`
     : 'w-full h-full flex flex-col';
 
   const panelClass = containerMode === 'overlay'
