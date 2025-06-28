@@ -16,7 +16,8 @@ export default function ChatLayout({
   onEditorToggle,
   onSidebarClose,
   onEditorClose,
-  onLayout
+  onLayout,
+  monacoRef
 }) {
   const editorGroupRef = useRef(null);
 
@@ -73,7 +74,15 @@ export default function ChatLayout({
                 </div>
               </PanelResizeHandle>
 
-              <Panel id="editor" order={2} defaultSize={35} minSize={20}>
+              <Panel 
+                id="editor" 
+                order={2} 
+                defaultSize={35} 
+                minSize={20}
+                onResize={(size) => {
+                  if (monacoRef?.current) monacoRef.current.layout();
+                }}
+              >
                 <div className="h-full relative">
                   {/* Close button for editor */}
                   {onEditorClose && (

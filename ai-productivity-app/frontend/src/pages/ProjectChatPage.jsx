@@ -533,6 +533,7 @@ export default function ProjectChatPage() {
         onSidebarClose={() => setShowKnowledgeAssistant(false)}
         onEditorClose={() => setShowMonacoEditor(false)}
         onLayout={setPanelSizes}
+        monacoRef={monacoRef}
         sidebar={
           <KnowledgeAssistant
             projectId={projectId}
