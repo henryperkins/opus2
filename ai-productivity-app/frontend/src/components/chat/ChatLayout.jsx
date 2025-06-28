@@ -34,7 +34,6 @@ export default function ChatLayout({
             <PanelGroup
               direction="vertical"
               autoSaveId="chat-editor-vertical"
-              onLayout={onLayout}
             >
               <Panel defaultSize={65} minSize={30}>
                 {children}
