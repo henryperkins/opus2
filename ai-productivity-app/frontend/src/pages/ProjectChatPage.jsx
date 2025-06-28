@@ -138,6 +138,7 @@ export default function ProjectChatPage() {
   // Refs for auto-scroll
   const messagesEndRef = useRef(null);
   const messageListRef = useRef(null);
+  const monacoRef = useRef(null);
 
   // -------------------------------------------------------------
   // Knowledge-assistant helpers – must run every render to keep
@@ -519,6 +520,7 @@ export default function ProjectChatPage() {
         showEditor={showMonacoEditor}
         onSidebarClose={() => setShowKnowledgeAssistant(false)}
         onEditorClose={() => setShowMonacoEditor(false)}
+        monacoRef={monacoRef}
         sidebar={
           <KnowledgeAssistant
             projectId={projectId}
@@ -535,6 +537,9 @@ export default function ProjectChatPage() {
             <MonacoRoot
               value={editorContent}
               onChange={setEditorContent}
+              onMount={(editor) => {
+                monacoRef.current = editor;
+              }}
               language={editorLanguage}
               height="100%"
               className="min-h-[200px]"

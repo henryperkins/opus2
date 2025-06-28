@@ -15,7 +15,8 @@ export default function ChatLayout({
   onSidebarToggle,
   onEditorToggle,
   onSidebarClose,
-  onEditorClose
+  onEditorClose,
+  monacoRef
 }) {
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
@@ -43,7 +44,13 @@ export default function ChatLayout({
                 </div>
               </PanelResizeHandle>
 
-              <Panel defaultSize={35} minSize={20}>
+              <Panel
+                defaultSize={35}
+                minSize={20}
+                onResize={(size) => {
+                  if (monacoRef?.current) monacoRef.current.layout();
+                }}
+              >
                 <div className="h-full relative">
                   {/* Close button for editor */}
                   {onEditorClose && (
