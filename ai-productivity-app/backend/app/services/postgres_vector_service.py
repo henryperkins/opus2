@@ -188,11 +188,22 @@ class PostgresVectorService:
                 )
 
                 # Approximate nearest-neighbour index (cosine distance)
-                conn.exec_driver_sql(
-                    f"""CREATE INDEX IF NOT EXISTS idx_{self.table_name}_ivfflat
-                           ON {self.table_name}
-                           USING ivfflat (embedding vector_cosine_ops);"""
-                )
+                # Skip index creation for high-dimensional vectors (>2000 dims)
+                # as pgvector has dimension limits for ivfflat/hnsw indexes
+                try:
+                    conn.exec_driver_sql(
+                        f"""CREATE INDEX IF NOT EXISTS idx_{self.table_name}_ivfflat
+                               ON {self.table_name}
+                               USING ivfflat (embedding vector_cosine_ops);"""
+                    )
+                    logger.info("Created ivfflat index for embeddings")
+                except Exception as e:
+                    if "cannot have more than 2000 dimensions" in str(e):
+                        logger.warning("Skipping ivfflat index creation - vector dimensions exceed 2000 limit")
+                        logger.info("Vector searches will use sequential scan (slower but functional)")
+                    else:
+                        logger.error(f"Failed to create vector index: {e}")
+                        # Don't raise - allow system to continue without index
 
         await anyio.to_thread.run_sync(_setup_schema)
         logger.info("pgvector backend ready (table: %s)", self.table_name)

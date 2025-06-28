@@ -112,6 +112,9 @@ class VectorService:
                 LIMIT :limit
                 """
                 
+                # Convert numpy array to list for PostgreSQL vector casting
+                params["query_vector"] = query_vector.tolist()
+                
                 result = await db.execute(text(query_sql), params)
                 rows = result.fetchall()
                 

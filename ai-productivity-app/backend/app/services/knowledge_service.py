@@ -349,3 +349,75 @@ class KnowledgeService:
     async def get_stats(self) -> Dict[str, Any]:
         """Get knowledge base statistics."""
         return await self.vector_store.get_stats()
+
+    async def add_knowledge_entry(
+        self,
+        content: str,
+        title: str,
+        source: str,
+        category: str = "general",
+        tags: Optional[List[str]] = None,
+        project_id: int = 1,
+        db: Session = None
+    ) -> str:
+        """Add a new knowledge entry and generate embedding."""
+        if not db:
+            raise ValueError("Database session is required")
+        
+        from app.models.knowledge import KnowledgeDocument
+        from sqlalchemy import text
+        
+        # Generate unique ID for knowledge document
+        import uuid
+        doc_id = f"kb_{uuid.uuid4().hex[:12]}"
+        
+        # Create knowledge document
+        doc = KnowledgeDocument(
+            id=doc_id,
+            project_id=project_id,
+            title=title,
+            content=content,
+            source=source,
+            category=category
+        )
+        
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        
+        # Generate embedding
+        embedding = await self.embedding_generator.generate_single_embedding(content)
+        
+        # Store in the main embeddings table with proper metadata
+        metadata = {
+            "title": title,
+            "source": source,
+            "category": category,
+            "project_id": project_id,
+            "document_type": "knowledge",
+            "knowledge_doc_id": doc.id,
+            "tags": tags or []
+        }
+        
+        insert_sql = """
+        INSERT INTO embeddings (document_id, chunk_id, project_id, embedding, content, content_hash, metadata, created_at)
+        VALUES (:document_id, 1, :project_id, CAST(:embedding AS vector), :content, :content_hash, :metadata, NOW())
+        """
+        
+        import json
+        import hashlib
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        
+        db.execute(text(insert_sql), {
+            "document_id": hash(doc.id) % 2147483647,  # Convert string ID to int within PostgreSQL int range
+            "project_id": project_id,
+            "embedding": embedding,  # Pass as list, not string
+            "content": content,
+            "content_hash": content_hash,
+            "metadata": json.dumps(metadata)
+        })
+        
+        db.commit()
+        
+        logger.info(f"Added knowledge entry: {title}")
+        return f"knowledge_{doc.id}"

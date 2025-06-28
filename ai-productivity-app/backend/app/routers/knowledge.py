@@ -2,12 +2,19 @@
 Knowledge base API router for search and context building.
 """
 import logging
+import hashlib
+import tempfile
 from datetime import datetime, timedelta
+from typing import List
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..dependencies import get_current_user
+from ..models.user import User
+from ..models.project import Project
+from ..models.knowledge import KnowledgeDocument
 from ..schemas.knowledge import (
     KnowledgeSearchRequest,
     KnowledgeEntry,
@@ -395,3 +402,213 @@ async def get_project_summary(
             status_code=500,
             detail=f"Failed to get project summary: {str(e)}"
         ) from e
+
+
+# Allowed MIME types for knowledge documents
+KNOWLEDGE_ALLOWED_MIME_TYPES = {
+    "text/plain",
+    "text/markdown",
+    "application/pdf",
+    "text/html",
+    "application/json",
+    "text/yaml",
+    "text/x-yaml",
+    "application/yaml",
+    "text/xml",
+    "application/xml",
+    "text/csv",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+    "application/msword",  # .doc
+    None,  # Some browsers don't set MIME type for text files
+}
+
+
+async def _process_knowledge_file(
+    doc_id: int, content: str, title: str, category: str = "general"
+) -> None:
+    """Process a knowledge file and create embeddings."""
+    from app.database import SessionLocal
+    from app.embeddings.generator import EmbeddingGenerator
+    from sqlalchemy import text
+    
+    session = SessionLocal()
+    try:
+        doc: KnowledgeDocument | None = (
+            session.query(KnowledgeDocument).filter_by(id=doc_id).first()
+        )
+        if not doc:
+            logger.warning("KnowledgeDocument %s vanished before processing", doc_id)
+            return
+
+        # Generate embedding for the document
+        embedding_generator = EmbeddingGenerator()
+        embedding = await embedding_generator.generate_single_embedding(content)
+        
+        # Store in the main embeddings table with proper metadata
+        metadata = {
+            "title": title,
+            "source": "upload",
+            "category": category,
+            "project_id": doc.project_id,
+            "document_type": "knowledge",
+            "knowledge_doc_id": doc_id
+        }
+        
+        insert_sql = """
+        INSERT INTO embeddings (document_id, chunk_id, project_id, embedding, content, content_hash, metadata, created_at)
+        VALUES (:document_id, 1, :project_id, CAST(:embedding AS vector), :content, :content_hash, :metadata, NOW())
+        """
+        
+        import json
+        import hashlib
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        
+        session.execute(text(insert_sql), {
+            "document_id": hash(doc_id) % 2147483647,  # Convert string ID to int within PostgreSQL int range
+            "project_id": doc.project_id,
+            "embedding": embedding,  # Pass as list, not string
+            "content": content,
+            "content_hash": content_hash,
+            "metadata": json.dumps(metadata)
+        })
+        
+        session.commit()
+        logger.info("Processed knowledge file %s", title)
+        
+    except Exception:
+        logger.exception("Failed to process knowledge file (doc_id=%s)", doc_id)
+        session.rollback()
+    finally:
+        session.close()
+
+
+@router.post("/projects/{project_id}/upload")
+async def upload_knowledge_files(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    files: List[UploadFile] = File(...),
+    category: str = "general",
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Upload knowledge documents for RAG access."""
+    
+    # Check project exists and user has access
+    project = db.query(Project).filter_by(id=project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    from app.config import settings
+    results = []
+    
+    for upload in files:
+        try:
+            # MIME type validation
+            if upload.content_type not in KNOWLEDGE_ALLOWED_MIME_TYPES:
+                results.append({
+                    "file": upload.filename or "unknown",
+                    "status": "rejected",
+                    "reason": f"Unsupported MIME type: {upload.content_type}"
+                })
+                continue
+            
+            # Read and validate file size
+            content_chunks = []
+            content_hash = hashlib.sha256()
+            total_size = 0
+            
+            while True:
+                chunk = await upload.read(4096)
+                if not chunk:
+                    break
+                
+                content_hash.update(chunk)
+                total_size += len(chunk)
+                content_chunks.append(chunk)
+                
+                if total_size > settings.max_upload_size:
+                    results.append({
+                        "file": upload.filename or "unknown",
+                        "status": "rejected",
+                        "reason": f"File too large: {total_size} > {settings.max_upload_size}"
+                    })
+                    break
+            else:
+                # File is acceptable
+                raw = b''.join(content_chunks)
+                content_hash_hex = content_hash.hexdigest()
+                
+                # Check for duplicates in knowledge documents
+                existing = db.query(KnowledgeDocument).filter_by(
+                    project_id=project_id,
+                    title=upload.filename or f"upload_{content_hash_hex[:8]}"
+                ).first()
+                
+                if existing:
+                    results.append({
+                        "file": upload.filename or "unknown",
+                        "status": "duplicate",
+                        "existing_title": existing.title
+                    })
+                    continue
+                
+                try:
+                    content_decoded = raw.decode("utf-8", errors="ignore")
+                    title = upload.filename or f"Document_{content_hash_hex[:8]}"
+                    
+                    # Generate unique ID for knowledge document
+                    import uuid
+                    doc_id = f"kb_{uuid.uuid4().hex[:12]}"
+                    
+                    # Create knowledge document
+                    doc = KnowledgeDocument(
+                        id=doc_id,
+                        project_id=project_id,
+                        title=title,
+                        content=content_decoded,
+                        source="upload",
+                        category=category
+                    )
+                    
+                    db.add(doc)
+                    db.commit()
+                    db.refresh(doc)
+                    
+                    # Queue background processing for embeddings
+                    background_tasks.add_task(
+                        _process_knowledge_file,
+                        doc_id=doc.id,
+                        content=content_decoded,
+                        title=title,
+                        category=category
+                    )
+                    
+                    results.append({
+                        "file": upload.filename or "unknown",
+                        "status": "success",
+                        "document_id": doc.id,
+                        "title": title
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Failed to process file {upload.filename}: {e}")
+                    results.append({
+                        "file": upload.filename or "unknown",
+                        "status": "error",
+                        "reason": str(e)
+                    })
+                    
+        except Exception as e:
+            logger.error(f"Unexpected error processing {upload.filename}: {e}")
+            results.append({
+                "file": upload.filename or "unknown", 
+                "status": "error",
+                "reason": str(e)
+            })
+    
+    return {
+        "success": True,
+        "results": results,
+        "total_files": len(files),
+        "processed": len([r for r in results if r["status"] == "success"])
+    }
