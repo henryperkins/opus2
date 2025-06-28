@@ -22,30 +22,64 @@ import { queryClient } from '../queryClient.js';
 // Backend base URL
 // ---------------------------------------------------------------------------
 // 1. Use the explicit Vite env variable when provided (works with Docker-compose
-//    where `VITE_API_URL` is injected).
-// 2. Fallback to the conventional local development port `8000` so that a
-//    plain `npm run dev` without env-vars still points towards the FastAPI
-//    server.  The previous empty string made the requests *relative* to the
-//    Vite origin (5173) which breaks unless a dev-proxy is configured.
-
-// Use a relative baseURL. This ensures that API requests are sent to the
-// same host that serves the frontend application. In the development setup,
-// NGINX is configured as a reverse proxy to route these requests from
-// `lakefrontdigital.io/api/...` to the backend service on port 8000.
-// Using a relative path is crucial to avoid CORS issues and to ensure
-// cookies are handled correctly by the browser.
+//    where `VITE_API_URL` is injected, or local development with specific backend URL).
+// 2. Fallback to relative URLs for production behind reverse proxy.
 //
-// NOTE: The baseURL is set to '/' (root) because:
-// 1. API calls will be made to relative paths like '/api/...'
-// 2. NGINX reverse proxy will route these to the backend
-// 3. This ensures consistent URL handling across dev/prod environments.
-// Use the domain-relative root. Requests that specify an absolute path like
-// "/api/auth/me" inherit the current scheme and host (avoiding mixed-content)
-// without duplicating the prefix ("/api/api/…").
-const BASE_URL = '/';
+// This handles both development scenarios:
+// - Local dev: VITE_API_URL=http://localhost:8000 (backend on different port)
+// - Production: VITE_API_URL="" or unset (reverse proxy handles routing)
+
+/**
+ * Resolve backend base URL with protocol-safety:
+ *  1. Prefer VITE_API_URL when provided.
+ *  2. If the frontend is served over HTTPS but VITE_API_URL begins with HTTP,
+ *     automatically upgrade the protocol to HTTPS to avoid mixed-content errors
+ *     (assuming the backend also supports HTTPS on the same host/port).
+ *  3. Fallback to relative '/' which relies on same-origin or reverse-proxy routing.
+ */
+let resolvedBaseUrl = '/';
+const envUrl = import.meta.env.VITE_API_URL;
+
+/**
+ * Determine the safest base URL for backend API calls.
+ *
+ * Decision matrix:
+ * ────────────────────────────────────────────────────────────
+ * 1. No VITE_API_URL provided  → use relative '/' (same-origin)
+ * 2. VITE_API_URL provided and protocol matches page protocol
+ *    → use the provided absolute URL as-is.
+ * 3. VITE_API_URL is HTTP while page is HTTPS
+ *    a) Same hostname or localhost  → upgrade to HTTPS.
+ *    b) Different hostname          → fall back to relative '/' to
+ *                                     avoid mixed-content errors.
+ * 4. VITE_API_URL is relative (e.g. '/api') → use as-is.
+ */
+if (envUrl) {
+  try {
+    const urlObj = new URL(envUrl, window.location.origin);
+
+    if (window.location.protocol === 'https:' && urlObj.protocol === 'http:') {
+      const sameHostnames = ['localhost', window.location.hostname];
+      if (sameHostnames.includes(urlObj.hostname)) {
+        // Safe protocol upgrade: same host or localhost
+        urlObj.protocol = 'https:';
+        resolvedBaseUrl = urlObj.toString();
+      } else {
+        // Cross-host HTTP backend under HTTPS frontend → use relative path
+        resolvedBaseUrl = '/';
+      }
+    } else {
+      // Protocols already match (http→http or https→https)
+      resolvedBaseUrl = urlObj.toString();
+    }
+  } catch {
+    // envUrl might be a relative path like '/api'
+    resolvedBaseUrl = envUrl;
+  }
+}
 
 const client = axios.create({
-  baseURL: BASE_URL,
+  baseURL: resolvedBaseUrl,
   withCredentials: true, // send/receive HttpOnly cookies
   timeout: 30_000,
 });
@@ -132,10 +166,22 @@ client.interceptors.response.use(
     const { response } = error;
 
     // Handle auth errors globally
+    // -------------------------------------------------------------------
+    // 401 – Unauthenticated / session expired
+    // -------------------------------------------------------------------
+    // The AuthProvider already handles the unauthenticated state gracefully
+    // by catching the 401 in `fetchMe` and returning `null`, meaning the
+    // application should render as a "guest" user.  Clearing the entire
+    // React-Query cache here caused a feedback-loop where the ongoing `/me`
+    // request was removed from the cache which in turn re-triggered a new
+    // request – resulting in an infinite "Checking authentication…" spinner.
+    //
+    // Instead of wiping the complete cache we now only reset the `me` query
+    // ensuring other cached data gets cleared when the user explicitly logs
+    // out via `authAPI.logout()` (that path still calls `queryClient.clear()`).
     if (response && response.status === 401) {
-      // Clear all React-Query cache to prevent cross-account data leaks
       if (queryClient) {
-        queryClient.clear();
+        queryClient.setQueryData(['me'], null);
       }
       window.dispatchEvent(new CustomEvent('auth:logout'));
     }

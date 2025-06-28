@@ -13,11 +13,35 @@
 // variable is absent.
 
 function normaliseApiUrl(value) {
-  if (!value) return 'http://localhost:8000';
-  if (value.startsWith('http://') || value.startsWith('https://')) {
-    return value;
+  // Default when env var is missing
+  const fallback = 'http://localhost:8000';
+
+  // Use provided env var or fallback
+  let urlInput = value || fallback;
+
+  try {
+    // Construct URL relative to current origin (handles relative paths)
+    const urlObj = new URL(urlInput, window.location.origin);
+
+    // If frontend is HTTPS but backend URL is HTTP, upgrade to HTTPS only when safe
+    if (window.location.protocol === 'https:' && urlObj.protocol === 'http:') {
+      const sameHost = ['localhost', window.location.hostname].includes(
+        urlObj.hostname
+      );
+      if (sameHost) {
+        urlObj.protocol = 'https:';
+      } else {
+        return '/'; // fall back to same-origin base
+      }
+    }
+    return urlObj.toString();
+  } catch {
+    // Gracefully handle non-URL strings / relative paths
+    if (window.location.protocol === 'https:' && urlInput.startsWith('http://')) {
+      return urlInput.replace(/^http:/, 'https:');
+    }
+    return urlInput;
   }
-  return `http://${value}`;
 }
 
 export const API_URL = normaliseApiUrl(import.meta.env.VITE_API_URL);

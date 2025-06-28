@@ -9,10 +9,32 @@
  */
 
 export function checkAuthEnvironment() {
+  // Normalise API URL to avoid mixed-content issues
+  const resolvedApiUrl = (() => {
+    const envUrl = import.meta.env.VITE_API_URL;
+    try {
+      const urlObj = new URL(envUrl || 'http://localhost:8000', window.location.origin);
+      if (window.location.protocol === 'https:' && urlObj.protocol === 'http:') {
+        const sameHost = ['localhost', window.location.hostname].includes(
+          urlObj.hostname
+        );
+        if (sameHost) {
+          urlObj.protocol = 'https:';
+        } else {
+          return '/';
+        }
+      }
+      return urlObj.toString();
+    } catch {
+      if (window.location.protocol === 'https:' && envUrl?.startsWith('http://')) {
+        return envUrl.replace(/^http:/, 'https:');
+      }
+      return envUrl || 'http://localhost:8000';
+    }
+  })();
+
   const info = {
-    apiUrl: (import.meta.env.VITE_API_URL?.match(/^https?:\/\//)
-      ? import.meta.env.VITE_API_URL
-      : `http://${import.meta.env.VITE_API_URL || 'localhost:8000'}`),
+    apiUrl: resolvedApiUrl,
     cookies: document.cookie,
     localStorageAuth: localStorage.getItem('ai-productivity-auth'),
     extensions: detectBrowserExtensions(),
