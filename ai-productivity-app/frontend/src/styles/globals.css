@@ -2,6 +2,9 @@
 
 @import "tailwindcss";
 
+/* Configure dark mode as class-based for Tailwind v4 */
+@variant dark (.dark &);
+
 /* ----------------------------------------------------------------------
    Custom component shortcuts (@apply) – kept in *components* layer so that
    the utilities are emitted after base + before one-off utilities.

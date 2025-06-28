@@ -53,26 +53,6 @@ export function ThemeProvider({ children }) {
   });
 
   // ---------------------------------------------------------------------------
-  // React to external preference updates (e.g. Settings page) -----------------
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    const pref = preferences?.theme;
-
-    if (pref === 'light' || pref === 'dark') {
-      if (pref !== theme) {
-        setTheme(pref);
-      }
-    }
-
-    if (pref === 'auto') {
-      const sys = getSystemTheme();
-      if (sys !== theme) {
-        setTheme(sys);
-      }
-    }
-  }, [preferences?.theme]);
-
-  // ---------------------------------------------------------------------------
   // Helper to apply the theme to the <html> element and meta tag.
   // ---------------------------------------------------------------------------
   const applyTheme = useCallback((newTheme) => {
@@ -87,6 +67,44 @@ export function ThemeProvider({ children }) {
   }, []);
 
   // ---------------------------------------------------------------------------
+  // React to external preference updates (e.g. Settings page) -----------------
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const pref = preferences?.theme;
+
+    // Fast-exit if nothing changed
+    if (!pref) return;
+
+    // 1. Explicit light / dark preference ------------------------------------
+    if (pref === 'light' || pref === 'dark') {
+      if (pref !== theme) {
+        /*
+         * We ONLY want to update the *effective* theme here – the preference
+         * itself is already stored in Zustand, so persisting again would be
+         * redundant and would overwrite an eventual user choice that happened
+         * in another tab while this tab was in the background.
+         */
+        setThemeState(pref);
+        applyTheme(pref);
+        // Keep fallback storage in sync without re-triggering Zustand updates
+        localStorage.setItem('theme', pref);
+      }
+      return;
+    }
+
+    // 2. "Auto" preference – follow system setting ---------------------------
+    if (pref === 'auto') {
+      const sys = getSystemTheme();
+      if (sys !== theme) {
+        // Do *not* persist the computed value – keep the original "auto"
+        // preference intact while still reflecting the correct UI theme.
+        setThemeState(sys);
+        applyTheme(sys);
+      }
+    }
+  }, [preferences?.theme, theme, applyTheme]);
+
+  // ---------------------------------------------------------------------------
   // Public setter – updates state, storage & DOM.
   // ---------------------------------------------------------------------------
   const setTheme = useCallback(
@@ -99,7 +117,7 @@ export function ThemeProvider({ children }) {
       localStorage.setItem('theme', newTheme);
       applyTheme(newTheme);
     },
-    [applyTheme]
+    [applyTheme, setPreference]
   );
 
   // Convenience toggle ---------------------------------------------------------
@@ -127,7 +145,7 @@ export function ThemeProvider({ children }) {
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [setTheme]);
+  }, [setTheme, preferences?.theme]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
