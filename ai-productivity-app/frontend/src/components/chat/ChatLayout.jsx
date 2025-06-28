@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Brain, X } from 'lucide-react';
 
@@ -15,8 +15,36 @@ export default function ChatLayout({
   onSidebarToggle,
   onEditorToggle,
   onSidebarClose,
-  onEditorClose
+  onEditorClose,
+  onLayout
 }) {
+  const editorGroupRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storageKey = 'react-resizable-panels:chat-editor-vertical';
+
+    if (showEditor) {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          // Look for the correct entry by matching the autoSaveId
+          const entry = parsed['chat-editor-vertical'];
+          if (entry && Array.isArray(entry.layout) && entry.layout.length >= 2 && entry.layout[1] === 0) {
+            const DEFAULT_LAYOUT = [65, 35];
+            editorGroupRef.current?.setLayout(DEFAULT_LAYOUT);
+          }
+        } catch (error) {
+          console.warn('Failed to parse panel layout from localStorage:', error);
+          // ignore parse errors
+        }
+      }
+    } else {
+      localStorage.removeItem(storageKey);
+    }
+  }, [showEditor]);
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
       {/* Main horizontal layout */}
@@ -24,6 +52,7 @@ export default function ChatLayout({
         direction="horizontal"
         className="flex-1"
         autoSaveId="chat-layout-main"
+        onLayout={onLayout}
       >
         {/* Chat/Content Area */}
         <Panel id="content" order={1} defaultSize={showSidebar ? 70 : 100} minSize={50}>
@@ -32,6 +61,7 @@ export default function ChatLayout({
             <PanelGroup
               direction="vertical"
               autoSaveId="chat-editor-vertical"
+              ref={editorGroupRef}
             >
               <Panel id="chat" order={1} defaultSize={65} minSize={30}>
                 {children}

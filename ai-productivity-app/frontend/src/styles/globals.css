@@ -196,6 +196,14 @@
     --success: theme(--color-success);
     --warning: theme(--color-warning);
     --error: theme(--color-error);
+    /* Fallback for dynamic viewport height */
+    --dvh: 100vh;
+  }
+
+  @supports (height: 100dvh) {
+    :root {
+      --dvh: 100dvh;
+    }
   }
 
   * {
