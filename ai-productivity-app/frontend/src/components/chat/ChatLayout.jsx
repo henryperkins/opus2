@@ -29,11 +29,14 @@ export default function ChatLayout({
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          const entry = Object.values(parsed)[0];
-          if (entry && Array.isArray(entry.layout) && entry.layout[1] === 0) {
-            editorGroupRef.current?.setLayout([65, 35]);
+          // Look for the correct entry by matching the autoSaveId
+          const entry = parsed['chat-editor-vertical'];
+          if (entry && Array.isArray(entry.layout) && entry.layout.length >= 2 && entry.layout[1] === 0) {
+            const DEFAULT_LAYOUT = [65, 35];
+            editorGroupRef.current?.setLayout(DEFAULT_LAYOUT);
           }
-        } catch {
+        } catch (error) {
+          console.warn('Failed to parse panel layout from localStorage:', error);
           // ignore parse errors
         }
       }
