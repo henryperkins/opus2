@@ -89,31 +89,38 @@ class VectorService:
         try:
             query_vector = np.array(query_embedding)
             
+            # Convert to pgvector format
+            vector_str = "[" + ",".join(f"{x:.6f}" for x in query_vector.tolist()) + "]"
+            
             async with AsyncSessionLocal() as db:
-                # Build query with optional project filtering
-                where_clause = "WHERE 1=1"
-                params = {"query_vector": query_vector.tolist(), "limit": limit}
-                
+                # Build query with positional parameters for asyncpg compatibility
                 if project_ids:
-                    where_clause += " AND metadata->>'project_id' = ANY(:project_ids)"
-                    params["project_ids"] = [str(pid) for pid in project_ids]
-                
-                # Search knowledge embeddings using cosine similarity
-                query_sql = f"""
-                SELECT 
-                    id,
-                    metadata,
-                    content,
-                    1 - (embedding <=> :query_vector::vector) as similarity_score
-                FROM embeddings 
-                {where_clause}
-                AND metadata->>'category' IS NOT NULL
-                ORDER BY embedding <=> :query_vector::vector
-                LIMIT :limit
-                """
-                
-                # Convert numpy array to list for PostgreSQL vector casting
-                params["query_vector"] = query_vector.tolist()
+                    query_sql = """
+                    SELECT 
+                        id,
+                        metadata,
+                        content,
+                        1 - (embedding <=> $1::vector) as similarity_score
+                    FROM embeddings 
+                    WHERE 1=1 AND metadata->>'project_id' = ANY($2)
+                    AND metadata->>'category' IS NOT NULL
+                    ORDER BY embedding <=> $1::vector
+                    LIMIT $3
+                    """
+                    params = (vector_str, [str(pid) for pid in project_ids], limit)
+                else:
+                    query_sql = """
+                    SELECT 
+                        id,
+                        metadata,
+                        content,
+                        1 - (embedding <=> $1::vector) as similarity_score
+                    FROM embeddings 
+                    WHERE metadata->>'category' IS NOT NULL
+                    ORDER BY embedding <=> $1::vector
+                    LIMIT $2
+                    """
+                    params = (vector_str, limit)
                 
                 result = await db.execute(text(query_sql), params)
                 rows = result.fetchall()
