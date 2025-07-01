@@ -45,7 +45,11 @@ class ConfigAPI {
   // Runtime configuration updates
   // ---------------------------------------------------------------------
   async updateModelConfig(config) {
-    const response = await client.put(`${this.baseURL}/model`, config);
+    // Strip the special `__noRetry` flag from the JSON payload – keep it only
+    // in the Axios request config so the interceptor can honour it.
+    const { __noRetry, ...payload } = config ?? {};
+    const axiosCfg = __noRetry ? { __noRetry } : undefined;
+    const response = await client.put(`${this.baseURL}/model`, payload, axiosCfg);
 
     // The endpoint returns only the **current** section. Fetch the full
     // configuration so we can broadcast a consistent object that matches
