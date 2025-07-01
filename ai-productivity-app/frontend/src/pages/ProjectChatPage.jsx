@@ -97,6 +97,8 @@ export default function ProjectChatPage() {
     connectionState,
     sendTypingIndicator,
     streamingMessages,
+    typingUsers,
+    retryMessage,
   } = useChat(projectId, urlSessionId);
 
   // ---------------------------------------------------------------------------
@@ -375,6 +377,30 @@ export default function ProjectChatPage() {
     </div>
   );
 
+  const renderUserTypingIndicator = () => {
+    const currentUserId = user?.id;
+    const otherUsersTyping = Array.from(typingUsers).filter(id => id !== currentUserId);
+    
+    if (otherUsersTyping.length === 0) return null;
+
+    return (
+      <div className="flex justify-start mb-6">
+        <div className="max-w-3xl rounded-lg px-4 py-3 bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100">
+          <div className="flex items-center space-x-2">
+            <div className="flex space-x-1">
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            </div>
+            <span className="text-sm text-gray-500">
+              {otherUsersTyping.length === 1 ? 'User is typing...' : `${otherUsersTyping.length} users are typing...`}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Memoized message component to prevent unnecessary re-renders
   const MessageItem = React.memo(({ msg, streaming, executionResult }) => {
     return (
@@ -414,7 +440,7 @@ export default function ProjectChatPage() {
 
           {/* Body */}
           {streaming ? (
-            <StreamingMessage messageId={msg.id} isStreaming={streaming.isStreaming} content={streaming.content} />
+            <StreamingMessage messageId={msg.id} isStreaming={streaming.isStreaming} content={streaming.content} onRetry={() => retryMessage(msg.id)} />
           ) : msg.metadata?.citations?.length ? (
             <CitationRenderer text={msg.content} citations={msg.metadata.citations} inline onCitationClick={handleCitationClick} />
           ) : (
@@ -426,6 +452,7 @@ export default function ProjectChatPage() {
               onCodeApply={handleCodeApply}
               executionResult={executionResult}
               onCitationClick={handleCitationClick}
+              onRetry={retryMessage}
             />
           )}
 
@@ -466,7 +493,7 @@ export default function ProjectChatPage() {
         executionResult={executionResult}
       />
     );
-  }, [streamingMessages, executionResults, handleCitationClick, handleCodeExecution, handleCodeApply, handleInteractiveElement, showAnalytics]);
+  }, [streamingMessages, executionResults, handleCitationClick, handleCodeExecution, handleCodeApply, handleInteractiveElement, showAnalytics, retryMessage]);
 
   // ----------------------------------------------------------------------------------
   // Early states (loading / not-found)
@@ -580,7 +607,8 @@ export default function ProjectChatPage() {
           <div className="flex-1 overflow-y-auto p-4" ref={messageListRef}>
             <div className="max-w-3xl mx-auto space-y-4">
               {messages.map(renderMessage)}
-              {streamingMessages.size > 0 && messages.length === 0 && renderTypingIndicator()}
+              {renderUserTypingIndicator()}
+              {streamingMessages.size > 0 && renderTypingIndicator()}
               <div ref={messagesEndRef} />
             </div>
           </div>

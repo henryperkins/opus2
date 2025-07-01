@@ -100,10 +100,10 @@ async def handle_chat_connection(
             elif data['type'] == 'typing':
                 # Broadcast typing indicator
                 await connection_manager.send_message({
-                    'type': 'user_typing',
+                    'type': 'typing',
                     'user_id': current_user.id,
                     # Accept both new ``is_typing`` and legacy ``typing`` keys
-                    'is_typing': data.get('is_typing', data.get('typing', False))
+                    'typing': data.get('is_typing', data.get('typing', False))
                 }, session_id)
                 
             elif data['type'] == 'request_config':

@@ -21,7 +21,8 @@ import {
   ChevronUp,
   Table,
   BarChart2,
-  Hash
+  Hash,
+  RotateCcw
 } from 'lucide-react';
 
 import CitationRenderer from './CitationRenderer';
@@ -216,12 +217,14 @@ export default function EnhancedMessageRenderer({
   onCodeApply,
   onDiagramClick,
   onCitationClick,
+  onRetry,
   showMetadata = false
 }) {
   const [activeTab, setActiveTab] = useState('rendered');
   const [copiedBlocks, setCopiedBlocks] = useState(new Set());
   const [expandedBlocks, setExpandedBlocks] = useState(new Set());
   const [showFullMetadata, setShowFullMetadata] = useState(false);
+  const [messageCopied, setMessageCopied] = useState(false);
 
   /* --------------------------------------------------------
    * Utils
@@ -244,6 +247,14 @@ export default function EnhancedMessageRenderer({
       n.has(blockId) ? n.delete(blockId) : n.add(blockId);
       return n;
     });
+  };
+
+  const handleCopyMessage = async () => {
+    await navigator.clipboard.writeText(messageContent);
+    setMessageCopied(true);
+    setTimeout(() => {
+      setMessageCopied(false);
+    }, 2000);
   };
 
   /* --------------------------------------------------------
@@ -540,6 +551,40 @@ export default function EnhancedMessageRenderer({
           <code className="text-sm">{messageContent}</code>
         </pre>
       )}
+
+      {/* Action buttons */}
+      <div className="mt-3 flex justify-end gap-2">
+        {/* Retry button for assistant messages */}
+        {message?.role === 'assistant' && onRetry && (
+          <button
+            onClick={() => onRetry(message.id)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            title="Regenerate response"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Retry</span>
+          </button>
+        )}
+        
+        {/* Copy message button */}
+        <button
+          onClick={handleCopyMessage}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+          title="Copy entire message"
+        >
+          {messageCopied ? (
+            <>
+              <Check className="w-4 h-4 text-green-500" />
+              <span className="text-green-500">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-4 h-4" />
+              <span>Copy message</span>
+            </>
+          )}
+        </button>
+      </div>
 
       {/* Optional metadata */}
       {showMetadata && messageMetadata && (

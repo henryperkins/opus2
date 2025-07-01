@@ -21,7 +21,15 @@ const backendTarget =
     process.env.BACKEND_URL ||
     'http://localhost:8000';
 
-export default defineConfig({
+export default defineConfig(({ command }) => {
+
+  const isBuild = command === 'build';
+
+  // Only include the bundle visualizer when explicitly analysing a production
+  // build; the plugin adds noticeable overhead during dev server startup.
+  const enableVisualizer = isBuild && process.env.ANALYZE === 'true';
+
+  return {
   plugins: [
     react(),
     tailwindcss(),
@@ -30,11 +38,12 @@ export default defineConfig({
     // Monaco Editor configured via @monaco-editor/react directly
     inject({ Buffer: ['buffer', 'Buffer'] }),
     splitVendorChunkPlugin(), // automatic vendor splitter
-    visualizer({
-      filename: 'stats.html',
-      template: 'treemap',
-      gzipSize: true,
-    }),
+    enableVisualizer &&
+      visualizer({
+        filename: 'stats.html',
+        template: 'treemap',
+        gzipSize: true,
+      }),
   ],
 
   // Ensure heavyweight libraries needed at runtime are eagerly pre-bundled so
@@ -139,4 +148,5 @@ export default defineConfig({
       },
     },
   },
+  };
 });

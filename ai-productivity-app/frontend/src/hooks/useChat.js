@@ -333,6 +333,37 @@ export function useChat(projectId, preferredSessionId = null) {
     [send]
   );
 
+  // Retry/regenerate functionality
+  const retryMessage = useCallback(async (messageId) => {
+    // Find the message to retry
+    const messageToRetry = messages.find(msg => msg.id === messageId);
+    if (!messageToRetry) return;
+
+    // Find the user message that triggered this assistant response
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1 || messageIndex === 0) return;
+
+    // Look for the user message immediately before this assistant message
+    let userMessage = null;
+    for (let i = messageIndex - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        userMessage = messages[i];
+        break;
+      }
+    }
+
+    if (!userMessage) return;
+
+    // Delete the assistant message we're retrying
+    await deleteMutation.mutateAsync(messageId);
+
+    // Re-send the user message with original metadata
+    return await sendMutation.mutateAsync({
+      content: userMessage.content,
+      metadata: userMessage.metadata || {}
+    });
+  }, [messages, deleteMutation, sendMutation]);
+
   // Cleanup old streaming messages to prevent memory leaks
   useEffect(() => {
     const cleanup = () => {
@@ -375,6 +406,7 @@ export function useChat(projectId, preferredSessionId = null) {
       sendMessage: (c, m) => sendMutation.mutateAsync({ content: c, metadata: m }),
       editMessage: (id, content) => editMutation.mutateAsync({ id, content }),
       deleteMessage: (id) => deleteMutation.mutateAsync(id),
+      retryMessage,
       sendTypingIndicator,
     }),
     [
@@ -388,6 +420,7 @@ export function useChat(projectId, preferredSessionId = null) {
       sendMutation,
       editMutation,
       deleteMutation,
+      retryMessage,
       sendTypingIndicator,
     ]
   );
