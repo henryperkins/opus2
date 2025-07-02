@@ -6,7 +6,7 @@
  */
 import React, { useState } from 'react';
 import Modal from '../common/Modal';
-import ProjectForm from './ProjectFormFixed';
+import ProjectForm from './ProjectForm';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectAPI } from '../../api/projects';
 
