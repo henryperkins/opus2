@@ -24,6 +24,13 @@ const useAuthStore = create(
         lastUsername: '',
         theme: 'light',
         language: 'en',
+        sidebarPinned: false,
+        collapsedSections: {
+          recent: false,
+          starred: true,
+          projects: false,
+          help: true,
+        },
       },
 
       // Session metadata
@@ -99,6 +106,28 @@ const useAuthStore = create(
         return state.preferences.rememberMe && state.preferences.lastUsername;
       },
 
+      // Sidebar-specific preference setters
+      setSidebarPinned: (pinned) => {
+        set((state) => ({
+          preferences: {
+            ...state.preferences,
+            sidebarPinned: pinned,
+          },
+        }));
+      },
+
+      setCollapsedSection: (section, collapsed) => {
+        set((state) => ({
+          preferences: {
+            ...state.preferences,
+            collapsedSections: {
+              ...state.preferences.collapsedSections,
+              [section]: collapsed,
+            },
+          },
+        }));
+      },
+
       // Clear all stored data (for logout)
       clearStore: () => {
         set({
@@ -107,6 +136,13 @@ const useAuthStore = create(
             lastUsername: '',
             theme: 'light',
             language: 'en',
+            sidebarPinned: false,
+            collapsedSections: {
+              recent: false,
+              starred: true,
+              projects: false,
+              help: true,
+            },
           },
           sessionMetadata: {
             lastLoginTime: null,

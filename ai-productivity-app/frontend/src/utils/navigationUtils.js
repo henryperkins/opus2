@@ -1,10 +1,25 @@
 import { navigationRoutes, projectSubRoutes, pageRoutes } from '../config/navigationConfig';
 
 export const isActivePath = (currentPath, targetPath) => {
-  if (targetPath === '/') {
-    return currentPath === '/';
+  // Normalize paths by removing trailing slashes and decoding URI components
+  const normalizeAndDecode = (path) => {
+    try {
+      const decoded = decodeURIComponent(path);
+      return decoded.toLowerCase().replace(/\/$/, '') || '/';
+    } catch {
+      // Fallback for malformed URIs
+      return path.toLowerCase().replace(/\/$/, '') || '/';
+    }
+  };
+
+  const normalizedCurrent = normalizeAndDecode(currentPath);
+  const normalizedTarget = normalizeAndDecode(targetPath);
+
+  if (normalizedTarget === '/') {
+    return normalizedCurrent === '/';
   }
-  return currentPath.startsWith(targetPath);
+  
+  return normalizedCurrent.startsWith(normalizedTarget);
 };
 
 export const getActiveNavStyles = (isActive) => {

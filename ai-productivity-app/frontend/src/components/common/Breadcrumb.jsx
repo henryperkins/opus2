@@ -17,37 +17,42 @@ export default function Breadcrumb({ items, showHome = true, separator = 'chevro
   const filteredBreadcrumbs = showHome ? breadcrumbs : breadcrumbs.filter(crumb => crumb.path !== '/');
 
   return (
-    <nav className="flex items-center space-x-1 text-sm" aria-label="Breadcrumb">
-      {showHome && (
-        <div className="flex items-center">
-          <Link
-            to="/"
-            className="flex items-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-          >
-            <Home className="w-4 h-4 mr-1" />
-            <span>Dashboard</span>
-          </Link>
-          {filteredBreadcrumbs.length > 0 && SeparatorIcon}
-        </div>
-      )}
-      
-      {filteredBreadcrumbs.map((crumb, index) => (
-        <div key={crumb.path} className="flex items-center">
-          {index > 0 && SeparatorIcon}
-          {index === filteredBreadcrumbs.length - 1 ? (
-            <span className="text-gray-900 dark:text-gray-100 font-medium">
-              {crumb.name}
-            </span>
-          ) : (
+    <nav aria-label="Breadcrumb">
+      <ol className="flex items-center space-x-1 text-sm">
+        {showHome && (
+          <li className="flex items-center">
             <Link
-              to={crumb.path}
-              className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+              to="/"
+              className="flex items-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
             >
-              {crumb.name}
+              <Home className="w-4 h-4 mr-1" />
+              <span>Dashboard</span>
             </Link>
-          )}
-        </div>
-      ))}
+            {filteredBreadcrumbs.length > 0 && SeparatorIcon}
+          </li>
+        )}
+        
+        {filteredBreadcrumbs.map((crumb, index) => (
+          <li key={`${crumb.path}-${index}`} className="flex items-center">
+            {index > 0 && SeparatorIcon}
+            {index === filteredBreadcrumbs.length - 1 ? (
+              <span 
+                className="text-gray-900 dark:text-gray-100 font-medium"
+                aria-current="page"
+              >
+                {crumb.name}
+              </span>
+            ) : (
+              <Link
+                to={crumb.path}
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+              >
+                {crumb.name}
+              </Link>
+            )}
+          </li>
+        ))}
+      </ol>
     </nav>
   );
 }

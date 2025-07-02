@@ -25,13 +25,14 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
   const { projects, loading: projectsLoading, search } = useProjectSearch();
   const { preferences } = useAuthStore();
 
-  const [isPinned, setIsPinned] = useState(preferences?.sidebarPinned || false);
-  const [collapsedSections, setCollapsedSections] = useState({
+  const { setSidebarPinned, setCollapsedSection } = useAuthStore();
+  const isPinned = preferences?.sidebarPinned || false;
+  const collapsedSections = preferences?.collapsedSections || {
     recent: false,
     starred: true,
     projects: false,
     help: true,
-  });
+  };
   const [recentChats, setRecentChats] = useState([]);
   const [starredItems, setStarredItems] = useState([]);
   const [loadingRecentChats, setLoadingRecentChats] = useState(false);
@@ -45,9 +46,9 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
     if (!isDesktop && onToggle) onToggle();
   };
 
-  // Load recent chats
+  // Load recent chats - only when Recent section is first expanded
   const loadRecentChats = useCallback(async () => {
-    if (!user) return;
+    if (!user || recentChats.length > 0) return; // Don't reload if already loaded
     setLoadingRecentChats(true);
     setRecentChatsError(null);
     try {
@@ -71,11 +72,14 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
     } finally {
       setLoadingRecentChats(false);
     }
-  }, [user]);
+  }, [user, recentChats.length]);
 
+  // Load recent chats when section is expanded
   useEffect(() => {
-    loadRecentChats();
-  }, [loadRecentChats, location.pathname]);
+    if (!collapsedSections.recent && user && recentChats.length === 0) {
+      loadRecentChats();
+    }
+  }, [collapsedSections.recent, user, recentChats.length, loadRecentChats]);
 
   // Navigation helpers
   const handleNewChat = () => {
@@ -95,21 +99,37 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
   };
 
   const toggleSection = (section) => {
-    setCollapsedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
+    setCollapsedSection(section, !collapsedSections[section]);
   };
 
   const navigationItems = getNavigationItems({ showInSidebar: true });
 
-  // Visual indicator for color
-  const ColorDot = ({ color }) => (
-    <div
-      className="w-2 h-2 rounded-full shrink-0"
-      style={{ backgroundColor: color || '#6B7280' }}
-    />
-  );
+  // Visual indicator for color with proper contrast
+  const ColorDot = ({ color }) => {
+    const backgroundColor = color || '#6B7280';
+    // Ensure minimum contrast by darkening light colors
+    const isLightColor = (hex) => {
+      const rgb = parseInt(hex.slice(1), 16);
+      const r = (rgb >> 16) & 0xff;
+      const g = (rgb >> 8) & 0xff;
+      const b = (rgb >> 0) & 0xff;
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      return luminance > 186;
+    };
+    
+    const finalColor = color && isLightColor(color) 
+      ? `color-mix(in srgb, ${color} 70%, black)` 
+      : backgroundColor;
+    
+    return (
+      <div
+        className="w-2 h-2 rounded-full shrink-0"
+        style={{ backgroundColor: finalColor }}
+        role="presentation"
+        aria-hidden="true"
+      />
+    );
+  };
 
   return (
     <>
@@ -130,7 +150,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
           <div className="flex items-center space-x-2">
             {isDesktop && (
               <button
-                onClick={() => setIsPinned(!isPinned)}
+                onClick={() => setSidebarPinned(!isPinned)}
                 className={`p-1.5 rounded-md transition-colors ${
                   isPinned
                     ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
@@ -178,6 +198,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             <button
               onClick={() => toggleSection('recent')}
               className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              aria-expanded={!collapsedSections.recent}
             >
               <div className="flex items-center space-x-2">
                 <Clock className="w-4 h-4" />
@@ -220,6 +241,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             <button
               onClick={() => toggleSection('starred')}
               className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              aria-expanded={!collapsedSections.starred}
             >
               <div className="flex items-center space-x-2">
                 <Star className="w-4 h-4" />
@@ -240,6 +262,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             <button
               onClick={() => toggleSection('projects')}
               className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              aria-expanded={!collapsedSections.projects}
             >
               <div className="flex items-center space-x-2">
                 <FolderOpen className="w-4 h-4" />
@@ -310,6 +333,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             <button
               onClick={() => toggleSection('help')}
               className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              aria-expanded={!collapsedSections.help}
             >
               <div className="flex items-center space-x-2">
                 <HelpCircle className="w-4 h-4" />

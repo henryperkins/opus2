@@ -88,7 +88,10 @@ export default function AppShell({ sidebar, children }) {
               <div
                 className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
                 onClick={() => setSidebarOpen(false)}
-                aria-hidden="true"
+                onKeyDown={(e) => e.key === 'Enter' && setSidebarOpen(false)}
+                role="button"
+                tabIndex="0"
+                aria-label="Close menu overlay"
               />
             )}
             
