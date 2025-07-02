@@ -11,39 +11,81 @@ import { MessageSquare, Plus, Clock, ChevronRight, Pencil, Trash2, Check, X } fr
 export default function ProjectChatList({ projectId, project }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const LIMIT = 20;                  // page size – keep in sync with backend default
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);           // zero-based page index
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState(null);   // id being renamed
   const [newTitle, setNewTitle] = useState('');
   const [busyId, setBusyId] = useState(null);   // spinner for save/del
 
-  // Load chat sessions for this project
+  // Load first page whenever project changes
   useEffect(() => {
-    loadSessions();
+    setSessions([]);
+    setPage(0);
+    setHasMore(true);
+    loadSessions(0, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
-  const loadSessions = async () => {
-    try {
+  const loadSessions = async (pageIndex = 0, reset = false) => {
+    if (reset) {
       setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
+    try {
       setError(null);
-      const response = await chatAPI.getChatSessions({ project_id: projectId });
-      const sessionsData = response?.data || response;
-      setSessions(Array.isArray(sessionsData) ? sessionsData : sessionsData.items || []);
+      const response = await chatAPI.getChatSessions({
+        project_id: projectId,
+        limit: LIMIT,
+        offset: pageIndex * LIMIT,
+      });
+
+      const raw = response?.data || response;
+      const items = Array.isArray(raw) ? raw : raw.items || [];
+
+      setSessions((prev) => (reset ? items : [...prev, ...items]));
+
+      // Determine if more pages remain
+      if (
+        items.length < LIMIT ||
+        (!Array.isArray(raw) &&
+          raw.total !== undefined &&
+          (pageIndex + 1) * LIMIT >= raw.total)
+      ) {
+        setHasMore(false);
+      }
+
+      setPage(pageIndex + 1);
     } catch (err) {
       console.error('Failed to load chat sessions:', err);
       setError('Failed to load chat sessions');
+      setHasMore(false);
     } finally {
-      setLoading(false);
+      if (reset) {
+        setLoading(false);
+      } else {
+        setLoadingMore(false);
+      }
+    }
+  };
+
+  const loadMoreSessions = () => {
+    if (hasMore && !loadingMore) {
+      loadSessions(page);
     }
   };
 
   const createNewChat = async () => {
     try {
       setCreating(true);
-      const response = await chatAPI.createSession({ 
+      const response = await chatAPI.createSession({
         project_id: Number(projectId),
         title: `Chat - ${new Date().toLocaleDateString()}`
       });
@@ -69,7 +111,7 @@ export default function ProjectChatList({ projectId, project }) {
       await chatAPI.updateSession(editingId, { title: newTitle.trim() });
       setSessions(s => s.map(sess =>
         sess.id === editingId ? { ...sess, title: newTitle.trim() } : sess));
-      
+
       // Invalidate sidebar recent chats cache to update titles immediately
       queryClient.invalidateQueries(['recentChats']);
     } catch (err) {
@@ -163,7 +205,7 @@ export default function ProjectChatList({ projectId, project }) {
                       {session.title || `Chat Session #${session.id}`}
                     </h3>
                   </div>
-                  
+
                   {session.summary && (
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
                       {session.summary}
@@ -188,7 +230,7 @@ export default function ProjectChatList({ projectId, project }) {
                     )}
                   </div>
                 </div>
-                
+
                 {/* actions / chevron */}
                 <div
                   className="flex items-center gap-1 text-gray-400 group-hover:text-gray-600
@@ -233,6 +275,15 @@ export default function ProjectChatList({ projectId, project }) {
               </div>
             </div>
           ))}
+          {hasMore && (
+            <button
+              onClick={loadMoreSessions}
+              disabled={loadingMore}
+              className="px-4 py-2 mx-auto my-2 text-sm text-blue-600 dark:text-blue-400 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loadingMore ? 'Loading…' : 'Load More'}
+            </button>
+          )}
         </div>
       )}
     </div>
