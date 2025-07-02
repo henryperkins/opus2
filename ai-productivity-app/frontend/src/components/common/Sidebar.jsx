@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { useAuth } from '../../hooks/useAuth';
 import { useProjectSearch } from '../../hooks/useProjects';
@@ -14,7 +14,7 @@ import { getNavigationItems, isActivePath, getSidebarActiveStyles } from '../../
 import {
   Plus, FolderOpen, Clock, Star, Search, Settings, HelpCircle,
   ChevronDown, Home, MessageSquare, FileText, BarChart3, Database,
-  PinIcon, X
+  PinIcon, X, Keyboard
 } from 'lucide-react';
 
 // Visual indicator for color with proper contrast - moved outside to prevent recreation
@@ -38,8 +38,8 @@ const ColorDot = ({ color }) => {
     <div
       className="w-2 h-2 rounded-full shrink-0"
       style={{ backgroundColor: finalColor }}
-      role="presentation"
-      aria-hidden="true"
+      role="img"
+      aria-label={color ? `Project color indicator: ${color}` : 'Default project color'}
     />
   );
 };
@@ -53,6 +53,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
   const { isDesktop } = useMediaQuery();
   const navigate = useNavigate();
   const location = useLocation();
+  const { projectId, sessionId } = useParams();
   const { projects, loading: projectsLoading, search } = useProjectSearch();
   const { preferences } = useAuthStore();
 
@@ -80,11 +81,6 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
     setLoadingRecentChats(true);
     setRecentChatsError(null);
     try {
-      // Debug: Check if getChatSessions exists
-      if (import.meta.env.DEV) {
-        console.log('[Sidebar] chatAPI methods:', Object.keys(chatAPI));
-        console.log('[Sidebar] getChatSessions available:', typeof chatAPI.getChatSessions);
-      }
 
       // Axios returns {data, status, ...}.  API might also be pre-wrapped {sessions:[…]}
       const axiosResp = await chatAPI.getChatSessions();
@@ -203,8 +199,15 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
           <div>
             <button
               onClick={() => toggleSection('recent')}
-              className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleSection('recent');
+                }
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
               aria-expanded={!isCollapsed('recent')}
+              aria-controls="recent-section"
             >
               <div className="flex items-center space-x-2">
                 <Clock className="w-4 h-4" />
@@ -214,25 +217,44 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             </button>
 
             {!isCollapsed('recent') && (
-              <div className="mt-2 space-y-1">
+              <div className="mt-2 space-y-1" id="recent-section">
                 {loadingRecentChats ? (
                   <div className="px-3 py-2 text-sm text-gray-500">
                     <div className="animate-pulse">Loading...</div>
                   </div>
                 ) : recentChats.length > 0 ? (
-                  recentChats.map((chat) => (
-                    <Link
-                      key={chat.id}
-                      to={`/projects/${chat.project_id}/chat/${chat.id}`}
-                      onClick={closeOnMobile}
-                      className="block px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg truncate transition-colors"
+                  recentChats.map((chat) => {
+                    const isActive = sessionId === chat.id;
+                    return (
+                      <Link
+                        key={chat.id}
+                        to={`/projects/${chat.project_id}/chat/${chat.id}`}
+                        onClick={closeOnMobile}
+                        className={`block px-3 py-2 text-sm rounded-lg truncate transition-colors ${
+                          isActive
+                            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span className="truncate">{chat.title || 'Untitled Chat'}</span>
+                        </div>
+                      </Link>
+                    );
+                  })
+                ) : recentChatsError ? (
+                  <div className="px-3 py-2 space-y-2">
+                    <div className="text-sm text-red-500 dark:text-red-400">
+                      {recentChatsError}
+                    </div>
+                    <button
+                      onClick={loadRecentChats}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                     >
-                      <div className="flex items-center space-x-2">
-                        <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span className="truncate">{chat.title || 'Untitled Chat'}</span>
-                      </div>
-                    </Link>
-                  ))
+                      Try again
+                    </button>
+                  </div>
                 ) : (
                   <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                     No recent chats
@@ -246,8 +268,15 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
           <div>
             <button
               onClick={() => toggleSection('starred')}
-              className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleSection('starred');
+                }
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
               aria-expanded={!isCollapsed('starred')}
+              aria-controls="starred-section"
             >
               <div className="flex items-center space-x-2">
                 <Star className="w-4 h-4" />
@@ -257,7 +286,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             </button>
 
             {!isCollapsed('starred') && (
-              <div className="mt-2 px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+              <div className="mt-2 px-3 py-2 text-sm text-gray-500 dark:text-gray-400" id="starred-section">
                 No starred items yet
               </div>
             )}
@@ -267,8 +296,15 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
           <div>
             <button
               onClick={() => toggleSection('projects')}
-              className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleSection('projects');
+                }
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
               aria-expanded={!isCollapsed('projects')}
+              aria-controls="projects-section"
             >
               <div className="flex items-center space-x-2">
                 <FolderOpen className="w-4 h-4" />
@@ -278,7 +314,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             </button>
 
             {!isCollapsed('projects') && (
-              <div className="mt-2 space-y-1">
+              <div className="mt-2 space-y-1" id="projects-section">
                 <Link
                   to="/projects"
                   onClick={closeOnMobile}
@@ -361,7 +397,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
                   onClick={() => setKeyboardShortcutsModalOpen(true)}
                   className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
-                  <Database className="w-4 h-4" />
+                  <Keyboard className="w-4 h-4" />
                   <span>Keyboard Shortcuts</span>
                 </button>
               </div>

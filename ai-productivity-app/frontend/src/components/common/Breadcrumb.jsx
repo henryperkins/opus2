@@ -2,12 +2,20 @@ import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { generateBreadcrumbs } from '../../utils/navigationUtils';
+import { useState, useEffect } from 'react';
 
 export default function Breadcrumb({ items, showHome = true, separator = 'chevron' }) {
   const location = useLocation();
+  const [breadcrumbs, setBreadcrumbs] = useState(items || [{ name: 'Dashboard', path: '/' }]);
 
-  // Auto-generate breadcrumbs if items not provided
-  const breadcrumbs = items || generateBreadcrumbs(location.pathname);
+  useEffect(() => {
+    if (!items) {
+      // Auto-generate breadcrumbs if items not provided
+      generateBreadcrumbs(location.pathname).then(setBreadcrumbs);
+    } else {
+      setBreadcrumbs(items);
+    }
+  }, [location.pathname, items]);
 
   const SeparatorIcon = separator === 'chevron' ? 
     <ChevronRight className="w-4 h-4 text-gray-400 mx-1" /> : 

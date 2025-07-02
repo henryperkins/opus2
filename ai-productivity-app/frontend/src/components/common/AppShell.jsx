@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../hooks/useAuth';
@@ -7,6 +7,7 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import ThemeToggle from './ThemeToggle';
 import { Link } from 'react-router-dom';
+import useAuthStore from '../../stores/authStore';
 
 export default function AppShell({ sidebar, children }) {
   const { user, loading: authLoading } = useAuth();
@@ -14,6 +15,16 @@ export default function AppShell({ sidebar, children }) {
   const { isMobile, isTablet } = useMediaQuery();
   const isDesktop = !isMobile && !isTablet;
   const [sidebarOpen, setSidebarOpen] = useState(isDesktop);
+  const { preferences, setSidebarWidth } = useAuthStore();
+
+  // Sync sidebar state with screen size changes
+  useEffect(() => {
+    if (isDesktop) {
+      setSidebarOpen(true);
+    } else {
+      setSidebarOpen(false);
+    }
+  }, [isDesktop]);
 
   // Show loading state
   if (authLoading) {
@@ -64,8 +75,23 @@ export default function AppShell({ sidebar, children }) {
       <div className="flex-1 overflow-hidden">
         {isDesktop ? (
           // Desktop: Resizable panels
-          <PanelGroup direction="horizontal" className="h-full">
-            <Panel defaultSize={22} minSize={14} maxSize={35} collapsible>
+          <PanelGroup 
+            direction="horizontal" 
+            className="h-full"
+            onLayout={(sizes) => {
+              // Calculate sidebar width from percentage
+              const sidebarWidthPercent = sizes[0];
+              const windowWidth = window.innerWidth;
+              const newWidth = (sidebarWidthPercent / 100) * windowWidth;
+              setSidebarWidth(newWidth);
+            }}
+          >
+            <Panel 
+              defaultSize={(preferences.sidebarWidth / window.innerWidth) * 100} 
+              minSize={14} 
+              maxSize={35} 
+              collapsible
+            >
               <Sidebar isOpen={true} onToggle={() => {}} className="h-full" />
             </Panel>
             <PanelResizeHandle className="w-px bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-col-resize" />

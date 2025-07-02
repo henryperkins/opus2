@@ -25,6 +25,7 @@ const useAuthStore = create(
         theme: 'light',
         language: 'en',
         sidebarPinned: false,
+        sidebarWidth: 280, // Default sidebar width in pixels
         // Use Map-like object for flexible section state management
         collapsedSections: {},
       },
@@ -108,6 +109,17 @@ const useAuthStore = create(
           preferences: {
             ...state.preferences,
             sidebarPinned: pinned,
+          },
+        }));
+      },
+
+      setSidebarWidth: (width) => {
+        // Ensure width is within reasonable bounds
+        const clampedWidth = Math.max(200, Math.min(600, width));
+        set((state) => ({
+          preferences: {
+            ...state.preferences,
+            sidebarWidth: clampedWidth,
           },
         }));
       },

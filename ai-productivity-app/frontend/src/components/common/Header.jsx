@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useMemo } from 'react';
 import UserMenu from '../auth/UserMenu';
@@ -6,11 +6,12 @@ import AIProviderStatus from './AIProviderStatus';
 import ThemeToggle from './ThemeToggle';
 import Breadcrumb from './Breadcrumb';
 import { Menu } from 'lucide-react';
-import { getNavigationItems } from '../../utils/navigationUtils';
+import { getNavigationItems, isActivePath } from '../../utils/navigationUtils';
 import PropTypes from 'prop-types';
 
 function Header({ onMenuClick, showMenuButton = false, sidebarOpen = false }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   // Memoize mobile quick action items to prevent unnecessary recomputations
   const mobileQuickActions = useMemo(() => 
@@ -52,13 +53,19 @@ function Header({ onMenuClick, showMenuButton = false, sidebarOpen = false }) {
             <nav className="lg:hidden flex items-center space-x-2" aria-label="Quick actions">
               {mobileQuickActions.map(action => {
                 const IconComponent = action.icon;
+                const isActive = isActivePath(location.pathname, action.path);
                 return (
                   <Link
                     key={action.id}
                     to={action.path}
-                    className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className={`p-2 rounded-md transition-colors ${
+                      isActive
+                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
                     aria-label={`Go to ${action.label}`}
                     title={action.label}
+                    aria-current={isActive ? 'page' : undefined}
                   >
                     <IconComponent className="w-5 h-5" />
                     <span className="sr-only">{action.label}</span>

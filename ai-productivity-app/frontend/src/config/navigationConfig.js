@@ -1,4 +1,4 @@
-import { Home, FolderOpen, Search, Clock, Settings, BarChart3 } from 'lucide-react';
+import { Home, FolderOpen, Search, Clock, Settings, BarChart3, Bot } from 'lucide-react';
 
 export const navigationRoutes = [
   {
@@ -42,6 +42,14 @@ export const navigationRoutes = [
     showInSidebar: true,
     showMobileQuickAction: true,
     breadcrumbLabel: 'Settings'
+  },
+  {
+    id: 'models',
+    path: '/models',
+    label: 'Model Settings',
+    icon: Bot,
+    showInSidebar: true,
+    breadcrumbLabel: 'Model Settings'
   }
 ];
 

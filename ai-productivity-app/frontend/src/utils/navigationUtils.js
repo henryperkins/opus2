@@ -1,4 +1,5 @@
 import { navigationRoutes, projectSubRoutes, pageRoutes } from '../config/navigationConfig';
+import { projectAPI } from '../api/projects';
 
 export const isActivePath = (currentPath, targetPath) => {
   // Normalize paths by removing trailing slashes and decoding URI components
@@ -49,8 +50,9 @@ export const getSidebarActiveStyles = (isActive) => {
 
 // Memoization cache for breadcrumb generation
 const breadcrumbCache = new Map();
+const projectNameCache = new Map();
 
-export const generateBreadcrumbs = (pathname) => {
+export const generateBreadcrumbs = async (pathname) => {
   // Check cache first for performance
   if (breadcrumbCache.has(pathname)) {
     return breadcrumbCache.get(pathname);
@@ -66,8 +68,25 @@ export const generateBreadcrumbs = (pathname) => {
     if (first === 'projects') {
       breadcrumbs.push({ name: 'Projects', path: '/projects' });
       if (paths[1]) {
-        // Use generic "Project" label for now - could be enhanced to fetch real project name
-        breadcrumbs.push({ name: 'Project', path: `/projects/${paths[1]}` });
+        const projectId = paths[1];
+        let projectName = 'Project';
+        
+        // Try to get project name from cache first
+        if (projectNameCache.has(projectId)) {
+          projectName = projectNameCache.get(projectId);
+        } else {
+          // Fetch project name from API
+          try {
+            const project = await projectAPI.get(projectId);
+            projectName = project.name || 'Project';
+            projectNameCache.set(projectId, projectName);
+          } catch (error) {
+            console.error('Failed to fetch project name:', error);
+            // Keep generic "Project" name as fallback
+          }
+        }
+        
+        breadcrumbs.push({ name: projectName, path: `/projects/${projectId}` });
         
         // Handle project sub-routes with extended depth support
         if (paths[2]) {
@@ -119,6 +138,19 @@ export const generateBreadcrumbs = (pathname) => {
   }
 
   return breadcrumbs;
+};
+
+// Cache invalidation helper
+export const invalidateProjectCache = (projectId) => {
+  if (projectId) {
+    projectNameCache.delete(projectId);
+  }
+  // Clear breadcrumb cache entries containing this project
+  for (const [pathname] of breadcrumbCache) {
+    if (pathname.includes(`/projects/${projectId}`)) {
+      breadcrumbCache.delete(pathname);
+    }
+  }
 };
 
 export const getNavigationItems = (filter = {}) => {
