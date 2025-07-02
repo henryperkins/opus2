@@ -28,13 +28,13 @@ export default function Breadcrumb({ items, showHome = true, separator = 'chevro
               <Home className="w-4 h-4 mr-1" />
               <span>Dashboard</span>
             </Link>
-            {filteredBreadcrumbs.length > 0 && SeparatorIcon}
           </li>
         )}
         
         {filteredBreadcrumbs.map((crumb, index) => (
           <li key={`${crumb.path}-${index}`} className="flex items-center">
-            {index > 0 && SeparatorIcon}
+            {/* Add separator before each crumb (including first when showHome is true) */}
+            {(showHome || index > 0) && SeparatorIcon}
             {index === filteredBreadcrumbs.length - 1 ? (
               <span 
                 className="text-gray-900 dark:text-gray-100 font-medium"

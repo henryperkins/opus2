@@ -15,11 +15,24 @@ export const isActivePath = (currentPath, targetPath) => {
   const normalizedCurrent = normalizeAndDecode(currentPath);
   const normalizedTarget = normalizeAndDecode(targetPath);
 
+  // Root path special case
   if (normalizedTarget === '/') {
     return normalizedCurrent === '/';
   }
   
-  return normalizedCurrent.startsWith(normalizedTarget);
+  // Split into segments and compare path boundaries
+  const currentSegments = normalizedCurrent.split('/').filter(Boolean);
+  const targetSegments = normalizedTarget.split('/').filter(Boolean);
+  
+  // Target must not have more segments than current
+  if (targetSegments.length > currentSegments.length) {
+    return false;
+  }
+  
+  // Compare each segment exactly
+  return targetSegments.every((segment, index) => 
+    currentSegments[index] === segment
+  );
 };
 
 export const getActiveNavStyles = (isActive) => {
@@ -34,8 +47,18 @@ export const getSidebarActiveStyles = (isActive) => {
     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800';
 };
 
+// Memoization cache for breadcrumb generation
+const breadcrumbCache = new Map();
+
 export const generateBreadcrumbs = (pathname) => {
-  const paths = pathname.split('/').filter(Boolean);
+  // Check cache first for performance
+  if (breadcrumbCache.has(pathname)) {
+    return breadcrumbCache.get(pathname);
+  }
+
+  // Strip query string and hash from pathname for parsing
+  const cleanPathname = pathname.split('?')[0].split('#')[0];
+  const paths = cleanPathname.split('/').filter(Boolean);
   const breadcrumbs = [{ name: 'Dashboard', path: '/' }];
 
   if (paths.length > 0) {
@@ -43,25 +66,56 @@ export const generateBreadcrumbs = (pathname) => {
     if (first === 'projects') {
       breadcrumbs.push({ name: 'Projects', path: '/projects' });
       if (paths[1]) {
+        // Use generic "Project" label for now - could be enhanced to fetch real project name
         breadcrumbs.push({ name: 'Project', path: `/projects/${paths[1]}` });
-        if (paths[2] && projectSubRoutes[paths[2]]) {
-          breadcrumbs.push({
-            name: projectSubRoutes[paths[2]].breadcrumbLabel,
-            path: pathname
-          });
+        
+        // Handle project sub-routes with extended depth support
+        if (paths[2]) {
+          if (projectSubRoutes[paths[2]]) {
+            breadcrumbs.push({
+              name: projectSubRoutes[paths[2]].breadcrumbLabel,
+              path: `/${paths.slice(0, 3).join('/')}`
+            });
+            
+            // Handle deeper nested routes (e.g., /projects/123/files/images)
+            if (paths[3]) {
+              for (let i = 3; i < paths.length; i++) {
+                const segment = paths[i];
+                breadcrumbs.push({
+                  name: segment.charAt(0).toUpperCase() + segment.slice(1),
+                  path: `/${paths.slice(0, i + 1).join('/')}`
+                });
+              }
+            }
+          } else {
+            // Unknown project sub-route
+            breadcrumbs.push({
+              name: paths[2].charAt(0).toUpperCase() + paths[2].slice(1),
+              path: `/${paths.slice(0, 3).join('/')}`
+            });
+          }
         }
       }
     } else if (pageRoutes[first]) {
       breadcrumbs.push({
         name: pageRoutes[first],
-        path: pathname
+        path: `/${first}` // Use clean path without query/hash
       });
     } else {
       breadcrumbs.push({
         name: first.charAt(0).toUpperCase() + first.slice(1),
-        path: pathname
+        path: `/${first}` // Use clean path without query/hash
       });
     }
+  }
+
+  // Cache the result and return
+  breadcrumbCache.set(pathname, breadcrumbs);
+  
+  // Prevent cache from growing too large
+  if (breadcrumbCache.size > 100) {
+    const firstKey = breadcrumbCache.keys().next().value;
+    breadcrumbCache.delete(firstKey);
   }
 
   return breadcrumbs;
@@ -70,7 +124,6 @@ export const generateBreadcrumbs = (pathname) => {
 export const getNavigationItems = (filter = {}) => {
   return navigationRoutes.filter(route => {
     if (filter.showInSidebar && !route.showInSidebar) return false;
-    if (filter.showInHeader && !route.showInHeader) return false;
     if (filter.showMobileQuickAction && !route.showMobileQuickAction) return false;
     return true;
   });

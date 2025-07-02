@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { useAuth } from '../../hooks/useAuth';
@@ -17,6 +17,37 @@ import {
   PinIcon, X
 } from 'lucide-react';
 
+// Visual indicator for color with proper contrast - moved outside to prevent recreation
+const ColorDot = ({ color }) => {
+  const backgroundColor = color || '#6B7280';
+  // Ensure minimum contrast by darkening light colors
+  const isLightColor = (hex) => {
+    const rgb = parseInt(hex.slice(1), 16);
+    const r = (rgb >> 16) & 0xff;
+    const g = (rgb >> 8) & 0xff;
+    const b = (rgb >> 0) & 0xff;
+    const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+    return luminance > 186;
+  };
+  
+  const finalColor = color && isLightColor(color) 
+    ? `color-mix(in srgb, ${color} 70%, black)` 
+    : backgroundColor;
+  
+  return (
+    <div
+      className="w-2 h-2 rounded-full shrink-0"
+      style={{ backgroundColor: finalColor }}
+      role="presentation"
+      aria-hidden="true"
+    />
+  );
+};
+
+ColorDot.propTypes = {
+  color: PropTypes.string
+};
+
 const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
   const { user } = useAuth();
   const { isDesktop } = useMediaQuery();
@@ -25,14 +56,11 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
   const { projects, loading: projectsLoading, search } = useProjectSearch();
   const { preferences } = useAuthStore();
 
-  const { setSidebarPinned, setCollapsedSection } = useAuthStore();
+  const { setSidebarPinned, setCollapsedSection, getSectionCollapsed } = useAuthStore();
   const isPinned = preferences?.sidebarPinned || false;
-  const collapsedSections = preferences?.collapsedSections || {
-    recent: false,
-    starred: true,
-    projects: false,
-    help: true,
-  };
+  
+  // Use helper function to get collapsed state with defaults
+  const isCollapsed = useCallback((section) => getSectionCollapsed(section), [getSectionCollapsed]);
   const [recentChats, setRecentChats] = useState([]);
   const [starredItems, setStarredItems] = useState([]);
   const [loadingRecentChats, setLoadingRecentChats] = useState(false);
@@ -76,10 +104,10 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
 
   // Load recent chats when section is expanded
   useEffect(() => {
-    if (!collapsedSections.recent && user && recentChats.length === 0) {
+    if (!isCollapsed('recent') && user && recentChats.length === 0) {
       loadRecentChats();
     }
-  }, [collapsedSections.recent, user, recentChats.length, loadRecentChats]);
+  }, [isCollapsed, user, recentChats.length, loadRecentChats]);
 
   // Navigation helpers
   const handleNewChat = () => {
@@ -99,41 +127,19 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
   };
 
   const toggleSection = (section) => {
-    setCollapsedSection(section, !collapsedSections[section]);
+    setCollapsedSection(section, !isCollapsed(section));
   };
 
-  const navigationItems = getNavigationItems({ showInSidebar: true });
+  // Memoize navigation items to prevent unnecessary recomputations
+  const navigationItems = useMemo(() => getNavigationItems({ showInSidebar: true }), []);
 
-  // Visual indicator for color with proper contrast
-  const ColorDot = ({ color }) => {
-    const backgroundColor = color || '#6B7280';
-    // Ensure minimum contrast by darkening light colors
-    const isLightColor = (hex) => {
-      const rgb = parseInt(hex.slice(1), 16);
-      const r = (rgb >> 16) & 0xff;
-      const g = (rgb >> 8) & 0xff;
-      const b = (rgb >> 0) & 0xff;
-      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-      return luminance > 186;
-    };
-    
-    const finalColor = color && isLightColor(color) 
-      ? `color-mix(in srgb, ${color} 70%, black)` 
-      : backgroundColor;
-    
-    return (
-      <div
-        className="w-2 h-2 rounded-full shrink-0"
-        style={{ backgroundColor: finalColor }}
-        role="presentation"
-        aria-hidden="true"
-      />
-    );
-  };
 
   return (
     <>
-      <div className={`flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 w-64 lg:w-72 ${className}`}>
+      <div 
+      id="sidebar-menu"
+      className={`flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 w-64 lg:w-72 ${className}`}
+    >
         {/* Header with logo and pin button */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <Link to="/" className="flex items-center space-x-2 no-underline">
@@ -198,16 +204,16 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             <button
               onClick={() => toggleSection('recent')}
               className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-              aria-expanded={!collapsedSections.recent}
+              aria-expanded={!isCollapsed('recent')}
             >
               <div className="flex items-center space-x-2">
                 <Clock className="w-4 h-4" />
                 <span>Recent</span>
               </div>
-              <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSections.recent ? '' : 'rotate-180'}`} />
+              <ChevronDown className={`w-4 h-4 transition-transform ${isCollapsed('recent') ? '' : 'rotate-180'}`} />
             </button>
 
-            {!collapsedSections.recent && (
+            {!isCollapsed('recent') && (
               <div className="mt-2 space-y-1">
                 {loadingRecentChats ? (
                   <div className="px-3 py-2 text-sm text-gray-500">
@@ -241,16 +247,16 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             <button
               onClick={() => toggleSection('starred')}
               className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-              aria-expanded={!collapsedSections.starred}
+              aria-expanded={!isCollapsed('starred')}
             >
               <div className="flex items-center space-x-2">
                 <Star className="w-4 h-4" />
                 <span>Starred</span>
               </div>
-              <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSections.starred ? '' : 'rotate-180'}`} />
+              <ChevronDown className={`w-4 h-4 transition-transform ${isCollapsed('starred') ? '' : 'rotate-180'}`} />
             </button>
 
-            {!collapsedSections.starred && (
+            {!isCollapsed('starred') && (
               <div className="mt-2 px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                 No starred items yet
               </div>
@@ -262,16 +268,16 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             <button
               onClick={() => toggleSection('projects')}
               className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-              aria-expanded={!collapsedSections.projects}
+              aria-expanded={!isCollapsed('projects')}
             >
               <div className="flex items-center space-x-2">
                 <FolderOpen className="w-4 h-4" />
                 <span>Projects</span>
               </div>
-              <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSections.projects ? '' : 'rotate-180'}`} />
+              <ChevronDown className={`w-4 h-4 transition-transform ${isCollapsed('projects') ? '' : 'rotate-180'}`} />
             </button>
 
-            {!collapsedSections.projects && (
+            {!isCollapsed('projects') && (
               <div className="mt-2 space-y-1">
                 <Link
                   to="/projects"
@@ -333,16 +339,16 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             <button
               onClick={() => toggleSection('help')}
               className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-              aria-expanded={!collapsedSections.help}
+              aria-expanded={!isCollapsed('help')}
             >
               <div className="flex items-center space-x-2">
                 <HelpCircle className="w-4 h-4" />
                 <span>Help & Resources</span>
               </div>
-              <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSections.help ? '' : 'rotate-180'}`} />
+              <ChevronDown className={`w-4 h-4 transition-transform ${isCollapsed('help') ? '' : 'rotate-180'}`} />
             </button>
 
-            {!collapsedSections.help && (
+            {!isCollapsed('help') && (
               <div className="mt-2 space-y-1">
                 <button
                   onClick={() => setDocumentationModalOpen(true)}

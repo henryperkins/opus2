@@ -56,7 +56,8 @@ export default function AppShell({ sidebar, children }) {
       {/* Global header */}
       <Header 
         onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
-        showMenuButton={!isDesktop} 
+        showMenuButton={!isDesktop}
+        sidebarOpen={sidebarOpen}
       />
 
       {/* Main content area with panels */}

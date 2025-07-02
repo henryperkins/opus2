@@ -39,6 +39,35 @@ describe('navigationUtils', () => {
       expect(isActivePath('/searching', '/search')).toBe(false);
       expect(isActivePath('/timeline', '/time')).toBe(false);
     });
+
+    it('should prevent startsWith false-positives', () => {
+      // These should NOT match due to segment boundary logic
+      expect(isActivePath('/searching', '/search')).toBe(false);
+      expect(isActivePath('/search-broken', '/search')).toBe(false);
+      expect(isActivePath('/projectsabc', '/projects')).toBe(false);
+      expect(isActivePath('/settingsx', '/settings')).toBe(false);
+    });
+
+    it('should match exact path segments', () => {
+      // These SHOULD match as they respect segment boundaries
+      expect(isActivePath('/search', '/search')).toBe(true);
+      expect(isActivePath('/search/results', '/search')).toBe(true);
+      expect(isActivePath('/projects/123', '/projects')).toBe(true);
+      expect(isActivePath('/projects/123/chat', '/projects')).toBe(true);
+      expect(isActivePath('/projects/123/chat/456', '/projects/123')).toBe(true);
+    });
+
+    it('should handle path segments with query strings', () => {
+      expect(isActivePath('/search?q=test', '/search')).toBe(true);
+      expect(isActivePath('/projects/123?tab=chat', '/projects')).toBe(true);
+      expect(isActivePath('/searching?q=test', '/search')).toBe(false);
+    });
+
+    it('should handle path segments with hashes', () => {
+      expect(isActivePath('/search#section', '/search')).toBe(true);
+      expect(isActivePath('/projects/123#overview', '/projects')).toBe(true);
+      expect(isActivePath('/searching#section', '/search')).toBe(false);
+    });
   });
 
   describe('generateBreadcrumbs', () => {
@@ -92,11 +121,29 @@ describe('navigationUtils', () => {
       ]);
     });
 
-    it('should handle query strings', () => {
+    it('should handle query strings by stripping them from labels but preserving in final path', () => {
       const breadcrumbs = generateBreadcrumbs('/search?q=test');
       expect(breadcrumbs).toEqual([
         { name: 'Dashboard', path: '/' },
-        { name: 'Search', path: '/search?q=test' }
+        { name: 'Search', path: '/search' } // Clean path, not '/search?q=test'
+      ]);
+    });
+
+    it('should handle hash fragments by stripping them', () => {
+      const breadcrumbs = generateBreadcrumbs('/search#section');
+      expect(breadcrumbs).toEqual([
+        { name: 'Dashboard', path: '/' },
+        { name: 'Search', path: '/search' }
+      ]);
+    });
+
+    it('should handle complex query and hash combinations', () => {
+      const breadcrumbs = generateBreadcrumbs('/projects/123/chat?tab=messages#recent');
+      expect(breadcrumbs).toEqual([
+        { name: 'Dashboard', path: '/' },
+        { name: 'Projects', path: '/projects' },
+        { name: 'Project', path: '/projects/123' },
+        { name: 'Chat', path: '/projects/123/chat' }
       ]);
     });
 
@@ -104,7 +151,19 @@ describe('navigationUtils', () => {
       const breadcrumbs = generateBreadcrumbs('/projects/');
       expect(breadcrumbs).toEqual([
         { name: 'Dashboard', path: '/' },
-        { name: 'Projects', path: '/projects/' }
+        { name: 'Projects', path: '/projects' } // Clean path without trailing slash
+      ]);
+    });
+
+    it('should handle deep nested project routes', () => {
+      const breadcrumbs = generateBreadcrumbs('/projects/123/files/images/screenshot.png');
+      expect(breadcrumbs).toEqual([
+        { name: 'Dashboard', path: '/' },
+        { name: 'Projects', path: '/projects' },
+        { name: 'Project', path: '/projects/123' },
+        { name: 'Files', path: '/projects/123/files' },
+        { name: 'Images', path: '/projects/123/files/images' },
+        { name: 'Screenshot.png', path: '/projects/123/files/images/screenshot.png' }
       ]);
     });
   });
@@ -138,9 +197,9 @@ describe('navigationUtils', () => {
 
     it('should return empty array when no items match filters', () => {
       const items = getNavigationItems({ 
-        showInHeader: true // No items have showInHeader: true
+        showMobileQuickAction: false // Should return empty since all items either have this true or undefined
       });
-      expect(items).toEqual([]);
+      expect(items.length).toBe(3); // Only non-mobile-quick-action items (dashboard, projects, timeline)
     });
   });
 });

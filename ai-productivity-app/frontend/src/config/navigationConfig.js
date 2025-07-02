@@ -7,7 +7,6 @@ export const navigationRoutes = [
     label: 'Dashboard',
     icon: Home,
     showInSidebar: true,
-    showInHeader: false,
     breadcrumbLabel: 'Dashboard'
   },
   {
@@ -16,7 +15,6 @@ export const navigationRoutes = [
     label: 'Projects',
     icon: FolderOpen,
     showInSidebar: true,
-    showInHeader: false,
     breadcrumbLabel: 'Projects'
   },
   {
@@ -25,7 +23,6 @@ export const navigationRoutes = [
     label: 'Search',
     icon: Search,
     showInSidebar: true,
-    showInHeader: false,
     showMobileQuickAction: true,
     breadcrumbLabel: 'Search'
   },
@@ -35,7 +32,6 @@ export const navigationRoutes = [
     label: 'Timeline',
     icon: Clock,
     showInSidebar: true,
-    showInHeader: false,
     breadcrumbLabel: 'Timeline'
   },
   {
@@ -44,7 +40,6 @@ export const navigationRoutes = [
     label: 'Settings',
     icon: Settings,
     showInSidebar: true,
-    showInHeader: false,
     showMobileQuickAction: true,
     breadcrumbLabel: 'Settings'
   }

@@ -1,18 +1,22 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useMemo } from 'react';
 import UserMenu from '../auth/UserMenu';
 import AIProviderStatus from './AIProviderStatus';
 import ThemeToggle from './ThemeToggle';
 import Breadcrumb from './Breadcrumb';
-import { Menu, Search, Settings } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { getNavigationItems } from '../../utils/navigationUtils';
 import PropTypes from 'prop-types';
 
-function Header({ onMenuClick, showMenuButton = false }) {
+function Header({ onMenuClick, showMenuButton = false, sidebarOpen = false }) {
   const { user, loading } = useAuth();
 
-  // Get mobile quick action items
-  const mobileQuickActions = getNavigationItems({ showMobileQuickAction: true });
+  // Memoize mobile quick action items to prevent unnecessary recomputations
+  const mobileQuickActions = useMemo(() => 
+    getNavigationItems({ showMobileQuickAction: true }), 
+    []
+  );
 
 
   return (
@@ -27,6 +31,8 @@ function Header({ onMenuClick, showMenuButton = false }) {
                 onClick={onMenuClick}
                 className="p-2 -ml-2 mr-3 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
                 aria-label="Toggle sidebar"
+                aria-expanded={sidebarOpen}
+                aria-controls="sidebar-menu"
               >
                 <Menu className="h-6 w-6" />
               </button>
@@ -38,37 +44,41 @@ function Header({ onMenuClick, showMenuButton = false }) {
 
 
           {/* Right side - Status, theme, and user menu */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 min-w-0 flex-wrap">
             {/* AI Provider Status */}
             <AIProviderStatus className="hidden sm:block" />
 
             {/* Mobile quick actions */}
-            {mobileQuickActions.map(action => {
-              const IconComponent = action.icon;
-              return (
-                <Link
-                  key={action.id}
-                  to={action.path}
-                  className="lg:hidden p-2 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  aria-label={action.label}
-                >
-                  <IconComponent className="w-5 h-5" />
-                </Link>
-              );
-            })}
+            <nav className="lg:hidden flex items-center space-x-2" aria-label="Quick actions">
+              {mobileQuickActions.map(action => {
+                const IconComponent = action.icon;
+                return (
+                  <Link
+                    key={action.id}
+                    to={action.path}
+                    className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    aria-label={`Go to ${action.label}`}
+                    title={action.label}
+                  >
+                    <IconComponent className="w-5 h-5" />
+                    <span className="sr-only">{action.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
 
             {/* Theme Toggle */}
             <ThemeToggle />
 
             {/* User menu or login */}
             {loading ? (
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 flex-shrink-0" aria-label="Loading"></div>
             ) : user ? (
               <UserMenu />
             ) : (
               <Link
                 to="/login"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex-shrink-0"
               >
                 Sign In
               </Link>
@@ -82,12 +92,14 @@ function Header({ onMenuClick, showMenuButton = false }) {
 
 Header.propTypes = {
   onMenuClick: PropTypes.func,
-  showMenuButton: PropTypes.bool
+  showMenuButton: PropTypes.bool,
+  sidebarOpen: PropTypes.bool
 };
 
 Header.defaultProps = {
   onMenuClick: () => {},
-  showMenuButton: false
+  showMenuButton: false,
+  sidebarOpen: false
 };
 
 export default Header;

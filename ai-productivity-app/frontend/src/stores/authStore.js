@@ -25,12 +25,8 @@ const useAuthStore = create(
         theme: 'light',
         language: 'en',
         sidebarPinned: false,
-        collapsedSections: {
-          recent: false,
-          starred: true,
-          projects: false,
-          help: true,
-        },
+        // Use Map-like object for flexible section state management
+        collapsedSections: {},
       },
 
       // Session metadata
@@ -128,6 +124,18 @@ const useAuthStore = create(
         }));
       },
 
+      // Helper to get collapsed state with sensible defaults
+      getSectionCollapsed: (section) => {
+        const state = get();
+        const defaults = {
+          recent: false,
+          starred: true,
+          projects: false,
+          help: true,
+        };
+        return state.preferences.collapsedSections[section] ?? defaults[section] ?? false;
+      },
+
       // Clear all stored data (for logout)
       clearStore: () => {
         set({
@@ -137,12 +145,7 @@ const useAuthStore = create(
             theme: 'light',
             language: 'en',
             sidebarPinned: false,
-            collapsedSections: {
-              recent: false,
-              starred: true,
-              projects: false,
-              help: true,
-            },
+            collapsedSections: {},
           },
           sessionMetadata: {
             lastLoginTime: null,
