@@ -1,6 +1,6 @@
 /* eslint-env node */
 // Vite configuration for React / Tailwind project
-import { defineConfig, splitVendorChunkPlugin } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
 import tailwindcss from '@tailwindcss/vite';
@@ -37,7 +37,6 @@ export default defineConfig(({ command }) => {
     svgr(),
     // Monaco Editor configured via @monaco-editor/react directly
     inject({ Buffer: ['buffer', 'Buffer'] }),
-    splitVendorChunkPlugin(), // automatic vendor splitter
     enableVisualizer &&
       visualizer({
         filename: 'stats.html',
@@ -123,7 +122,7 @@ export default defineConfig(({ command }) => {
     outDir: 'dist',
     sourcemap: true,
     minify: 'esbuild',
-    target: 'esnext',
+    target: 'es2022',
     /**
      * After deliberate chunking we allow 1.5 MB as the
      * *warning* threshold so CI stays green.
