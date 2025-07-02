@@ -10,7 +10,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 
-from app.dependencies import CurrentUserRequired, DatabaseDep, AsyncDatabaseDep
+from app.dependencies import CurrentUserRequired, DatabaseDep
 from app.models.chat import ChatMessage, ChatSession
 from app.schemas.chat import (
     ChatSessionCreate,
@@ -174,12 +174,12 @@ async def get_messages(
     """Get messages for a chat session."""
     service = ChatService(db)
     messages = await service.get_session_messages(session_id, limit, before_id)
-    
+
     # Transform messages to include metadata in the format expected by frontend
     response_messages = []
     for msg in messages:
         msg_dict = MessageResponse.from_orm(msg).dict()
-        
+
         # Add metadata object with RAG information to match WebSocket format
         msg_dict['metadata'] = {
             'ragUsed': msg.rag_used,
@@ -191,7 +191,7 @@ async def get_messages(
             'ragError': msg.rag_error_message,
         }
         response_messages.append(msg_dict)
-    
+
     return response_messages
 
 
@@ -251,6 +251,7 @@ async def create_message(
 
         # Process with AI in background - create async session
         from app.database import AsyncSessionLocal
+
         async def process_with_async_session():
             async with AsyncSessionLocal() as async_db:
                 # Initialize knowledge service for RAG capabilities
@@ -259,21 +260,21 @@ async def create_message(
                     from app.services.vector_service import vector_service
                     from app.embeddings.generator import EmbeddingGenerator
                     from app.services.knowledge_service import KnowledgeService
-                    
+
                     await vector_service.initialize()
                     embedding_generator = EmbeddingGenerator()
                     knowledge_service = KnowledgeService(vector_service, embedding_generator)
                     logger.info("Knowledge service initialized for REST API chat processor")
                 except Exception as e:
                     logger.warning(f"Failed to initialize knowledge service for REST API: {e}")
-                
+
                 processor = ChatProcessor(async_db, kb=knowledge_service)
                 await processor.process_message(
                     session_id=session_id,
                     message=msg,
                     websocket=mock_websocket
                 )
-        
+
         asyncio.create_task(process_with_async_session())
 
     return MessageResponse.from_orm(msg)
@@ -305,11 +306,27 @@ async def delete_message(
     current_user: CurrentUserRequired,
     db: DatabaseDep,
 ):
-    """Soft-delete a chat message."""
-    service = ChatService(db)
-    success = await service.delete_message(message_id, current_user.id)
-    if not success:
+    """Soft-delete a chat message.
+
+    Behaviour:
+    • Returns **404** when the message does not exist.
+    • Returns **403** when the authenticated user is *not* the author.
+    • Returns **204** (empty) on successful soft-delete.
+    """
+    # ‑- verify existence
+    message = db.query(ChatMessage).filter_by(id=message_id).first()
+    if not message:
         raise HTTPException(status_code=404, detail="Message not found")
+
+    # ‑- enforce ownership (only the author may delete for now)
+    if message.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Not authorised to delete this message"
+        )
+
+    # perform soft-delete
+    service = ChatService(db)
+    await service.delete_message(message_id, current_user.id)
 
 
 @router.websocket("/ws/sessions/{session_id}")

@@ -85,46 +85,56 @@ class VectorService:
         import numpy as np
         from sqlalchemy import text
         from app.database import AsyncSessionLocal
-        
+
         try:
             query_vector = np.array(query_embedding)
-            
+
             # Convert to pgvector format
             vector_str = "[" + ",".join(f"{x:.6f}" for x in query_vector.tolist()) + "]"
-            
+
             async with AsyncSessionLocal() as db:
-                # Build query with positional parameters for asyncpg compatibility
+                # Build query using **named** parameters so SQLAlchemy receives a single
+                # dictionary instead of a bare tuple (which triggers the “List argument
+                # must consist only of tuples or dictionaries” error).
                 if project_ids:
                     query_sql = """
-                    SELECT 
+                    SELECT
                         id,
                         metadata,
                         content,
-                        1 - (embedding <=> $1::vector) as similarity_score
-                    FROM embeddings 
-                    WHERE 1=1 AND metadata->>'project_id' = ANY($2)
-                    AND metadata->>'category' IS NOT NULL
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT $3
+                        1 - (embedding <=> :vector::vector) AS similarity_score
+                    FROM embeddings
+                    WHERE metadata->>'project_id' = ANY(:project_ids)
+                      AND metadata->>'category' IS NOT NULL
+                    ORDER BY embedding <=> :vector::vector
+                    LIMIT :limit
                     """
-                    params = (vector_str, [str(pid) for pid in project_ids], limit)
+                    params = {
+                        "vector": vector_str,
+                        "project_ids": [str(pid) for pid in project_ids],
+                        "limit": limit,
+                    }
                 else:
                     query_sql = """
-                    SELECT 
+                    SELECT
                         id,
                         metadata,
                         content,
-                        1 - (embedding <=> $1::vector) as similarity_score
-                    FROM embeddings 
+                        1 - (embedding <=> :vector::vector) AS similarity_score
+                    FROM embeddings
                     WHERE metadata->>'category' IS NOT NULL
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT $2
+                    ORDER BY embedding <=> :vector::vector
+                    LIMIT :limit
                     """
-                    params = (vector_str, limit)
-                
+                    params = {
+                        "vector": vector_str,
+                        "limit": limit,
+                    }
+
+                # Execute with named parameters
                 result = await db.execute(text(query_sql), params)
                 rows = result.fetchall()
-                
+
                 knowledge_results = []
                 for row in rows:
                     if row.similarity_score >= score_threshold:
@@ -140,10 +150,10 @@ class VectorService:
                             "project_id": int(metadata.get("project_id", 0)) if metadata.get("project_id") else None,
                             "metadata": metadata
                         })
-                
+
                 logger.info(f"Found {len(knowledge_results)} knowledge results for query")
                 return knowledge_results
-                
+
         except Exception as e:
             logger.error(f"Knowledge search failed: {e}", exc_info=True)
             return []
@@ -179,45 +189,45 @@ class VectorService:
             from app.database import AsyncSessionLocal
             from sqlalchemy import text
             import hashlib
-            
+
             # Create content hash for deduplication
             content_hash = hashlib.sha256(content.encode()).hexdigest()
-            
+
             async with AsyncSessionLocal() as db:
                 # Insert into embeddings table with knowledge metadata
                 insert_sql = """
                 INSERT INTO embeddings (embedding, content, content_hash, metadata, created_at)
                 VALUES (:embedding::vector, :content, :content_hash, :metadata::jsonb, NOW())
-                ON CONFLICT (content_hash) 
-                DO UPDATE SET 
+                ON CONFLICT (content_hash)
+                DO UPDATE SET
                     embedding = EXCLUDED.embedding,
                     content = EXCLUDED.content,
                     metadata = EXCLUDED.metadata,
                     created_at = NOW()
                 """
-                
+
                 # Ensure project_id is in metadata for filtering
                 full_metadata = {**metadata}
                 if "project_id" not in full_metadata and "project_id" in metadata:
                     full_metadata["project_id"] = metadata["project_id"]
-                
+
                 # Add entry_id to metadata for reference
                 full_metadata["entry_id"] = entry_id
                 full_metadata["type"] = "knowledge"
-                
+
                 params = {
                     "embedding": embedding,
                     "content": content,
                     "content_hash": content_hash,
                     "metadata": full_metadata
                 }
-                
+
                 await db.execute(text(insert_sql), params)
                 await db.commit()
-                
+
                 logger.info(f"Added knowledge entry to pgvector: {entry_id}")
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to add knowledge entry: {e}", exc_info=True)
             return False

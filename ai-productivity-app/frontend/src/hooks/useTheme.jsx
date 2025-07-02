@@ -14,41 +14,33 @@ const ThemeContext = createContext({
 });
 
 export function ThemeProvider({ children }) {
-  // ---------------------------------------------------------------------------
-  // Initial state – prefer localStorage, fall back to system preference.
-  // ---------------------------------------------------------------------------
-  /* -------------------------------------------------------------------------
-   * Theme source of truth
-   * ------------------------------------------------------------------------
-   * 1. We first try to read the preference from the Zustand auth store so the
-   *    user-selected theme survives across devices/browsers (the store itself
-   *    is persisted via `zustand/middleware/persist`).
-   * 2. If the store has no preference we fall back to localStorage (legacy –
-   *    kept for backward compatibility so existing users keep their choice).
-   * 3. Finally we fall back to the system preference.
-   */
-
   const { preferences, setPreference } = useAuthStore();
 
   // Helper to map preference -> actual theme string (light | dark)
-  const getSystemTheme = () =>
-    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  const getSystemTheme = useCallback(() => {
+    if (typeof window === 'undefined') return 'light';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }, []);
+
+  // Helper to get the current theme from DOM (set by HTML script)
+  const getCurrentThemeFromDOM = useCallback(() => {
+    if (typeof window === 'undefined') return 'light';
+    const root = document.documentElement;
+    return root.classList.contains('dark') ? 'dark' : 'light';
+  }, []);
 
   const [theme, setThemeState] = useState(() => {
     if (typeof window === 'undefined') return 'light';
 
-    const prefFromStore = preferences?.theme;
-    if (prefFromStore === 'light' || prefFromStore === 'dark') {
-      return prefFromStore;
+    // First, check what the HTML script already applied to avoid flash
+    const domTheme = getCurrentThemeFromDOM();
+
+    // If we already have a theme from the HTML script, use it initially
+    if (domTheme) {
+      return domTheme;
     }
 
-    if (prefFromStore === 'auto') {
-      return getSystemTheme();
-    }
-
-    const saved = localStorage.getItem('theme');
-    if (saved === 'light' || saved === 'dark') return saved;
-
+    // Fallback to system preference if nothing is set
     return getSystemTheme();
   });
 
@@ -56,96 +48,127 @@ export function ThemeProvider({ children }) {
   // Helper to apply the theme to the <html> element and meta tag.
   // ---------------------------------------------------------------------------
   const applyTheme = useCallback((newTheme) => {
+    if (typeof window === 'undefined') return;
+
+    console.log('applyTheme called with:', newTheme);
     const root = document.documentElement;
+    console.log('Current classes before change:', root.classList.toString());
+
     root.classList.remove('light', 'dark');
     root.classList.add(newTheme);
+
+    console.log('Current classes after change:', root.classList.toString());
 
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
       meta.content = newTheme === 'dark' ? '#111827' : '#ffffff';
+      console.log('Updated meta theme-color to:', meta.content);
     }
   }, []);
 
   // ---------------------------------------------------------------------------
-  // React to external preference updates (e.g. Settings page) -----------------
+  // Sync with Zustand store when it hydrates or changes
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    const pref = preferences?.theme;
+    // Wait for the store to be hydrated (preferences will be null initially)
+    if (!preferences) return;
 
-    // Fast-exit if nothing changed
-    if (!pref) return;
+    const pref = preferences.theme;
 
-    // 1. Explicit light / dark preference ------------------------------------
+    // Handle explicit light/dark preference
     if (pref === 'light' || pref === 'dark') {
       if (pref !== theme) {
-        /*
-         * We ONLY want to update the *effective* theme here – the preference
-         * itself is already stored in Zustand, so persisting again would be
-         * redundant and would overwrite an eventual user choice that happened
-         * in another tab while this tab was in the background.
-         */
         setThemeState(pref);
         applyTheme(pref);
-        // Keep fallback storage in sync without re-triggering Zustand updates
+        // Keep fallback storage in sync
         localStorage.setItem('theme', pref);
       }
       return;
     }
 
-    // 2. "Auto" preference – follow system setting ---------------------------
+    // Handle auto preference - follow system setting
     if (pref === 'auto') {
       const sys = getSystemTheme();
       if (sys !== theme) {
-        // Do *not* persist the computed value – keep the original "auto"
-        // preference intact while still reflecting the correct UI theme.
         setThemeState(sys);
         applyTheme(sys);
       }
+      return;
     }
-  }, [preferences?.theme, theme, applyTheme]);
+
+    // If no preference is set in the store, check localStorage for legacy support
+    const legacyTheme = localStorage.getItem('theme');
+    if (legacyTheme === 'light' || legacyTheme === 'dark') {
+      if (legacyTheme !== theme) {
+        setThemeState(legacyTheme);
+        applyTheme(legacyTheme);
+        // Migrate to Zustand store
+        setPreference('theme', legacyTheme);
+      }
+    }
+  }, [preferences, theme, applyTheme, getSystemTheme, setPreference]);
 
   // ---------------------------------------------------------------------------
   // Public setter – updates state, storage & DOM.
   // ---------------------------------------------------------------------------
   const setTheme = useCallback(
     (newTheme) => {
-      if (newTheme !== 'light' && newTheme !== 'dark') return;
+      console.log('setTheme called with:', newTheme);
+      if (newTheme !== 'light' && newTheme !== 'dark' && newTheme !== 'auto') return;
 
-      setThemeState(newTheme);
-      // Persist both in Zustand store and localStorage for backward compat.
+      if (newTheme === 'auto') {
+        const systemTheme = getSystemTheme();
+        console.log('Auto theme detected, using system theme:', systemTheme);
+        setThemeState(systemTheme);
+        applyTheme(systemTheme);
+      } else {
+        console.log('Setting theme state and applying:', newTheme);
+        setThemeState(newTheme);
+        applyTheme(newTheme);
+        // Keep fallback storage in sync
+        localStorage.setItem('theme', newTheme);
+      }
+
+      // Always persist the preference (including 'auto')
+      console.log('Persisting theme preference to Zustand store:', newTheme);
       setPreference('theme', newTheme);
-      localStorage.setItem('theme', newTheme);
-      applyTheme(newTheme);
     },
-    [applyTheme, setPreference]
+    [applyTheme, setPreference, getSystemTheme]
   );
 
   // Convenience toggle ---------------------------------------------------------
   const toggleTheme = useCallback(() => {
+    console.log('Theme toggle clicked. Current theme:', theme);
     const next = theme === 'light' ? 'dark' : 'light';
+    console.log('Switching to theme:', next);
     setTheme(next);
   }, [theme, setTheme]);
 
   // Apply theme at mount & whenever it changes --------------------------------
   useEffect(() => {
+    console.log('Applying theme to DOM:', theme);
     applyTheme(theme);
   }, [theme, applyTheme]);
 
   // Keep in-sync with system preference changes -------------------------------
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
     const handleChange = (e) => {
       // Only update when user preference is set to "auto" (or unset).
       const pref = preferences?.theme;
       if (!pref || pref === 'auto') {
-        setTheme(e.matches ? 'dark' : 'light');
+        const newTheme = e.matches ? 'dark' : 'light';
+        setThemeState(newTheme);
+        applyTheme(newTheme);
       }
     };
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [setTheme, preferences?.theme]);
+  }, [preferences?.theme, applyTheme]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
@@ -158,6 +181,10 @@ ThemeProvider.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-export function useTheme() {
-  return useContext(ThemeContext);
-}
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return context;
+};

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 
@@ -170,7 +170,7 @@ class ChatService:
             result = await self.db.execute(
                 select(ChatMessage).where(
                     ChatMessage.id == message_id,
-                    ChatMessage.is_deleted == False
+                    ChatMessage.is_deleted.is_(False)
                 )
             )
             message = result.scalar_one_or_none()
@@ -199,23 +199,27 @@ class ChatService:
 
         return message
 
-    async def delete_message(self, message_id: int, user_id: int) -> bool:
-        """Soft delete message."""
+    async def delete_message(self, message_id: int, _user_id: int) -> bool:  # noqa: D401 – keep signature for BC
+        """Soft-delete *any* message by ``message_id``.
+
+        The caller is responsible for *authorisation*.  This method merely
+        performs the state change and broadcasts the deletion.  It returns
+        ``True`` when the message existed (even if already deleted) and the
+        operation succeeded, otherwise ``False``.
+        """
+        # Fetch without filtering on *user_id* – permission is checked in router.
         if self.is_async:
             result = await self.db.execute(
-                select(ChatMessage).where(
-                    ChatMessage.id == message_id,
-                    ChatMessage.user_id == user_id
-                )
+                select(ChatMessage).where(ChatMessage.id == message_id)
             )
             message = result.scalar_one_or_none()
         else:
-            message = (
-                self.db.query(ChatMessage).filter_by(id=message_id, user_id=user_id).first()
-            )
+            message = self.db.query(ChatMessage).filter_by(id=message_id).first()
 
         if not message:
             return False
+        if message.is_deleted:
+            return True  # already deleted – treat as success
 
         message.is_deleted = True
 

@@ -127,13 +127,16 @@ const useAuthStore = create(
       // Helper to get collapsed state with sensible defaults
       getSectionCollapsed: (section) => {
         const state = get();
+        // Ensure we handle legacy persisted data where collapsedSections
+        // may be undefined by providing a safe fallback object.
+        const collapsedSections = state?.preferences?.collapsedSections || {};
         const defaults = {
           recent: false,
           starred: true,
           projects: false,
           help: true,
         };
-        return state.preferences.collapsedSections[section] ?? defaults[section] ?? false;
+        return collapsedSections[section] ?? defaults[section] ?? false;
       },
 
       // Clear all stored data (for logout)

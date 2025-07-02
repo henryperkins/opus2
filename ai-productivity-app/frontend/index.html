@@ -2,33 +2,57 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="AI Productivity App - Code-centric productivity tool">
-    <!-- Apply initial theme as early as possible to avoid flash -->
-    <script>
-      (function () {
-        try {
-          const saved = localStorage.getItem('theme');
-          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          const theme = saved === 'light' || saved === 'dark'
-            ? saved
-            : prefersDark
-              ? 'dark'
-              : 'light';
-          document.documentElement.classList.add(theme);
-        } catch (e) {
-          // Fail silently
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="AI Productivity App - Code-centric productivity tool">
+  <!-- Apply initial theme as early as possible to avoid flash -->
+  <script>
+    (function () {
+      try {
+        // First try to read from Zustand persisted store
+        const zustandData = localStorage.getItem('ai-productivity-auth');
+        let theme = null;
+
+        if (zustandData) {
+          try {
+            const parsed = JSON.parse(zustandData);
+            theme = parsed?.state?.preferences?.theme;
+          } catch (e) {
+            // Ignore JSON parse errors
+          }
         }
-      })();
-    </script>
-    <title>AI Productivity App</title>
-    <link rel="icon" type="image/svg+xml" href="/vite.svg">
+
+        // Fall back to legacy localStorage key for backward compatibility
+        if (!theme) {
+          theme = localStorage.getItem('theme');
+        }
+
+        // Finally fall back to system preference
+        if (!theme || (theme !== 'light' && theme !== 'dark')) {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          theme = prefersDark ? 'dark' : 'light';
+        }
+
+        // Handle 'auto' theme by detecting system preference
+        if (theme === 'auto') {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          theme = prefersDark ? 'dark' : 'light';
+        }
+
+        document.documentElement.classList.add(theme);
+      } catch (e) {
+        // Fail silently and add default theme
+        document.documentElement.classList.add('light');
+      }
+    })();
+  </script>
+  <title>AI Productivity App</title>
+  <link rel="icon" type="image/svg+xml" href="/vite.svg">
 </head>
 
 <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
 </body>
 
 </html>
