@@ -10,6 +10,7 @@ import KeyboardShortcutsModal from '../modals/KeyboardShortcutsModal';
 import WhatsNewModal from '../modals/WhatsNewModal';
 import DocumentationModal from '../modals/DocumentationModal';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { getNavigationItems, isActivePath, getSidebarActiveStyles } from '../../utils/navigationUtils';
 import {
   Plus, FolderOpen, Clock, Star, Search, Settings, HelpCircle,
   ChevronDown, Home, MessageSquare, FileText, BarChart3, Database,
@@ -100,7 +101,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
     }));
   };
 
-  const isActive = (path) => location.pathname === path;
+  const navigationItems = getNavigationItems({ showInSidebar: true });
 
   // Visual indicator for color
   const ColorDot = ({ color }) => (
@@ -253,9 +254,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
                   to="/projects"
                   onClick={closeOnMobile}
                   className={`flex items-center space-x-2 px-3 py-2 text-sm rounded-lg transition-colors ${
-                    isActive('/projects')
-                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    getSidebarActiveStyles(isActivePath(location.pathname, '/projects'))
                   }`}
                 >
                   <BarChart3 className="w-4 h-4" />
@@ -287,44 +286,23 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
 
           {/* Main Navigation */}
           <div className="pt-4 space-y-1 border-t border-gray-200 dark:border-gray-700">
-            <Link
-              to="/"
-              onClick={closeOnMobile}
-              className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isActive('/')
-                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              <Home className="w-4 h-4" />
-              <span>Dashboard</span>
-            </Link>
-
-            <Link
-              to="/search"
-              onClick={closeOnMobile}
-              className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isActive('/search')
-                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              <Search className="w-4 h-4" />
-              <span>Search</span>
-            </Link>
-
-            <Link
-              to="/timeline"
-              onClick={closeOnMobile}
-              className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isActive('/timeline')
-                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              <Clock className="w-4 h-4" />
-              <span>Timeline</span>
-            </Link>
+            {navigationItems.map(item => {
+              const IconComponent = item.icon;
+              const isActive = isActivePath(location.pathname, item.path);
+              return (
+                <Link
+                  key={item.id}
+                  to={item.path}
+                  onClick={closeOnMobile}
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    getSidebarActiveStyles(isActive)
+                  }`}
+                >
+                  <IconComponent className="w-4 h-4" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
           </div>
 
           {/* Help & Resources */}
@@ -368,9 +346,7 @@ const Sidebar = ({ isOpen = true, onToggle, className = '' }) => {
             to="/settings"
             onClick={closeOnMobile}
             className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isActive('/settings')
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              getSidebarActiveStyles(isActivePath(location.pathname, '/settings'))
             }`}
           >
             <Settings className="w-4 h-4" />

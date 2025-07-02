@@ -54,12 +54,10 @@ export default function AppShell({ sidebar, children }) {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       {/* Global header */}
-      <header className="sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-800 shadow-md px-4 py-2">
-        <Header 
-          onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
-          showMenuButton={!isDesktop} 
-        />
-      </header>
+      <Header 
+        onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
+        showMenuButton={!isDesktop} 
+      />
 
       {/* Main content area with panels */}
       <div className="flex-1 overflow-hidden">
