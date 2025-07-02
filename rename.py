@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 """
 rename_to_md.py
@@ -222,7 +223,8 @@ def prepare_work_dir(
         log(f"Removing existing '{out_dir}'.")
         shutil.rmtree(out_dir)
 
-    shutil.copytree(src_dir, out_dir)
+    # Use ignore_dangling_symlinks=True to handle broken symlinks gracefully
+    shutil.copytree(src_dir, out_dir, ignore_dangling_symlinks=True)
     log(f"Copied working tree → '{out_dir}'.")
     return out_dir
 
