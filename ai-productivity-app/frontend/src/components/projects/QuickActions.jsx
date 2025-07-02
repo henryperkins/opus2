@@ -1,4 +1,3 @@
-import React from 'react';
 import { MessageCircle, FileText, BarChart2, BookOpen, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 

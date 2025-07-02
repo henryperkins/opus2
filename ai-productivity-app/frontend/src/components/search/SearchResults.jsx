@@ -1,5 +1,4 @@
 // Search results display with code previews and navigation
-import React from 'react';
 import CodeSnippet from './CodeSnippet';
 import LoadingSpinner from '../common/LoadingSpinner';
 

@@ -6,7 +6,7 @@ import { useChat } from '../hooks/useChat';
 import { useProject } from '../hooks/useProjects';
 import { useUser } from '../hooks/useAuth';
 import { useCodeExecutor } from '../hooks/useCodeExecutor';
-import { useResponseQualityTracking } from '../components/analytics/ResponseQuality';
+import { useResponseQualityTracking } from '../hooks/useResponseQualityTracking';
 
 // Context providers
 import { useModelContext } from '../contexts/ModelContext';

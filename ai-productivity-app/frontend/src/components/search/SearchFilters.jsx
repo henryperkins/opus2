@@ -1,5 +1,4 @@
 // Advanced search filters for language, file type, and code structure
-import React from 'react';
 
 export default function SearchFilters({ filters, onChange, availableLanguages = [] }) {
   const handleFilterChange = (key, value) => {

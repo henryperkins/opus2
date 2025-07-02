@@ -8,7 +8,7 @@ export default [
     files: ['**/*.{js,jsx}'],
     ignores: ['**/*.test.{js,jsx}', '**/test/**', '**/tests/**', '**/api/client.js'],
     languageOptions: {
-      ecmaVersion: 2021,
+      ecmaVersion: 2022,
       sourceType: 'module',
       parserOptions: {
         ecmaFeatures: {
@@ -38,7 +38,11 @@ export default [
         btoa: 'readonly',
         atob: 'readonly',
         WebSocket: 'readonly',
-        performance: 'readonly'
+        performance: 'readonly',
+        IntersectionObserver: 'readonly',
+        Blob: 'readonly',
+        monaco: 'readonly',
+        alert: 'readonly'
       }
     },
     plugins: {
@@ -91,7 +95,7 @@ export default [
   {
     files: ['**/*.test.{js,jsx}', '**/test/**/*.{js,jsx}', '**/tests/**/*.{js,jsx}'],
     languageOptions: {
-      ecmaVersion: 2021,
+      ecmaVersion: 2022,
       sourceType: 'module',
       parserOptions: {
         ecmaFeatures: {
@@ -124,7 +128,7 @@ export default [
     // API layer files are allowed to import axios and other modules directly
     files: ['**/api/**/*.{js,jsx}'],
     languageOptions: {
-      ecmaVersion: 2021,
+      ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
         window: 'readonly',

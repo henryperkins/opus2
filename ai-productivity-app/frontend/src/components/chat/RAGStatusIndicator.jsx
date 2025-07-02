@@ -1,4 +1,3 @@
-import React from 'react';
 import { Brain, Database, Search, AlertCircle } from 'lucide-react';
 import PropTypes from 'prop-types';
 

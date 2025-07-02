@@ -153,11 +153,11 @@ export function useWebSocketChannel({
   useEffect(() => {
     let aborted = false;
 
+    // If path is falsy *do not* touch an existing live socket.
+    // This prevents the null→valid→null oscillation that closes
+    // and re-opens the connection every render.
     if (!path) {
-      setState('disconnected');
-      connectionStable.current = false;
-      lastSuccessfulPath.current = null;
-      return () => { };
+      return () => {};       // keep current socket alive
     }
 
     // Enhanced connection reuse with stability tracking
@@ -316,18 +316,15 @@ export function useWebSocketChannel({
     debouncedConnect(connect);
 
     return () => {
-      aborted = true;
-      console.log(`🔌 WebSocket useEffect cleanup: closing connection to ${path}`);
-      clearTimeout(timerRef.current); // cancel pending reconnect
-      debouncedConnect.cancel(); // Cancel any pending debounced connections
-      
-      // Reset stability tracking on cleanup
-      connectionStable.current = false;
-      if (lastSuccessfulPath.current === path) {
-        lastSuccessfulPath.current = null;
+      // Only tear down when the next render requests **another**
+      // non-null path.  Skip if it's the transient null sentinel.
+      if (path && path !== lastSuccessfulPath.current) {
+        aborted = true;
+        clearTimeout(timerRef.current);
+        connectionStable.current = false;
+        console.log(`🔌 WebSocket cleanup: closing ${path}`);
+        close();
       }
-      
-      close();
     };
   }, [connectionKey, debouncedConnect, close]); // Use memoized connection key instead of individual params
 

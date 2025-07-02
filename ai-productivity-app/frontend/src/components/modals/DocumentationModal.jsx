@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Brain, Search, Upload, MessageCircle, CheckCircle, Info } from 'lucide-react';
 import Modal from '../common/Modal';
 
@@ -7,7 +7,7 @@ const DocumentationModal = ({ isOpen, onClose, defaultTab = 'overview' }) => {
   const [activeTab, setActiveTab] = useState(defaultTab);
   
   // Update tab when defaultTab prop changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen && defaultTab) {
       setActiveTab(defaultTab);
     }

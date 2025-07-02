@@ -1,18 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import PropTypes from 'prop-types';
 import { format } from 'date-fns';
 import chatAPI from '../../api/chat';
 import LoadingSpinner from '../common/LoadingSpinner';
 import EmptyState from '../common/EmptyState';
-import { MessageSquare, Plus, Clock, ChevronRight } from 'lucide-react';
+import { MessageSquare, Plus, Clock, ChevronRight, Pencil, Trash2, Check, X } from 'lucide-react';
 
 export default function ProjectChatList({ projectId, project }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState(null);   // id being renamed
+  const [newTitle, setNewTitle] = useState('');
+  const [busyId, setBusyId] = useState(null);   // spinner for save/del
 
   // Load chat sessions for this project
   useEffect(() => {
@@ -54,6 +59,43 @@ export default function ProjectChatList({ projectId, project }) {
 
   const openChat = (sessionId) => {
     navigate(`/projects/${projectId}/chat/${sessionId}`);
+  };
+
+  // Persist new title
+  const saveTitle = async () => {
+    if (!newTitle.trim()) return;
+    try {
+      setBusyId(editingId);
+      await chatAPI.updateSession(editingId, { title: newTitle.trim() });
+      setSessions(s => s.map(sess =>
+        sess.id === editingId ? { ...sess, title: newTitle.trim() } : sess));
+      
+      // Invalidate sidebar recent chats cache to update titles immediately
+      queryClient.invalidateQueries(['recentChats']);
+    } catch (err) {
+      setError('Failed to rename chat session');
+    } finally {
+      setBusyId(null);
+      setEditingId(null);
+    }
+  };
+
+  // Ask & delete
+  const confirmDelete = (id) => {
+    if (!window.confirm('Delete this conversation?')) return;
+    deleteSession(id);
+  };
+
+  const deleteSession = async (id) => {
+    try {
+      setBusyId(id);
+      await chatAPI.deleteSession(id);
+      setSessions(s => s.filter(sess => sess.id !== id));
+    } catch (err) {
+      setError('Failed to delete chat session');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   if (loading) {
@@ -147,7 +189,47 @@ export default function ProjectChatList({ projectId, project }) {
                   </div>
                 </div>
                 
-                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+                {/* actions / chevron */}
+                <div
+                  className="flex items-center gap-1 text-gray-400 group-hover:text-gray-600
+                             dark:text-gray-500 dark:group-hover:text-gray-300"
+                  onClick={(e) => e.stopPropagation()}   /* keep card from navigating */
+                >
+                  {editingId === session.id ? (
+                    <>
+                      <input
+                        value={newTitle}
+                        onChange={e => setNewTitle(e.target.value)}
+                        className="w-40 px-1 py-0.5 text-sm rounded border
+                                   dark:bg-gray-700 dark:border-gray-600"
+                      />
+                      <Check
+                        className={`w-4 h-4 cursor-pointer ${busyId===session.id&&'animate-spin'}`}
+                        aria-label="Save"
+                        onClick={saveTitle}
+                      />
+                      <X
+                        className="w-4 h-4 cursor-pointer"
+                        aria-label="Cancel"
+                        onClick={() => setEditingId(null)}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Pencil
+                        className="w-4 h-4 cursor-pointer"
+                        aria-label="Edit title"
+                        onClick={() => { setEditingId(session.id); setNewTitle(session.title || ''); }}
+                      />
+                      <Trash2
+                        className={`w-4 h-4 cursor-pointer ${busyId===session.id&&'animate-spin'}`}
+                        aria-label="Delete conversation"
+                        onClick={() => confirmDelete(session.id)}
+                      />
+                      <ChevronRight className="w-5 h-5" />
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           ))}

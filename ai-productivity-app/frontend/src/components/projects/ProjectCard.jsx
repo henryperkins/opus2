@@ -1,6 +1,5 @@
 // ProjectCard.jsx: visual card with status, emoji, tags, and quick actions.
 
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Badge from '../common/Badge';
 

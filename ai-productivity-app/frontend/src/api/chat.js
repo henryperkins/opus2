@@ -57,8 +57,13 @@ function createChatAPI() {
     },
 
     // Delete a message
-    deleteMessage: (id) => {
-      return client.delete(`/api/chat/messages/${id}`);
+    deleteMessage: async (id) => {
+      try {
+        return await client.delete(`/api/chat/messages/${id}`);
+      } catch (err) {
+        if (err.response?.status === 404) return { status: 404 }; // idempotent
+        throw err;
+      }
     }
   };
 }

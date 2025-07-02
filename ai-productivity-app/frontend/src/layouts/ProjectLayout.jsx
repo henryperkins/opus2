@@ -1,4 +1,3 @@
-import React from 'react';
 import { Outlet, Link, useParams } from 'react-router-dom';
 
 export default function ProjectLayout() {

@@ -4,7 +4,7 @@
 // Each ProjectCard now links directly to the full project overview page.
 // -----------------------------------------------------------------------------
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 // Components & hooks
@@ -64,12 +64,8 @@ export default function ProjectDashboard() {
   }, [user, authLoading]);
 
   useEffect(() => {
-    console.log('useEffect triggered - authLoading:', authLoading, 'user:', !!user, 'filters changed');
-    if (!authLoading && user) {
-      fetchProjects();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user, filters]);
+    if (!authLoading && user) fetchProjects();
+  }, [authLoading, user]);          // ← filters removed, callers are responsible
 
   // ---------------------------------------------------------------------------
   // Action handlers
@@ -112,7 +108,10 @@ export default function ProjectDashboard() {
     fetchProjects();
   };
 
-  const handleFilterChange = (newFilters) => setFilters(newFilters);
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+    fetchProjects();
+  };
   const handlePageChange = (newPage) => setPage(newPage);
 
   // Derived counts

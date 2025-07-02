@@ -1,7 +1,6 @@
 // Reusable status badge component
 // Applies consistent gradient colours based on *status* prop.
 
-import React from 'react';
 
 /**
  * Badge – gradient pill displaying a status label.

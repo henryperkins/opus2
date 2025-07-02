@@ -1,4 +1,3 @@
-import React from 'react';
 
 export default function ProjectHeader({ project }) {
   if (!project) return null;

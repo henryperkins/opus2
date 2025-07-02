@@ -1,10 +1,10 @@
 // components/analytics/ResponseQuality.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
-  TrendingUp, ThumbsUp, ThumbsDown, MessageSquare,
-  Clock, Zap, AlertCircle, BarChart2
+  ThumbsUp, ThumbsDown, MessageSquare,
+  Clock, Zap, AlertCircle
 } from 'lucide-react';
-import { Line, Bar } from 'recharts';
+import PropTypes from 'prop-types';
 
 // Quality assessment algorithms
 const assessQuality = (content, metadata) => {
@@ -74,8 +74,13 @@ const MetricBar = ({
   );
 };
 
+MetricBar.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.number.isRequired,
+  color: PropTypes.string
+};
+
 export default function ResponseQuality({
-  messageId,
   content,
   metadata,
   onFeedback,
@@ -314,62 +319,16 @@ export default function ResponseQuality({
   );
 }
 
-// Hook for tracking response quality over time
-export function useResponseQualityTracking(projectId) {
-  const [qualityHistory, setQualityHistory] = useState([]);
-
-  const trackResponseQuality = (messageId, metrics) => {
-    const score = (
-      metrics.relevance * 0.3 +
-      metrics.accuracy * 0.25 +
-      metrics.helpfulness * 0.2 +
-      metrics.clarity * 0.15 +
-      metrics.completeness * 0.1
-    );
-
-    // Store in localStorage for persistence
-    const key = `quality_${projectId}_${new Date().toISOString().split('T')[0]}`;
-    const existing = localStorage.getItem(key);
-    const data = existing ? JSON.parse(existing) : { totalScore: 0, count: 0 };
-
-    data.totalScore += score;
-    data.count += 1;
-
-    localStorage.setItem(key, JSON.stringify(data));
-  };
-
-  const loadQualityHistory = () => {
-    const history = [];
-    const prefix = `quality_${projectId}_`;
-
-    // Get last 30 days
-    for (let i = 0; i < 30; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      const key = `${prefix}${dateStr}`;
-
-      const data = localStorage.getItem(key);
-      if (data) {
-        const { totalScore, count } = JSON.parse(data);
-        history.unshift({
-          date: dateStr,
-          averageScore: totalScore / count,
-          responseCount: count
-        });
-      }
-    }
-
-    setQualityHistory(history);
-  };
-
-  useEffect(() => {
-    loadQualityHistory();
-  }, [projectId]);
-
-  return {
-    qualityHistory,
-    trackResponseQuality,
-    refresh: loadQualityHistory
-  };
-}
+ResponseQuality.propTypes = {
+  content: PropTypes.string.isRequired,
+  metadata: PropTypes.shape({
+    model: PropTypes.string,
+    responseTime: PropTypes.number,
+    tokens: PropTypes.shape({
+      completion: PropTypes.number
+    }),
+    citations: PropTypes.array
+  }),
+  onFeedback: PropTypes.func,
+  showDetailedMetrics: PropTypes.bool
+};

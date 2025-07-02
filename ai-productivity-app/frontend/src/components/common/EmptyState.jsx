@@ -1,4 +1,3 @@
-import React from 'react';
 import PropTypes from 'prop-types';
 import { Search, MessageCircle, FileText, Brain, Plus, Wifi, WifiOff, Zap } from 'lucide-react';
 

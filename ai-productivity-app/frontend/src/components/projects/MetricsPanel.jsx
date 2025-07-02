@@ -1,4 +1,3 @@
-import React from 'react';
 
 export default function MetricsPanel({ quality, kb }) {
   if (!quality && !kb) return null;

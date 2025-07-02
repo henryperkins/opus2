@@ -1,6 +1,5 @@
 /* ModelSettingsPage.jsx – wrapper around reusable ModelConfiguration component */
 
-import React from 'react';
 import ModelConfiguration from '../components/settings/ModelConfiguration';
 
 export default function ModelSettingsPage() {
