@@ -42,6 +42,16 @@ async def search(
         request.project_ids = [p.id for p in projects]
 
     # ------------------------------------------------------------------
+    # Convert Pydantic object to plain dict so that downstream services that
+    # expect a mapping (and call .get()) continue to work and so that we can
+    # store the filters JSON in the database without serialization issues.
+    # ------------------------------------------------------------------
+
+    filters_dict = (
+        request.filters.model_dump(exclude_none=True) if request.filters else None
+    )
+
+    # ------------------------------------------------------------------
     # Execute search (may raise).
     # ------------------------------------------------------------------
 
@@ -49,7 +59,7 @@ async def search(
         raw_results = await hybrid_search.search(
             query=request.query,
             project_ids=request.project_ids,
-            filters=request.filters,
+            filters=filters_dict,
             limit=request.limit,
             search_types=request.search_types,
         )
@@ -83,7 +93,7 @@ async def search(
             SearchHistory(
                 user_id=current_user.id,
                 query_text=request.query.strip()[:255],
-                filters=request.filters,
+                filters=filters_dict,
                 project_ids=request.project_ids,
             )
         )
