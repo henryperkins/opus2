@@ -1,11 +1,11 @@
 """Service for managing persistent runtime configuration."""
 
+import logging
+import re
 from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
-import logging
-import re
 
 from app.models.config import RuntimeConfig, ConfigHistory, ModelConfiguration, ModelUsageMetrics
 from app.config import settings
@@ -36,23 +36,20 @@ class ConfigService:
 
     def get_all_config(self, include_secrets: bool = True, mask_secrets: bool = False) -> Dict[str, Any]:
         """Get all configuration as a dictionary.
-        
+
         Args:
             include_secrets: Whether to include secret values in the result
             mask_secrets: Whether to mask secret values for display
         """
         configs = self.db.query(RuntimeConfig).all()
         result = {}
-        
         for config in configs:
             key = config.key
             value = config.value
-            
             # Handle secret values
             if config.value_type == "secret" and value:
                 if not include_secrets:
                     continue  # Skip secret values entirely
-                
                 try:
                     # Decrypt the secret value
                     decrypted_value = decrypt_secret(value)
@@ -61,14 +58,12 @@ class ConfigService:
                     else:
                         value = decrypted_value
                 except Exception as e:
-                    logger.warning(f"Failed to decrypt secret for key {key}: {e}")
+                    logger.warning("Failed to decrypt secret for key %s: %s", key, e)
                     value = "***" if mask_secrets else None
             elif is_secret_key(key) and mask_secrets and value:
                 # Mask unencrypted secrets for display
                 value = mask_secret_value(str(value))
-            
             result[key] = value
-        
         return result
 
     def set_config(self, key: str, value: Any, description: str = None,
@@ -89,9 +84,9 @@ class ConfigService:
             try:
                 stored_value = encrypt_secret(value)
                 value_type = "secret"
-                logger.debug(f"Encrypted secret value for key: {key}")
+                logger.debug("Encrypted secret value for key: %s", key)
             except Exception as e:
-                logger.warning(f"Failed to encrypt secret for key {key}: {e}")
+                logger.warning("Failed to encrypt secret for key %s: %s", key, e)
                 # Continue with unencrypted value but log the issue
 
         if existing:
@@ -121,12 +116,12 @@ class ConfigService:
             # Record configuration change in history
             self._record_history(key, old_value, value, updated_by)
 
-            logger.info(f"Configuration updated: {key} = {value}")
+            logger.info("Configuration updated: %s = %s", key, value)
             return config
 
         except IntegrityError as e:
             self.db.rollback()
-            logger.error(f"Failed to update configuration {key}: {e}")
+            logger.error("Failed to update configuration %s: %s", key, e)
             raise
 
     def set_multiple_config(self, config_dict: Dict[str, Any],
@@ -147,9 +142,9 @@ class ConfigService:
                     try:
                         stored_value = encrypt_secret(value)
                         value_type = "secret"
-                        logger.debug(f"Encrypted secret value for key: {key}")
+                        logger.debug("Encrypted secret value for key: %s", key)
                     except Exception as e:
-                        logger.warning(f"Failed to encrypt secret for key {key}: {e}")
+                        logger.warning("Failed to encrypt secret for key %s: %s", key, e)
                         # Continue with unencrypted value but log the issue
 
                 if existing:
@@ -171,12 +166,12 @@ class ConfigService:
                 self._record_history(key, old_value, value, updated_by)
 
             self.db.commit()
-            logger.info(f"Multiple configurations updated: {list(config_dict.keys())}")
+            logger.info("Multiple configurations updated: %s", list(config_dict.keys()))
             return results
 
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Failed to update multiple configurations: {e}")
+            logger.error("Failed to update multiple configurations: %s", e)
             raise
 
     def delete_config(self, key: str, updated_by: str = None) -> bool:
@@ -194,12 +189,12 @@ class ConfigService:
             # Record deletion in history
             self._record_history(key, old_value, None, updated_by, "Configuration deleted")
 
-            logger.info(f"Configuration deleted: {key}")
+            logger.info("Configuration deleted: %s", key)
             return True
 
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Failed to delete configuration {key}: {e}")
+            logger.error("Failed to delete configuration %s: %s", key, e)
             raise
 
     def get_config_history(self, key: str = None, limit: int = 100) -> List[ConfigHistory]:
@@ -235,7 +230,7 @@ class ConfigService:
 
         if new_configs:
             self.set_multiple_config(new_configs, updated_by="system_init")
-            logger.info(f"Initialized default configurations: {list(new_configs.keys())}")
+            logger.info("Initialized default configurations: %s", list(new_configs.keys()))
 
     def _get_value_type(self, value: Any) -> str:
         """Determine the type of a configuration value."""
@@ -265,7 +260,7 @@ class ConfigService:
             # Don't commit here - let the caller handle the transaction
 
         except Exception as e:
-            logger.warning(f"Failed to record config history for {key}: {e}")
+            logger.warning("Failed to record config history for %s: %s", key, e)
 
     # Model Configuration Management
 
@@ -274,11 +269,11 @@ class ConfigService:
         return self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
 
     def get_available_models(self, provider: Optional[str] = None,
-                           capabilities: Optional[List[str]] = None) -> List[ModelConfiguration]:
+                             capabilities: Optional[List[str]] = None) -> List[ModelConfiguration]:
         """Get list of available models with optional filtering."""
         query = self.db.query(ModelConfiguration).filter(
-            ModelConfiguration.is_available == True,
-            ModelConfiguration.is_deprecated == False
+            ModelConfiguration.is_available.is_(True),
+            ModelConfiguration.is_deprecated.is_(False)
         )
 
         if provider:
@@ -300,11 +295,11 @@ class ConfigService:
 
         try:
             self.db.commit()
-            logger.info(f"Created model configuration: {model_config.model_id}")
+            logger.info("Created model configuration: %s", model_config.model_id)
             return model_config
         except IntegrityError as e:
             self.db.rollback()
-            logger.error(f"Failed to create model configuration: {e}")
+            logger.error("Failed to create model configuration: %s", e)
             raise
 
     def update_model_configuration(self, model_id: str, updates: Dict[str, Any]) -> Optional[ModelConfiguration]:
@@ -319,15 +314,15 @@ class ConfigService:
 
         try:
             self.db.commit()
-            logger.info(f"Updated model configuration: {model_id}")
+            logger.info("Updated model configuration: %s", model_id)
             return model_config
         except IntegrityError as e:
             self.db.rollback()
-            logger.error(f"Failed to update model configuration: {e}")
+            logger.error("Failed to update model configuration: %s", e)
             raise
 
     def get_model_by_capabilities(self, required_capabilities: List[str],
-                                provider: Optional[str] = None) -> List[ModelConfiguration]:
+                                  provider: Optional[str] = None) -> List[ModelConfiguration]:
         """Find models that have all required capabilities."""
         if self.db.bind.dialect.name == 'postgresql':
             # Use PostgreSQL JSONB containment operator
@@ -339,8 +334,8 @@ class ConfigService:
             capability_filter = text("1=1")  # TODO: Implement SQLite fallback
 
         query = self.db.query(ModelConfiguration).filter(
-            ModelConfiguration.is_available == True,
-            ModelConfiguration.is_deprecated == False,
+            ModelConfiguration.is_available.is_(True),
+            ModelConfiguration.is_deprecated.is_(False),
             capability_filter
         )
 
@@ -354,8 +349,8 @@ class ConfigService:
         if self.db.bind.dialect.name == 'postgresql':
             # Use PostgreSQL expression for cost efficiency calculation
             query = self.db.query(ModelConfiguration).filter(
-                ModelConfiguration.is_available == True,
-                ModelConfiguration.is_deprecated == False,
+                ModelConfiguration.is_available.is_(True),
+                ModelConfiguration.is_deprecated.is_(False),
                 ModelConfiguration.cost_input_per_1k.isnot(None),
                 ModelConfiguration.cost_output_per_1k.isnot(None),
                 ModelConfiguration.throughput_tokens_per_sec.isnot(None)
@@ -365,8 +360,8 @@ class ConfigService:
         else:
             # Fallback for SQLite
             query = self.db.query(ModelConfiguration).filter(
-                ModelConfiguration.is_available == True,
-                ModelConfiguration.is_deprecated == False
+                ModelConfiguration.is_available.is_(True),
+                ModelConfiguration.is_deprecated.is_(False)
             ).order_by(ModelConfiguration.cost_input_per_1k).limit(limit)
 
         return query.all()
@@ -383,11 +378,11 @@ class ConfigService:
 
         try:
             self.db.commit()
-            logger.debug(f"Recorded usage metrics for model: {model_id}")
+            logger.debug("Recorded usage metrics for model: %s", model_id)
             return usage_metrics
         except IntegrityError as e:
             self.db.rollback()
-            logger.error(f"Failed to record model usage metrics: {e}")
+            logger.error("Failed to record model usage metrics: %s", e)
             raise
 
     def get_model_usage_metrics(self, model_id: str, days: int = 30) -> List[ModelUsageMetrics]:
@@ -436,17 +431,16 @@ class ConfigService:
 
     async def validate_config(self, config_dict: Dict[str, Any]) -> tuple[bool, str]:
         """Validate a configuration by testing it with the LLM provider.
-        
+
         Args:
             config_dict: Configuration dictionary to validate
-            
+
         Returns:
             Tuple of (is_valid, error_message)
         """
         import asyncio
-        import time
         from app.llm.client import LLMClient
-        
+
         provider = config_dict.get("provider", "openai")
         model = config_dict.get("chat_model", "gpt-3.5-turbo")
         temperature = config_dict.get("temperature", 0.7)
