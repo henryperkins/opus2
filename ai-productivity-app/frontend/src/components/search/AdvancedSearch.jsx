@@ -98,6 +98,7 @@ export default function AdvancedSearch({ projectId }) {
                     onChange={updateQuery}
                     placeholder="Search code, symbols, or use natural language..."
                     loading={loading}
+                    projectId={projectId}
                 />
 
                 {/* Search Mode Selector */}

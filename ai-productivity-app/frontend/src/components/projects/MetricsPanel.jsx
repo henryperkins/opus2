@@ -9,7 +9,12 @@ export default function MetricsPanel({ quality, kb }) {
 
   return (
     <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-      {Object.entries(stats).filter(([k, v]) => v != null).map(([k, v]) => (
+      {Object.entries(stats)
+        .filter(
+          ([, v]) =>
+            v != null && (typeof v === 'number' || typeof v === 'string')
+        )
+        .map(([k, v]) => (
         <div key={k} className="card p-4">
           <dt className="text-sm text-gray-500 capitalize">
             {k.replace(/_/g, ' ')}

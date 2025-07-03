@@ -102,11 +102,11 @@ class VectorService:
                         id,
                         metadata,
                         content,
-                        1 - (embedding <=> :vector::vector) AS similarity_score
+                        1 - (embedding <=> CAST(:vector AS vector)) AS similarity_score
                     FROM embeddings
                     WHERE metadata->>'project_id' = ANY(:project_ids)
                       AND metadata->>'category' IS NOT NULL
-                    ORDER BY embedding <=> :vector::vector
+                    ORDER BY embedding <=> CAST(:vector AS vector)
                     LIMIT :limit
                     """
                     params = {
@@ -120,10 +120,10 @@ class VectorService:
                         id,
                         metadata,
                         content,
-                        1 - (embedding <=> :vector::vector) AS similarity_score
+                        1 - (embedding <=> CAST(:vector AS vector)) AS similarity_score
                     FROM embeddings
                     WHERE metadata->>'category' IS NOT NULL
-                    ORDER BY embedding <=> :vector::vector
+                    ORDER BY embedding <=> CAST(:vector AS vector)
                     LIMIT :limit
                     """
                     params = {

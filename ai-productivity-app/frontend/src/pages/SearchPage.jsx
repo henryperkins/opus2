@@ -82,7 +82,7 @@ export default function SearchPage() {
             onChange={updateQuery}
             placeholder="Search code, functions, classes, or natural language queries..."
             loading={loading}
-            suggestions={true}
+            projectId={selectedProjects.length > 0 ? selectedProjects[0] : null}
           />
 
           {/* Search Type Toggles */}

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from app.dependencies import DatabaseDep, CurrentUserRequired
+from app.dependencies import DatabaseDep, CurrentUserRequired, CurrentUserOptional
 from app.models.user import User
 from app.models.project import Project
 from app.models.timeline import TimelineEvent
@@ -16,7 +16,12 @@ from app.schemas.project import (
     TimelineEventCreate, TimelineEventResponse,
     UserInfo
 )
+from app.schemas.search import SuggestionsResponse
 from app.services.project_service import ProjectService
+from app.services.vector_service import get_vector_service
+from app.services.hybrid_search import HybridSearch
+from app.embeddings.generator import EmbeddingGenerator
+from app.config import settings
 
 import logging
 
@@ -539,3 +544,43 @@ async def find_similar_content(
     except Exception as e:
         logger.error(f"Similarity search failed for project {project_id}: {e}")
         return {"items": [], "total": 0}
+
+
+@router.get(
+    "/{project_id}/search/suggestions",
+    dependencies=[Depends(CurrentUserOptional)],
+    response_model=SuggestionsResponse,
+)
+async def project_suggestions(
+    project_id: int,
+    q: str = Query(..., min_length=2, alias="q"),
+    limit: int = Query(5, le=25),
+    db: Session = Depends(DatabaseDep),
+):
+    """Get search suggestions for a project."""
+    try:
+        # Get the project (raises 404 if not found)
+        project = get_project_or_404(project_id, db)
+        
+        # Initialize services
+        vector_service = await get_vector_service()
+        embedding_generator = EmbeddingGenerator()
+        hybrid_search = HybridSearch(db, vector_service, embedding_generator)
+        
+        # Execute search with keyword search only for suggestions
+        results = await hybrid_search.search(
+            query=q,
+            project_ids=[project_id],
+            limit=limit,
+            search_types=["keyword"]
+        )
+        
+        # Extract suggestion strings from results
+        suggestions = [result.get("content", "")[:100] for result in results if result.get("content")]
+        
+        return {"suggestions": suggestions}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get suggestions for project {project_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get suggestions")

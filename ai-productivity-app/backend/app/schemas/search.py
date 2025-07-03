@@ -47,6 +47,11 @@ class SearchResponse(BaseModel):
     search_types: List[str]
 
 
+class SuggestionsResponse(BaseModel):
+    """Suggestions response schema."""
+    suggestions: List[str]
+
+
 class IndexRequest(BaseModel):
     """Document indexing request."""
     document_id: int

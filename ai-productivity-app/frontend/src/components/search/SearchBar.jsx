@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { searchAPI } from '../../api/search';
 import { useDebounce } from '../../hooks/useDebounce';
 
-export default function SearchBar({ value, onChange, placeholder, loading }) {
+export default function SearchBar({ value, onChange, placeholder, loading, projectId }) {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -14,21 +14,21 @@ export default function SearchBar({ value, onChange, placeholder, loading }) {
 
   useEffect(() => {
     const fetchSuggestions = async () => {
-      if (debouncedValue.length < 2) {
+      if (debouncedValue.length < 2 || !projectId) {
         setSuggestions([]);
         return;
       }
 
       try {
-        const response = await searchAPI.getSuggestions(debouncedValue);
-        setSuggestions(response.suggestions || []);
-      } catch (err) {
+        const response = await searchAPI.getSuggestions(projectId, debouncedValue);
+        setSuggestions(response || []);
+      } catch (error) {
         setSuggestions([]);
       }
     };
 
     fetchSuggestions();
-  }, [debouncedValue]);
+  }, [debouncedValue, projectId]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
