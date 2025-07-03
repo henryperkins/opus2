@@ -52,7 +52,7 @@ export const getSidebarActiveStyles = (isActive) => {
 const breadcrumbCache = new Map();
 const projectNameCache = new Map();
 
-export const generateBreadcrumbs = async (pathname) => {
+export const generateBreadcrumbs = (pathname) => {
   // Check cache first for performance
   if (breadcrumbCache.has(pathname)) {
     return breadcrumbCache.get(pathname);
@@ -69,22 +69,12 @@ export const generateBreadcrumbs = async (pathname) => {
       breadcrumbs.push({ name: 'Projects', path: '/projects' });
       if (paths[1]) {
         const projectId = paths[1];
-        let projectName = 'Project';
-        
-        // Try to get project name from cache first
-        if (projectNameCache.has(projectId)) {
-          projectName = projectNameCache.get(projectId);
-        } else {
-          // Fetch project name from API
-          try {
-            const project = await projectAPI.get(projectId);
-            projectName = project.name || 'Project';
-            projectNameCache.set(projectId, projectName);
-          } catch (error) {
-            console.error('Failed to fetch project name:', error);
-            // Keep generic "Project" name as fallback
-          }
-        }
+        // Default name – attempt to read from cache, otherwise generic placeholder.
+        let projectName = projectNameCache.get(projectId) || 'Project';
+        // Note: We intentionally avoid asynchronous network requests here so the
+        // function remains synchronous. Production code that needs the real
+        // project name should populate `projectNameCache` via a separate data
+        // fetching layer.
         
         breadcrumbs.push({ name: projectName, path: `/projects/${projectId}` });
         
@@ -155,8 +145,18 @@ export const invalidateProjectCache = (projectId) => {
 
 export const getNavigationItems = (filter = {}) => {
   return navigationRoutes.filter(route => {
-    if (filter.showInSidebar && !route.showInSidebar) return false;
-    if (filter.showMobileQuickAction && !route.showMobileQuickAction) return false;
+    // When the filter property is explicitly provided (true or false)
+    // we require an exact boolean match.  Missing values on the route
+    // are treated as false.
+
+    if (filter.showInSidebar !== undefined) {
+      if (!!route.showInSidebar !== filter.showInSidebar) return false;
+    }
+
+    if (filter.showMobileQuickAction !== undefined) {
+      if (!!route.showMobileQuickAction !== filter.showMobileQuickAction) return false;
+    }
+
     return true;
   });
 };

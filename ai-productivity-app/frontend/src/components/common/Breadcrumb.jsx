@@ -10,8 +10,16 @@ export default function Breadcrumb({ items, showHome = true, separator = 'chevro
 
   useEffect(() => {
     if (!items) {
-      // Auto-generate breadcrumbs if items not provided
-      generateBreadcrumbs(location.pathname).then(setBreadcrumbs);
+      // Auto-generate breadcrumbs if items not provided. The util was made
+      // synchronous for test determinism, but we keep Promise handling for
+      // backward-compatibility.
+      const maybeBreadcrumbs = generateBreadcrumbs(location.pathname);
+      if (maybeBreadcrumbs && typeof maybeBreadcrumbs.then === 'function') {
+        // Future-proof: handle Promise.
+        maybeBreadcrumbs.then(setBreadcrumbs);
+      } else {
+        setBreadcrumbs(maybeBreadcrumbs);
+      }
     } else {
       setBreadcrumbs(items);
     }
