@@ -422,7 +422,13 @@ async def search_project_documents(
     hybrid_search = HybridSearch(db, vector_service, embedding_generator)
     
     try:
-        results = await hybrid_search.search(search_request)
+        results = await hybrid_search.search(
+            query=search_request.query,
+            project_ids=search_request.project_ids,
+            filters=search_request.filters,
+            limit=search_request.limit,
+            search_types=search_request.search_types,
+        )
         return {"results": results.results, "total": results.total}
     except Exception as e:
         logger.error(f"Document search failed for project {project_id}: {e}")
@@ -553,9 +559,9 @@ async def find_similar_content(
 )
 async def project_suggestions(
     project_id: int,
+    db: DatabaseDep,
     q: str = Query(..., min_length=2, alias="q"),
     limit: int = Query(5, le=25),
-    db: Session = Depends(DatabaseDep),
 ):
     """Get search suggestions for a project."""
     try:
