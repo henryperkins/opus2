@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { 
   ChevronLeft, 
+  ChevronRight,
   Search, 
   Copy, 
   ZoomIn, 
@@ -20,10 +21,48 @@ import {
   ChevronDown,
   Info,
   Hash,
-  Download
+  Download,
+  Printer
 } from 'lucide-react';
 import LoadingSpinner from '../common/LoadingSpinner';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import useTextSelection from '../../hooks/useTextSelection';
+
+// ------------------------------------------------------------
+// Small helpers
+// ------------------------------------------------------------
+
+function Breadcrumbs({ path, onNavigate }) {
+  const parts = path.split('/');
+  const assembled = [];
+  return (
+    <nav className="file-breadcrumbs" aria-label="Breadcrumb">
+      {parts.map((part, idx) => {
+        assembled.push(part);
+        const subPath = assembled.join('/');
+        const isLast = idx === parts.length - 1;
+        return (
+          <span key={idx} className="flex items-center">
+            {idx !== 0 && (
+              <ChevronRight className="w-3 h-3 text-gray-400 mx-0.5" />
+            )}
+            {isLast ? (
+              <span className="breadcrumb-item font-medium truncate max-w-[8rem]" title={part}>{part}</span>
+            ) : (
+              <button
+                className="breadcrumb-item text-blue-600 hover:underline truncate max-w-[8rem]"
+                title={part}
+                onClick={() => onNavigate(subPath)}
+              >
+                {part}
+              </button>
+            )}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
 
 export default function FileViewer() {
   const { path } = useParams();
@@ -46,13 +85,22 @@ export default function FileViewer() {
   const [searchText, setSearchText] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [currentMatch, setCurrentMatch] = useState(0);
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
+  const [searchRegex, setSearchRegex] = useState(false);
 
   const [gotoLineOpen, setGotoLineOpen] = useState(false);
   const [gotoLineNumber, setGotoLineNumber] = useState('');
 
   const [showInfo, setShowInfo] = useState(false);
+
+  // New for Phase-2 -------------------------------------------
+  const [performanceMode, setPerformanceMode] = useState(false);
   
   const { isMobile } = useMediaQuery();
+  const navigate = useNavigate();
+
+  // selection tracking for context-menu
+  const { selectionText, position: selectionPos } = useTextSelection();
   const containerRef = useRef(null);
   const syntaxHighlighterRef = useRef(null);
 
@@ -82,8 +130,16 @@ export default function FileViewer() {
         const { codeAPI } = await import('../../api/code');
         const response = await codeAPI.getFileContent(decodedPath);
         
-        setFileContent(response.content || '');
+        const content = response.content || '';
+        setFileContent(content);
         setLanguage(response.language || detectLanguage(decodedPath));
+
+        // Performance heuristics
+        const large = content.length > 1_000_000 || content.split('\n').length > 10_000;
+        setPerformanceMode(large);
+        if (large) {
+          setShowLineNumbers(false);
+        }
       } catch (err) {
         setError(err.response?.data?.detail || err.message || 'Failed to load file');
       } finally {
@@ -156,6 +212,40 @@ export default function FileViewer() {
     return highlighted;
   };
 
+  // Helper to highlight search matches within line text
+  const highlightSearchMatches = (lineText, lineNumber) => {
+    if (!searchOpen || !searchText || !searchResults.length) {
+      return lineText;
+    }
+
+    // Find if this line has matches
+    const lineResult = searchResults.find(result => result.lineNumber === lineNumber);
+    if (!lineResult) {
+      return lineText;
+    }
+
+    try {
+      let regex;
+      if (searchRegex) {
+        const flags = searchCaseSensitive ? 'g' : 'gi';
+        regex = new RegExp(searchText, flags);
+      } else {
+        const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const flags = searchCaseSensitive ? 'g' : 'gi';
+        regex = new RegExp(escaped, flags);
+      }
+
+      return lineText.replace(regex, (match) => {
+        // Determine if this is the current match line
+        const isCurrentMatch = searchResults[currentMatch]?.lineNumber === lineNumber;
+        const className = isCurrentMatch ? 'search-highlight current' : 'search-highlight';
+        return `<span class="${className}">${match}</span>`;
+      });
+    } catch (error) {
+      return lineText;
+    }
+  };
+
   // Mobile-specific functions
   const increaseFontSize = () => {
     setFontSize(prev => Math.min(prev + 2, 24));
@@ -172,6 +262,21 @@ export default function FileViewer() {
     } catch (err) {
       console.warn('Copy failed:', err);
     }
+  };
+
+  // Helpers for the inline selection context-menu ---------------------------
+  const copySelection = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.warn('copySelection failed', err);
+    }
+  };
+
+  const searchFor = (txt) => {
+    if (!txt) return;
+    setSearchOpen(true);
+    setSearchText(txt);
   };
 
   const shareFile = async () => {
@@ -204,6 +309,62 @@ export default function FileViewer() {
     URL.revokeObjectURL(url);
   };
 
+  const printFile = () => {
+    const printWindow = window.open('', '_blank');
+    const fileName = decodedPath.split('/').pop() || 'file.txt';
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print: ${fileName}</title>
+          <style>
+            @media print {
+              @page { margin: 1in; }
+              body { font-family: 'Courier New', monospace; font-size: 10pt; line-height: 1.2; }
+              .print-header { border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+              .print-header h1 { margin: 0; font-size: 14pt; }
+              .print-header .meta { font-size: 8pt; color: #666; margin-top: 5px; }
+              .line-number { display: inline-block; width: 4em; color: #666; font-size: 9pt; }
+              pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+              .highlight { background-color: #ffffcc !important; }
+            }
+            @media screen {
+              body { font-family: 'Courier New', monospace; font-size: 12pt; padding: 20px; }
+              .print-header { border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+              .print-header h1 { margin: 0; font-size: 16pt; }
+              .print-header .meta { font-size: 10pt; color: #666; margin-top: 5px; }
+              .line-number { display: inline-block; width: 4em; color: #666; font-size: 11pt; }
+              pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+              .highlight { background-color: #ffffcc; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-header">
+            <h1>${fileName}</h1>
+            <div class="meta">
+              Path: ${decodedPath}<br>
+              Language: ${language}<br>
+              Lines: ${fileContent.split('\n').length}<br>
+              Printed: ${new Date().toLocaleString()}
+            </div>
+          </div>
+          <pre>${fileContent.split('\n').map((line, i) => 
+            `<span class="line-number">${(i + 1).toString().padStart(4, ' ')}</span>${line}`
+          ).join('\n')}</pre>
+        </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  };
+
   const toggleLineNumbers = () => {
     setShowLineNumbers(prev => !prev);
   };
@@ -214,6 +375,39 @@ export default function FileViewer() {
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+
+  // ---------------------------------------------------------------------
+  // Selection floating context-menu component definition
+  // ---------------------------------------------------------------------
+
+  const SelectionMenu = () => {
+    // Do not show when search/dialogs are open or no text selected
+    if (!selectionText || searchOpen || gotoLineOpen) return null;
+
+    // Clamp inside viewport a bit
+    const left = Math.min(window.innerWidth - 120, Math.max(60, selectionPos.x));
+    const top = Math.max(50, selectionPos.y);
+
+    return (
+      <div
+        style={{ left, top, transform: 'translate(-50%, -100%)' }}
+        className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg flex divide-x divide-gray-200 dark:divide-gray-700 select-none"
+      >
+        <button
+          onClick={() => copySelection(selectionText)}
+          className="px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
+        >
+          Copy
+        </button>
+        <button
+          onClick={() => searchFor(selectionText)}
+          className="px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
+        >
+          Search
+        </button>
+      </div>
+    );
   };
 
   // -----------------------
@@ -255,22 +449,44 @@ export default function FileViewer() {
       return;
     }
 
-    const safe = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(safe, 'gi');
-    const lines = fileContent.split('\n');
-    const matches = [];
-
-    lines.forEach((line, idx) => {
-      if (regex.test(line)) {
-        matches.push({ lineNumber: idx + 1 });
+    try {
+      let regex;
+      if (searchRegex) {
+        // Use regex as-is if regex mode is enabled
+        const flags = searchCaseSensitive ? 'g' : 'gi';
+        regex = new RegExp(text, flags);
+      } else {
+        // Escape special characters for literal search
+        const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const flags = searchCaseSensitive ? 'g' : 'gi';
+        regex = new RegExp(escaped, flags);
       }
-      regex.lastIndex = 0; // reset per iteration
-    });
 
-    setSearchResults(matches);
-    setCurrentMatch(matches.length ? 0 : -1);
+      const lines = fileContent.split('\n');
+      const matches = [];
 
-    if (matches.length) jumpToLine(matches[0].lineNumber);
+      lines.forEach((line, idx) => {
+        const lineMatches = [...line.matchAll(regex)];
+        if (lineMatches.length > 0) {
+          matches.push({ 
+            lineNumber: idx + 1,
+            matchCount: lineMatches.length,
+            matches: lineMatches.map(m => ({ index: m.index, text: m[0] }))
+          });
+        }
+      });
+
+      setSearchResults(matches);
+      setCurrentMatch(matches.length ? 0 : -1);
+
+      if (matches.length) jumpToLine(matches[0].lineNumber);
+    } catch (error) {
+      // Invalid regex - clear results but don't show error to avoid interrupting typing
+      if (searchRegex) {
+        setSearchResults([]);
+        setCurrentMatch(-1);
+      }
+    }
   };
 
   const navigateSearch = useCallback((direction) => {
@@ -284,12 +500,12 @@ export default function FileViewer() {
     });
   }, [searchResults]);
 
-  // Run search when text changes
+  // Run search when text or options change
   useEffect(() => {
     if (searchOpen) {
       performSearch(searchText);
     }
-  }, [searchText, searchOpen, fileContent]);
+  }, [searchText, searchOpen, fileContent, searchCaseSensitive, searchRegex]);
 
   // -----------------------
   // Keyboard shortcuts
@@ -434,7 +650,51 @@ export default function FileViewer() {
             <span className="text-xs text-gray-600 capitalize">{theme}</span>
           </button>
           
+          <button
+            onClick={() => {
+              setGotoLineOpen(true);
+              setShowMobileMenu(false);
+            }}
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+          >
+            <Hash className="w-4 h-4" />
+            <span>Go to Line</span>
+          </button>
+          
+          <button
+            onClick={() => {
+              setShowInfo(true);
+              setShowMobileMenu(false);
+            }}
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+          >
+            <Info className="w-4 h-4" />
+            <span>File Info</span>
+          </button>
+          
           <hr className="my-1" />
+          
+          <button
+            onClick={() => {
+              downloadFile();
+              setShowMobileMenu(false);
+            }}
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download</span>
+          </button>
+
+          <button
+            onClick={() => {
+              printFile();
+              setShowMobileMenu(false);
+            }}
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Print</span>
+          </button>
           
           <button
             onClick={() => {
@@ -496,46 +756,68 @@ export default function FileViewer() {
     >
       {/* Search overlay */}
       {searchOpen && (
-        <div className="absolute top-0 inset-x-0 z-40 bg-white/90 backdrop-blur dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-700 p-2 flex items-center space-x-2">
-          <input
-            autoFocus
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Search in file…"
-            className="flex-1 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
-          />
-          {searchResults.length > 0 && (
-            <span className="text-xs text-gray-600 dark:text-gray-400 select-none">
-              {currentMatch + 1}/{searchResults.length}
-            </span>
-          )}
-          <button
-            onClick={() => navigateSearch('prev')}
-            disabled={!searchResults.length}
-            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
-            title="Previous match"
-          >
-            <ChevronUp className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => navigateSearch('next')}
-            disabled={!searchResults.length}
-            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
-            title="Next match"
-          >
-            <ChevronDown className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => {
-              setSearchOpen(false);
-              setSearchText('');
-              setSearchResults([]);
-            }}
-            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-            title="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
+        <div className="absolute top-0 inset-x-0 z-40 bg-white/90 backdrop-blur dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-700 p-2 space-y-2">
+          <div className="flex items-center space-x-2">
+            <input
+              autoFocus
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder={searchRegex ? "Search with regex…" : "Search in file…"}
+              className="flex-1 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
+            />
+            {searchResults.length > 0 && (
+              <span className="text-xs text-gray-600 dark:text-gray-400 select-none">
+                {currentMatch + 1}/{searchResults.length}
+              </span>
+            )}
+            <button
+              onClick={() => navigateSearch('prev')}
+              disabled={!searchResults.length}
+              className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+              title="Previous match"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => navigateSearch('next')}
+              disabled={!searchResults.length}
+              className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+              title="Next match"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => {
+                setSearchOpen(false);
+                setSearchText('');
+                setSearchResults([]);
+              }}
+              className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+              title="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center space-x-4 text-xs">
+            <label className="flex items-center space-x-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={searchCaseSensitive}
+                onChange={(e) => setSearchCaseSensitive(e.target.checked)}
+                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-gray-700 dark:text-gray-300">Case sensitive</span>
+            </label>
+            <label className="flex items-center space-x-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={searchRegex}
+                onChange={(e) => setSearchRegex(e.target.checked)}
+                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-gray-700 dark:text-gray-300">Regular expression</span>
+            </label>
+          </div>
         </div>
       )}
       {/* Enhanced Header */}
@@ -555,11 +837,10 @@ export default function FileViewer() {
             
             <div className="min-w-0 flex-1">
               {!headerCollapsed && (
-                <h1 className={`font-medium text-gray-900 truncate ${
-                  isMobile ? 'text-base' : 'text-lg'
-                }`}>
-                  {decodedPath}
-                </h1>
+                <Breadcrumbs
+                  path={decodedPath}
+                  onNavigate={(sub) => navigate(`/viewer/${encodeURIComponent(sub)}`)}
+                />
               )}
               {headerCollapsed && isMobile && (
                 <span className="text-sm text-gray-600 truncate">
@@ -619,6 +900,14 @@ export default function FileViewer() {
                 >
                   <Download className="w-4 h-4" />
                 </button>
+
+                <button
+                  onClick={printFile}
+                  className="p-2 bg-white rounded-lg border border-gray-300 hover:bg-gray-50"
+                  title="Print file"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
               </>
             )}
             
@@ -643,15 +932,31 @@ export default function FileViewer() {
 
       {/* Keyboard hint */}
       {!isMobile && !searchOpen && (
-        <div className="absolute bottom-4 right-4 text-xs text-gray-500 bg-white/80 dark:bg-gray-800/80 backdrop-blur px-3 py-1.5 rounded-md shadow-md select-none">
-          Press <kbd className="px-1 bg-gray-200 dark:bg-gray-700 rounded border border-gray-400 dark:border-gray-600">⌘F</kbd> to search
+        <div className="absolute bottom-4 right-4 text-xs text-gray-500 dark:text-gray-400 bg-white/80 dark:bg-gray-800/80 backdrop-blur px-3 py-1.5 rounded-md shadow-md select-none">
+          Press <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">⌘F</kbd> to search
         </div>
       )}
+
+      {/* Floating selection context menu */}
+      <SelectionMenu />
 
       {/* File Content */}
       <div className={`flex-1 min-h-0 overflow-auto ${
         theme === 'light' ? 'bg-white' : 'bg-gray-900'
       }`}>
+        <style>
+          {`
+            .search-highlight {
+              background-color: #fef08a !important;
+              padding: 0 2px;
+              border-radius: 2px;
+            }
+            .search-highlight.current {
+              background-color: #f59e0b !important;
+              color: white;
+            }
+          `}
+        </style>
         <SyntaxHighlighter
           ref={syntaxHighlighterRef}
           language={language}
@@ -689,6 +994,45 @@ export default function FileViewer() {
               fontSize: `${responsiveFontSize}px`,
               lineHeight: isMobile ? '1.4' : '1.5',
             }
+          }}
+          renderer={({ rows, stylesheet, useInlineStyles }) => {
+            return rows.map((row, i) => {
+              const lineNumber = i + 1;
+              let lineContent = row.map((node, j) => {
+                if (node.type === 'text') {
+                  // Apply search highlighting to text nodes
+                  const highlightedText = highlightSearchMatches(node.value, lineNumber);
+                  if (highlightedText !== node.value) {
+                    return <span key={j} dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+                  }
+                }
+                return <span key={j} style={useInlineStyles ? node.properties.style : undefined} className={node.properties.className}>
+                  {node.children ? node.children.map((child, k) => {
+                    if (child.type === 'text') {
+                      const highlightedText = highlightSearchMatches(child.value, lineNumber);
+                      if (highlightedText !== child.value) {
+                        return <span key={k} dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+                      }
+                    }
+                    return child.value;
+                  }) : node.value}
+                </span>;
+              });
+
+              return (
+                <div key={i} style={{
+                  display: 'block',
+                  backgroundColor: getHighlightedLines().includes(lineNumber) 
+                    ? (theme === 'light' ? '#fef3c7' : '#451a03')
+                    : 'transparent',
+                  paddingLeft: isMobile ? '0.5rem' : '1rem',
+                  paddingRight: isMobile ? '0.5rem' : '1rem',
+                  minHeight: isMobile ? '1.5rem' : 'auto',
+                }} id={`line-${lineNumber}`}>
+                  {lineContent}
+                </div>
+              );
+            });
           }}
         >
           {fileContent}
