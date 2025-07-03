@@ -1,13 +1,14 @@
-from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 
-from app.models.chat import ChatSession, ChatMessage
-from app.models.timeline import TimelineEvent
+from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from ..models.chat import ChatSession, ChatMessage
+from ..models.timeline import TimelineEvent
+from ..websocket.manager import connection_manager
 # Pydantic request models are not required inside the service layer
-from app.websocket.manager import connection_manager
 
 
 class ChatService:

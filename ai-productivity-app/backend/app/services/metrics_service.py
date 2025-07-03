@@ -4,8 +4,33 @@ Service for querying and formatting Prometheus metrics data.
 
 import logging
 from typing import Dict, Any, Optional, List
-from prometheus_client import CollectorRegistry, REGISTRY, generate_latest
-from prometheus_client.parser import text_string_to_metric_families
+# Optional Prometheus support – this service must *not* hard-fail when the
+# ``prometheus_client`` dependency is absent (e.g. in CI or local dev
+# environments without metrics).  We therefore attempt to import it and fall
+# back to no-op stubs when unavailable so the rest of the application (and
+# test-suite collection) continues to work.
+try:
+    from prometheus_client import CollectorRegistry, REGISTRY, generate_latest  # type: ignore
+    from prometheus_client.parser import text_string_to_metric_families  # type: ignore
+    HAS_PROMETHEUS = True
+except ImportError:  # pragma: no cover
+    HAS_PROMETHEUS = False
+
+    class _StubRegistry:  # Minimal placeholder to satisfy type checks
+        """Very small stub to stand-in for a real ``CollectorRegistry``."""
+        pass
+
+    # Provide stubbed names so type-checkers and the rest of this module are
+    # satisfied without conditional imports throughout the code.
+    CollectorRegistry = _StubRegistry  # type: ignore
+    REGISTRY = _StubRegistry()        # type: ignore
+
+    def generate_latest(_registry: "_StubRegistry") -> bytes:  # type: ignore
+        return b""
+
+    def text_string_to_metric_families(_text: str):  # type: ignore
+        # Yield nothing – callers will therefore treat it as “no metrics”.
+        return []
 
 logger = logging.getLogger(__name__)
 
@@ -18,18 +43,23 @@ class MetricsService:
 
     def get_embedding_metrics(self) -> Dict[str, Any]:
         """Get embedding-specific metrics formatted for analytics API."""
+        # When Prometheus support is disabled we still expose the endpoint but
+        # return deterministic default data instead of raising an import error
+        # during application start-up.
+        if not HAS_PROMETHEUS:
+            return self._get_default_metrics()
         try:
             # Generate the latest metrics in text format
             metrics_text = generate_latest(self.registry).decode('utf-8')
-            
+
             # Parse the metrics
             parsed_metrics = {}
             for family in text_string_to_metric_families(metrics_text):
                 if family.name.startswith('embedding_'):
                     parsed_metrics[family.name] = self._process_metric_family(family)
-            
+
             return self._format_embedding_metrics(parsed_metrics)
-            
+
         except Exception as e:
             logger.error("Failed to get embedding metrics: %s", e)
             return self._get_default_metrics()
@@ -42,20 +72,20 @@ class MetricsService:
             for sample in family.samples:
                 total += sample.value
             return {"type": "counter", "value": total}
-        
+
         elif family.type == 'gauge':
             # For gauges, get the current value
             value = 0
             for sample in family.samples:
                 value = sample.value
             return {"type": "gauge", "value": value}
-        
+
         elif family.type == 'histogram':
             # For histograms, extract useful stats
             count = 0
             sum_value = 0
             buckets = {}
-            
+
             for sample in family.samples:
                 if sample.name.endswith('_count'):
                     count = sample.value
@@ -64,7 +94,7 @@ class MetricsService:
                 elif sample.name.endswith('_bucket'):
                     le = sample.labels.get('le', 'inf')
                     buckets[le] = sample.value
-            
+
             avg = sum_value / count if count > 0 else 0
             return {
                 "type": "histogram",
@@ -73,13 +103,13 @@ class MetricsService:
                 "average": avg,
                 "buckets": buckets
             }
-        
+
         else:
             return {"type": family.type, "value": 0}
 
     def _format_embedding_metrics(self, parsed_metrics: Dict[str, Any]) -> Dict[str, Any]:
         """Format parsed metrics into analytics-friendly structure."""
-        
+
         # Extract key metrics
         batches_metric = parsed_metrics.get('embedding_batches_total', {"value": 0})
         tokens_metric = parsed_metrics.get('embedding_tokens_total', {"value": 0})
@@ -92,7 +122,7 @@ class MetricsService:
         total_batches = batches_metric.get("value", 0)
         total_tokens = tokens_metric.get("value", 0)
         total_errors = errors_metric.get("value", 0)
-        
+
         success_rate = 1.0 if total_batches == 0 else max(0, (total_batches - total_errors) / total_batches)
         avg_batch_size = batch_size_metric.get("average", 0)
         avg_processing_time = duration_metric.get("average", 0)
@@ -161,18 +191,18 @@ class MetricsService:
         # For now, this combines embedding metrics with mock quality data
         # In production, you'd want to track actual quality metrics per project
         embedding_data = self.get_embedding_metrics()
-        
+
         # Calculate quality indicators based on embedding performance
         success_rate = embedding_data["embedding_stats"]["success_rate"]
         error_rate = embedding_data["performance_metrics"]["error_rate_percent"]
         processing_time = embedding_data["embedding_stats"]["average_processing_time_seconds"]
-        
+
         # Map technical metrics to quality scores
         accuracy = max(0.5, min(1.0, success_rate))
         relevance = max(0.6, min(1.0, 1.0 - (error_rate / 100)))
         completeness = max(0.7, min(1.0, 1.0 - (processing_time / 10)))  # Faster = more complete responses
         clarity = 0.8  # Static for now, could be enhanced with NLP analysis
-        
+
         return {
             "project_id": project_id,
             "average_accuracy": round(accuracy, 2),
