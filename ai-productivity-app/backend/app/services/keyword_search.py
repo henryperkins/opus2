@@ -37,6 +37,17 @@ class KeywordSearch:
                 results.extend(await self._fts_search(query, project_ids, filters, limit))
         except Exception as e:
             logger.warning(f"Full-text search failed: {e}")
+            # Reset broken connection state so that subsequent LIKE queries
+            # run in the *same* request do not inherit PostgreSQL’s aborted
+            # transaction state.
+            try:
+                if self.db.in_transaction():
+                    self.db.rollback()
+            except Exception as rollback_exc:  # noqa: BLE001 – best-effort
+                logger.error(
+                    "Failed to roll back DB session after search error: %s",
+                    rollback_exc,
+                )
 
         # Fallback to LIKE search
         if len(results) < limit:
