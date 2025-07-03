@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Brain, X } from 'lucide-react';
 
@@ -20,7 +21,10 @@ export default function ChatLayout({
   monacoRef
 }) {
   const editorGroupRef = useRef(null);
+  const [isEditorReady, setIsEditorReady] = useState(false);
+  const layoutTimerRef = useRef(null);
 
+  // Fix localStorage corruption and panel state management
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -33,9 +37,13 @@ export default function ChatLayout({
           const parsed = JSON.parse(saved);
           // Look for the correct entry by matching the autoSaveId
           const entry = parsed['chat-editor-vertical'];
-          if (entry && Array.isArray(entry.layout) && entry.layout.length >= 2 && entry.layout[1] === 0) {
-            const DEFAULT_LAYOUT = [65, 35];
-            editorGroupRef.current?.setLayout(DEFAULT_LAYOUT);
+          // Only reset if editor panel is completely collapsed (0) or very small
+          if (entry && Array.isArray(entry.layout) && entry.layout.length >= 2) {
+            // If editor panel is 0 or very small, set reasonable default
+            if (entry.layout[1] < 5) {
+              const DEFAULT_LAYOUT = [65, 35];
+              editorGroupRef.current?.setLayout(DEFAULT_LAYOUT);
+            }
           }
         } catch (error) {
           console.warn('Failed to parse panel layout from localStorage:', error);
@@ -46,6 +54,29 @@ export default function ChatLayout({
       localStorage.removeItem(storageKey);
     }
   }, [showEditor]);
+
+  // Force Monaco layout update when editor becomes visible
+  useEffect(() => {
+    if (showEditor && monacoRef?.current && !isEditorReady) {
+      // Delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        monacoRef.current?.layout();
+        setIsEditorReady(true);
+      }, 100);
+      return () => clearTimeout(timer);
+    } else if (!showEditor) {
+      setIsEditorReady(false);
+    }
+  }, [showEditor, monacoRef, isEditorReady]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (layoutTimerRef.current) {
+        clearTimeout(layoutTimerRef.current);
+      }
+    };
+  }, []);
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
       {/* Main horizontal layout */}
@@ -74,16 +105,24 @@ export default function ChatLayout({
                 </div>
               </PanelResizeHandle>
 
-              <Panel 
-                id="editor" 
-                order={2} 
-                defaultSize={35} 
+              <Panel
+                id="editor"
+                order={2}
+                defaultSize={35}
                 minSize={20}
                 onResize={(size) => {
-                  if (monacoRef?.current) monacoRef.current.layout();
+                  // Debounce layout calls during resize
+                  if (monacoRef?.current) {
+                    if (layoutTimerRef.current) {
+                      clearTimeout(layoutTimerRef.current);
+                    }
+                    layoutTimerRef.current = setTimeout(() => {
+                      monacoRef.current?.layout();
+                    }, 50);
+                  }
                 }}
               >
-                <div className="h-full relative">
+                <div className="h-full relative flex flex-col">
                   {/* Close button for editor */}
                   {onEditorClose && (
                     <button
@@ -94,7 +133,9 @@ export default function ChatLayout({
                       <X className="w-4 h-4" />
                     </button>
                   )}
-                  {editor}
+                  <div className="flex-1 min-h-0">
+                    {editor}
+                  </div>
                 </div>
               </Panel>
             </PanelGroup>
@@ -149,6 +190,20 @@ export default function ChatLayout({
     </div>
   );
 }
+
+ChatLayout.propTypes = {
+  children: PropTypes.node.isRequired,
+  sidebar: PropTypes.node,
+  editor: PropTypes.node,
+  showSidebar: PropTypes.bool,
+  showEditor: PropTypes.bool,
+  onSidebarToggle: PropTypes.func,
+  onEditorToggle: PropTypes.func,
+  onSidebarClose: PropTypes.func,
+  onEditorClose: PropTypes.func,
+  onLayout: PropTypes.func,
+  monacoRef: PropTypes.object
+};
 
 /**
  * Simple mobile drawer that's collapsible

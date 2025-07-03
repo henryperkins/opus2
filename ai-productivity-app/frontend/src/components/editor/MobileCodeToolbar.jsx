@@ -23,6 +23,13 @@ const MobileCodeToolbar = ({
   const insertText = (text) => {
     if (!editorRef.current) return;
     
+    // Safely check for monaco global
+    const monaco = window.monaco;
+    if (!monaco) {
+      console.warn('Monaco Editor not available');
+      return;
+    }
+    
     const editor = editorRef.current;
     const selection = editor.getSelection();
     const range = new monaco.Range(

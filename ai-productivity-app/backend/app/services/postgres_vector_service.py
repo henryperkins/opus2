@@ -245,7 +245,7 @@ class PostgresVectorService:
                     ).scalar_one()
                     row_ids.append(str(row))
             return row_ids
-        
+
         return await anyio.to_thread.run_sync(_insert)
 
     # --------------------------------------------------------------------- #
@@ -317,7 +317,7 @@ class PostgresVectorService:
                     sa.text(f"DELETE FROM {self.table_name} WHERE document_id = :doc"),
                     {"doc": document_id},
                 )
-        
+
         await anyio.to_thread.run_sync(_delete)
 
     async def get_stats(self) -> Dict[str, Any]:
@@ -339,12 +339,12 @@ class PostgresVectorService:
                 "total_embeddings": total,
                 "by_project": by_project,
             }
-        
+
         return await anyio.to_thread.run_sync(_get_stats)
 
     async def gc_dangling_points(self) -> int:
         """Garbage collection for dangling points.
-        
+
         PostgreSQL automatically handles cleanup, so this is a no-op.
         Returns 0 to indicate no action was needed.
         """

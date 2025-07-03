@@ -584,20 +584,34 @@ export default function ProjectChatPage() {
           />
         }
         editor={
-          <div className="h-full p-4">
+          <div className="h-full flex flex-col p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Code Editor</h3>
             </div>
-            <MonacoRoot
-              ref={monacoRef}
-              value={editorContent}
-              onChange={setEditorContent}
-              language={editorLanguage}
-              height="100%"
-              className="min-h-[200px]"
-              filename={currentFile}
-              enableCopilot={true}
-            />
+            {/* Editor container with explicit height calculation */}
+            <div className="flex-1 min-h-0 relative">
+              <MonacoRoot
+                ref={monacoRef}
+                value={editorContent}
+                onChange={setEditorContent}
+                language={editorLanguage}
+                height="100%"
+                className="absolute inset-0"
+                filename={currentFile}
+                enableCopilot={true}
+                options={{
+                  automaticLayout: true,
+                  scrollBeyondLastLine: false,
+                  minimap: { enabled: false }
+                }}
+                onMount={(editor) => {
+                  // Force layout after mount
+                  setTimeout(() => {
+                    editor.layout();
+                  }, 0);
+                }}
+              />
+            </div>
           </div>
         }
       >

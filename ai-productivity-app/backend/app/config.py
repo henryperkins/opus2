@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     vector_search_limit: int = Field(default=10, description="Default vector search result limit")
     vector_score_threshold: float = Field(default=0.7, description="Minimum similarity score threshold")
 
+    # Embedding processing settings
+    embedding_model_token_limit: int = Field(default=8000, description="Token limit for embedding model")
+    embedding_safety_margin: int = Field(default=200, description="Safety margin for token calculation")
+    embedding_max_batch_rows: int = Field(default=100, description="Maximum rows to fetch per batch")
+    embedding_max_retries: int = Field(default=5, description="Maximum retries for embedding operations")
+
     # Deprecated settings - kept for backward compatibility during migration
     qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant server URL (deprecated)")
     qdrant_host: str = Field(default="localhost", description="Qdrant server host (deprecated)")

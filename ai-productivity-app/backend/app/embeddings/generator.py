@@ -19,6 +19,7 @@ import base64
 import functools
 import logging
 import struct
+import time
 from typing import (
     Dict,
     List,
@@ -47,6 +48,7 @@ try:
         stop_after_attempt,
         wait_exponential,
         retry_if_exception_type,
+        retry_if_exception,
     )
 except ModuleNotFoundError:  # pragma: no cover
 
@@ -71,6 +73,11 @@ except ModuleNotFoundError:  # pragma: no cover
         return None
 
     def retry_if_exception_type(_):  # noqa: D401
+        """Stub that always retries zero times (no-op)."""
+
+        return None
+
+    def retry_if_exception(_):  # noqa: D401
         """Stub that always retries zero times (no-op)."""
 
         return None
@@ -109,6 +116,22 @@ from app.exceptions import (  # pylint: disable=wrong-import-position
 from app.models.code import CodeEmbedding  # pylint: disable=wrong-import-position
 
 logger = logging.getLogger(__name__)
+
+
+def _is_oversize_error(exc: Exception) -> bool:
+    """Check if an exception represents an oversized batch error."""
+    return (isinstance(exc, EmbeddingException) and
+            ("Batch too large" in str(exc) or "INPUT_TOO_LARGE" in str(exc)))
+
+
+def _is_retryable_error(exc: Exception) -> bool:
+    """Check if an exception should be retried."""
+    # Don't retry oversized batch errors - they're deterministic
+    if _is_oversize_error(exc):
+        return False
+
+    # Retry rate limits and timeouts
+    return isinstance(exc, (RateLimitError, APITimeoutError))
 
 
 class EmbeddingGenerator:
@@ -228,14 +251,12 @@ class EmbeddingGenerator:
     # ------------------------------------------------------------------ #
     # Public helpers
     # ------------------------------------------------------------------ #
-    # Retries on transient OpenAI errors (rate limit / timeout). The *retry*
-    # argument expects a *retrying predicate*, not a bare *tuple* of
-    # exceptions.  Using ``retry_if_exception_type`` ensures Tenacity treats
-    # the provided exception classes correctly.
+    # Retries only on transient OpenAI errors (rate limit / timeout).
+    # Oversized batches are NOT retried as they're deterministic failures.
     @retry(  # noqa: D401 – decorator docs
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.embedding_max_retries),
         wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry=retry_if_exception_type((RateLimitError, APITimeoutError)),
+        retry=retry_if_exception(_is_retryable_error),
         reraise=True,
     )
     async def generate_embeddings(self, texts: Sequence[str]) -> List[List[float]]:
@@ -248,13 +269,28 @@ class EmbeddingGenerator:
         if not texts:
             return []
 
-        self._check_token_limits(texts)
+        # Import batching utilities
+        from app.embeddings.batching import iter_token_limited_batches
+        from app.monitoring.metrics import record_success
 
         try:
             all_embeddings: List[List[float]] = []
+            start_time = time.time()
 
-            for idx in range(0, len(texts), self.batch_size):
-                batch = list(texts[idx: idx + self.batch_size])
+            # Use token-aware batching instead of fixed size batching
+            token_limit = settings.embedding_model_token_limit
+            safety_margin = settings.embedding_safety_margin
+
+            batch_count = 0
+            for batch in iter_token_limited_batches(
+                list(texts), self.estimate_tokens, token_limit, safety_margin
+            ):
+                batch_count += 1
+                logger.debug(
+                    "Processing batch %d with %d texts, estimated %d tokens",
+                    batch_count, len(batch),
+                    sum(self.estimate_tokens(text) for text in batch)
+                )
 
                 # Build kwargs for embedding creation
                 kwargs = {
@@ -262,12 +298,11 @@ class EmbeddingGenerator:
                     "input": batch,
                     "encoding_format": self.encoding_format,
                 }
-                
                 # Only include dimensions if it's specified and supported
-                if (self.dimensions is not None and 
-                    self._model_meta["supports_dimensions_param"]):
+                if (self.dimensions is not None and
+                        self._model_meta["supports_dimensions_param"]):
                     kwargs["dimensions"] = self.dimensions
-                
+
                 resp = await self.client.embeddings.create(**kwargs)
 
                 for item in resp.data:
@@ -283,11 +318,18 @@ class EmbeddingGenerator:
                         )
                     all_embeddings.append(vector)
 
+            # Record success metrics
+            duration = time.time() - start_time
+            total_tokens = sum(self.estimate_tokens(text) for text in texts)
+            record_success(len(all_embeddings), total_tokens, duration)
+
             logger.info(
-                "Generated %d embeddings (%s, dim=%d)",
+                "Generated %d embeddings in %d batches (%s, dim=%d) in %.2fs",
                 len(all_embeddings),
+                batch_count,
                 self.model_family,
                 self._model_meta["dimension"],
+                duration
             )
             return all_embeddings
 

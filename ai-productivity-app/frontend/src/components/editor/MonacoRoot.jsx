@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import PropTypes from 'prop-types';
 import LoadingSpinner from '../common/LoadingSpinner';
 import { useTheme } from '../../hooks/useTheme';
-import useCodeEditor from '../../hooks/useCodeEditor';
 import EditorErrorBoundary from './EditorErrorBoundary';
 import MobileCodeToolbar from './MobileCodeToolbar';
 
@@ -31,7 +31,7 @@ const MonacoRoot = forwardRef(({
   enableVirtualization = true,
   showMobileToolbar = true,
   onLanguageChange,
-  ...props 
+  ...props
 }, ref) => {
   const { theme: appTheme } = useTheme();
   const editorRef = useRef(null);
@@ -40,30 +40,64 @@ const MonacoRoot = forwardRef(({
   const fileSize = value ? new Blob([value]).size : 0;
   const isLargeFile = fileSize > maxFileSize;
   const shouldVirtualize = enableVirtualization && isLargeFile;
-  
+
   // Mobile detection
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   // Expose imperative API to parent components
   useImperativeHandle(ref, () => ({
-    layout: () => editorRef.current?.layout(),
+    layout: () => {
+      if (editorRef.current) {
+        // Force update editor layout
+        editorRef.current.layout();
+        // Also update view zones if needed
+        editorRef.current.changeViewZones(() => {});
+      }
+    },
     getFileSize: () => fileSize,
     isVirtualized: () => shouldVirtualize,
-  }));
-  
+  }), [fileSize, shouldVirtualize]);
+
   // Use app theme if no custom theme is provided
   const effectiveTheme = customTheme || (appTheme === 'dark' ? 'vs-dark' : 'vs-light');
-  
-  // Initialize code editor with Monacopilot
-  const { editorRef: codeEditorRef, copilotEnabled, triggerCompletion } = useCodeEditor({
-    language,
-    enableCopilot,
-    filename,
-    maxContextLines: 80
-  });
+
+  const resizeObserverRef = useRef(null);
+  // Setup ResizeObserver for container size changes
+  useEffect(() => {
+    if (!editorRef.current) return;
+    
+    const container = editorRef.current.getContainerDomNode();
+    if (!container) return;
+    
+    resizeObserverRef.current = new ResizeObserver((entries) => {
+      // Only trigger layout if size actually changed
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          editorRef.current?.layout();
+        }
+      }
+    });
+    
+    resizeObserverRef.current.observe(container);
+    
+    return () => {
+      resizeObserverRef.current?.disconnect();
+    };
+  }, []);
+
   // Handle editor mount with proper disposal
   const handleEditorMount = (editor, monaco) => {
     editorRef.current = editor;
+    
+    // Ensure editor has correct dimensions on mount
+    requestAnimationFrame(() => {
+      editor.layout();
+      // Double-check after a short delay for slow-rendering containers
+      setTimeout(() => {
+        editor.layout();
+      }, 100);
+    });
     
     // Disable TypeScript worker for large files to prevent excessive memory usage
     if (shouldVirtualize && (language === 'typescript' || language === 'javascript')) {
@@ -79,10 +113,6 @@ const MonacoRoot = forwardRef(({
       });
     }
     
-    // Call both the useCodeEditor mount handler and custom onMount
-    if (codeEditorRef.onMount) {
-      codeEditorRef.onMount(editor, monaco);
-    }
     if (onMount) {
       onMount(editor, monaco);
     }
@@ -94,11 +124,18 @@ const MonacoRoot = forwardRef(({
       if (editorRef.current) {
         editorRef.current.dispose();
       }
-      // Dispose all models to prevent memory leaks when opening many files
-      if (typeof window !== 'undefined' && window.monaco?.editor) {
-        window.monaco.editor.getModels().forEach(model => model.dispose());
+    };
+  }, []);
+
+  // Force layout on visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && editorRef.current) {
+        editorRef.current.layout();
       }
     };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   const defaultOptions = {
@@ -185,7 +222,7 @@ const MonacoRoot = forwardRef(({
         {value ? `${value.split('\n').length} lines of code.` : 'Empty file.'}
         {shouldVirtualize && ' Large file - performance mode enabled.'}
       </div>
-      
+
       {/* Large file warning */}
       {shouldVirtualize && (
         <div className="mb-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
@@ -197,17 +234,17 @@ const MonacoRoot = forwardRef(({
           </div>
         </div>
       )}
-      
+
       {/* Mobile toolbar */}
       {isMobile && showMobileToolbar && (
-        <MobileCodeToolbar 
+        <MobileCodeToolbar
           editorRef={editorRef}
           language={language}
           onLanguageChange={onLanguageChange}
         />
       )}
-      
-      <EditorErrorBoundary 
+
+      <EditorErrorBoundary
         value={value}
         onFallback={(content) => {
           // Fallback to textarea if provided via props
@@ -236,5 +273,29 @@ const MonacoRoot = forwardRef(({
     </div>
   );
 });
+
+MonacoRoot.displayName = 'MonacoRoot';
+
+MonacoRoot.propTypes = {
+  value: PropTypes.string,
+  defaultValue: PropTypes.string,
+  language: PropTypes.string,
+  theme: PropTypes.string,
+  height: PropTypes.string,
+  width: PropTypes.string,
+  options: PropTypes.object,
+  onMount: PropTypes.func,
+  onChange: PropTypes.func,
+  onValidate: PropTypes.func,
+  loading: PropTypes.node,
+  className: PropTypes.string,
+  filename: PropTypes.string,
+  enableCopilot: PropTypes.bool,
+  maxFileSize: PropTypes.number,
+  enableVirtualization: PropTypes.bool,
+  showMobileToolbar: PropTypes.bool,
+  onLanguageChange: PropTypes.func,
+  onEditorError: PropTypes.func
+};
 
 export default MonacoRoot;
