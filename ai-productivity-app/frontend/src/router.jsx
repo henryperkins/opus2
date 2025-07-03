@@ -34,6 +34,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import ProjectFilesPage from './pages/ProjectFilesPage';
 import ModelSettingsPage from './pages/ModelSettingsPage';
 import ProjectKnowledgePage from './pages/ProjectKnowledgePage';
+import FileViewerPage from './pages/FileViewerPage';
 import Layout from './components/common/Layout';
 import ProjectLayout from './layouts/ProjectLayout';
 import { useRequireAuth } from './hooks/useAuth';
@@ -127,6 +128,10 @@ export const router = createBrowserRouter(
         {
           path: 'models',
           element: <ProtectedRoute element={<ModelSettingsPage />} />,
+        },
+        {
+          path: 'files/:path',
+          element: <ProtectedRoute element={<FileViewerPage />} />,
         },
       ],
     },

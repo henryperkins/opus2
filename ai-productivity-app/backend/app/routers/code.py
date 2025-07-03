@@ -358,6 +358,52 @@ def delete_file(file_id: int, db: Session = Depends(get_db)):
 
     return {"status": "deleted"}
 
+
+# ---------------------------------------------------------------------------
+# Get file content by path
+# ---------------------------------------------------------------------------
+
+@router.get("/files/content")
+def get_file_content(
+    file_path: str,
+    project_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get file content by path."""
+    query = db.query(CodeDocument).filter(CodeDocument.file_path == file_path)
+    
+    if project_id:
+        query = query.filter(CodeDocument.project_id == project_id)
+    
+    doc: CodeDocument | None = query.first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Check if user has access to this project
+    project = db.query(Project).filter_by(id=doc.project_id).first()
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Read file content from disk
+    try:
+        file_full_path = os.path.join(settings.upload_root, doc.file_path)
+        with open(file_full_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        return {
+            "content": content,
+            "language": doc.language,
+            "file_path": doc.file_path,
+            "size": doc.file_size,
+        }
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    except Exception as e:
+        logger.error(f"Error reading file {doc.file_path}: {e}")
+        raise HTTPException(status_code=500, detail="Error reading file")
+
+
 # ---------------------------------------------------------------------------
 # New: lightweight Python code execution endpoint (unsafe, dev-only)
 # ---------------------------------------------------------------------------

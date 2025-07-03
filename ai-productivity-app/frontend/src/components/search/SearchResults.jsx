@@ -2,7 +2,7 @@
 import CodeSnippet from './CodeSnippet';
 import LoadingSpinner from '../common/LoadingSpinner';
 
-export default function SearchResults({ results, query, loading }) {
+export default function SearchResults({ results, query, loading, onFileClick }) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -25,15 +25,31 @@ export default function SearchResults({ results, query, loading }) {
     );
   }
 
+  /**
+   * Highlight occurrences of the current search query inside a piece of text.
+   * This version is defensive: it tolerates undefined / non-string inputs.
+   */
   const highlightQuery = (text) => {
-    if (!query) return text;
+    // If no query or text is not a string, just return it untouched
+    if (!query || typeof text !== 'string') {
+      return text ?? '';
+    }
 
+    // Escape RegExp metacharacters before building the pattern
     const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`(${escapedQuery})`, 'gi');
+
+    // Split into alternating unmatched/matched parts
     const parts = text.split(regex);
 
     return parts.map((part, i) =>
-      regex.test(part) ? <mark key={i} className="bg-yellow-200">{part}</mark> : part
+      regex.test(part) ? (
+        <mark key={i} className="bg-yellow-200">
+          {part}
+        </mark>
+      ) : (
+        part
+      )
     );
   };
 
@@ -44,6 +60,11 @@ export default function SearchResults({ results, query, loading }) {
       </div>
 
       {results.map((result, index) => {
+        // Safety check: ensure result is a valid object
+        if (!result || typeof result !== 'object') {
+          return null;
+        }
+
         // Use a unique, string-safe key: prefer valid id, else file_path+lines, else fallback to index
         let resultKey = `result-${index}`;
         if (result && typeof result.id === 'string' && result.id.trim() && !/[\uFFFD<>]/.test(result.id)) {
@@ -52,22 +73,30 @@ export default function SearchResults({ results, query, loading }) {
           resultKey = `${result.file_path}:${result.start_line}-${result.end_line}`;
         }
         return (
-          <div
+          <button
+            type="button"
             key={resultKey}
-            className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+            onClick={() => {
+              const filePath = result.file_path || result?.file_path;
+              const startLine = result.start_line ?? 1;
+              if (filePath && typeof filePath === 'string' && filePath.trim()) {
+                onFileClick?.(filePath, startLine);
+              }
+            }}
+            className="w-full text-left bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             <div className="p-4">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
-                  <h4 className="text-sm font-medium text-gray-900">
-                    {highlightQuery(result.file_path)}
+                  <h4 className="text-sm font-medium text-gray-900 truncate">
+                    {highlightQuery(result.file_path || result?.file_path || 'unknown')}
                   </h4>
                   <div className="flex items-center mt-1 space-x-4 text-xs text-gray-500">
                     <span className="flex items-center">
                       <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                       </svg>
-                      {result.language}
+                      {result.language || 'unknown'}
                     </span>
                     {result.symbol && (
                       <span className="flex items-center">
@@ -78,34 +107,34 @@ export default function SearchResults({ results, query, loading }) {
                       </span>
                     )}
                     <span className="flex items-center">
-                      Lines {result.start_line}-{result.end_line}
+                      <span className="text-xs">Lines {result.start_line || 1}-{result.end_line || result.start_line || 1}</span>
                     </span>
                   </div>
                 </div>
                 <div className="ml-4 flex items-center space-x-2">
                   <span className={`px-2 py-1 text-xs rounded-full ${
-                    result.search_type === 'semantic'
+                    (result.search_type || result.type) === 'semantic'
                       ? 'bg-purple-100 text-purple-800'
                       : 'bg-green-100 text-green-800'
                   }`}>
-                    {result.search_type}
+                    {result.search_type || result.type || 'unknown'}
                   </span>
                   <span className="text-xs text-gray-500">
-                    {(result.score * 100).toFixed(0)}% match
+                    {((result.score || 0) * 100).toFixed(0)}% match
                   </span>
                 </div>
               </div>
 
               <div className="mt-3">
                 <CodeSnippet
-                  content={result.content}
-                  language={result.language}
-                  startLine={result.start_line}
+                  content={result.content || ''}
+                  language={result.language || 'text'}
+                  startLine={result.start_line || 1}
                   highlightLines={[]}
                 />
               </div>
             </div>
-          </div>
+          </button>
         );
       })}
     </div>

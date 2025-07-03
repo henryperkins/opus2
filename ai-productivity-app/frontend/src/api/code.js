@@ -33,8 +33,12 @@ export const codeAPI = {
         return response.data;
     },
 
-    async getFileContent(fileId) {
-        const response = await client.get(`/api/code/files/${fileId}/content`);
+    async getFileContent(filePath, projectId = null) {
+        const params = { file_path: filePath };
+        if (projectId) {
+            params.project_id = projectId;
+        }
+        const response = await client.get('/api/code/files/content', { params });
         return response.data;
     },
 

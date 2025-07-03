@@ -31,12 +31,20 @@ class SearchRequest(BaseModel):
 
 class SearchResult(BaseModel):
     """Individual search result."""
-    type: str
+    id: str
+    file_path: str
+    start_line: int
+    end_line: int
+    language: str
+    content: str
+    symbol: Optional[str] = None
+    search_type: str
     score: float
+    # Legacy fields for backward compatibility
+    type: Optional[str] = None
     document_id: Optional[int] = None
     chunk_id: Optional[int] = None
-    content: str
-    metadata: Dict[str, Any]
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class SearchResponse(BaseModel):

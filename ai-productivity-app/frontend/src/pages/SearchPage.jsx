@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useSearch } from '../hooks/useSearch';
 import SearchBar from '../components/search/SearchBar';
 import SearchResults from '../components/search/SearchResults';
@@ -9,6 +9,7 @@ import useProjectStore from '../stores/projectStore';
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { projects, fetchProjects } = useProjectStore();
   const [selectedProjects, setSelectedProjects] = useState([]);
   const [showGraph, setShowGraph] = useState(false);
@@ -63,6 +64,16 @@ export default function SearchPage() {
   const handleShowGraph = (projectId) => {
     setGraphProjectId(projectId);
     setShowGraph(true);
+  };
+
+  const handleFileClick = (path, line) => {
+    if (!path || typeof path !== 'string' || !path.trim()) {
+      console.warn('Invalid file path provided to handleFileClick:', path);
+      return;
+    }
+    
+    const lineParam = Number.isInteger(line) && line > 0 ? line : 1;
+    navigate(`/files/${encodeURIComponent(path.trim())}?line=${lineParam}`);
   };
 
   return (
@@ -188,11 +199,7 @@ export default function SearchPage() {
                   results={results}
                   query={query}
                   loading={loading}
-                  onFileClick={(file) => {
-                    if (import.meta.env.DEV) {
-                      console.log('Open file:', file.path || file.name);
-                    }
-                  }}
+                  onFileClick={handleFileClick}
                 />
               </div>
             </div>

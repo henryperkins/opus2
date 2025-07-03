@@ -67,17 +67,39 @@ async def search(
         logger.error("Search failed: %s", err)
         raise HTTPException(status_code=500, detail="Search failed") from err
 
-    formatted_results = [
-        SearchResult(
-            type=r["type"],
-            score=r["score"],
-            document_id=r.get("document_id"),
-            chunk_id=r.get("chunk_id"),
+    # Format results with required fields
+    formatted_results = []
+    for r in raw_results:
+        # Get document information for file path and language
+        document_id = r.get("document_id")
+        document = None
+        if document_id:
+            document = db.query(CodeDocument).filter_by(id=document_id).first()
+        
+        # Extract metadata
+        metadata = r.get("metadata", {})
+        
+        # Create stable ID
+        result_id = f"{document_id}:{r.get('chunk_id', 0)}" if document_id else f"result_{len(formatted_results)}"
+        
+        formatted_result = SearchResult(
+            id=result_id,
+            file_path=document.file_path if document else metadata.get("file_path", "unknown"),
+            start_line=metadata.get("start_line", 1),
+            end_line=metadata.get("end_line", metadata.get("start_line", 1)),
+            language=document.language if document else metadata.get("language", "unknown"),
             content=r["content"],
-            metadata=r.get("metadata", {}),
+            symbol=metadata.get("symbol_name"),
+            search_type=r["type"],
+            score=r["score"],
+            # Legacy fields for backward compatibility
+            type=r["type"],
+            document_id=document_id,
+            chunk_id=r.get("chunk_id"),
+            metadata=metadata,
         )
-        for r in raw_results
-    ]
+        formatted_results.append(formatted_result)
+    
 
     # Assemble response object
     response_payload = SearchResponse(

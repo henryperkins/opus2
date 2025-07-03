@@ -38,12 +38,13 @@ const codeTheme = {
   },
 };
 
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter/dist/cjs/prism';
+import SyntaxHighlighter from 'react-syntax-highlighter/dist/cjs/prism';
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 
 const CodeSnippet = memo(({ content, language, startLine, highlightLines = [] }) => {
   // Limit preview to first 15 lines
-  const lines = content.split('\n');
+  const safeContent = typeof content === 'string' ? content : '';
+  const lines = safeContent.split('\n');
   const previewLines = lines.slice(0, 15);
   const hasMore = lines.length > 15;
   const previewContent = previewLines.join('\n');
@@ -58,7 +59,7 @@ const CodeSnippet = memo(({ content, language, startLine, highlightLines = [] })
         </div>
 
         <SyntaxHighlighter
-          language={language}
+          language={language || 'text'}
           style={oneDark}
           showLineNumbers
           startingLineNumber={startLine || 1}
