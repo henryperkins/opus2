@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -15,7 +15,12 @@ import {
   MoreVertical,
   Share,
   Bookmark,
-  Settings
+  X,
+  ChevronUp,
+  ChevronDown,
+  Info,
+  Hash,
+  Download
 } from 'lucide-react';
 import LoadingSpinner from '../common/LoadingSpinner';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -35,8 +40,19 @@ export default function FileViewer() {
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [theme, setTheme] = useState('dark');
+
+  // Enhanced features state (Phase 1)
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [currentMatch, setCurrentMatch] = useState(0);
+
+  const [gotoLineOpen, setGotoLineOpen] = useState(false);
+  const [gotoLineNumber, setGotoLineNumber] = useState('');
+
+  const [showInfo, setShowInfo] = useState(false);
   
-  const { isMobile, isTablet } = useMediaQuery();
+  const { isMobile } = useMediaQuery();
   const containerRef = useRef(null);
   const syntaxHighlighterRef = useRef(null);
 
@@ -130,11 +146,14 @@ export default function FileViewer() {
     return languageMap[ext] || 'text';
   };
 
+  // compute lines needing highlight (target line & current search match)
   const getHighlightedLines = () => {
-    if (targetLine > 1) {
-      return [targetLine];
+    const highlighted = [];
+    if (targetLine > 1) highlighted.push(targetLine);
+    if (searchResults.length && currentMatch >= 0) {
+      highlighted.push(searchResults[currentMatch]?.lineNumber);
     }
-    return [];
+    return highlighted;
   };
 
   // Mobile-specific functions
@@ -172,6 +191,19 @@ export default function FileViewer() {
     }
   };
 
+  // Download file helper
+  const downloadFile = () => {
+    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = decodedPath.split('/').pop() || 'file.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const toggleLineNumbers = () => {
     setShowLineNumbers(prev => !prev);
   };
@@ -183,6 +215,132 @@ export default function FileViewer() {
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
+
+  // -----------------------
+  // File info helper
+  // -----------------------
+  const getFileInfo = () => {
+    const bytes = new Blob([fileContent]).size;
+    const kbSizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes || 1) / Math.log(1024));
+    const sizeReadable = (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + kbSizes[i];
+
+    return {
+      size: sizeReadable,
+      lines: fileContent.split('\n').length,
+      words: fileContent.split(/\s+/).filter(Boolean).length,
+      characters: fileContent.length,
+      language,
+    };
+  };
+
+  // -----------------------
+  // Goto line
+  // -----------------------
+  const jumpToLine = (line) => {
+    const el = document.getElementById(`line-${line}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  // -----------------------
+  // Search helpers
+  // -----------------------
+
+  const performSearch = (text) => {
+    if (!text || !fileContent) {
+      setSearchResults([]);
+      setCurrentMatch(0);
+      return;
+    }
+
+    const safe = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(safe, 'gi');
+    const lines = fileContent.split('\n');
+    const matches = [];
+
+    lines.forEach((line, idx) => {
+      if (regex.test(line)) {
+        matches.push({ lineNumber: idx + 1 });
+      }
+      regex.lastIndex = 0; // reset per iteration
+    });
+
+    setSearchResults(matches);
+    setCurrentMatch(matches.length ? 0 : -1);
+
+    if (matches.length) jumpToLine(matches[0].lineNumber);
+  };
+
+  const navigateSearch = useCallback((direction) => {
+    if (!searchResults.length) return;
+    setCurrentMatch((prev) => {
+      const len = searchResults.length;
+      let idx = prev;
+      idx = direction === 'next' ? (idx + 1) % len : (idx - 1 + len) % len;
+      jumpToLine(searchResults[idx].lineNumber);
+      return idx;
+    });
+  }, [searchResults]);
+
+  // Run search when text changes
+  useEffect(() => {
+    if (searchOpen) {
+      performSearch(searchText);
+    }
+  }, [searchText, searchOpen, fileContent]);
+
+  // -----------------------
+  // Keyboard shortcuts
+  // -----------------------
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const metaOrCtrl = e.metaKey || e.ctrlKey;
+
+      // Cmd/Ctrl + F => open search
+      if (metaOrCtrl && e.key === 'f') {
+        e.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
+
+      // Cmd/Ctrl + G => goto line
+      if (metaOrCtrl && e.key === 'g') {
+        e.preventDefault();
+        setGotoLineOpen(true);
+        return;
+      }
+
+      // Esc closes overlays
+      if (e.key === 'Escape') {
+        setSearchOpen(false);
+        setGotoLineOpen(false);
+        setShowMobileMenu(false);
+      }
+
+      // Cmd/Ctrl + C with no selection => copy file
+      if (metaOrCtrl && e.key === 'c' && !window.getSelection()?.toString()) {
+        e.preventDefault();
+        copyContent();
+      }
+
+      // Search navigation: F3 / Enter navigate next
+      if (searchOpen) {
+        if (e.key === 'Enter' || e.key === 'F3') {
+          e.preventDefault();
+          navigateSearch('next');
+        }
+        if (metaOrCtrl && e.shiftKey && e.key.toLowerCase() === 'g') {
+          e.preventDefault();
+          navigateSearch('prev');
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [searchOpen, navigateSearch]);
 
   // Mobile toolbar component
   const MobileToolbar = () => (
@@ -208,6 +366,15 @@ export default function FileViewer() {
       </div>
       
       <div className="flex items-center space-x-2">
+        {/* Search (mobile) */}
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="p-2 bg-white rounded-lg border border-gray-300 touch-manipulation"
+          aria-label="Search"
+        >
+          <Search className="w-4 h-4" />
+        </button>
+
         <button
           onClick={toggleLineNumbers}
           className={`p-2 rounded-lg border touch-manipulation ${
@@ -327,6 +494,50 @@ export default function FileViewer() {
       className={`h-full flex flex-col relative ${isMobile ? 'pb-safe' : ''}`}
       onClick={() => showMobileMenu && setShowMobileMenu(false)}
     >
+      {/* Search overlay */}
+      {searchOpen && (
+        <div className="absolute top-0 inset-x-0 z-40 bg-white/90 backdrop-blur dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-700 p-2 flex items-center space-x-2">
+          <input
+            autoFocus
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Search in file…"
+            className="flex-1 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
+          />
+          {searchResults.length > 0 && (
+            <span className="text-xs text-gray-600 dark:text-gray-400 select-none">
+              {currentMatch + 1}/{searchResults.length}
+            </span>
+          )}
+          <button
+            onClick={() => navigateSearch('prev')}
+            disabled={!searchResults.length}
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+            title="Previous match"
+          >
+            <ChevronUp className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => navigateSearch('next')}
+            disabled={!searchResults.length}
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+            title="Next match"
+          >
+            <ChevronDown className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
+              setSearchOpen(false);
+              setSearchText('');
+              setSearchResults([]);
+            }}
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            title="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {/* Enhanced Header */}
       <div className={`bg-white border-b border-gray-200 transition-all duration-200 ${
         headerCollapsed && isMobile ? 'px-2 py-2' : 'px-4 py-3'
@@ -392,6 +603,22 @@ export default function FileViewer() {
                 >
                   <Copy className="w-4 h-4" />
                 </button>
+
+                <button
+                  onClick={() => setShowInfo(true)}
+                  className="p-2 bg-white rounded-lg border border-gray-300 hover:bg-gray-50"
+                  title="File info"
+                >
+                  <Info className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={downloadFile}
+                  className="p-2 bg-white rounded-lg border border-gray-300 hover:bg-gray-50"
+                  title="Download file"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
               </>
             )}
             
@@ -413,6 +640,13 @@ export default function FileViewer() {
       
       {/* Mobile Menu */}
       <MobileMenu />
+
+      {/* Keyboard hint */}
+      {!isMobile && !searchOpen && (
+        <div className="absolute bottom-4 right-4 text-xs text-gray-500 bg-white/80 dark:bg-gray-800/80 backdrop-blur px-3 py-1.5 rounded-md shadow-md select-none">
+          Press <kbd className="px-1 bg-gray-200 dark:bg-gray-700 rounded border border-gray-400 dark:border-gray-600">⌘F</kbd> to search
+        </div>
+      )}
 
       {/* File Content */}
       <div className={`flex-1 min-h-0 overflow-auto ${
@@ -460,6 +694,111 @@ export default function FileViewer() {
           {fileContent}
         </SyntaxHighlighter>
       </div>
+
+      {/* Goto line dialog */}
+      {gotoLineOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 p-4" onClick={() => setGotoLineOpen(false)}>
+          <div
+            className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-sm font-medium mb-4 text-gray-900 dark:text-gray-100">Go to line</h2>
+            <input
+              type="number"
+              min={1}
+              value={gotoLineNumber}
+              onChange={(e) => setGotoLineNumber(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const line = parseInt(gotoLineNumber, 10);
+                  if (line) jumpToLine(line);
+                  setGotoLineOpen(false);
+                  setGotoLineNumber('');
+                }
+              }}
+              placeholder="Line number"
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+            <div className="mt-4 flex justify-end space-x-2">
+              <button
+                onClick={() => {
+                  setGotoLineOpen(false);
+                  setGotoLineNumber('');
+                }}
+                className="px-3 py-1.5 text-sm rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const line = parseInt(gotoLineNumber, 10);
+                  if (line) jumpToLine(line);
+                  setGotoLineOpen(false);
+                  setGotoLineNumber('');
+                }}
+                className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Go
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* File info modal */}
+      {showInfo && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 p-4" onClick={() => setShowInfo(false)}>
+          <div
+            className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-4 flex items-center space-x-2">
+              <Info className="w-5 h-5" />
+              <span>File information</span>
+            </h2>
+            {(() => {
+              const info = getFileInfo();
+              return (
+                <dl className="text-sm divide-y divide-gray-200 dark:divide-gray-700">
+                  <div className="flex justify-between py-2">
+                    <dt className="text-gray-500 dark:text-gray-400">Path</dt>
+                    <dd className="font-mono truncate max-w-[12rem]" title={decodedPath}>{decodedPath}</dd>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <dt className="text-gray-500 dark:text-gray-400">Size</dt>
+                    <dd>{info.size}</dd>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <dt className="text-gray-500 dark:text-gray-400">Lines</dt>
+                    <dd>{info.lines}</dd>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <dt className="text-gray-500 dark:text-gray-400">Words</dt>
+                    <dd>{info.words}</dd>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <dt className="text-gray-500 dark:text-gray-400">Characters</dt>
+                    <dd>{info.characters}</dd>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <dt className="text-gray-500 dark:text-gray-400">Language</dt>
+                    <dd className="capitalize">{info.language}</dd>
+                  </div>
+                </dl>
+              );
+            })()}
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowInfo(false)}
+                className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
