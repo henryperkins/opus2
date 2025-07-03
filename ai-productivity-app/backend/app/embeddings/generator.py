@@ -125,7 +125,7 @@ class EmbeddingGenerator:
             "supports_dimensions_param": True,
         },
         "text-embedding-3-large": {
-            "dimension": 3072,
+            "dimension": 1536,
             "token_limit": 8000,
             "supports_dimensions_param": True,
         },
@@ -144,7 +144,7 @@ class EmbeddingGenerator:
         self,
         model: str = "text-embedding-3-large",
         *,
-        dimensions: Optional[int] = None,
+        dimensions: Optional[int] = 1536,
         encoding_format: Literal["float", "base64"] = "float",
         batch_size: int = 50,
     ):

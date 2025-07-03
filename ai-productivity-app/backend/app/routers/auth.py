@@ -61,6 +61,7 @@ from app.auth.schemas import (
     UserRegister,
     UserResponse,
     UserUpdate,
+    PreferencesUpdate,
 )
 from app.config import settings
 from app.dependencies import CurrentUserRequired, DatabaseDep
@@ -387,6 +388,30 @@ def update_profile(
     # Password
     if (password := data.get("password")):
         current_user.password_hash = security.hash_password(password)
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return UserResponse.from_orm(current_user)
+
+
+@router.patch("/preferences", response_model=UserResponse)
+def update_preferences(
+    payload: PreferencesUpdate,
+    db: DatabaseDep,
+    current_user: CurrentUserRequired,
+) -> UserResponse:
+    """Update user preferences (e.g., quality settings)."""
+    if payload.quality_settings is not None:
+        # Merge with existing preferences to avoid overwriting other settings
+        existing_prefs = current_user.preferences or {}
+        existing_prefs.update({"quality_settings": payload.quality_settings})
+        current_user.preferences = existing_prefs
+
+        # Mark as modified for SQLAlchemy to pick up the change in JSONB
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(current_user, "preferences")
 
     db.add(current_user)
     db.commit()

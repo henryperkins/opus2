@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, status
 
 from app.dependencies import CurrentUserRequired, DatabaseDep
 from app.models.import_job import ImportJob, ImportStatus
@@ -163,7 +163,6 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
         files = clone_info["files"]
 
         from app.code_processing.language_detector import detect_language
-        from app.models.code import CodeDocument  # noqa: WPS433
         from app.routers.code import _process_code_file  # re-use existing helper
 
         # Import here to avoid circular issues at top of module
@@ -196,8 +195,15 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
                 # task opens a new session so it will simply poll for the row
                 # – if the current transaction rolls back the task becomes a
                 # no-op.
+                # Schedule synchronous file-processing logic inside a
+                # background *thread* so that ``asyncio.create_task`` receives
+                # a proper coroutine.  This eliminates the runtime error
+                # “TypeError: a coroutine was expected, got None” while keeping
+                # the import pipeline non-blocking.
                 asyncio.create_task(
-                    _process_code_file(db, doc.id, content, doc.language)
+                    asyncio.to_thread(
+                        _process_code_file, db, doc.id, content, doc.language
+                    )
                 )
 
                 # Update progress in memory (frequent commits are no longer

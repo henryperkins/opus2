@@ -31,6 +31,7 @@ from .routers import models as models_router
 from .routers import rendering as rendering_router
 from .routers import copilot as copilot_router
 from .routers import prompts as prompts_router
+from .routers import repositories as repositories_router
 
 
 @asynccontextmanager
@@ -124,6 +125,7 @@ app.include_router(models_router.router)
 app.include_router(rendering_router.router)
 app.include_router(copilot_router.router)
 app.include_router(prompts_router.router)
+app.include_router(repositories_router.router)
 
 
 @app.get("/health")

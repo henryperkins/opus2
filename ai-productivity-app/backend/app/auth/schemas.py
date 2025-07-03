@@ -117,6 +117,7 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    preferences: dict | None = None
 
     class Config:
         from_attributes = True
@@ -188,6 +189,11 @@ class UserUpdate(BaseModel):
             getattr(self, field) is not None for field in ("username", "email", "password")
         ):
             raise ValueError("At least one field must be provided")
+
+
+class PreferencesUpdate(BaseModel):
+    """Partial update for user preferences."""
+    quality_settings: dict | None = Field(None, description="Quality settings for model responses")
 
 
 # --------------------------------------------------------------------------- #

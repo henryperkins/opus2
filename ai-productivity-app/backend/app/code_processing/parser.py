@@ -169,9 +169,19 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                     "error": f"Language {language} not supported",
                 }
 
+            # Initialise and cache a tree-sitter parser for the requested language
+            # Tree-sitter ≥ 0.23 removed ``Parser.set_language`` in favour of the
+            # attribute assignment ``parser.language = LANG``.
+            # Support both APIs to stay compatible with older runtimes.
             if language not in self.parsers:
                 parser = Parser()
-                parser.set_language(self.languages[language])
+                lang_obj = self.languages[language]
+                if hasattr(parser, "set_language"):
+                    # Legacy API (≤ 0.22)
+                    parser.set_language(lang_obj)
+                else:
+                    # Modern API (≥ 0.23)
+                    parser.language = lang_obj      # type: ignore[attr-defined]
                 self.parsers[language] = parser
 
             parser = self.parsers[language]
