@@ -42,6 +42,30 @@ class HybridSearch:
         search_types: Optional[List[str]] = None,
     ) -> List[Dict]:
         """Execute hybrid search across all modalities."""
+        # ------------------------------------------------------------------
+        # `filters` can either be a plain ``dict`` **or** a Pydantic model
+        # (``SearchFilters``) depending on where `HybridSearch.search` is being
+        # called from.  Down-stream services (keyword/structural search, vector
+        # filtering, …) expect *mapping* semantics and use ``filters.get``.
+        # To be defensive we therefore convert the object to a plain dict
+        # early on so that the remainder of the code never needs to care about
+        # the concrete type.
+        # ------------------------------------------------------------------
+
+        if filters is not None and not isinstance(filters, dict):
+            # Pydantic v2 → ``model_dump``
+            if hasattr(filters, "model_dump"):
+                filters = filters.model_dump(exclude_none=True)  # type: ignore[attr-defined]
+            # Pydantic v1 → ``dict``
+            elif hasattr(filters, "dict"):
+                filters = filters.dict(exclude_none=True)  # type: ignore[attr-defined]
+            else:  # Fallback – should not normally happen
+                filters = {
+                    k: v
+                    for k, v in getattr(filters, "__dict__", {}).items()
+                    if (not k.startswith("_")) and k not in {"model_config", "model_fields"}
+                }
+
         if not search_types:
             search_types = ["semantic", "keyword", "structural"]
 
