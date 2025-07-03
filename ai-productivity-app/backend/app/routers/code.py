@@ -20,6 +20,7 @@ import textwrap
 import traceback
 import tempfile
 import os
+from pathlib import Path
 from typing import List
 from pydantic import BaseModel
 
@@ -233,17 +234,16 @@ async def upload_code_files(  # noqa: D401, WPS211
 
                 # ── Store file to disk securely ───────────────────────────────
                 try:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.code') as tmp_file:
-                        tmp_file.write(raw)
-                        tmp_file.flush()
-                        stored_path = tmp_file.name
-
                     content_decoded = raw.decode("utf-8", errors="ignore")
                     language = detect_language(upload.filename, content_decoded)
 
+                    # Create safe filename and path
+                    safe_filename = upload.filename or f"upload_{content_hash_hex[:8]}.{language}"
+                    file_path = safe_filename
+
                     doc = CodeDocument(
                         project_id=project_id,
-                        file_path=upload.filename or f"upload_{content_hash_hex[:8]}",
+                        file_path=file_path,
                         file_size=total_size,
                         content_hash=content_hash_hex,
                         language=language,
@@ -251,11 +251,17 @@ async def upload_code_files(  # noqa: D401, WPS211
                     db.add(doc)
                     db.commit()
 
-                    # Clean up temporary file
-                    try:
-                        os.unlink(stored_path)
-                    except OSError:
-                        logger.warning("Failed to clean up temp file: %s", stored_path)
+                    # Save file to uploads directory
+                    upload_dir = Path(settings.upload_root)
+                    upload_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    full_file_path = upload_dir / file_path
+                    # Create parent directories if needed
+                    full_file_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Write file content to disk
+                    with open(full_file_path, 'wb') as f:
+                        f.write(raw)
 
                     # Kick background processing
                     if background_tasks is not None:
