@@ -1786,5 +1786,178 @@ kbd {
 }
 
 /* ========================================================================
+   Mobile File Viewer Enhancements
+   ======================================================================== */
+
+/* Touch-friendly manipulation */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile file viewer container */
+.mobile-file-viewer {
+  @apply h-full flex flex-col;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Responsive file header */
+.file-header-mobile {
+  @apply transition-all duration-200;
+}
+
+.file-header-collapsed {
+  @apply px-2 py-2;
+}
+
+.file-header-expanded {
+  @apply px-4 py-3;
+}
+
+/* Mobile toolbar styles */
+.mobile-file-toolbar {
+  @apply flex items-center justify-between p-2 bg-gray-50 border-b border-gray-200;
+  @apply lg:hidden;
+}
+
+/* Font size controls */
+.font-size-controls {
+  @apply flex items-center space-x-2;
+}
+
+.font-size-display {
+  @apply text-sm font-medium min-w-[2rem] text-center;
+}
+
+/* Mobile menu styles */
+.mobile-file-menu {
+  @apply absolute top-full right-2 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50;
+  @apply lg:hidden;
+}
+
+.mobile-file-menu button {
+  @apply w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center justify-between;
+}
+
+/* Code container responsive styles */
+.code-container-mobile {
+  @apply flex-1 min-h-0 overflow-auto;
+}
+
+/* Syntax highlighter mobile optimizations */
+.syntax-highlighter-mobile pre {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.syntax-highlighter-mobile code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace !important;
+  word-wrap: break-word !important;
+}
+
+/* Mobile line number styles */
+.mobile-line-numbers {
+  min-width: 2.5em !important;
+  padding-right: 0.5em !important;
+  text-align: right !important;
+  border-right: 1px solid #e5e7eb !important;
+  margin-right: 0.5em !important;
+}
+
+/* Dark mode line numbers */
+.dark .mobile-line-numbers {
+  border-right-color: #374151 !important;
+}
+
+/* Responsive font sizing */
+@media (max-width: 768px) {
+  .file-viewer-responsive {
+    font-size: clamp(14px, 4vw, 20px);
+    line-height: 1.4;
+  }
+  
+  .line-number-responsive {
+    font-size: clamp(10px, 3vw, 16px);
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .syntax-highlighter-container {
+    filter: contrast(1.2);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .file-header-mobile,
+  .mobile-file-menu {
+    transition: none;
+  }
+}
+
+/* Focus styles for file viewer */
+.file-viewer-focus:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Mobile theme toggle states */
+.theme-toggle-light {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.theme-toggle-dark {
+  @apply bg-gray-800 text-gray-200;
+}
+
+/* File path truncation */
+.file-path-truncate {
+  @apply truncate;
+  max-width: calc(100vw - 8rem);
+}
+
+@media (max-width: 768px) {
+  .file-path-truncate {
+    max-width: calc(100vw - 6rem);
+  }
+}
+
+/* Loading shimmer for file content */
+.file-loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.dark .file-loading-shimmer {
+  background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+  background-size: 200% 100%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Mobile gesture hints */
+.mobile-gesture-hint {
+  @apply absolute bottom-4 left-1/2 transform -translate-x-1/2;
+  @apply text-xs text-gray-500 dark:text-gray-400;
+  @apply animate-pulse;
+  @apply pointer-events-none;
+}
+
+/* ========================================================================
+   End Mobile File Viewer Enhancements
+   ======================================================================== */
+
+/* ========================================================================
    End Chat Component Utilities
    ======================================================================== */
