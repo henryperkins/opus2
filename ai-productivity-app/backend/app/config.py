@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     embedding_safety_margin: int = Field(default=200, description="Safety margin for token calculation")
     embedding_max_batch_rows: int = Field(default=100, description="Maximum rows to fetch per batch")
     embedding_max_retries: int = Field(default=5, description="Maximum retries for embedding operations")
+    embedding_max_concurrency: int = Field(default=1, description="Maximum concurrent embedding requests")
 
     # Deprecated settings - kept for backward compatibility during migration
     qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant server URL (deprecated)")

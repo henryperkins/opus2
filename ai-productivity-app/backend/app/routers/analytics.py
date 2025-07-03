@@ -17,6 +17,7 @@ from ..schemas.analytics import (
     DashboardMetrics,
     AnalyticsResponse
 )
+from ..services.metrics_service import metrics_service
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -159,36 +160,42 @@ async def record_feedback(
 
 @router.get("/quality/{project_id}")
 async def get_quality_metrics(
-    project_id: int,  # Changed from str to int
+    project_id: int,
     _start_date: Optional[datetime] = None,
     _end_date: Optional[datetime] = None,
     _db: Session = Depends(get_db)
 ) -> AnalyticsResponse:
-    """Get quality metrics for a project."""
+    """Get quality metrics for a project based on real Prometheus data."""
     try:
-        # Query quality metrics from database
-        # This is a mock response
-
-        mock_data = {
-            "project_id": project_id,
-            "average_accuracy": 0.85,
-            "average_relevance": 0.78,
-            "average_completeness": 0.82,
-            "average_clarity": 0.80,
-            "average_user_rating": 4.2,
-            "total_responses": 150,
-            "trend_data": [0.82, 0.84, 0.85, 0.83, 0.85],
-            "last_updated": datetime.utcnow().isoformat()
-        }
+        # Get real quality metrics from Prometheus data
+        quality_data = metrics_service.get_quality_metrics(project_id)
+        quality_data["last_updated"] = datetime.utcnow().isoformat()
 
         return AnalyticsResponse(
             success=True,
-            data=mock_data
+            data=quality_data
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get quality metrics: {str(e)}"
+        ) from e
+
+
+@router.get("/embedding-metrics")
+async def get_embedding_metrics() -> AnalyticsResponse:
+    """Get embedding processing metrics from Prometheus."""
+    try:
+        embedding_data = metrics_service.get_embedding_metrics()
+        
+        return AnalyticsResponse(
+            success=True,
+            data=embedding_data
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get embedding metrics: {str(e)}"
         ) from e
 
 

@@ -134,6 +134,23 @@ def _is_retryable_error(exc: Exception) -> bool:
     return isinstance(exc, (RateLimitError, APITimeoutError))
 
 
+def _adaptive_wait(retry_state):
+    """Custom wait function that respects Retry-After header from Azure OpenAI."""
+    exc = retry_state.outcome.exception()
+    if isinstance(exc, RateLimitError):
+        try:
+            # Honor Retry-After header if present
+            retry_after = exc.response.headers.get("Retry-After") if exc.response else None
+            if retry_after:
+                return float(retry_after)
+        except (AttributeError, ValueError, TypeError):
+            # Header missing or cast fails, fall back to exponential
+            pass
+    
+    # Fall back to capped exponential backoff (1, 2, 4, 8, 10 seconds)
+    return min(2 ** (retry_state.attempt_number - 1), 10)
+
+
 class EmbeddingGenerator:
     """Generate embeddings via (Azure) OpenAI with batching + retries."""
 
@@ -197,6 +214,10 @@ class EmbeddingGenerator:
         self._populate_model_meta()
         self.client: AsyncOpenAI | AsyncAzureOpenAI | None = None
         self._init_client()
+        
+        # Initialize concurrency limiter
+        import asyncio
+        self._semaphore = asyncio.Semaphore(settings.embedding_max_concurrency)
 
     # ------------------------------------------------------------------ #
     # Client initialisation
@@ -255,7 +276,7 @@ class EmbeddingGenerator:
     # Oversized batches are NOT retried as they're deterministic failures.
     @retry(  # noqa: D401 – decorator docs
         stop=stop_after_attempt(settings.embedding_max_retries),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
+        wait=_adaptive_wait,
         retry=retry_if_exception(_is_retryable_error),
         reraise=True,
     )
@@ -303,7 +324,9 @@ class EmbeddingGenerator:
                         self._model_meta["supports_dimensions_param"]):
                     kwargs["dimensions"] = self.dimensions
 
-                resp = await self.client.embeddings.create(**kwargs)
+                # Use semaphore to limit concurrent requests
+                async with self._semaphore:
+                    resp = await self.client.embeddings.create(**kwargs)
 
                 for item in resp.data:
                     vector = (

@@ -211,6 +211,15 @@ export const analyticsAPI = {
     },
 
     /**
+     * Get embedding processing metrics from Prometheus
+     * @returns {Promise<object>} Embedding metrics data
+     */
+    getEmbeddingMetrics: async () => {
+        const response = await client.get('/api/analytics/embedding-metrics');
+        return response.data;
+    },
+
+    /**
      * Track flow performance metrics
      * @param {object} flowMetrics - Flow execution metrics
      * @returns {Promise<object>} Tracking confirmation

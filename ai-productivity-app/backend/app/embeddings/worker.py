@@ -11,14 +11,6 @@ import logging
 import time
 from typing import Optional
 
-# Optional Prometheus metrics
-try:
-    from prometheus_client import Gauge
-    EMBEDDING_QUEUE = Gauge("embedding_queue_length", "Pending embeddings count")
-    HAS_PROMETHEUS = True
-except ImportError:
-    EMBEDDING_QUEUE = None
-    HAS_PROMETHEUS = False
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine

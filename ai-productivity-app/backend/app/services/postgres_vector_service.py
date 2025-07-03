@@ -53,7 +53,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 # ---------------------------------------------------------------------------
 # Optional anyio shim – mirrors approach in qdrant_client so the wider
@@ -213,10 +213,25 @@ class PostgresVectorService:
     # --------------------------------------------------------------------- #
 
     @staticmethod
-    def _to_pgvector(vec: np.ndarray) -> str:
-        """Convert numpy array (1-D) to pgvector literal."""
-        # Use str.format to avoid f-string parsing issues within generator
-        return "[" + ",".join("{:.6f}".format(x) for x in vec.tolist()) + "]"
+    def _to_pgvector(vec: Sequence[float] | np.ndarray) -> str:
+        """
+        Convert *vec* into the textual representation expected by the `pgvector`
+        extension, e.g. `[0.123456,0.654321,...]`.
+
+        Accepts:
+        • plain Python sequences (list/tuple) – what the OpenAI client returns
+        • NumPy ndarrays – legacy callers or future optimisations
+        """
+        # NumPy objects expose `.tolist()`: normalise them first
+        if hasattr(vec, "tolist"):
+            vec = vec.tolist()  # type: ignore[assignment]
+
+        if not isinstance(vec, (list, tuple)):
+            raise TypeError(
+                f"Vector must be list/tuple/ndarray, got {type(vec).__name__}"
+            )
+
+        return "[" + ",".join(f"{x:.6f}" for x in vec) + "]"
 
     async def insert_embeddings(self, embeddings: List[Dict[str, Any]]) -> List[str]:
         def _insert():
