@@ -3,9 +3,14 @@ import { useTheme } from '../../hooks/useTheme';
 export default function ThemeToggle({ className = '' }) {
   const { theme, toggleTheme } = useTheme();
 
+  const handleToggle = () => {
+    console.log('ThemeToggle: Current theme before toggle:', theme);
+    toggleTheme();
+  };
+
   return (
     <button
-      onClick={toggleTheme}
+      onClick={handleToggle}
       className={`p-2 rounded-md transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 ${className}`}
       aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
       title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}

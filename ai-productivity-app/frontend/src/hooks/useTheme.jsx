@@ -3,7 +3,7 @@
 // theme is persisted to localStorage and kept in-sync with the system colour
 // scheme.
 
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import useAuthStore from '../stores/authStore';
 import PropTypes from 'prop-types';
 
@@ -15,6 +15,7 @@ const ThemeContext = createContext({
 
 export function ThemeProvider({ children }) {
   const { preferences, setPreference } = useAuthStore();
+  const isInitialMount = useRef(true);
 
   // Helper to map preference -> actual theme string (light | dark)
   const getSystemTheme = useCallback(() => {
@@ -52,6 +53,13 @@ export function ThemeProvider({ children }) {
 
     console.log('applyTheme called with:', newTheme);
     const root = document.documentElement;
+    
+    // Only update if actually changing
+    if (root.classList.contains(newTheme)) {
+      console.log('Theme already applied:', newTheme);
+      return;
+    }
+
     console.log('Current classes before change:', root.classList.toString());
 
     root.classList.remove('light', 'dark');
@@ -67,46 +75,34 @@ export function ThemeProvider({ children }) {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Sync with Zustand store when it hydrates or changes
+  // Initialize theme from preferences on mount
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    // Wait for the store to be hydrated (preferences will be null initially)
-    if (!preferences) return;
-
+    if (!isInitialMount.current || !preferences) return;
+    
+    isInitialMount.current = false;
+    
     const pref = preferences.theme;
-
-    // Handle explicit light/dark preference
+    
+    // Handle explicit preference
     if (pref === 'light' || pref === 'dark') {
-      if (pref !== theme) {
-        setThemeState(pref);
-        applyTheme(pref);
-        // Keep fallback storage in sync
-        localStorage.setItem('theme', pref);
-      }
-      return;
-    }
-
-    // Handle auto preference - follow system setting
-    if (pref === 'auto') {
-      const sys = getSystemTheme();
-      if (sys !== theme) {
-        setThemeState(sys);
-        applyTheme(sys);
-      }
-      return;
-    }
-
-    // If no preference is set in the store, check localStorage for legacy support
-    const legacyTheme = localStorage.getItem('theme');
-    if (legacyTheme === 'light' || legacyTheme === 'dark') {
-      if (legacyTheme !== theme) {
+      setThemeState(pref);
+      applyTheme(pref);
+      localStorage.setItem('theme', pref);
+    } else if (pref === 'auto') {
+      const systemTheme = getSystemTheme();
+      setThemeState(systemTheme);
+      applyTheme(systemTheme);
+    } else {
+      // No preference set, check localStorage for legacy support
+      const legacyTheme = localStorage.getItem('theme');
+      if (legacyTheme === 'light' || legacyTheme === 'dark') {
         setThemeState(legacyTheme);
         applyTheme(legacyTheme);
-        // Migrate to Zustand store
         setPreference('theme', legacyTheme);
       }
     }
-  }, [preferences, theme, applyTheme, getSystemTheme, setPreference]);
+  }, [preferences, applyTheme, getSystemTheme, setPreference]);
 
   // ---------------------------------------------------------------------------
   // Public setter – updates state, storage & DOM.
@@ -116,17 +112,22 @@ export function ThemeProvider({ children }) {
       console.log('setTheme called with:', newTheme);
       if (newTheme !== 'light' && newTheme !== 'dark' && newTheme !== 'auto') return;
 
+      let actualTheme = newTheme;
+      
       if (newTheme === 'auto') {
-        const systemTheme = getSystemTheme();
-        console.log('Auto theme detected, using system theme:', systemTheme);
-        setThemeState(systemTheme);
-        applyTheme(systemTheme);
-      } else {
-        console.log('Setting theme state and applying:', newTheme);
-        setThemeState(newTheme);
-        applyTheme(newTheme);
-        // Keep fallback storage in sync
-        localStorage.setItem('theme', newTheme);
+        actualTheme = getSystemTheme();
+        console.log('Auto theme detected, using system theme:', actualTheme);
+      }
+      
+      // Update state
+      setThemeState(actualTheme);
+      
+      // Apply to DOM immediately
+      applyTheme(actualTheme);
+      
+      // Keep fallback storage in sync
+      if (newTheme !== 'auto') {
+        localStorage.setItem('theme', actualTheme);
       }
 
       // Always persist the preference (including 'auto')
@@ -143,12 +144,6 @@ export function ThemeProvider({ children }) {
     console.log('Switching to theme:', next);
     setTheme(next);
   }, [theme, setTheme]);
-
-  // Apply theme at mount & whenever it changes --------------------------------
-  useEffect(() => {
-    console.log('Applying theme to DOM:', theme);
-    applyTheme(theme);
-  }, [theme, applyTheme]);
 
   // Keep in-sync with system preference changes -------------------------------
   useEffect(() => {

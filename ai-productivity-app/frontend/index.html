@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="AI Productivity App - Code-centric productivity tool">
+  <meta name="theme-color" content="#ffffff">
   <!-- Apply initial theme as early as possible to avoid flash -->
   <script>
     (function () {
@@ -40,6 +41,12 @@
         }
 
         document.documentElement.classList.add(theme);
+        
+        // Also set the theme-color meta tag
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) {
+          metaTheme.content = theme === 'dark' ? '#111827' : '#ffffff';
+        }
       } catch (e) {
         // Fail silently and add default theme
         document.documentElement.classList.add('light');

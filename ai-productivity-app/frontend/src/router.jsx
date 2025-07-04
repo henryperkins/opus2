@@ -37,6 +37,7 @@ import FileViewerPage from './pages/FileViewerPage';
 import Layout from './components/common/Layout';
 import ProjectLayout from './layouts/ProjectLayout';
 import { useRequireAuth } from './hooks/useAuth';
+import ThemeTestPage from './pages/ThemeTestPage';
 
 // -----------------------------------------------------------------------------
 // ProtectedRoute wrapper
@@ -131,6 +132,10 @@ export const router = createBrowserRouter(
         {
           path: 'files/:path',
           element: <ProtectedRoute element={<FileViewerPage />} />,
+        },
+        {
+          path: 'theme-test',
+          element: <ThemeTestPage />,
         },
       ],
     },
