@@ -986,7 +986,7 @@ export default function FileViewer() {
             padding: 0,
             fontSize: `${responsiveFontSize}px`,
             lineHeight: isMobile ? '1.4' : '1.5',
-            background: 'transparent',
+            background: theme === 'light' ? '#ffffff' : '#1f2937',
             fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
           }}
           codeTagProps={{
@@ -998,26 +998,37 @@ export default function FileViewer() {
           renderer={({ rows, stylesheet, useInlineStyles }) => {
             return rows.map((row, i) => {
               const lineNumber = i + 1;
-              let lineContent = row.map((node, j) => {
-                if (node.type === 'text') {
-                  // Apply search highlighting to text nodes
-                  const highlightedText = highlightSearchMatches(node.value, lineNumber);
-                  if (highlightedText !== node.value) {
-                    return <span key={j} dangerouslySetInnerHTML={{ __html: highlightedText }} />;
-                  }
-                }
-                return <span key={j} style={useInlineStyles ? node.properties.style : undefined} className={node.properties.className}>
-                  {node.children ? node.children.map((child, k) => {
-                    if (child.type === 'text') {
-                      const highlightedText = highlightSearchMatches(child.value, lineNumber);
-                      if (highlightedText !== child.value) {
-                        return <span key={k} dangerouslySetInnerHTML={{ __html: highlightedText }} />;
-                      }
+              let lineContent;
+              
+              if (Array.isArray(row)) {
+                lineContent = row.map((node, j) => {
+                  if (node.type === 'text') {
+                    // Apply search highlighting to text nodes
+                    const highlightedText = highlightSearchMatches(node.value, lineNumber);
+                    if (highlightedText !== node.value) {
+                      return <span key={j} dangerouslySetInnerHTML={{ __html: highlightedText }} />;
                     }
-                    return child.value;
-                  }) : node.value}
-                </span>;
-              });
+                  }
+                  return <span key={j} style={useInlineStyles ? node.properties?.style : undefined} className={node.properties?.className}>
+                    {node.children ? node.children.map((child, k) => {
+                      if (child.type === 'text') {
+                        const highlightedText = highlightSearchMatches(child.value, lineNumber);
+                        if (highlightedText !== child.value) {
+                          return <span key={k} dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+                        }
+                      }
+                      return child.value;
+                    }) : node.value}
+                  </span>;
+                });
+              } else {
+                // Handle case where row is not an array (fallback to simple text)
+                const rowText = typeof row === 'string' ? row : (row?.value || '');
+                const highlightedText = highlightSearchMatches(rowText, lineNumber);
+                lineContent = highlightedText !== rowText ? 
+                  <span dangerouslySetInnerHTML={{ __html: highlightedText }} /> : 
+                  rowText;
+              }
 
               return (
                 <div key={i} style={{
