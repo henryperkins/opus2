@@ -5,6 +5,15 @@ FastAPI application entry point with middleware and lifespan management.
 import logging
 from contextlib import asynccontextmanager
 
+# ---------------------------------------------------------------------------
+# Ensure noisy 3rd-party libraries are set to INFO in production before any of
+# them emit log records.
+# ---------------------------------------------------------------------------
+
+from .logging_config import configure_library_loggers  # noqa: E402 – after sys path setup
+
+configure_library_loggers()
+
 # Third-party
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +41,7 @@ from .routers import rendering as rendering_router
 from .routers import copilot as copilot_router
 from .routers import prompts as prompts_router
 from .routers import repositories as repositories_router
+from .routers import project_search as project_search_router
 
 
 @asynccontextmanager
@@ -126,6 +136,7 @@ app.include_router(rendering_router.router)
 app.include_router(copilot_router.router)
 app.include_router(prompts_router.router)
 app.include_router(repositories_router.router)
+app.include_router(project_search_router.router)
 
 
 @app.get("/health")

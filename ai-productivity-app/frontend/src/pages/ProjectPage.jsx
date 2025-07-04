@@ -5,7 +5,6 @@ import SkeletonLoader from '../components/common/SkeletonLoader';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { knowledgeAPI } from '../api/knowledge';
 import useProjectStore from '../stores/projectStore';
-import ProjectHeader from '../components/projects/ProjectHeader';
 import QuickActions from '../components/projects/QuickActions';
 import MetricsPanel from '../components/projects/MetricsPanel';
 import ActivityTimeline from '../components/projects/ActivityTimeline';
@@ -62,8 +61,8 @@ export default function ProjectPage() {
 
   return (
     <main className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8">
-      <ProjectHeader project={project} />
 
+      {/* Quick navigation/action shortcuts */}
       <QuickActions projectId={projectId} />
 
       <MetricsPanel quality={metrics} kb={kbStats} />

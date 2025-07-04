@@ -18,11 +18,16 @@ class VectorService:
 
     async def initialize(self) -> None:
         """Initialize the vector service."""
+        # Prevent duplicate initialisation during application startup when
+        # both the lifespan hook *and* the embedding worker call this method.
         if self._initialized:
             return
 
         await self._backend.initialize()
         self._initialized = True
+
+        # The informational log is emitted only once so the health-check logs
+        # remain free of duplicate "pgvector backend ready" lines.
         logger.info("Vector service initialized with pgvector backend")
 
     async def insert_embeddings(

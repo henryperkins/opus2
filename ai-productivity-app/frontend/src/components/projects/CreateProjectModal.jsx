@@ -50,7 +50,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Create New Project" closeOnOverlayClick={false}>
+    <UnifiedModal isOpen={isOpen} onClose={handleClose} title="Create New Project" closeOnOverlayClick={false}>
       <div className="mt-4">
         {localError && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -65,6 +65,6 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }) {
           submitText="Create Project"
         />
       </div>
-    </Modal>
+    </UnifiedModal>
   );
 }

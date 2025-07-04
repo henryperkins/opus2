@@ -72,7 +72,9 @@ class EmbeddingWorker:
 
         self.running = True
         self._task = asyncio.create_task(self._worker_loop())
-        logger.info("Embedding worker started")
+        # DEBUG-level to avoid duplicating the info checkpoint emitted by
+        # *start_background_loop()*.
+        logger.debug("Embedding worker started")
 
     async def stop(self) -> None:
         """Stop the background worker loop."""

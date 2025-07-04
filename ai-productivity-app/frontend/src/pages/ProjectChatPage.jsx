@@ -56,6 +56,7 @@ import { toast } from '../components/common/Toast';
 import ProjectChatList from '../components/chat/ProjectChatList';
 import { Link } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import ConnectionIndicator from '../components/common/ConnectionIndicator';
 
 // ----------------------------------------------------------------------------------
 // Helpers
@@ -357,6 +358,32 @@ export default function ProjectChatPage() {
     return () => clearTimeout(handler);
   }, [showMonacoEditor, panelSizes]);
 
+  // Add handler for context actions from UnifiedNavBar
+  useEffect(() => {
+    const handleContextAction = (event) => {
+      switch (event.detail) {
+        case 'knowledge':
+          setShowKnowledgeAssistant(prev => !prev);
+          break;
+        case 'editor':
+          setShowMonacoEditor(prev => !prev);
+          break;
+        case 'search':
+          setShowSearch(true);
+          break;
+        case 'settings':
+          setShowPromptManager(true);
+          break;
+        case 'analytics':
+          setShowAnalytics(v => !v);
+          break;
+      }
+    };
+
+    window.addEventListener('contextAction', handleContextAction);
+    return () => window.removeEventListener('contextAction', handleContextAction);
+  }, [showKnowledgeAssistant, showMonacoEditor]);
+
   // ---------------------------------------------------------------------------
   // Render helpers
   // ---------------------------------------------------------------------------
@@ -379,7 +406,7 @@ export default function ProjectChatPage() {
   const renderUserTypingIndicator = () => {
     const currentUserId = user?.id;
     const otherUsersTyping = Array.from(typingUsers).filter(id => id !== currentUserId);
-    
+
     if (otherUsersTyping.length === 0) return null;
 
     return (
@@ -528,7 +555,7 @@ export default function ProjectChatPage() {
         <div className="max-w-4xl mx-auto p-6">
           {/* Project Header */}
           <div className="mb-6">
-            <Link 
+            <Link
               to={`/projects/${projectId}`}
               className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 mb-2 inline-block"
             >
@@ -550,31 +577,6 @@ export default function ProjectChatPage() {
   // Main render
   // ----------------------------------------------------------------------------------
 
-  // Add handler for context actions from UnifiedNavBar
-  useEffect(() => {
-    const handleContextAction = (event) => {
-      switch (event.detail) {
-        case 'knowledge':
-          setShowKnowledgeAssistant(!showKnowledgeAssistant);
-          break;
-        case 'editor':
-          setShowMonacoEditor(!showMonacoEditor);
-          break;
-        case 'search':
-          setShowSearch(true);
-          break;
-        case 'settings':
-          setShowPromptManager(true);
-          break;
-        case 'analytics':
-          setShowAnalytics(v => !v);
-          break;
-      }
-    };
-
-    window.addEventListener('contextAction', handleContextAction);
-    return () => window.removeEventListener('contextAction', handleContextAction);
-  }, [showKnowledgeAssistant, showMonacoEditor]);
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 overflow-hidden">

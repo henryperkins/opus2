@@ -319,9 +319,13 @@ class CodeEmbedding(Base, TimestampMixin):
         """Validate chunk content."""
         if not content or len(content.strip()) == 0:
             raise ValueError("Chunk content cannot be empty")
-        # Limit chunk size to prevent huge embeddings
-        if len(content) > 10000:
-            raise ValueError("Chunk content exceeds maximum size")
+        # Limit chunk size to prevent huge embeddings.  Empirically we found
+        # that the previous 10 kB threshold was too strict for files that are
+        # still handled well by the embedding model.  Increase to 32 kB which
+        # corresponds to the maximum context length of most modern models
+        # while keeping a guardrail against pathological inputs.
+        if len(content) > 32000:
+            raise ValueError("Chunk content exceeds maximum size (32 k cap)")
         return content
 
     def __repr__(self):
