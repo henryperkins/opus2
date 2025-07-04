@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import Modal from '../common/Modal';
+import UnifiedModal from "../../components/common/UnifiedModal";
 
 const WhatsNewModal = ({ isOpen, onClose }) => {
   const features = [

@@ -3,11 +3,12 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../hooks/useAuth';
 import { useLocation } from 'react-router-dom';
-import Header from './Header';
-import Sidebar from './Sidebar';
+import UnifiedNavBar from '../navigation/UnifiedNavBar';
+import UnifiedSidebar from '../navigation/UnifiedSidebar';
 import ThemeToggle from './ThemeToggle';
 import { Link } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore';
+import { NavigationProvider } from '../../contexts/NavigationContext';
 
 export default function AppShell({ sidebar, children }) {
   const { user, loading: authLoading } = useAuth();
@@ -16,6 +17,12 @@ export default function AppShell({ sidebar, children }) {
   const isDesktop = !isMobile && !isTablet;
   const [sidebarOpen, setSidebarOpen] = useState(isDesktop);
   const { preferences, setSidebarWidth } = useAuthStore();
+
+  const handleContextAction = (actionId) => {
+    console.log('Context action triggered:', actionId);
+    // Handle context actions based on actionId
+    // This could dispatch events or call specific handlers
+  };
 
   // Sync sidebar state with screen size changes
   useEffect(() => {
@@ -63,69 +70,73 @@ export default function AppShell({ sidebar, children }) {
 
   // Main layout with sidebar for authenticated users
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
-      {/* Global header */}
-      <Header 
-        onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
-        showMenuButton={!isDesktop}
-        sidebarOpen={sidebarOpen}
-      />
+    <NavigationProvider>
+      <div className="flex flex-col h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+        {/* Global header */}
+        <UnifiedNavBar 
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
+          showMenuButton={!isDesktop}
+          sidebarOpen={sidebarOpen}
+          onContextAction={handleContextAction}
+        />
 
-      {/* Main content area with panels */}
-      <div className="flex-1 overflow-hidden">
-        {isDesktop ? (
-          // Desktop: Resizable panels
-          <PanelGroup 
-            direction="horizontal" 
-            className="h-full"
-            onLayout={(sizes) => {
-              // Calculate sidebar width from percentage
-              const sidebarWidthPercent = sizes[0];
-              const windowWidth = window.innerWidth;
-              const newWidth = (sidebarWidthPercent / 100) * windowWidth;
-              setSidebarWidth(newWidth);
-            }}
-          >
-            <Panel 
-              defaultSize={(preferences.sidebarWidth / window.innerWidth) * 100} 
-              minSize={14} 
-              maxSize={35} 
-              collapsible
+        {/* Main content area with panels */}
+        <div className="flex-1 overflow-hidden">
+          {isDesktop ? (
+            // Desktop: Resizable panels
+            <PanelGroup 
+              direction="horizontal" 
+              className="h-full"
+              onLayout={(sizes) => {
+                // Calculate sidebar width from percentage
+                const sidebarWidthPercent = sizes[0];
+                const windowWidth = window.innerWidth;
+                const newWidth = (sidebarWidthPercent / 100) * windowWidth;
+                setSidebarWidth(newWidth);
+              }}
             >
-              <Sidebar isOpen={true} onToggle={() => {}} className="h-full" />
-            </Panel>
-            <PanelResizeHandle className="w-px bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-col-resize" />
-            <Panel minSize={40}>
-              <main className="h-full overflow-auto">{children}</main>
-            </Panel>
-          </PanelGroup>
-        ) : (
-          // Mobile/Tablet: Drawer behavior
-          <>
-            <Sidebar
-              isOpen={sidebarOpen}
-              onToggle={() => setSidebarOpen(false)}
-              className={`fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-300 ${
+              <Panel 
+                defaultSize={(preferences.sidebarWidth / window.innerWidth) * 100} 
+                minSize={14} 
+                maxSize={35} 
+                collapsible
+              >
+                <UnifiedSidebar isOpen={true} onClose={() => {}} />
+              </Panel>
+              <PanelResizeHandle className="w-px bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-col-resize" />
+              <Panel minSize={40}>
+                <main className="h-full overflow-auto">{children}</main>
+              </Panel>
+            </PanelGroup>
+          ) : (
+            // Mobile/Tablet: Drawer behavior
+            <>
+              <div className={`fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-300 ${
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-              }`}
-            />
-            
-            {/* Overlay for mobile/tablet when sidebar is open */}
-            {sidebarOpen && (
-              <div
-                className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
-                onClick={() => setSidebarOpen(false)}
-                onKeyDown={(e) => e.key === 'Enter' && setSidebarOpen(false)}
-                role="button"
-                tabIndex="0"
-                aria-label="Close menu overlay"
-              />
-            )}
-            
-            <main className="h-full overflow-auto">{children}</main>
-          </>
-        )}
+              }`}>
+                <UnifiedSidebar
+                  isOpen={sidebarOpen}
+                  onClose={() => setSidebarOpen(false)}
+                />
+              </div>
+              
+              {/* Overlay for mobile/tablet when sidebar is open */}
+              {sidebarOpen && (
+                <div
+                  className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
+                  onClick={() => setSidebarOpen(false)}
+                  onKeyDown={(e) => e.key === 'Enter' && setSidebarOpen(false)}
+                  role="button"
+                  tabIndex="0"
+                  aria-label="Close menu overlay"
+                />
+              )}
+              
+              <main className="h-full overflow-auto">{children}</main>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+    </NavigationProvider>
   );
 }

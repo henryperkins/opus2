@@ -24,7 +24,7 @@ import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import UserProfile from './components/auth/UserProfile';
-import SettingsPage from './pages/SettingsPage';
+import UnifiedSettingsPage from './pages/UnifiedSettingsPage';
 import TimelinePage from './pages/TimelinePage';
 import SearchPage from './pages/SearchPage';
 import ProjectDashboard from './pages/ProjectDashboard';
@@ -32,7 +32,6 @@ import ProjectPage from './pages/ProjectPage';
 import ProjectChatPage from './pages/ProjectChatPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ProjectFilesPage from './pages/ProjectFilesPage';
-import ModelSettingsPage from './pages/ModelSettingsPage';
 import ProjectKnowledgePage from './pages/ProjectKnowledgePage';
 import FileViewerPage from './pages/FileViewerPage';
 import Layout from './components/common/Layout';
@@ -99,7 +98,7 @@ export const router = createBrowserRouter(
         },
         {
           path: 'settings',
-          element: <ProtectedRoute element={<SettingsPage />} />,
+          element: <ProtectedRoute element={<UnifiedSettingsPage />} />,
         },
         {
           path: 'search',
@@ -127,7 +126,7 @@ export const router = createBrowserRouter(
         },
         {
           path: 'models',
-          element: <ProtectedRoute element={<ModelSettingsPage />} />,
+          element: <ProtectedRoute element={<UnifiedSettingsPage />} />,
         },
         {
           path: 'files/:path',

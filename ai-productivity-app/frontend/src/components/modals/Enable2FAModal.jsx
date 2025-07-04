@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import Modal from '../common/Modal';
+import UnifiedModal from '../common/UnifiedModal';
 import { authAPI } from '../../api/auth';
 import { toast } from '../common/Toast';
 import { copyToClipboard } from '../../utils/clipboard';
@@ -259,13 +259,11 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Enable Two-Factor Authentication">
-      <div className="p-4">
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
-      </div>
-    </Modal>
+    <UnifiedModal isOpen={isOpen} onClose={handleClose} title="Enable Two-Factor Authentication" size="lg">
+      {step === 1 && renderStep1()}
+      {step === 2 && renderStep2()}
+      {step === 3 && renderStep3()}
+    </UnifiedModal>
   );
 };
 

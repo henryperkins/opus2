@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { useState, useEffect } from 'react';
 import { Brain, Search, Upload, MessageCircle, CheckCircle, Info } from 'lucide-react';
-import Modal from '../common/Modal';
+import UnifiedModal from "../../components/common/UnifiedModal";
 
 const DocumentationModal = ({ isOpen, onClose, defaultTab = 'overview' }) => {
   const [activeTab, setActiveTab] = useState(defaultTab);

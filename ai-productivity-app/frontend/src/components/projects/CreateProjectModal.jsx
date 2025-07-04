@@ -5,7 +5,7 @@
  * and success/error handling.
  */
 import React, { useState } from 'react';
-import Modal from '../common/Modal';
+import UnifiedModal from "../../components/common/UnifiedModal";
 import ProjectForm from './ProjectForm';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectAPI } from '../../api/projects';
