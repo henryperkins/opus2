@@ -19,9 +19,18 @@ export default function AppShell({ sidebar, children }) {
   const { preferences, setSidebarWidth } = useAuthStore();
 
   const handleContextAction = (actionId) => {
-    console.log('Context action triggered:', actionId);
-    // Handle context actions based on actionId
-    // This could dispatch events or call specific handlers
+    // Dispatch custom event that pages can listen to
+    window.dispatchEvent(new CustomEvent('contextAction', { detail: actionId }));
+    
+    // Handle global actions
+    switch (actionId) {
+      case 'settings':
+        // Could navigate to settings or open a modal
+        break;
+      case 'analytics':
+        // Could toggle global analytics view
+        break;
+    }
   };
 
   // Sync sidebar state with screen size changes

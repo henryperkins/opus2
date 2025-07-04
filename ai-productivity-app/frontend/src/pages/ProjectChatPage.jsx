@@ -17,7 +17,6 @@ import useMediaQuery from '../hooks/useMediaQuery';
 
 // Layout components
 import ChatLayout from '../components/chat/ChatLayout';
-import ChatHeader from '../components/chat/ChatHeader';
 
 // Common components
 import SkeletonLoader from '../components/common/SkeletonLoader';
@@ -551,22 +550,34 @@ export default function ProjectChatPage() {
   // Main render
   // ----------------------------------------------------------------------------------
 
+  // Add handler for context actions from UnifiedNavBar
+  useEffect(() => {
+    const handleContextAction = (event) => {
+      switch (event.detail) {
+        case 'knowledge':
+          setShowKnowledgeAssistant(!showKnowledgeAssistant);
+          break;
+        case 'editor':
+          setShowMonacoEditor(!showMonacoEditor);
+          break;
+        case 'search':
+          setShowSearch(true);
+          break;
+        case 'settings':
+          setShowPromptManager(true);
+          break;
+        case 'analytics':
+          setShowAnalytics(v => !v);
+          break;
+      }
+    };
+
+    window.addEventListener('contextAction', handleContextAction);
+    return () => window.removeEventListener('contextAction', handleContextAction);
+  }, [showKnowledgeAssistant, showMonacoEditor]);
+
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 overflow-hidden">
-      {/* Chat Header */}
-      <ChatHeader
-        project={project}
-        connectionState={connectionState}
-        messages={messages}
-        showKnowledgeAssistant={showKnowledgeAssistant}
-        showEditor={showMonacoEditor}
-        onToggleKnowledge={() => setShowKnowledgeAssistant(!showKnowledgeAssistant)}
-        onToggleEditor={() => setShowMonacoEditor(!showMonacoEditor)}
-        onOpenSearch={() => setShowSearch(true)}
-        onOpenPromptManager={() => setShowPromptManager(true)}
-        onToggleAnalytics={() => setShowAnalytics(v => !v)}
-      />
-
       {/* Main Layout */}
       <ChatLayout
         showSidebar={showKnowledgeAssistant}
@@ -617,6 +628,12 @@ export default function ProjectChatPage() {
       >
         {/* Chat Interface */}
         <div className="flex flex-col h-full">
+          {/* Connection Status Bar */}
+          <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <ConnectionIndicator state={connectionState} />
+            <SessionRAGBadge messages={messages} />
+          </div>
+
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4" ref={messageListRef}>
             <div className="max-w-3xl mx-auto space-y-4">

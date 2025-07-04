@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigation } from '../contexts/NavigationContext';
+import { NavigationManager } from '../utils/navigation';
 import UnifiedModal from '../components/common/UnifiedModal';
 import ModelConfiguration from '../components/settings/ModelConfiguration';
 import AIProviderInfo from '../components/settings/AIProviderInfo';
@@ -72,9 +73,7 @@ export default function UnifiedSettingsPage() {
                   <button
                     onClick={() => setActiveSection(section.id)}
                     className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      NavigationManager.getActiveStyles(isActive, 'sidebar')
                     }`}
                   >
                     <Icon className="w-4 h-4" />
