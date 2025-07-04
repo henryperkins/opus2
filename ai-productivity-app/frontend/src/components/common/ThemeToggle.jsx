@@ -3,10 +3,15 @@ import { useTheme } from '../../hooks/useTheme';
 export default function ThemeToggle({ className = '' }) {
   const { theme, toggleTheme } = useTheme();
 
-  const handleToggle = () => {
-    console.log('ThemeToggle: Current theme before toggle:', theme);
+  const handleToggle = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('[ThemeToggle] Button clicked, current theme:', theme);
     toggleTheme();
   };
+
+  // Force re-render when theme changes
+  const isDark = theme === 'dark';
 
   return (
     <button
@@ -16,7 +21,7 @@ export default function ThemeToggle({ className = '' }) {
       title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
       type="button"
     >
-      {theme === 'light' ? (
+      {!isDark ? (
         <svg
           className="w-5 h-5 text-gray-600"
           fill="none"
