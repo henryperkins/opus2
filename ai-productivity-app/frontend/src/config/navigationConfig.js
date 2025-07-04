@@ -39,7 +39,7 @@ export const navigationRoutes = [
     path: '/settings',
     label: 'Settings',
     icon: Settings,
-    showInSidebar: true,
+    showInSidebar: false, // Hidden from main navigation; footer link provides single entry
     showMobileQuickAction: true,
     breadcrumbLabel: 'Settings'
   },
@@ -48,7 +48,7 @@ export const navigationRoutes = [
     path: '/models',
     label: 'Model Settings',
     icon: Bot,
-    showInSidebar: true,
+    showInSidebar: false, // Hide until distinct Model Settings page exists
     breadcrumbLabel: 'Model Settings'
   }
 ];
@@ -62,7 +62,7 @@ export const projectSubRoutes = {
 
 export const pageRoutes = {
   'search': 'Search',
-  'timeline': 'Timeline', 
+  'timeline': 'Timeline',
   'settings': 'Settings',
   'profile': 'Profile',
   'models': 'Model Settings'
