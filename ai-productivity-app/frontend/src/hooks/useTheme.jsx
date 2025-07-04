@@ -61,9 +61,7 @@ export function ThemeProvider({ children }) {
   const applyTheme = useCallback((newTheme) => {
     if (typeof window === 'undefined') return;
 
-    console.log('[useTheme] Applying theme to DOM:', newTheme);
     const root = document.documentElement;
-
     root.classList.remove('light', 'dark');
     root.classList.add(newTheme);
 
@@ -71,8 +69,6 @@ export function ThemeProvider({ children }) {
     if (meta) {
       meta.content = newTheme === 'dark' ? '#111827' : '#ffffff';
     }
-
-    console.log('[useTheme] DOM updated - classes:', root.classList.toString());
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -81,11 +77,9 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     if (!preferences?.theme) return;
 
-    console.log('[useTheme] Preferences changed:', preferences.theme);
     const resolvedTheme = resolveTheme(preferences.theme);
     
     if (resolvedTheme !== theme) {
-      console.log('[useTheme] Updating theme from preference:', resolvedTheme);
       setThemeState(resolvedTheme);
       applyTheme(resolvedTheme);
     }
@@ -96,14 +90,11 @@ export function ThemeProvider({ children }) {
   // ---------------------------------------------------------------------------
   const setTheme = useCallback(
     (newTheme) => {
-      console.log('[useTheme] setTheme called with:', newTheme);
       if (newTheme !== 'light' && newTheme !== 'dark' && newTheme !== 'auto') {
-        console.warn('[useTheme] Invalid theme value:', newTheme);
         return;
       }
 
       const resolvedTheme = resolveTheme(newTheme);
-      console.log('[useTheme] Resolved theme:', resolvedTheme);
       
       // Update state
       setThemeState(resolvedTheme);
@@ -117,7 +108,6 @@ export function ThemeProvider({ children }) {
       }
 
       // Always persist the preference
-      console.log('[useTheme] Persisting preference:', newTheme);
       setPreference('theme', newTheme);
     },
     [applyTheme, setPreference, resolveTheme]
@@ -126,13 +116,11 @@ export function ThemeProvider({ children }) {
   // Convenience toggle ---------------------------------------------------------
   const toggleTheme = useCallback(() => {
     const next = theme === 'light' ? 'dark' : 'light';
-    console.log('[useTheme] Toggle theme from', theme, 'to', next);
     setTheme(next);
   }, [theme, setTheme]);
 
   // Apply theme on mount -------------------------------------------------------
   useEffect(() => {
-    console.log('[useTheme] Initial theme application:', theme);
     applyTheme(theme);
   }, []); // Only on mount
 
@@ -146,7 +134,6 @@ export function ThemeProvider({ children }) {
       const pref = preferences?.theme;
       if (!pref || pref === 'auto') {
         const newTheme = e.matches ? 'dark' : 'light';
-        console.log('[useTheme] System preference changed:', newTheme);
         setThemeState(newTheme);
         applyTheme(newTheme);
       }

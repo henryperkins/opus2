@@ -1,0 +1,193 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@import "tailwindcss";
+
+/* Configure dark mode variant for Tailwind v4 */
+@variant dark (&:where(.dark, .dark *));
+
+/* ----------------------------------------------------------------------
+   Rest of your @theme declarations remain the same...
+   ------------------------------------------------------------------- */
+
+@theme {
+  /* Core colors */
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* Gray scale */
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+
+  /* Blue scale */
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+  --color-blue-800: #1e40af;
+  --color-blue-900: #1e3a8a;
+
+  /* Red scale */
+  --color-red-50: #fef2f2;
+  --color-red-100: #fee2e2;
+  --color-red-200: #fecaca;
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-red-600: #dc2626;
+  --color-red-700: #b91c1c;
+  --color-red-800: #991b1b;
+  --color-red-900: #7f1d1d;
+
+  /* Brand colors */
+  --color-brand-primary: #2563eb;
+  --color-brand-secondary: #0ea5e9;
+
+  /* Semantic colors */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+
+  /* Spacing scale */
+  --spacing-0: 0px;
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-7: 1.75rem;
+  --spacing-8: 2rem;
+  --spacing-9: 2.25rem;
+  --spacing-10: 2.5rem;
+  --spacing-11: 2.75rem;
+  --spacing-12: 3rem;
+  --spacing-14: 3.5rem;
+  --spacing-16: 4rem;
+  --spacing-18: 4.5rem;
+  --spacing-20: 5rem;
+  --spacing-24: 6rem;
+  --spacing-28: 7rem;
+  --spacing-32: 8rem;
+  --spacing-36: 9rem;
+  --spacing-40: 10rem;
+  --spacing-44: 11rem;
+  --spacing-48: 12rem;
+  --spacing-52: 13rem;
+  --spacing-56: 14rem;
+  --spacing-60: 15rem;
+  --spacing-64: 16rem;
+  --spacing-72: 18rem;
+  --spacing-80: 20rem;
+  --spacing-88: 22rem;
+  --spacing-96: 24rem;
+}
+
+/* Fix the dark mode issue in base styles */
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+  
+  .dark * {
+    @apply border-gray-700;
+  }
+
+  body {
+    @apply bg-white text-gray-900 antialiased transition-colors duration-200;
+  }
+  
+  .dark body {
+    @apply bg-gray-900 text-gray-100;
+  }
+}
+
+/* Fix component dark mode styles */
+@layer components {
+  /* Fix chat-layout dark mode */
+  .chat-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: theme(--color-white);
+  }
+
+  .dark .chat-layout {
+    background-color: theme(--color-gray-900);
+  }
+
+  /* Fix chat-container dark mode */
+  .chat-container {
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: theme(--color-white);
+  }
+
+  .dark .chat-container {
+    background-color: theme(--color-gray-900);
+  }
+
+  /* Fix btn-primary dark mode */
+  .btn-primary {
+    background: linear-gradient(to right, theme(--color-blue-600), theme(--color-blue-700));
+    color: theme(--color-white);
+  }
+
+  .dark .btn-primary {
+    background: linear-gradient(to right, theme(--color-blue-500), theme(--color-blue-600));
+  }
+
+  .dark .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(to right, theme(--color-blue-600), theme(--color-blue-700));
+  }
+
+  /* Fix btn-secondary dark mode */
+  .btn-secondary {
+    background-color: theme(--color-white);
+    color: theme(--color-gray-700);
+    border: 1px solid theme(--color-gray-300);
+  }
+
+  .dark .btn-secondary {
+    background-color: theme(--color-gray-800);
+    color: theme(--color-gray-200);
+    border-color: theme(--color-gray-600);
+  }
+
+  .dark .btn-secondary:hover:not(:disabled) {
+    background-color: theme(--color-gray-700);
+  }
+
+  /* Fix chat-message-assistant dark mode */
+  .chat-message-assistant .chat-message-content {
+    background-color: theme(--color-gray-100);
+    color: theme(--color-gray-900);
+  }
+
+  .dark .chat-message-assistant .chat-message-content {
+    background-color: theme(--color-gray-800);
+    color: theme(--color-gray-100);
+  }
+
+  /* Fix skeleton dark mode */
+  .skeleton {
+    @apply animate-pulse bg-gray-200 rounded;
+  }
+  
+  .dark .skeleton {
+    @apply bg-gray-700;
+  }
+}

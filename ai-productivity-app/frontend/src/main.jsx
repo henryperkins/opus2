@@ -9,6 +9,7 @@ import AppRouter from './router';
 import { ThemeProvider } from './hooks/useTheme';
 import { ToastContainer } from './components/common/Toast';
 import './styles/globals.css';
+import './styles/dark-mode-emergency.css';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 // React-Query

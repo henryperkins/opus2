@@ -1,0 +1,2 @@
+/* Configure dark mode as class-based for Tailwind v4 */
+@variant dark (&:where(.dark, .dark *));

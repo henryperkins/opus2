@@ -3,25 +3,15 @@ import { useTheme } from '../../hooks/useTheme';
 export default function ThemeToggle({ className = '' }) {
   const { theme, toggleTheme } = useTheme();
 
-  const handleToggle = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log('[ThemeToggle] Button clicked, current theme:', theme);
-    toggleTheme();
-  };
-
-  // Force re-render when theme changes
-  const isDark = theme === 'dark';
-
   return (
     <button
-      onClick={handleToggle}
+      onClick={toggleTheme}
       className={`p-2 rounded-md transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 ${className}`}
       aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
       title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
       type="button"
     >
-      {!isDark ? (
+      {theme === 'light' ? (
         <svg
           className="w-5 h-5 text-gray-600"
           fill="none"

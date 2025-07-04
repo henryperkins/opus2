@@ -2,6 +2,7 @@ import React from 'react';
 import ThemeTest from '../components/ThemeTest';
 import ThemeToggle from '../components/common/ThemeToggle';
 import MinimalThemeTest from '../components/MinimalThemeTest';
+import DarkModeTest from '../components/DarkModeTest';
 
 export default function ThemeTestPage() {
   return (
@@ -19,6 +20,10 @@ export default function ThemeTestPage() {
         <div className="border-t border-gray-200 dark:border-gray-700 my-8" />
         
         <MinimalThemeTest />
+        
+        <div className="border-t border-gray-200 dark:border-gray-700 my-8" />
+        
+        <DarkModeTest />
         
         <div className="p-8 space-y-4">
           <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">

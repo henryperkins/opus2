@@ -1,0 +1,30 @@
+/* Test CSS for dark mode */
+
+/* Direct dark mode test */
+.test-dark-mode {
+  background-color: white;
+  color: black;
+}
+
+.dark .test-dark-mode {
+  background-color: #111827;
+  color: white;
+}
+
+/* Using :where for specificity */
+:where(.dark) .test-dark-mode-where {
+  background-color: #111827;
+  color: white;
+}
+
+/* Test with html element */
+html.dark .test-dark-mode-html {
+  background-color: #111827;
+  color: white;
+}
+
+/* Test descendant selector */
+.dark .test-dark-mode-descendant {
+  background-color: #111827;
+  color: white;
+}
