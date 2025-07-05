@@ -31,7 +31,7 @@ export function useSearch(initialQuery = '', initialFilters = {}) {
   const [filters, setFilters] = useState(initialFilters);
   const [searchTypes, setSearchTypes] = useState(['hybrid']);
 
-  const debouncedQuery = useDebounce(query, 300);
+  const debouncedQuery = useDebounce(query, 500);
 
   // React-Query's query client – obtain it once at the top level so the
   // hook rules are respected.  It is then reused inside callbacks such as

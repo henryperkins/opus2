@@ -97,7 +97,7 @@ class ContextInjectionRequest(BaseModel):
     """Context injection request."""
     query: str = Field(..., min_length=1)
     knowledge: List[KnowledgeEntry]
-    citation_style: Optional[str] = Field("inline", regex="^(inline|footnote)$")
+    citation_style: Optional[str] = Field("inline", pattern="^(inline|footnote)$")
     max_context_length: Optional[int] = Field(2000, ge=100, le=10000)
 
 
@@ -112,7 +112,7 @@ class CitationRequest(BaseModel):
     """Citation addition request."""
     response: str
     knowledge: List[KnowledgeEntry]
-    citation_style: Optional[str] = Field("inline", regex="^(inline|footnote)$")
+    citation_style: Optional[str] = Field("inline", pattern="^(inline|footnote)$")
 
 
 class CitationResponse(BaseModel):

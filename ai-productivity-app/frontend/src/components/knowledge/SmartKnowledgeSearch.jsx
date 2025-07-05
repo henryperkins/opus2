@@ -27,7 +27,7 @@ export default function SmartKnowledgeSearch({
   const resultsRef = useRef(null);
   const { isDesktop } = useMediaQuery();
 
-  const debouncedQuery = useDebounce(query, 300);
+  const debouncedQuery = useDebounce(query, 500);
 
   // Load search history and popular queries
   useEffect(() => {

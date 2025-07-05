@@ -2,6 +2,7 @@
 import React, { useCallback, useState, useRef } from 'react';
 import { Upload, X, FileText, File, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import PropTypes from 'prop-types';
+import client from '../../api/client';
 
 const ALLOWED_FILE_TYPES = {
   'text/plain': { label: 'Text Files', ext: '.txt' },
@@ -129,17 +130,13 @@ export default function FileUpload({
       });
       formData.append('category', category);
 
-      const response = await fetch(`/api/knowledge/projects/${projectId}/upload`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
+      const response = await client.post(`/api/knowledge/projects/${projectId}/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
 
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
-      }
-
-      const result = await response.json();
+      const result = response.data;
       
       if (result.success) {
         setUploadResults(result.results || []);

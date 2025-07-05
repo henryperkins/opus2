@@ -10,7 +10,7 @@ export default function SearchBar({ value, onChange, placeholder, loading, proje
   const inputRef = useRef(null);
   const suggestionsRef = useRef(null);
 
-  const debouncedValue = useDebounce(value, 200);
+  const debouncedValue = useDebounce(value, 400);
 
   useEffect(() => {
     const fetchSuggestions = async () => {

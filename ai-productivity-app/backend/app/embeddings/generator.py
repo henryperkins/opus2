@@ -114,6 +114,7 @@ from app.exceptions import (  # pylint: disable=wrong-import-position
     VectorDimensionMismatchException,
 )
 from app.models.code import CodeEmbedding  # pylint: disable=wrong-import-position
+from app.embeddings.cache import EMBEDDING_CACHE  # pylint: disable=wrong-import-position
 
 logger = logging.getLogger(__name__)
 
@@ -372,9 +373,26 @@ class EmbeddingGenerator:
             ) from exc
 
     async def generate_single_embedding(self, text: str) -> List[float]:
-        """Convenience wrapper for a single input."""
+        """Convenience wrapper for a single input with caching."""
+        # Create cache key from model and text
+        cache_key = (self.deployment_name, text)
+        
+        # Check cache first
+        cached_result = await EMBEDDING_CACHE.get(cache_key)
+        if cached_result:
+            logger.debug(f"Cache hit for embedding: {len(text)} chars")
+            return cached_result
+        
+        # Generate embedding
         out = await self.generate_embeddings([text])
-        return out[0] if out else []
+        result = out[0] if out else []
+        
+        # Cache the result
+        if result:
+            await EMBEDDING_CACHE.set(cache_key, result)
+            logger.debug(f"Cache miss, stored embedding: {len(text)} chars")
+        
+        return result
 
     async def generate_and_store(
         self, chunks: List[CodeEmbedding], db: Session, vector_store=None  # type: ignore [name-defined]

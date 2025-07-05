@@ -107,6 +107,16 @@ def get_history(
             .all()
         )
     except Exception as exc:  # noqa: BLE001 – dialect mismatch fallback
+        # The initial SQL attempt can fail when the underlying database
+        # does not support JSON containment operators for the `JSON` column
+        # type (e.g. PostgreSQL `json` vs. `jsonb`).  Once the statement
+        # errors the transaction is left in *failed* state and every further
+        # query on the same connection will raise *InFailedSqlTransaction*.
+        #
+        # To safely run the Python-level fallback logic we therefore need to
+        # roll back the session first.
+        db.rollback()
+
         logger.debug("Falling back to Python filtering for history: %s", exc)
         all_rows: List[SearchHistory] = (
             db.query(SearchHistory)
@@ -163,7 +173,11 @@ def get_popular(
 
         popular_queries = [row.query for row in rows]
 
-    except Exception as exc:  # noqa: BLE001 – fallback for SQLite
+    except Exception as exc:  # noqa: BLE001 – fallback for SQLite / unsupported JSON ops
+        # Roll back the failed transaction so that the subsequent SELECT used
+        # for the in-memory aggregation runs on a clean connection.
+        db.rollback()
+
         logger.debug("Falling back to Python aggregation for popular: %s", exc)
         all_rows: List[SearchHistory] = (
             db.query(SearchHistory)

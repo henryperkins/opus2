@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { searchAPI } from '../../api/search';
 import { ChevronRight, ChevronDown, FileText, Code, Link, AlertCircle } from 'lucide-react';
+import { useDebounce } from '../../hooks/useDebounce';
 
 // Custom hook for search logic
 function useKnowledgeSearch(projectId, query) {
@@ -14,8 +15,10 @@ function useKnowledgeSearch(projectId, query) {
     error: null
   });
 
+  const debouncedQuery = useDebounce(query, 500);
+
   useEffect(() => {
-    if (!query || query.length < 3) {
+    if (!debouncedQuery || debouncedQuery.length < 3) {
       setState({ results: null, loading: false, error: null });
       return;
     }
@@ -27,7 +30,7 @@ function useKnowledgeSearch(projectId, query) {
       setState(prev => ({ ...prev, loading: true, error: null }));
 
       try {
-        const results = await searchAPI.searchProject(projectId, query, {
+        const results = await searchAPI.searchProject(projectId, debouncedQuery, {
           include_code: true,
           include_docs: true,
           max_results: 10,
@@ -36,7 +39,7 @@ function useKnowledgeSearch(projectId, query) {
 
         if (!cancelled) {
           setState({
-            results: processResults(results, query),
+            results: processResults(results, debouncedQuery),
             loading: false,
             error: null
           });
@@ -59,7 +62,7 @@ function useKnowledgeSearch(projectId, query) {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [projectId, query]);
+  }, [projectId, debouncedQuery]);
 
   return state;
 }
