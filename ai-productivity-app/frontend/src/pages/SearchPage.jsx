@@ -73,7 +73,8 @@ export default function SearchPage() {
     }
     
     const lineParam = Number.isInteger(line) && line > 0 ? line : 1;
-    navigate(`/files/${encodeURIComponent(path.trim())}?line=${lineParam}`);
+    const projectParam = selectedProjects.length > 0 ? `&project_id=${selectedProjects[0]}` : '';
+    navigate(`/files/${encodeURIComponent(path.trim())}?line=${lineParam}${projectParam}`);
   };
 
   return (

@@ -67,6 +67,7 @@ function Breadcrumbs({ path, onNavigate }) {
 export default function FileViewer() {
   const { path } = useParams();
   const [searchParams] = useSearchParams();
+  const projectId = searchParams.get('project_id');
   const [fileContent, setFileContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -128,7 +129,7 @@ export default function FileViewer() {
         
         // Import codeAPI dynamically to avoid ESLint restriction
         const { codeAPI } = await import('../../api/code');
-        const response = await codeAPI.getFileContent(decodedPath);
+        const response = await codeAPI.getFileContent(decodedPath, projectId);
         
         const content = response.content || '';
         setFileContent(content);
@@ -141,14 +142,33 @@ export default function FileViewer() {
           setShowLineNumbers(false);
         }
       } catch (err) {
-        setError(err.response?.data?.detail || err.message || 'Failed to load file');
+        console.error('FileViewer: Failed to load file', decodedPath, err);
+        
+        // If we failed with a project_id, try without it as a fallback
+        if (projectId && err.response?.status === 404) {
+          try {
+            console.log('FileViewer: Retrying without project_id');
+            const { codeAPI: fallbackCodeAPI } = await import('../../api/code');
+            const fallbackResponse = await fallbackCodeAPI.getFileContent(decodedPath);
+            const fallbackContent = fallbackResponse.content || '';
+            setFileContent(fallbackContent);
+            setLanguage(fallbackResponse.language || detectLanguage(decodedPath));
+            setLoading(false);
+            return; // Success, no need to set error
+          } catch (fallbackErr) {
+            console.error('FileViewer: Fallback also failed', fallbackErr);
+          }
+        }
+        
+        const errorMsg = err.response?.data?.detail || err.message || 'Failed to load file';
+        setError(`${errorMsg} (Path: ${decodedPath})`);
       } finally {
         setLoading(false);
       }
     };
 
     fetchFileContent();
-  }, [decodedPath]);
+  }, [decodedPath, projectId]);
 
   // Scroll to target line after content loads
   useEffect(() => {
@@ -943,7 +963,10 @@ export default function FileViewer() {
       {/* File Content */}
       <div className={`flex-1 min-h-0 overflow-auto ${
         theme === 'light' ? 'bg-white' : 'bg-gray-900'
-      }`}>
+      }`} style={{ 
+        backgroundColor: theme === 'light' ? '#ffffff' : '#1f2937',
+        minHeight: '200px'
+      }}>
         <style>
           {`
             .search-highlight {
@@ -983,11 +1006,13 @@ export default function FileViewer() {
           })}
           customStyle={{
             margin: 0,
-            padding: 0,
+            padding: '1rem',
             fontSize: `${responsiveFontSize}px`,
             lineHeight: isMobile ? '1.4' : '1.5',
             background: theme === 'light' ? '#ffffff' : '#1f2937',
             fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+            minHeight: '100%',
+            width: '100%',
           }}
           codeTagProps={{
             style: {
@@ -1046,7 +1071,7 @@ export default function FileViewer() {
             });
           }}
         >
-          {fileContent}
+          {fileContent || '// File appears to be empty or failed to load\n// This could happen if:\n// - The file has no content\n// - The file was not found in the database\n// - You don\'t have access to this file\'s project\n// - The file path doesn\'t match exactly'}
         </SyntaxHighlighter>
       </div>
 
