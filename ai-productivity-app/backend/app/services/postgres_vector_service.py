@@ -65,88 +65,21 @@ from typing import Any, Dict, List, Optional, Sequence
 
 # pylint: disable=import-error
 
-try:
-    import anyio  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover – lightweight fallback for CI
-    import sys as _sys
-    import types as _types
-    import asyncio as _asyncio
-
-    _anyio = _types.ModuleType("anyio")
-
-    class _ToThread:  # pylint: disable=too-few-public-methods
-        """Subset of *anyio.to_thread* namespace used by this module."""
-
-        @staticmethod
-        async def run_sync(func, *args, **kwargs):  # type: ignore[override]
-            loop = _asyncio.get_event_loop()
-            return await loop.run_in_executor(None, func, *args, **kwargs)
-
-    # Expose namespace objects expected by callers
-    _anyio.to_thread = _ToThread()  # type: ignore[attr-defined]
-
-    # Register stub so subsequent ``import anyio`` statements succeed
-    _sys.modules["anyio"] = _anyio
-    anyio = _anyio  # type: ignore
+import anyio
 import numpy as np
 import sqlalchemy as sa
 from sqlalchemy.engine import Engine
 
-# ---------------------------------------------------------------------------
-# Optional pgvector shim – avoids pulling the heavy C-extension when the CI
-# environment only needs to *import* the symbol so that SQLAlchemy models can
-# be constructed.  When the real *pgvector* package is absent we register a
-# *very small* placeholder that mimics the two attributes referenced in this
-# file: ``Vector`` (SQLAlchemy column type) and ``vector_cosine_ops`` (index
-# operator family).  All actual distance calculations happen inside Postgres
-# so the stub never needs to implement them.
-# ---------------------------------------------------------------------------
-
-try:
-    from pgvector.sqlalchemy import Vector  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover – lightweight fallback for CI
-    import sys as _sys
-    import types as _types
-
-    _pgvector_mod = _types.ModuleType("pgvector")
-    _sa_mod = _types.ModuleType("pgvector.sqlalchemy")
-
-    class _Vector:  # pylint: disable=too-few-public-methods
-        """Stub replacement for pgvector.sqlalchemy.Vector """
-
-        cache_ok = True
-
-        def __init__(self, dimension: int):  # noqa: D401
-            self.dimension = dimension
-
-        # SQLAlchemy calls ``compile`` on the type to emit DDL – we return the
-        # canonical postgres type here so migrations succeed.
-        def compile(self, dialect=None):  # noqa: D401, ANN001
-            return f"vector({self.dimension})"
-
-    # Minimal operator family names as constants – only used when building
-    # index DDL strings which are rendered server-side by SQLA.
-    _sa_mod.Vector = _Vector  # type: ignore[attr-defined]
-
-    # ``vector_cosine_ops`` is referenced literally in index creation.  It is
-    # not an attribute but part of the returned DDL so we expose a constant in
-    # the module namespace for completeness.
-    _sa_mod.vector_cosine_ops = "vector_cosine_ops"  # type: ignore[attr-defined]
-
-    _pgvector_mod.sqlalchemy = _sa_mod  # type: ignore[attr-defined]
-
-    _sys.modules["pgvector"] = _pgvector_mod
-    _sys.modules["pgvector.sqlalchemy"] = _sa_mod
-
-    Vector = _Vector  # type: ignore
+from pgvector.sqlalchemy import Vector
 
 from app.config import settings
 from app.database import get_engine_sync
+from app.services.vector_service import VectorServiceProtocol
 
 logger = logging.getLogger(__name__)
 
 
-class PostgresVectorService:
+class PostgresVectorService(VectorServiceProtocol):
     """pgvector implementation compatible with VectorServiceProtocol."""
 
     def __init__(self) -> None:
@@ -273,6 +206,7 @@ class PostgresVectorService:
         limit: int = 10,
         project_ids: Optional[List[int]] = None,
         score_threshold: Optional[float] = None,
+        filters: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         if limit <= 0:
             return []
@@ -284,6 +218,12 @@ class PostgresVectorService:
             if project_ids:
                 where_fragments.append("project_id = ANY(:pids)")
                 params["pids"] = project_ids
+            
+            if filters:
+                for key, value in filters.items():
+                    if value is not None:
+                        where_fragments.append(f"metadata->>'{key}' = :{key}")
+                        params[key] = str(value)
 
             sql_where = ("WHERE " + " AND ".join(where_fragments)) if where_fragments else ""
             sql = (

@@ -4,54 +4,35 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import anyio
+from qdrant_client import QdrantClient, models
+from prometheus_client import Summary, Gauge
 
-try:
-    from qdrant_client import QdrantClient  # type: ignore
-    from qdrant_client.http.models import (  # type: ignore
-        Distance,
-        FieldCondition,
-        Filter,
-        HnswConfigDiff,
-        MatchAny,
-        MatchValue,
-        PointStruct,
-        UpdateStatus,
-        VectorParams,
-    )
-except ModuleNotFoundError as exc:  # pragma: no cover
-    raise ImportError(
-        "The `qdrant-client` package is required. "
-        "Install with: pip install qdrant-client>=1.9.0"
-    ) from exc
-
-from app.config import settings  # pylint: disable=import-error
+from app.config import settings
+from app.services.vector_service import VectorServiceProtocol
 
 logger = logging.getLogger(__name__)
 
 __all__ = ["QdrantService"]
 
+VECTOR_UPSERT_LAT = Summary("vector_upsert_seconds", "Qdrant upsert latency")
+VECTOR_SEARCH_LAT = Summary("vector_search_seconds", "Qdrant search latency")
+VECTOR_DELETE_LAT = Summary("vector_delete_seconds", "Qdrant delete latency")
+VECTOR_POINTS_COUNT = Gauge("vector_points_total", "Total points in Qdrant", ["collection"])
+
 
 def _run_blocking(func, /, *args, **kwargs):
-    """Execute *func* in the global thread-pool while preserving kwargs.
-
-    ``anyio.to_thread.run_sync`` forwards *positional* arguments to the target
-    callable but will treat keyword arguments as its *own* options, raising a
-    ``TypeError`` when parameters like ``collection_name`` are supplied.
-
-    Many Qdrant client methods rely on keyword parameters, therefore we wrap
-    the invocation in a small lambda when such arguments are present.
-    """
-
+    """Execute *func* in the global thread-pool while preserving kwargs."""
     if kwargs:
         return anyio.to_thread.run_sync(lambda: func(*args, **kwargs))
     return anyio.to_thread.run_sync(func, *args)
 
 
-class QdrantService:
+class QdrantService(VectorServiceProtocol):
     """Async-friendly wrapper around Qdrant collections."""
 
     _EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
@@ -78,9 +59,6 @@ class QdrantService:
             timeout=settings.qdrant_timeout or 30,
         )
 
-    # ------------------------------------------------------------------ #
-    # Bootstrap
-    # ------------------------------------------------------------------ #
     async def initialize(self) -> None:
         """Initialize the Qdrant service by creating the collection if it doesn't exist."""
         await self._create_collection_if_missing()
@@ -96,32 +74,19 @@ class QdrantService:
         await _run_blocking(
             self.client.create_collection,
             collection_name=self.collection_name,
-            vectors_config=VectorParams(
+            vectors_config=models.VectorParams(
                 size=self.vector_size,
-                distance=Distance.COSINE
+                distance=models.Distance.COSINE
             ),
-            hnsw_config=HnswConfigDiff(m=16, ef_construct=200),
+            hnsw_config=models.HnswConfigDiff(m=16, ef_construct=200),
         )
         logger.info("Created Qdrant collection '%s'", self.collection_name)
 
-    # ------------------------------------------------------------------ #
-    # Insert/Upsert
-    # ------------------------------------------------------------------ #
+    @VECTOR_UPSERT_LAT.time()
     async def insert_embeddings(self, embeddings: List[Dict[str, Any]]) -> List[str]:
-        """Insert embeddings into the Qdrant collection (alias for upsert)."""
-        return await self.upsert(embeddings)
-    
-    async def upsert(self, embeddings: List[Dict[str, Any]]) -> List[str]:
-        """Upsert embeddings into the Qdrant collection.
-
-        Args:
-            embeddings: List of dictionaries containing embedding data.
-
-        Returns:
-            List of IDs for the upserted points.
-        """
+        """Insert embeddings into the Qdrant collection."""
         points = [
-            PointStruct(
+            models.PointStruct(
                 id=e["id"],
                 vector=e["vector"],
                 payload={
@@ -141,47 +106,41 @@ class QdrantService:
             collection_name=self.collection_name,
             points=points,
         )
-        if result.status != UpdateStatus.COMPLETED:  # type: ignore[attr-defined]
-            logger.error(
-                "Qdrant upsert failed (%s)",
-                result.status
-            )
+        if result.status != models.UpdateStatus.COMPLETED:
+            logger.error("Qdrant upsert failed (%s)", result.status)
+        
+        VECTOR_POINTS_COUNT.labels(collection=self.collection_name).inc(len(points))
         return [str(p.id) for p in points]
 
-    # ------------------------------------------------------------------ #
-    # Search
-    # ------------------------------------------------------------------ #
+    @VECTOR_SEARCH_LAT.time()
     async def search(
         self,
-        *,
         query_vector: List[float],
         limit: int = 10,
         project_ids: Optional[List[int]] = None,
         score_threshold: float = 0.7,
+        filters: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
-        """Search for similar vectors in the Qdrant collection.
-
-        Args:
-            query_vector: Vector to search for similarities.
-            limit: Maximum number of results to return.
-            project_ids: Optional list of project IDs to filter results.
-            score_threshold: Minimum similarity score for results.
-
-        Returns:
-            List of search results with IDs, scores, and payload data.
-        """
-        filt = (
-            Filter(
-                must=[
-                    FieldCondition(
-                        key="project_id",
-                        match=MatchAny(any=project_ids)
-                    )
-                ]
+        """Search for similar vectors in the Qdrant collection."""
+        must_conditions = []
+        if project_ids:
+            must_conditions.append(
+                models.FieldCondition(
+                    key="project_id",
+                    match=models.MatchAny(any=project_ids)
+                )
             )
-            if project_ids
-            else None
-        )
+        if filters:
+            for key, value in filters.items():
+                if value is not None:
+                    must_conditions.append(
+                        models.FieldCondition(
+                            key=f"metadata.{key}",
+                            match=models.MatchValue(value=value)
+                        )
+                    )
+        
+        filt = models.Filter(must=must_conditions) if must_conditions else None
 
         results = await _run_blocking(
             self.client.search,
@@ -200,53 +159,73 @@ class QdrantService:
             for r in results
         ]
 
-    # ------------------------------------------------------------------ #
-    # Delete
-    # ------------------------------------------------------------------ #
+    @VECTOR_DELETE_LAT.time()
     async def delete_by_document(self, document_id: int) -> None:
-        """Delete vectors associated with a specific document ID.
-
-        Args:
-            document_id: ID of the document whose vectors should be deleted.
-        """
+        """Delete vectors associated with a specific document ID."""
         await _run_blocking(
             self.client.delete,
             collection_name=self.collection_name,
-            points_selector=Filter(
+            points_selector=models.Filter(
                 must=[
-                    FieldCondition(
+                    models.FieldCondition(
                         key="document_id",
-                        match=MatchValue(value=document_id)
+                        match=models.MatchValue(value=document_id)
                     )
                 ]
             ),
         )
-        logger.info(
-            "Removed vectors for document %s from '%s'",
-            document_id,
-            self.collection_name
-        )
+        logger.info("Removed vectors for document %s from '%s'", document_id, self.collection_name)
 
-    # ------------------------------------------------------------------ #
-    # Stats
-    # ------------------------------------------------------------------ #
     async def get_stats(self) -> Dict[str, Any]:
-        """Get statistics about the Qdrant collection.
-
-        Returns:
-            Dictionary containing collection statistics.
-        """
+        """Get statistics about the Qdrant collection."""
         info = await _run_blocking(self.client.get_collection, self.collection_name)
-        return {
+        stats = {
             "total_points": info.points_count,
-            "vector_size": info.config.params.vectors.size,
-            "distance_metric": info.config.params.vectors.distance,
+            "vector_size": info.vectors_config.params.size,
+            "distance_metric": info.vectors_config.params.distance,
             "collection_name": self.collection_name,
         }
+        if info.points_count is not None:
+            VECTOR_POINTS_COUNT.labels(collection=self.collection_name).set(info.points_count)
+        return stats
 
-    # ------------------------------------------------------------------ #
-    # Lifecycle management
-    # ------------------------------------------------------------------ #
+    async def gc_dangling_points(self) -> int:
+        """Garbage collect dangling vector points that no longer exist in the database."""
+        from app.models.code import CodeEmbedding
+        from app.database import SessionLocal
+        
+        removed_count = 0
+        
+        try:
+            qdrant_ids = await _run_blocking(
+                lambda: {str(p.id) for p in self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=10000,
+                    with_payload=False,
+                    with_vectors=False
+                )[0]}
+            )
+            
+            with SessionLocal() as db:
+                db_ids = {str(row[0]) for row in db.query(CodeEmbedding.id).all()}
+            
+            stale_ids = qdrant_ids - db_ids
+            
+            if stale_ids:
+                logger.info(f"Found {len(stale_ids)} stale embeddings to remove")
+                await _run_blocking(
+                    self.client.delete,
+                    collection_name=self.collection_name,
+                    points_selector=models.PointIdsList(points=list(stale_ids))
+                )
+                removed_count = len(stale_ids)
+                logger.info(f"Removed {len(stale_ids)} stale embeddings")
+                    
+        except Exception as exc:
+            logger.error(f"GC failed: {exc}")
+        
+        return removed_count
+
     @classmethod
     def shutdown(cls) -> None:
         """Shutdown the shared thread pool executor."""

@@ -4,6 +4,7 @@ import logging
 import math
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+import numpy as np
 
 # ---------------------------------------------------------------------------
 # ``tiktoken`` is an optional dependency used for accurate token counting.  In
@@ -14,41 +15,7 @@ from typing import List, Dict, Any, Optional
 # run without the heavy binary dependency.
 # ---------------------------------------------------------------------------
 
-try:
-    import tiktoken  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover – lightweight fallback for CI
-
-    class _EncodingStub:  # pylint: disable=too-few-public-methods
-        """Extremely simplified tokenizer replacement."""
-
-        def encode(self, text: str):  # noqa: D401 – mimic tiktoken API
-            # More conservative token estimation: ~4 chars per token with safety factor
-            # This helps avoid context overflows when tiktoken is not available
-            estimated_tokens = max(1, len(text) // 3)  # Conservative 3 chars/token
-            return list(range(estimated_tokens))  # Return dummy tokens for counting
-
-        def decode(self, tokens):  # noqa: D401 – mimic tiktoken API
-            # For fallback mode with dummy tokens, approximate text reconstruction
-            # Since we can't truly decode, return truncated version of text
-            if isinstance(tokens, list):
-                # Estimate ~3 chars per token and reconstruct placeholder text
-                return "..." + " [truncated]"
-            return str(tokens)
-
-    class _TiktokenStub:  # pylint: disable=too-few-public-methods
-        """Minimal subset of the tiktoken public interface."""
-
-        _enc = _EncodingStub()
-
-        @staticmethod
-        def get_encoding(_name: str):  # noqa: D401
-            return _TiktokenStub._enc
-
-        @staticmethod
-        def encoding_for_model(_model: str):  # noqa: D401
-            return _TiktokenStub._enc
-
-    tiktoken = _TiktokenStub()  # type: ignore
+import tiktoken
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -89,14 +56,11 @@ class KnowledgeService:
         if not db:
             raise ValueError("Database session is required")
         
-        # Generate unique ID for knowledge document
         import uuid
         doc_id = f"kb_{uuid.uuid4().hex[:12]}"
         
-        # Generate embedding
         embedding = await self.embedding_generator.generate_single_embedding(content)
 
-        # Create knowledge document
         knowledge_doc = KnowledgeDocument(
             id=doc_id,
             project_id=project_id,
@@ -111,7 +75,6 @@ class KnowledgeService:
         db.refresh(knowledge_doc)
         logger.info(f"Persisted knowledge document to database: {doc_id}")
 
-        # Store in the main embeddings table with proper metadata
         metadata = {
             "title": title,
             "source": source,
@@ -120,29 +83,17 @@ class KnowledgeService:
             "document_type": "knowledge",
             "knowledge_doc_id": doc_id,
             "tags": tags or [],
-            "schema_version": 1  # Track schema version for future migrations
+            "schema_version": 1
         }
         
-        from sqlalchemy import text
-        import json
-        import hashlib
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
-        
-        insert_sql = """
-        INSERT INTO embeddings (document_id, chunk_id, project_id, embedding, content, content_hash, metadata, created_at)
-        VALUES (:document_id, 1, :project_id, CAST(:embedding AS vector), :content, :content_hash, :metadata, NOW())
-        """
-        
-        db.execute(text(insert_sql), {
-            "document_id": hash(doc_id) % 2147483647,  # Convert string ID to int within PostgreSQL int range
+        await self.vector_store.insert_embeddings([{
+            "id": doc_id,
+            "vector": embedding,
+            "document_id": knowledge_doc.id,
             "project_id": project_id,
-            "embedding": embedding,  # Pass as list, not string
             "content": content,
-            "content_hash": content_hash,
-            "metadata": json.dumps(metadata)
-        })
-        
-        db.commit()
+            "metadata": metadata
+        }])
         
         logger.info(f"Added knowledge entry with embedding: {title}")
         return doc_id
@@ -160,14 +111,14 @@ class KnowledgeService:
         query_embedding = await (
             self.embedding_generator.generate_single_embedding(query)
         )
+        query_vector = np.array(query_embedding)
 
         # Search vector store
-        results = await self.vector_store.search_knowledge(
-            query_embedding=query_embedding,
+        results = await self.vector_store.search(
+            query_vector=query_vector,
             project_ids=project_ids,
             limit=limit,
             score_threshold=similarity_threshold,
-            filters=filters
         )
 
         return results
@@ -180,53 +131,51 @@ class KnowledgeService:
         limit: int = 10
     ) -> List[Dict[str, Any]]:
         """Search code embeddings."""
-        # Generate query embedding
         query_embedding = await (
             self.embedding_generator.generate_single_embedding(query)
         )
+        query_vector = np.array(query_embedding)
 
-        # Search code vector store
-        results = await self.vector_store.search_code(
-            query_embedding=query_embedding,
+        filters = {}
+        if language:
+            filters["language"] = language
+
+        results = await self.vector_store.search(
+            query_vector=query_vector,
             project_ids=project_ids,
-            language=language,
             limit=limit,
-            score_threshold=0.5
+            score_threshold=0.5,
+            filters=filters
         )
 
         return results
 
     async def build_context(
         self,
-        entry_ids: List[str],
         max_context_length: int = 4000,
         model_name: str = "gpt-4",
         db: Session = None,
         search_results: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Build production-grade context from knowledge entries with token limits and citations."""
-        if not entry_ids or not db:
+        if not search_results or not db:
             return {
                 "context": "",
                 "citations": {},
                 "context_length": 0
             }
 
-        # Use unified token counting for consistency
+        entry_ids = [result['id'] for result in search_results]
+        
         from app.utils.token_counter import get_tokenizer, count_tokens, estimate_max_context_tokens
         enc, is_fallback = get_tokenizer(model_name)
 
-        # Fetch full knowledge documents from database
-        # Handle both sync and async sessions
         stmt = select(KnowledgeDocument).where(KnowledgeDocument.id.in_(entry_ids))
         
-        # Check if db is async or sync session
         if hasattr(db, 'execute') and hasattr(db, 'commit') and not hasattr(db.__class__, '__aenter__'):
-            # Sync session - execute without await
             result = db.execute(stmt)
             documents = result.scalars().all()
         else:
-            # Async session - execute with await
             result = await db.execute(stmt)
             documents = result.scalars().all()
 
@@ -237,46 +186,27 @@ class KnowledgeService:
                 "context_length": 0
             }
 
-        # Create lookup for search result metadata
-        search_lookup = {}
-        if search_results:
-            for result in search_results:
-                search_lookup[result.get('id')] = result
-
-        # Rank entries by similarity + recency
+        search_lookup = {result.get('id'): result for result in search_results}
         ranked_entries = self._rank_entries(documents, entry_ids)
 
-        # Build context with token limits
         context_parts = []
         citation_map = {}
         tokens_used = 0
 
         for idx, doc in enumerate(ranked_entries):
-            # Create citation marker
             marker = f"[{idx + 1}]"
-
-            # Prepare content with citation
             content_with_citation = f"{marker} {doc.content}"
-
-            # Count tokens for this entry using unified counter
             entry_tokens = count_tokens(content_with_citation, model_name)
 
-            # Check if adding this entry would exceed limit
             if tokens_used + entry_tokens > max_context_length:
-                # Try to fit a truncated version
                 remaining_tokens = max_context_length - tokens_used
-                if remaining_tokens > 100:  # Only truncate if we have reasonable space
-                    # Truncate content to fit using unified utilities
+                if remaining_tokens > 100:
                     truncated_content, actual_tokens = estimate_max_context_tokens(
-                        doc.content, remaining_tokens - 10, model_name  # -10 for marker and spacing
+                        doc.content, remaining_tokens - 10, model_name
                     )
                     content_with_citation = f"{marker} {truncated_content}..."
                     context_parts.append(content_with_citation)
-                    
-                    # Update tokens_used with actual truncated size
                     tokens_used += count_tokens(content_with_citation, model_name)
-
-                    # Add to citation map with search metadata
                     search_data = search_lookup.get(doc.id, {})
                     citation_map[marker] = {
                         "id": doc.id,
@@ -288,11 +218,8 @@ class KnowledgeService:
                     }
                 break
 
-            # Add full content
             context_parts.append(content_with_citation)
             tokens_used += entry_tokens
-
-            # Add to citation map with search metadata
             search_data = search_lookup.get(doc.id, {})
             citation_map[marker] = {
                 "id": doc.id,
