@@ -404,10 +404,90 @@ def get_file_content(
             "size": doc.file_size,
         }
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="File not found on disk")
+        logger.warning(f"File exists in database but missing on disk: {doc.file_path} (expected at {file_full_path})")
+        
+        # Try to find the file in the original codebase structure as fallback
+        # Remove the leading project name from path if present
+        potential_path = doc.file_path
+        if '/' in potential_path:
+            # Try without the first directory component
+            path_parts = potential_path.split('/', 1)
+            if len(path_parts) > 1:
+                fallback_path = path_parts[1]  # Skip the "ai-productivity-app" prefix
+                try:
+                    with open(fallback_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    logger.info(f"Found file at fallback location: {fallback_path}")
+                    return {
+                        "content": content,
+                        "language": doc.language,
+                        "file_path": doc.file_path,
+                        "size": len(content.encode('utf-8')),
+                    }
+                except FileNotFoundError:
+                    pass
+        
+        raise HTTPException(
+            status_code=404, 
+            detail=f"File found in database but missing from disk: {doc.file_path}. This may indicate a synchronization issue."
+        )
     except Exception as e:
         logger.error(f"Error reading file {doc.file_path}: {e}")
-        raise HTTPException(status_code=500, detail="Error reading file")
+        raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# Database maintenance endpoint for identifying orphaned files
+# ---------------------------------------------------------------------------
+
+@router.get("/files/integrity-check")
+def check_file_integrity(
+    fix_orphaned: bool = False,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Check database-filesystem integrity and optionally fix orphaned entries.
+    
+    This endpoint helps identify files that exist in the database but are missing from disk.
+    """
+    # Only allow admins or during development
+    if not settings.debug:
+        raise HTTPException(status_code=403, detail="Only available in debug mode")
+    
+    # Get user's documents or all if admin check is implemented
+    query = db.query(CodeDocument).filter(
+        db.query(Project).filter(Project.id == CodeDocument.project_id).filter(Project.owner_id == current_user.id).exists()
+    ).limit(limit)
+    
+    docs = query.all()
+    results = {
+        "checked": 0,
+        "missing_files": [],
+        "fixed": 0
+    }
+    
+    for doc in docs:
+        results["checked"] += 1
+        file_full_path = os.path.join(settings.upload_root, doc.file_path)
+        
+        if not os.path.exists(file_full_path):
+            results["missing_files"].append({
+                "id": doc.id,
+                "file_path": doc.file_path,
+                "project_id": doc.project_id,
+                "expected_path": file_full_path
+            })
+            
+            if fix_orphaned:
+                db.delete(doc)
+                results["fixed"] += 1
+    
+    if fix_orphaned and results["fixed"] > 0:
+        db.commit()
+        logger.info(f"Removed {results['fixed']} orphaned file entries")
+    
+    return results
 
 
 # ---------------------------------------------------------------------------

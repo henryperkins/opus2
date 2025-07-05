@@ -82,7 +82,7 @@ class KeywordSearch:
                 m.chunk_id,
                 m.project_id,
                 m.content,
-                m.metadata,
+                m.embedding_metadata,
                 ts_rank(to_tsvector('ai_english', m.content), plainto_tsquery('ai_english', :query)) as rank
             FROM embedding_metadata m
             WHERE to_tsvector('ai_english', m.content) @@ plainto_tsquery('ai_english', :query)
@@ -104,7 +104,7 @@ class KeywordSearch:
                 'chunk_id': row.chunk_id,
                 'project_id': row.project_id,
                 'content': row.content,
-                'metadata': row.metadata,
+                'metadata': row.embedding_metadata,
                 'score': float(row.rank),
                 'search_type': 'postgresql_fts'
             }
