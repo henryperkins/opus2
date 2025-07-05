@@ -138,26 +138,52 @@ async def handle_chat_connection(
 
 def serialize_message(message: ChatMessage) -> dict:
     """Convert message to JSON-serializable format."""
-    return {
-        'id': message.id,
-        'content': message.content,
-        'role': message.role,
-        'user_id': message.user_id,
-        'created_at': message.created_at.isoformat(),
-        'is_edited': message.is_edited,
-        'edited_at': message.edited_at.isoformat() if message.edited_at else None,
-        'code_snippets': message.code_snippets or [],
-        'referenced_files': message.referenced_files or [],
-        'referenced_chunks': message.referenced_chunks or [],
-        'applied_commands': message.applied_commands or {},
-        # Include RAG metadata to match REST API format
-        'metadata': {
-            'ragUsed': message.rag_used,
-            'ragConfidence': float(message.rag_confidence) if message.rag_confidence else None,
-            'knowledgeSourcesCount': message.knowledge_sources_count,
-            'searchQuery': message.search_query_used,
-            'contextTokensUsed': message.context_tokens_used,
-            'ragStatus': message.rag_status,
-            'ragError': message.rag_error_message,
+    try:
+        return {
+            'id': message.id,
+            'content': message.content,
+            'role': message.role,
+            'user_id': message.user_id,
+            'created_at': message.created_at.isoformat(),
+            'is_edited': message.is_edited,
+            'edited_at': message.edited_at.isoformat() if message.edited_at else None,
+            'code_snippets': message.code_snippets or [],
+            'referenced_files': message.referenced_files or [],
+            'referenced_chunks': message.referenced_chunks or [],
+            'applied_commands': message.applied_commands or {},
+            # Include RAG metadata to match REST API format
+            'metadata': {
+                'ragUsed': message.rag_used,
+                'ragConfidence': float(message.rag_confidence) if message.rag_confidence else None,
+                'knowledgeSourcesCount': message.knowledge_sources_count,
+                'searchQuery': message.search_query_used,
+                'contextTokensUsed': message.context_tokens_used,
+                'ragStatus': message.rag_status,
+                'ragError': message.rag_error_message,
+            }
         }
-    }
+    except Exception as e:
+        logger.error(f"Failed to serialize message {message.id}: {e}")
+        # Return a fallback message to prevent WebSocket connection failure
+        return {
+            'id': message.id,
+            'content': message.content,
+            'role': message.role,
+            'user_id': message.user_id,
+            'created_at': message.created_at.isoformat() if message.created_at else '',
+            'is_edited': False,
+            'edited_at': None,
+            'code_snippets': [],
+            'referenced_files': [],
+            'referenced_chunks': [],
+            'applied_commands': {},
+            'metadata': {
+                'ragUsed': False,
+                'ragConfidence': None,
+                'knowledgeSourcesCount': 0,
+                'searchQuery': None,
+                'contextTokensUsed': 0,
+                'ragStatus': 'error',
+                'ragError': 'Serialization failed',
+            }
+        }

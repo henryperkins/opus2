@@ -162,7 +162,6 @@ class ChatProcessor:
             # Build knowledge context with token limits
             if entry_ids:
                 ctx_kb = await self._kb.build_context(
-                    entry_ids=entry_ids,
                     max_context_length=getattr(settings, "model_ctx", 4000) - 1024,
                     db=self.db,
                     search_results=kb_hits,

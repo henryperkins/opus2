@@ -74,12 +74,15 @@ from pgvector.sqlalchemy import Vector
 
 from app.config import settings
 from app.database import get_engine_sync
-from app.services.vector_service import VectorServiceProtocol
+# Avoid circular import - define protocol locally or use TYPE_CHECKING
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.services.vector_service import VectorServiceProtocol
 
 logger = logging.getLogger(__name__)
 
 
-class PostgresVectorService(VectorServiceProtocol):
+class PostgresVectorService:
     """pgvector implementation compatible with VectorServiceProtocol."""
 
     def __init__(self) -> None:
@@ -271,6 +274,17 @@ class PostgresVectorService(VectorServiceProtocol):
                 conn.execute(
                     sa.text(f"DELETE FROM {self.table_name} WHERE document_id = :doc"),
                     {"doc": document_id},
+                )
+
+        await anyio.to_thread.run_sync(_delete)
+
+    async def delete_by_project(self, project_id: int) -> None:
+        """Delete all embeddings for a project."""
+        def _delete():
+            with self.engine.begin() as conn:
+                conn.execute(
+                    sa.text(f"DELETE FROM {self.table_name} WHERE project_id = :project_id"),
+                    {"project_id": project_id},
                 )
 
         await anyio.to_thread.run_sync(_delete)

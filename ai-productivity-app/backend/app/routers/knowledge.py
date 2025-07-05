@@ -741,17 +741,22 @@ async def _process_knowledge_file(
         
         insert_sql = """
         INSERT INTO embeddings (document_id, chunk_id, project_id, embedding, content, content_hash, metadata, created_at)
-        VALUES (:document_id, 1, :project_id, CAST(:embedding AS vector), :content, :content_hash, :metadata, NOW())
+        VALUES (:document_id, 1, :project_id, :embedding, :content, :content_hash, :metadata, NOW())
         """
         
         import json
         import hashlib
         content_hash = hashlib.sha256(content.encode()).hexdigest()
         
+        # Convert embedding to pgvector format
+        def to_pgvector(vec):
+            """Convert Python list to pgvector format string."""
+            return "[" + ",".join(f"{x:.6f}" for x in vec) + "]"
+        
         session.execute(text(insert_sql), {
             "document_id": hash(doc_id) % 2147483647,  # Convert string ID to int within PostgreSQL int range
             "project_id": doc.project_id,
-            "embedding": embedding,  # Pass as list, not string
+            "embedding": to_pgvector(embedding),  # Convert to pgvector format
             "content": content,
             "content_hash": content_hash,
             "metadata": json.dumps(metadata)

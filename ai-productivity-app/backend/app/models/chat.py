@@ -218,7 +218,7 @@ class ChatMessage(Base, TimestampMixin):
     rag_status = Column(
         String(20), 
         nullable=True,
-        comment="RAG status: active, degraded, error, inactive, standard"
+        comment="RAG status: active, degraded, poor, error, inactive, standard"
     )
     rag_error_message = Column(Text, nullable=True)
 
@@ -250,7 +250,7 @@ class ChatMessage(Base, TimestampMixin):
         # for the deployment. The processor uses this status explicitly when
         # it detects that the knowledge service is unavailable, so we must
         # accept it here.
-        allowed_statuses = {"active", "degraded", "error", "inactive", "standard"}
+        allowed_statuses = {"active", "degraded", "poor", "error", "inactive", "standard"}
         if value is not None and value not in allowed_statuses:
             raise ValueError(f"Invalid RAG status: {value!r}")
         return value

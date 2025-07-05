@@ -104,9 +104,28 @@ class KnowledgeService:
         project_ids: Optional[List[int]] = None,
         limit: int = 10,
         similarity_threshold: float = 0.5,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        current_user_id: Optional[int] = None,
+        db: Optional[Session] = None
     ) -> List[Dict[str, Any]]:
         """Search knowledge base."""
+        # Security: Validate project access if current_user_id is provided
+        if current_user_id is not None and project_ids and db:
+            from app.models.project import Project
+            # Verify user owns all requested projects
+            user_projects = db.query(Project).filter(
+                Project.id.in_(project_ids),
+                Project.owner_id == current_user_id
+            ).all()
+            user_project_ids = [p.id for p in user_projects]
+            
+            # Only search projects the user actually owns
+            project_ids = user_project_ids
+            
+            if not project_ids:
+                # User doesn't own any of the requested projects
+                return []
+        
         # Generate query embedding
         query_embedding = await (
             self.embedding_generator.generate_single_embedding(query)

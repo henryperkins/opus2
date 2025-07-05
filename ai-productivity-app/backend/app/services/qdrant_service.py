@@ -13,7 +13,10 @@ from qdrant_client import QdrantClient, models
 from prometheus_client import Summary, Gauge
 
 from app.config import settings
-from app.services.vector_service import VectorServiceProtocol
+# Avoid circular import - define protocol locally or use TYPE_CHECKING
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.services.vector_service import VectorServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,7 @@ def _run_blocking(func, /, *args, **kwargs):
     return anyio.to_thread.run_sync(func, *args)
 
 
-class QdrantService(VectorServiceProtocol):
+class QdrantService:
     """Async-friendly wrapper around Qdrant collections."""
 
     _EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None

@@ -283,6 +283,34 @@ async def check_background_workers() -> Dict[str, Any]:
         }
 
 
+async def check_vector_backend() -> Dict[str, Any]:
+    """Check vector database backend health."""
+    start_time = datetime.utcnow()
+    try:
+        from app.services.vector_service import get_vector_service
+        vector_service = await get_vector_service()
+        
+        # Test basic connection by getting stats
+        stats = await vector_service.get_stats()
+        
+        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return {
+            "status": HealthStatus.HEALTHY,
+            "backend": stats.get("backend", "unknown"),
+            "total_embeddings": stats.get("total_embeddings", 0),
+            "response_time_ms": round(duration_ms, 2)
+        }
+    except Exception as e:
+        logger.error(f"Vector backend health check failed: {e}")
+        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        return {
+            "status": HealthStatus.UNHEALTHY,
+            "error": str(e)[:100],
+            "response_time_ms": round(duration_ms, 2)
+        }
+
+
 @router.get("/ready")
 async def readiness_check(
     response: Response, db=Depends(get_db)
@@ -302,7 +330,8 @@ async def readiness_check(
     async_check_tasks = {
         "redis": check_redis(),
         "openai": check_openai(),
-        "workers": check_background_workers()
+        "workers": check_background_workers(),
+        "vector": check_vector_backend()
     }
     
     # Run database check synchronously
