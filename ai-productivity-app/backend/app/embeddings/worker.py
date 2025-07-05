@@ -110,7 +110,7 @@ class EmbeddingWorker:
                     try:
                         logger.info("Running vector store garbage collection")
                         # Only run GC if the backend supports it
-                        backend = await self.vector_store._get_backend()
+                        backend = await self.vector_store.get_backend()
                         if hasattr(backend, 'gc_dangling_points'):
                             removed = await backend.gc_dangling_points()
                             logger.info("GC completed: removed %s dangling points", removed)

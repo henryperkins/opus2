@@ -183,11 +183,28 @@ class QdrantService:
         """Get statistics about the Qdrant collection."""
         info = await _run_blocking(self.client.get_collection, self.collection_name)
         stats = {
-            "total_points": info.points_count,
-            "vector_size": info.vectors_config.params.size,
-            "distance_metric": info.vectors_config.params.distance,
+            "backend": "qdrant",
+            "total_embeddings": info.points_count or 0,
             "collection_name": self.collection_name,
         }
+        
+        # Handle vector configuration based on the actual structure
+        if hasattr(info, 'config') and hasattr(info.config, 'params'):
+            # Handle VectorParams structure
+            vector_config = info.config.params
+            if hasattr(vector_config, 'size'):
+                stats["vector_size"] = vector_config.size
+            if hasattr(vector_config, 'distance'):
+                stats["distance_metric"] = vector_config.distance
+        elif hasattr(info, 'vectors_config'):
+            # Handle alternative structure
+            if hasattr(info.vectors_config, 'params'):
+                params = info.vectors_config.params
+                if hasattr(params, 'size'):
+                    stats["vector_size"] = params.size
+                if hasattr(params, 'distance'):
+                    stats["distance_metric"] = params.distance
+        
         if info.points_count is not None:
             VECTOR_POINTS_COUNT.labels(collection=self.collection_name).set(info.points_count)
         return stats

@@ -101,6 +101,11 @@ class VectorService:
         stats["configured_backend"] = settings.vector_store_type
         return stats
 
+    async def get_backend(self) -> VectorServiceProtocol:
+        """Get the underlying vector backend for advanced operations."""
+        await self.initialize()
+        return self._backend
+
 # Global instance
 vector_service = VectorService()
 
