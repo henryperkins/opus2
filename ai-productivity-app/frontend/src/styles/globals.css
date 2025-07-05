@@ -766,17 +766,40 @@
     scrollbar-width: thin;
   }
 
+  /* ------------------------------------------------------------------
+     Scrollbar styles rewritten without @apply to avoid Tailwind’s
+     :where() wrapper that breaks WebKit pseudo-element syntax.
+     ------------------------------------------------------------------ */
   .scrollbar-thin::-webkit-scrollbar {
-    @apply w-2 h-2;
+    width: 0.5rem;   /* w-2 */
+    height: 0.5rem;  /* h-2 */
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800 rounded-full;
+    background-color: var(--color-gray-100);
+    border-radius: 9999px; /* rounded-full */
+  }
+
+  html.dark .scrollbar-thin::-webkit-scrollbar-track {
+    background-color: var(--color-gray-800);
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-gray-400 dark:bg-gray-600 rounded-full;
-    @apply hover:bg-gray-500 dark:hover:bg-gray-500;
+    background-color: var(--color-gray-400);
+    border-radius: 9999px;
+    transition: background-color 0.2s ease-in-out;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-gray-500);
+  }
+
+  html.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--color-gray-600);
+  }
+
+  html.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-gray-500);
   }
 
   /* Safe area insets for mobile */
@@ -1877,7 +1900,7 @@ kbd {
     font-size: clamp(14px, 4vw, 20px);
     line-height: 1.4;
   }
-  
+
   .line-number-responsive {
     font-size: clamp(10px, 3vw, 16px);
   }
