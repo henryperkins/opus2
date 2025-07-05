@@ -127,11 +127,24 @@ export default function FileViewer() {
         setLoading(true);
         setError(null);
         
+        console.log('FileViewer: Fetching file content', { 
+          decodedPath, 
+          projectId, 
+          originalPath: path 
+        });
+        
         // Import codeAPI dynamically to avoid ESLint restriction
         const { codeAPI } = await import('../../api/code');
         const response = await codeAPI.getFileContent(decodedPath, projectId);
         
+        console.log('FileViewer: API response', response);
+        
         const content = response.content || '';
+        console.log('FileViewer: Setting content', { 
+          contentLength: content.length, 
+          hasContent: !!content,
+          contentPreview: content.substring(0, 100) 
+        });
         setFileContent(content);
         setLanguage(response.language || detectLanguage(decodedPath));
 
@@ -143,6 +156,18 @@ export default function FileViewer() {
         }
       } catch (err) {
         console.error('FileViewer: Failed to load file', decodedPath, err);
+        
+        // Provide specific error messages based on the error type
+        let errorMessage = 'Failed to load file';
+        if (err.response?.status === 401) {
+          errorMessage = 'Authentication required. Please log in to view this file.';
+        } else if (err.response?.status === 403) {
+          errorMessage = 'Access denied. You do not have permission to view this file.';
+        } else if (err.response?.status === 404) {
+          errorMessage = 'File not found. The file may have been moved or deleted.';
+        } else if (err.response?.data?.detail) {
+          errorMessage = err.response.data.detail;
+        }
         
         // If we failed with a project_id, try without it as a fallback
         if (projectId && err.response?.status === 404) {
@@ -160,8 +185,7 @@ export default function FileViewer() {
           }
         }
         
-        const errorMsg = err.response?.data?.detail || err.message || 'Failed to load file';
-        setError(`${errorMsg} (Path: ${decodedPath})`);
+        setError(`${errorMessage} (Path: ${decodedPath})`);
       } finally {
         setLoading(false);
       }
@@ -967,6 +991,12 @@ export default function FileViewer() {
         backgroundColor: theme === 'light' ? '#ffffff' : '#1f2937',
         minHeight: '200px'
       }}>
+        {/* Debug info - remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="p-2 bg-yellow-100 text-yellow-800 text-xs">
+            Debug: Content length: {fileContent.length}, Language: {language}, Theme: {theme}
+          </div>
+        )}
         <style>
           {`
             .search-highlight {
@@ -982,7 +1012,7 @@ export default function FileViewer() {
         </style>
         <SyntaxHighlighter
           ref={syntaxHighlighterRef}
-          language={language}
+          language={language || 'text'}
           style={theme === 'light' ? oneLight : tomorrow}
           showLineNumbers={showLineNumbers}
           wrapLines={wrapLines || isMobile}
