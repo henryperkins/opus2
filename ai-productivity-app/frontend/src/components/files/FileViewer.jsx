@@ -121,70 +121,106 @@ export default function FileViewer() {
     }
   }, [isMobile]);
 
+  // -------------------------------------------------------------------------
+  // Fetch file content whenever the *decodedPath* (URL param) or *projectId*
+  // (optional query param) changes.  The implementation is intentionally kept
+  // inside the hook to avoid recreating the function on every render while
+  // still having access to the latest *decodedPath* and *projectId* values.
+  // -------------------------------------------------------------------------
   useEffect(() => {
     const fetchFileContent = async () => {
       try {
         setLoading(true);
         setError(null);
-        
-        console.log('FileViewer: Fetching file content', { 
-          decodedPath, 
-          projectId, 
-          originalPath: path 
-        });
-        
-        // Import codeAPI dynamically to avoid ESLint restriction
-        const { codeAPI } = await import('../../api/code');
-        const response = await codeAPI.getFileContent(decodedPath, projectId);
-        
-        console.log('FileViewer: API response', response);
-        
-        const content = response.content || '';
-        console.log('FileViewer: Setting content', { 
-          contentLength: content.length, 
-          hasContent: !!content,
-          contentPreview: content.substring(0, 100) 
-        });
-        setFileContent(content);
-        setLanguage(response.language || detectLanguage(decodedPath));
 
-        // Performance heuristics
-        const large = content.length > 1_000_000 || content.split('\n').length > 10_000;
+        console.log('FileViewer: Fetching file content', {
+          decodedPath,
+          projectId,
+          originalPath: path,
+        });
+
+        // Dynamically import the API client so the bundler does not complain
+        // about unused imports in environments where the component is not
+        // rendered (e.g. server-side rendering or static analysis tools).
+        const { codeAPI } = await import('../../api/code');
+
+        const apiResponse = await codeAPI.getFileContent(decodedPath, projectId);
+
+        console.log('FileViewer: API response received');
+
+        // Axios is configured with an interceptor that unwraps `response.data`,
+        // therefore *apiResponse* already contains the JSON payload returned
+        // by the backend → { content, language, file_path, size }.
+        const content = apiResponse?.content ?? '';
+        const detectedLanguage = apiResponse?.language || detectLanguage(decodedPath);
+
+        // Guard against unexpected payloads so that we fail loudly instead of
+        // rendering "[object Object]" in the UI.
+        if (typeof content !== 'string') {
+          console.error('FileViewer: Invalid content type:', typeof content);
+          throw new Error('Invalid file content format received from server');
+        }
+
+        console.log('FileViewer: Setting content', {
+          contentLength: content.length,
+          hasContent: Boolean(content),
+          language: detectedLanguage,
+        });
+
+        setFileContent(content);
+        setLanguage(detectedLanguage);
+
+        // Performance heuristics – disable heavy features for very large files
+        const large =
+          content.length > 1_000_000 || content.split('\n').length > 10_000;
         setPerformanceMode(large);
         if (large) {
           setShowLineNumbers(false);
         }
       } catch (err) {
         console.error('FileViewer: Failed to load file', decodedPath, err);
-        
-        // Provide specific error messages based on the error type
+
+        // Craft a meaningful error message for common HTTP status codes.  We
+        // fall back to the error's message or a generic string otherwise.
         let errorMessage = 'Failed to load file';
-        if (err.response?.status === 401) {
+        // eslint-disable-next-line no-unsafe-optional-chaining -- runtime guard above
+        if (err?.response?.status === 401) {
           errorMessage = 'Authentication required. Please log in to view this file.';
-        } else if (err.response?.status === 403) {
+        } else if (err?.response?.status === 403) {
           errorMessage = 'Access denied. You do not have permission to view this file.';
-        } else if (err.response?.status === 404) {
+        } else if (err?.response?.status === 404) {
           errorMessage = 'File not found. The file may have been moved or deleted.';
-        } else if (err.response?.data?.detail) {
+        } else if (err?.response?.data?.detail) {
           errorMessage = err.response.data.detail;
+        } else if (err?.message) {
+          errorMessage = err.message;
         }
-        
-        // If we failed with a project_id, try without it as a fallback
-        if (projectId && err.response?.status === 404) {
+
+        // If the request failed with a *404* while a *projectId* was supplied
+        // try again without the project context – users might have followed an
+        // outdated link after the file was moved to another project.
+        if (projectId && err?.response?.status === 404) {
           try {
             console.log('FileViewer: Retrying without project_id');
             const { codeAPI: fallbackCodeAPI } = await import('../../api/code');
             const fallbackResponse = await fallbackCodeAPI.getFileContent(decodedPath);
-            const fallbackContent = fallbackResponse.content || '';
+
+            const fallbackContent = fallbackResponse?.content ?? '';
+            if (typeof fallbackContent !== 'string') {
+              throw new Error('Invalid file content format in fallback response');
+            }
+
             setFileContent(fallbackContent);
-            setLanguage(fallbackResponse.language || detectLanguage(decodedPath));
+            setLanguage(
+              fallbackResponse?.language || detectLanguage(decodedPath)
+            );
             setLoading(false);
-            return; // Success, no need to set error
+            return; // ✅ success – skip the error handling below
           } catch (fallbackErr) {
             console.error('FileViewer: Fallback also failed', fallbackErr);
           }
         }
-        
+
         setError(`${errorMessage} (Path: ${decodedPath})`);
       } finally {
         setLoading(false);
@@ -192,6 +228,7 @@ export default function FileViewer() {
     };
 
     fetchFileContent();
+    // Only re-run when *decodedPath* or *projectId* changes.
   }, [decodedPath, projectId]);
 
   // Scroll to target line after content loads
@@ -1101,7 +1138,7 @@ export default function FileViewer() {
             });
           }}
         >
-          {fileContent || '// File appears to be empty or failed to load\n// This could happen if:\n// - The file has no content\n// - The file was not found in the database\n// - You don\'t have access to this file\'s project\n// - The file path doesn\'t match exactly'}
+          {fileContent || '// No content to display'}
         </SyntaxHighlighter>
       </div>
 
