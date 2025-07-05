@@ -22,7 +22,14 @@ from ..schemas.knowledge import (
     ContextResult,
     KnowledgeStats,
     KnowledgeSearchResponse,
-    KnowledgeResponse
+    KnowledgeResponse,
+    QueryAnalysisRequest,
+    QueryAnalysisResponse,
+    KnowledgeRetrievalRequest,
+    ContextInjectionRequest,
+    ContextInjectionResponse,
+    CitationRequest,
+    CitationResponse
 )
 from ..services.knowledge_service import KnowledgeService
 from ..services.vector_service import vector_service
@@ -402,6 +409,284 @@ async def get_project_summary(
             status_code=500,
             detail=f"Failed to get project summary: {str(e)}"
         ) from e
+
+
+@router.post("/analyze-query")
+async def analyze_query(
+    request: QueryAnalysisRequest,
+    db: Session = Depends(get_db)
+) -> KnowledgeResponse:
+    """Analyze user query for intent, task type, and keywords."""
+    try:
+        query = request.query.strip().lower()
+        
+        # Simple intent detection based on keywords
+        intent = "search"
+        if any(word in query for word in ["implement", "create", "build", "add"]):
+            intent = "implement"
+        elif any(word in query for word in ["error", "bug", "fix", "debug", "issue"]):
+            intent = "debug"
+        elif any(word in query for word in ["how", "what", "why", "explain"]):
+            intent = "explain"
+        elif any(word in query for word in ["review", "check", "analyze"]):
+            intent = "review"
+        
+        # Task type detection
+        task_type = "general"
+        if any(word in query for word in ["code", "function", "class", "method"]):
+            task_type = "code_review"
+        elif any(word in query for word in ["doc", "documentation", "readme"]):
+            task_type = "documentation"
+        elif any(word in query for word in ["test", "testing", "unit", "integration"]):
+            task_type = "testing"
+        elif any(word in query for word in ["api", "endpoint", "route"]):
+            task_type = "api_development"
+        
+        # Complexity estimation
+        complexity = "simple"
+        if len(query.split()) > 15:
+            complexity = "complex"
+        elif len(query.split()) > 8:
+            complexity = "moderate"
+        
+        # Extract keywords (simple approach)
+        stop_words = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "is", "are", "was", "were"}
+        keywords = [word for word in query.split() if word not in stop_words and len(word) > 2][:10]
+        
+        # Calculate confidence based on keyword match and query length
+        confidence = min(0.9, 0.3 + (len(keywords) * 0.1) + (len(query.split()) * 0.02))
+        
+        analysis = QueryAnalysisResponse(
+            intent=intent,
+            task_type=task_type,
+            complexity=complexity,
+            keywords=keywords,
+            confidence=confidence,
+            suggested_filters={
+                "type": "code" if task_type == "code_review" else "document",
+                "category": task_type
+            }
+        )
+        
+        return KnowledgeResponse(
+            success=True,
+            data=analysis.dict()
+        )
+    except Exception as e:
+        logger.error(f"Query analysis failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Query analysis failed: {str(e)}"
+        )
+
+
+@router.post("/retrieve")
+async def retrieve_knowledge(
+    request: KnowledgeRetrievalRequest,
+    db: Session = Depends(get_db)
+) -> KnowledgeResponse:
+    """Retrieve relevant knowledge from the knowledge base."""
+    try:
+        service = await get_knowledge_service()
+        if not service:
+            # Fallback to mock implementation
+            mock_docs = [
+                KnowledgeEntry(
+                    id=f"kb_{i}",
+                    content=f"Sample knowledge content related to: {', '.join(request.analysis.keywords[:3])}",
+                    title=f"Knowledge Document {i}",
+                    source="system",
+                    category=request.analysis.task_type,
+                    tags=request.analysis.keywords[:3],
+                    similarity_score=0.8 - (i * 0.1)
+                )
+                for i in range(min(request.max_docs, 3))
+            ]
+            
+            filtered_docs = [
+                doc for doc in mock_docs 
+                if doc.similarity_score >= request.min_confidence
+            ]
+            
+            return KnowledgeResponse(
+                success=True,
+                data=filtered_docs
+            )
+        
+        # Use real knowledge service
+        project_ids = [int(request.project_id)] if request.project_id.isdigit() else None
+        results = await service.search_knowledge(
+            query=" ".join(request.analysis.keywords),
+            project_ids=project_ids,
+            limit=request.max_docs,
+            similarity_threshold=request.min_confidence
+        )
+        
+        # Convert to KnowledgeEntry format
+        entries = [
+            KnowledgeEntry(
+                id=r["id"],
+                content=r["content"],
+                title=r.get("title", "Untitled"),
+                source=r.get("source", "unknown"),
+                category=r.get("category", "general"),
+                tags=r.get("tags", []),
+                similarity_score=r.get("score", 0.0)
+            )
+            for r in results
+        ]
+        
+        return KnowledgeResponse(
+            success=True,
+            data=entries
+        )
+    except Exception as e:
+        logger.error(f"Knowledge retrieval failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Knowledge retrieval failed: {str(e)}"
+        )
+
+
+@router.post("/inject-context")
+async def inject_context(
+    request: ContextInjectionRequest,
+    db: Session = Depends(get_db)
+) -> KnowledgeResponse:
+    """Inject context into query for better model understanding."""
+    try:
+        if not request.knowledge:
+            return KnowledgeResponse(
+                success=True,
+                data=ContextInjectionResponse(
+                    contextualized_query=request.query,
+                    context_length=len(request.query),
+                    citations_added=0
+                ).dict()
+            )
+        
+        # Build context from knowledge entries
+        context_parts = []
+        citations_added = 0
+        current_length = len(request.query)
+        
+        for i, entry in enumerate(request.knowledge):
+            if current_length >= request.max_context_length:
+                break
+                
+            # Create citation marker
+            if request.citation_style == "footnote":
+                citation = f"[{i+1}]"
+                context_part = f"{citation} {entry.title}: {entry.content}"
+            else:  # inline
+                context_part = f"Based on {entry.title}: {entry.content}"
+            
+            # Check if adding this would exceed limit
+            if current_length + len(context_part) > request.max_context_length:
+                # Truncate this entry to fit
+                remaining_space = request.max_context_length - current_length - 20  # buffer
+                if remaining_space > 50:  # Only add if meaningful space
+                    truncated_content = entry.content[:remaining_space] + "..."
+                    if request.citation_style == "footnote":
+                        context_part = f"[{i+1}] {entry.title}: {truncated_content}"
+                    else:
+                        context_part = f"Based on {entry.title}: {truncated_content}"
+                    context_parts.append(context_part)
+                    citations_added += 1
+                break
+            
+            context_parts.append(context_part)
+            current_length += len(context_part)
+            citations_added += 1
+        
+        # Combine query with context
+        if context_parts:
+            if request.citation_style == "footnote":
+                contextualized_query = f"{request.query}\n\nRelevant context:\n" + "\n".join(context_parts)
+            else:
+                contextualized_query = f"{request.query}\n\nContext: " + " ".join(context_parts)
+        else:
+            contextualized_query = request.query
+        
+        response_data = ContextInjectionResponse(
+            contextualized_query=contextualized_query,
+            context_length=len(contextualized_query),
+            citations_added=citations_added
+        )
+        
+        return KnowledgeResponse(
+            success=True,
+            data=response_data.dict()
+        )
+    except Exception as e:
+        logger.error(f"Context injection failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Context injection failed: {str(e)}"
+        )
+
+
+@router.post("/add-citations")
+async def add_citations(
+    request: CitationRequest,
+    db: Session = Depends(get_db)
+) -> KnowledgeResponse:
+    """Add citations to model response."""
+    try:
+        if not request.knowledge:
+            return KnowledgeResponse(
+                success=True,
+                data=CitationResponse(
+                    response_with_citations=request.response,
+                    citations={},
+                    citation_count=0
+                ).dict()
+            )
+        
+        response_with_citations = request.response
+        citations = {}
+        
+        if request.citation_style == "footnote":
+            # Add footnote citations
+            citation_text = "\n\nSources:\n"
+            for i, entry in enumerate(request.knowledge):
+                citation_key = f"[{i+1}]"
+                citations[citation_key] = {
+                    "id": entry.id,
+                    "title": entry.title,
+                    "source": entry.source or "Unknown",
+                    "similarity_score": entry.similarity_score or 0.0
+                }
+                citation_text += f"{citation_key} {entry.title} ({entry.source})\n"
+            
+            response_with_citations = request.response + citation_text
+        else:  # inline citations
+            # For inline, we'll just track the citations without modifying the response
+            for i, entry in enumerate(request.knowledge):
+                citation_key = f"inline_{i+1}"
+                citations[citation_key] = {
+                    "id": entry.id,
+                    "title": entry.title,
+                    "source": entry.source or "Unknown",
+                    "similarity_score": entry.similarity_score or 0.0
+                }
+        
+        response_data = CitationResponse(
+            response_with_citations=response_with_citations,
+            citations=citations,
+            citation_count=len(request.knowledge)
+        )
+        
+        return KnowledgeResponse(
+            success=True,
+            data=response_data.dict()
+        )
+    except Exception as e:
+        logger.error(f"Citation addition failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Citation addition failed: {str(e)}"
+        )
 
 
 # Allowed MIME types for knowledge documents

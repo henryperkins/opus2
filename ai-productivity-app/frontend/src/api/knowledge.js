@@ -16,7 +16,7 @@ export const knowledgeAPI = {
             query,
             project_id: projectId
         });
-        return response.data;
+        return response.data?.data || response.data;
     },
 
     /**
@@ -34,7 +34,7 @@ export const knowledgeAPI = {
             min_confidence: settings.minConfidence,
             auto_context: settings.autoContext
         });
-        return response.data;
+        return response.data?.data || response.data;
     },
 
     /**
@@ -51,7 +51,7 @@ export const knowledgeAPI = {
             citation_style: settings.citationStyle,
             max_context_length: settings.maxContextDocs * 500 // rough estimate
         });
-        return response.data.contextualized_query;
+        return response.data?.data?.contextualized_query || response.data?.contextualized_query;
     },
 
     /**
@@ -67,7 +67,7 @@ export const knowledgeAPI = {
             knowledge,
             citation_style: citationStyle
         });
-        return apiResponse.data;
+        return apiResponse.data?.data || apiResponse.data;
     },
 
     /**
@@ -90,9 +90,25 @@ export const knowledgeAPI = {
     semanticSearch: async (projectId, query, options = {}) => {
         const response = await client.post(`/api/knowledge/search/${projectId}`, {
             query,
+            project_ids: [projectId],
+            limit: options.limit || 10,
+            similarity_threshold: options.similarity_threshold || 0.5,
+            filters: options.filters || {},
+            include_metadata: options.include_metadata !== false,
             ...options
         });
-        return response.data;
+        return response.data?.data || response.data;
+    },
+
+    /**
+     * Search knowledge base (alias for semanticSearch)
+     * @param {string} projectId - Project ID
+     * @param {string} query - Search query
+     * @param {object} options - Search options
+     * @returns {Promise<Array>} Search results
+     */
+    search: async (projectId, query, options = {}) => {
+        return knowledgeAPI.semanticSearch(projectId, query, options);
     },
 
     /**

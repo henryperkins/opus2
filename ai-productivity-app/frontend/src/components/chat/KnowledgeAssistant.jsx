@@ -66,11 +66,19 @@ function KnowledgeAssistantCore({
 
     setLoading(true);
     setActiveQuery(message);
+    setError(null);
+    
     try {
       const result = await buildContextForQuery(message);
-      setContext(result);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setContext(result);
+        setError(null);
+      }
     } catch (err) {
-      setError(err);
+      console.error('Failed to update context from chat:', err);
+      setError(err.message || 'Failed to retrieve knowledge context');
     } finally {
       setLoading(false);
     }
@@ -265,15 +273,18 @@ function KnowledgeAssistantCore({
                 <>
                   {/* Active Query Indicator */}
                   {activeQuery && (
-                    <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                    <div className={`px-4 py-2 border-b ${error ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'}`}>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-blue-700">
-                          Searching: "{activeQuery}"
+                        <span className={`text-sm ${error ? 'text-red-700' : 'text-blue-700'}`}>
+                          {error ? `Search failed: "${activeQuery}"` : `Searching: "${activeQuery}"`}
                         </span>
                         {loading && (
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
                         )}
                       </div>
+                      {error && (
+                        <p className="text-xs text-red-600 mt-1">{error}</p>
+                      )}
                     </div>
                   )}
 

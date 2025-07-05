@@ -67,48 +67,56 @@ export function useKnowledgeChat(projectId, userSettings = {}, knowledgeAPI = nu
     async (query) => {
       if (!knowledgeAPI) {
         console.warn('Knowledge API not available');
-        return { contextualisedQuery: query, documents: [] };
+        return { contextualisedQuery: query, documents: [], relevantDocs: [], codeSnippets: [], confidence: 0 };
       }
 
-      // 1) Analyse intent
-      const analysis = await analyzeMutation.mutateAsync({ query });
+      try {
+        // 1) Analyse intent
+        const analysis = await analyzeMutation.mutateAsync({ query });
 
-      // 2) Retrieve matching docs
-      const docs = await retrieveMutation.mutateAsync({ analysis });
+        // 2) Retrieve matching docs
+        const docs = await retrieveMutation.mutateAsync({ analysis });
 
-      // 3) Update local context + citations
-      setCurrentContext(docs);
-      addToCitations(docs);
+        // 3) Update local context + citations
+        setCurrentContext(docs);
+        addToCitations(docs);
 
-      // 4) Optionally inject context into the query
-      if (settings.autoContext) {
-        const contextualised = await knowledgeAPI.injectContext(
-          query,
-          docs,
-          settings
-        );
+        // 4) Optionally inject context into the query
+        let contextualised = query;
+        if (settings.autoContext && docs && docs.length > 0) {
+          try {
+            contextualised = await knowledgeAPI.injectContext(
+              query,
+              docs,
+              settings
+            );
+          } catch (error) {
+            console.warn('Context injection failed, using original query:', error);
+          }
+        }
+
         // Separate documents and code snippets for UI compatibility
-        const relevantDocs = docs.filter(doc => doc.type === 'document' || !doc.type);
-        const codeSnippets = docs.filter(doc => doc.type === 'code');
+        const relevantDocs = Array.isArray(docs) ? docs.filter(doc => doc.type === 'document' || !doc.type) : [];
+        const codeSnippets = Array.isArray(docs) ? docs.filter(doc => doc.type === 'code') : [];
         
         return { 
           contextualisedQuery: contextualised, 
-          documents: docs,
+          documents: docs || [],
           relevantDocs,
-          codeSnippets
+          codeSnippets,
+          confidence: analysis?.confidence || 0.5
+        };
+      } catch (error) {
+        console.error('buildContextForQuery failed:', error);
+        return { 
+          contextualisedQuery: query, 
+          documents: [], 
+          relevantDocs: [], 
+          codeSnippets: [],
+          confidence: 0,
+          error: error.message
         };
       }
-
-      // Separate documents and code snippets for UI compatibility
-      const relevantDocs = docs.filter(doc => doc.type === 'document' || !doc.type);
-      const codeSnippets = docs.filter(doc => doc.type === 'code');
-      
-      return { 
-        contextualisedQuery: query, 
-        documents: docs,
-        relevantDocs,
-        codeSnippets
-      };
     },
     [settings, analyzeMutation, retrieveMutation, addToCitations, knowledgeAPI]
   );
