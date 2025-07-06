@@ -10,6 +10,8 @@ import hashlib
 from app.services.vector_service import VectorService
 from app.services.keyword_search import KeywordSearch
 from app.services.structural_search import StructuralSearch
+from app.services.git_history_searcher import GitHistorySearcher
+from app.services.static_analysis_searcher import StaticAnalysisSearcher
 from app.embeddings.generator import EmbeddingGenerator
 
 logger = logging.getLogger(__name__)
@@ -72,8 +74,44 @@ class HybridSearch:
         # Check if structural search applies
         structural_parsed = self.structural_search._parse_query(query)
         if structural_parsed:
-            # Prioritize structural search for specific queries
-            search_types = ["structural"]
+            search_type = structural_parsed.get("type")
+            
+            # Handle Git History searches
+            if search_type in ["commit", "blame"]:
+                # For Git searches, we need to determine the repository path
+                # Using the first project_id as the primary project
+                if project_ids:
+                    # Simple path construction - in production, you'd query the database
+                    # to get the actual repository path
+                    project_repo_path = f"repos/project_{project_ids[0]}"
+                    git_searcher = GitHistorySearcher(project_repo_path)
+                    
+                    if search_type == "commit":
+                        return git_searcher.search_commits(structural_parsed["term"], limit)
+                    elif search_type == "blame":
+                        return git_searcher.get_blame(structural_parsed["file"], structural_parsed["line"])
+            
+            # Handle documentation searches
+            elif search_type == "doc":
+                # If it's a doc search, modify the query and add a filter
+                query = structural_parsed["term"]
+                if filters is None:
+                    filters = {}
+                # Add a filter to only search in documentation files
+                filters["file_path_pattern"] = "**/*.md"
+                # Force only semantic and keyword search for docs
+                search_types = ["semantic", "keyword"]
+            
+            # Handle static analysis/linting
+            elif search_type == "lint":
+                if project_ids:
+                    project_repo_path = f"repos/project_{project_ids[0]}"
+                    analysis_searcher = StaticAnalysisSearcher(project_repo_path)
+                    return analysis_searcher.run_pylint(structural_parsed["term"])
+            
+            else:
+                # Prioritize structural search for other specific queries
+                search_types = ["structural"]
 
         # Execute searches in parallel
         tasks = []

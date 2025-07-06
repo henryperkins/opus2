@@ -7,6 +7,8 @@ POST /api/auth/register       – User registration
 POST /api/auth/login          – Username/email + password login
 POST /api/auth/logout         – Clear session cookie
 GET  /api/auth/me             – Return current authenticated user
+GET  /api/auth/preferences    – Get user preferences
+PATCH /api/auth/preferences   – Update user preferences
 POST /api/auth/reset-password – Two-step password-reset flow (request + submit)
 
 All endpoints follow guardrails defined in Phase 2:
@@ -394,6 +396,14 @@ def update_profile(
     db.refresh(current_user)
 
     return UserResponse.from_orm(current_user)
+
+
+@router.get("/preferences")
+def get_preferences(
+    current_user: CurrentUserRequired,
+) -> dict:
+    """Get user preferences."""
+    return current_user.preferences or {}
 
 
 @router.patch("/preferences", response_model=UserResponse)

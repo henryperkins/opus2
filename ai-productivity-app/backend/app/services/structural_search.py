@@ -23,6 +23,10 @@ class StructuralSearch:
             "interface": re.compile(r"^interface:(.+)$", re.I),
             "type": re.compile(r"^type:(.+)$", re.I),
             "import": re.compile(r"^import:(.+)$", re.I),
+            "commit": re.compile(r"^commit:(.+)$", re.I),
+            "blame": re.compile(r"^blame:(.+):(\d+)$", re.I),
+            "doc": re.compile(r"^doc:(.+)$", re.I),
+            "lint": re.compile(r"^lint:(.+)$", re.I),
             "file": re.compile(r"^file:(.+)$", re.I),
             "line": re.compile(r"^(.+):(\d+)$"),
         }
@@ -76,6 +80,18 @@ class StructuralSearch:
                         "file": match.group(1),
                         "line": int(match.group(2)),
                     }
+                elif pattern_name == "blame":
+                    return {
+                        "type": "blame",
+                        "file": match.group(1).strip(),
+                        "line": int(match.group(2))
+                    }
+                elif pattern_name == "commit":
+                    return {"type": "commit", "term": match.group(1).strip()}
+                elif pattern_name == "doc":
+                    return {"type": "doc", "term": match.group(1).strip()}
+                elif pattern_name == "lint":
+                    return {"type": "lint", "term": match.group(1).strip()}
                 elif pattern_name in ["func", "class", "method", "interface", "type"]:
                     return {
                         "type": "symbol",

@@ -21,7 +21,7 @@ import traceback
 import tempfile
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Dict
 from pydantic import BaseModel
 
 from fastapi import (
@@ -45,6 +45,7 @@ from app.models.code import CodeDocument, CodeEmbedding
 from app.models.project import Project
 from app.models.user import User
 from app.config import settings
+from app.services.usage_searcher import UsageSearcher
 
 logger = logging.getLogger(__name__)
 
@@ -500,6 +501,13 @@ def check_file_integrity(
 # by the LLM.  Protect behind authentication / feature-flag in production!
 
 
+class UsageRequest(BaseModel):
+    """Request body for finding symbol usages."""
+    file_path: str
+    line: int
+    column: int
+
+
 class CodeExecRequest(BaseModel):
     """Request body for /api/code/execute."""
     code: str
@@ -513,6 +521,31 @@ class CodeExecResponse(BaseModel):
     stderr: str
     result_repr: str | None = None
     success: bool
+
+
+@router.post("/{project_id}/usages", response_model=List[Dict])
+async def find_symbol_usages(
+    project_id: int,
+    request: UsageRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Find all usages of a symbol at a given location."""
+    # Verify project access
+    project = db.query(Project).filter_by(id=project_id, owner_id=current_user.id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Get project repository path
+    project_path = f"repos/project_{project_id}"
+    
+    usage_searcher = UsageSearcher(project_path)
+    results = usage_searcher.find_usages(
+        file_path=request.file_path,
+        line=request.line,
+        column=request.column
+    )
+    return results
 
 
 @router.post("/execute", response_model=CodeExecResponse)

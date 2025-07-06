@@ -159,7 +159,7 @@ class GitManager:
         path = Path(file_path)
 
         # 3. Supported extensions
-        extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".mjs"}
+        extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".mjs", ".md", ".rst", ".txt"}
 
         # 4. Skip common non-code directories
         skip_dirs = {

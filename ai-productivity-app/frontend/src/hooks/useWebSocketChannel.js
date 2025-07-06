@@ -58,23 +58,29 @@ export function useWebSocketChannel({
     onMessageRef.current = onMessage;
   }, [onMessage]);
 
-  // Process buffered messages periodically
+  // Process buffered messages with optimized batching
   useEffect(() => {
     const interval = setInterval(() => {
       if (messageBuffer.current.length > 0 && onMessageRef.current) {
-        const messages = messageBuffer.current.splice(0);
-        messages.forEach((data, index) => {
-          try {
-            // Create a synthetic event for compatibility
-            const syntheticEvent = { data: JSON.stringify(data) };
-            onMessageRef.current(syntheticEvent);
-          } catch (error) {
-            console.error(`Failed to process buffered message at index ${index}:`, error);
-            // Continue processing remaining messages instead of breaking
-          }
+        // Process messages in smaller batches to prevent blocking
+        const batchSize = Math.min(5, messageBuffer.current.length);
+        const batch = messageBuffer.current.splice(0, batchSize);
+        
+        // Use requestAnimationFrame for better performance
+        requestAnimationFrame(() => {
+          batch.forEach((data, index) => {
+            try {
+              // Create a synthetic event for compatibility
+              const syntheticEvent = { data: JSON.stringify(data) };
+              onMessageRef.current(syntheticEvent);
+            } catch (error) {
+              console.error(`Failed to process buffered message at index ${index}:`, error);
+              // Continue processing remaining messages instead of breaking
+            }
+          });
         });
       }
-    }, 100);
+    }, 50); // Reduced interval for more responsive processing
 
     return () => clearInterval(interval);
   }, []);

@@ -100,8 +100,10 @@ export default function FileViewer() {
   const { isMobile } = useMediaQuery();
   const navigate = useNavigate();
 
-  // selection tracking for context-menu
+  // selection tracking for context-menu with throttling
   const { selectionText, position: selectionPos } = useTextSelection();
+  const [throttledSelectionText, setThrottledSelectionText] = useState('');
+  const [throttledSelectionPos, setThrottledSelectionPos] = useState({ x: 0, y: 0 });
   const containerRef = useRef(null);
   const syntaxHighlighterRef = useRef(null);
 
@@ -110,6 +112,16 @@ export default function FileViewer() {
   
   // Responsive font size
   const responsiveFontSize = isMobile ? Math.max(fontSize, 12) : fontSize;
+
+  // Throttle selection events to improve performance
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setThrottledSelectionText(selectionText);
+      setThrottledSelectionPos(selectionPos);
+    }, 150); // 150ms throttle
+
+    return () => clearTimeout(timeout);
+  }, [selectionText, selectionPos]);
 
   // Initialize mobile-friendly defaults
   useEffect(() => {

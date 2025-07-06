@@ -185,6 +185,12 @@ class KeywordSearch:
                             CodeDocument.file_path.like("%spec%"),
                         )
                     )
+            if filters.get("file_path_pattern"):
+                # Convert glob pattern to SQL LIKE pattern
+                pattern = filters["file_path_pattern"]
+                # Simple conversion: ** -> %, * -> %
+                sql_pattern = pattern.replace("**", "%").replace("*", "%")
+                stmt = stmt.where(CodeDocument.file_path.like(sql_pattern))
 
         stmt = stmt.limit(limit)
 

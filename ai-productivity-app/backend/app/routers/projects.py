@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.dependencies import DatabaseDep, CurrentUserRequired, CurrentUserOptional
+from app.database import get_db
 from app.models.user import User
 from app.models.project import Project
 from app.models.timeline import TimelineEvent
@@ -554,24 +555,23 @@ async def find_similar_content(
 
 @router.get(
     "/{project_id}/search/suggestions",
-    dependencies=[Depends(CurrentUserOptional)],
     response_model=SuggestionsResponse,
 )
 async def project_suggestions(
     project_id: int,
-    db: DatabaseDep,
     q: str = Query(..., min_length=2, alias="q"),
     limit: int = Query(5, le=25),
+    db: Session = Depends(get_db),
 ):
     """Get search suggestions for a project."""
     try:
         # Get the project (raises 404 if not found)
         project = get_project_or_404(project_id, db)
         
-        # Initialize services
-        vector_service = await get_vector_service()
+        # Initialize services - use the dependency injection properly
+        vector_service_instance = await get_vector_service()
         embedding_generator = EmbeddingGenerator()
-        hybrid_search = HybridSearch(db, vector_service, embedding_generator)
+        hybrid_search = HybridSearch(db, vector_service_instance, embedding_generator)
         
         # Execute search with keyword search only for suggestions
         results = await hybrid_search.search(

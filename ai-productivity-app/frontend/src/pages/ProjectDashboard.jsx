@@ -13,6 +13,7 @@ import CreateProjectModal from '../components/projects/CreateProjectModal';
 import Timeline from '../components/projects/Timeline';
 import ProjectFilters from '../components/projects/ProjectFilters';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import Pagination from '../components/common/Pagination';
 
 import useProjectStore from '../stores/projectStore';
 import { useAuth } from '../hooks/useAuth';
@@ -313,14 +314,14 @@ export default function ProjectDashboard() {
           <Timeline projectId={selectedProject?.id} />
         )}
 
-        {/* Pagination – placeholder (implement when backend supports) */}
-        {/* Example:
-        <Pagination
-          page={filters.page}
-          pageCount={totalPages}
-          onPageChange={handlePageChange}
-        />
-        */}
+        {/* Pagination */}
+        <div className="mt-8">
+          <Pagination
+            page={filters.page}
+            pageCount={totalPages}
+            onPageChange={handlePageChange}
+          />
+        </div>
       </div>
 
       {/* Create Project Modal */}

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status, Request, Cookie
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,19 +34,20 @@ AsyncDatabaseDep = Annotated[AsyncSession, Depends(get_async_db)]
 
 
 def _current_user_optional(
-    user: Annotated[User, Depends(get_current_user)],
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    authorization: Annotated[str | None, Header()] = None,
+    access_cookie: Annotated[str | None, Cookie(alias="access_token")] = None,
 ) -> User | None:
     """
     Return currently authenticated user or None.
 
-    The underlying `get_current_user` will already raise 401 if no credentials;
-    therefore we catch that and swallow the exception to make it optional.
+    This implementation doesn't raise exceptions, instead returning None
+    when authentication fails or no credentials are provided.
     """
-    from fastapi import HTTPException as _HTTPException
-
     try:
-        return user
-    except _HTTPException:
+        return get_current_user(request, db, authorization, access_cookie)
+    except HTTPException:
         return None
 
 
