@@ -37,6 +37,7 @@ def _extract(obj: dict, key: str, default=None):
 
 def _validate_repo_url(url: str) -> None:
     """Security: Sanity-check git URL to prevent command injection / local file access."""
+
     allowed_protocols = ("https://", "ssh://git@")
     if not url.startswith(allowed_protocols):
         raise HTTPException(
@@ -44,11 +45,11 @@ def _validate_repo_url(url: str) -> None:
             detail="Invalid repository URL. Must start with 'https://' or 'ssh://git@'.",
         )
 
-    # Disallow whitespace or " --" which could be used for arg injection
-    if re.search(r"\s|--", url):
+    # Strict character whitelist to prevent command injection via url
+    if not re.fullmatch(r"[a-zA-Z0-9@:/._\-]+", url):
         raise HTTPException(
             status_code=400,
-            detail="Invalid repository URL. Contains whitespace or '--'.",
+            detail="Invalid repository URL. Contains unsafe characters.",
         )
 
 
@@ -297,13 +298,13 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
                 tasks.append(task)
 
                 # Update progress in memory
-                pct = 10 + int((idx / total) * 60)
+                pct = 10 + int(((idx + 1) / total) * 60)
                 if pct > job.progress_pct:
                     job.progress_pct = pct
                     job.touch()
                     await _notify(phase="indexing", percent=job.progress_pct)
         
-        # Await all parsing tasks
+        # Await all parsing tasks ------------------------------------------------
         try:
             await asyncio.gather(*tasks)
         except Exception as exc:
@@ -318,6 +319,7 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
         # 3. Wait until embedding finished (simplified – check flag)
         # ------------------------------------------------------------------
         job.status = ImportStatus.EMBEDDING
+        job.progress_pct = 80
         db.commit()
         await _notify(phase="embedding", percent=80)
 
@@ -326,12 +328,25 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
 
         deadline = time.time() + 600
         while time.time() < deadline:
-            # Use a thread for the blocking DB call
+            # Get remaining unembedded documents
             remaining = await asyncio.to_thread(
-                db.query(CodeDocument).filter_by(project_id=job.project_id, is_indexed=False).count
+                lambda: db.query(CodeDocument)
+                .filter_by(project_id=job.project_id, is_indexed=False)
+                .count()
             )
+
+            processed = total - remaining if total else 0
+            pct = 80 + int((processed / total) * 20) if total else 99
+
+            if pct > job.progress_pct:
+                job.progress_pct = pct
+                job.touch()
+                db.commit()
+                await _notify(phase="embedding", percent=pct)
+
             if remaining == 0:
                 break
+
             await asyncio.sleep(5)
 
         # ------------------------------------------------------------------

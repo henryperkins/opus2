@@ -1,6 +1,9 @@
 # backend/app/code_processing/git_integration.py
 """Git repository management for code ingestion."""
 from pathlib import Path
+import os
+import tempfile
+import stat
 import shutil
 import logging
 import asyncio
@@ -9,6 +12,7 @@ from typing import List, Dict, Any, Optional
 import git
 import aiofiles
 import fnmatch
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -20,67 +24,149 @@ class GitManager:
         self.base_path = Path(base_path)
         self.base_path.mkdir(exist_ok=True)
 
-    async def clone_repository(
-        self, repo_url: str, project_id: int, branch: str = "main", token: str = None, include_patterns: List[str] = None, exclude_patterns: List[str] = None
-    ) -> Dict[str, Any]:
-        """Clone a repository and return file list."""
-        repo_name = self._extract_repo_name(repo_url)
-        repo_path = self.base_path / f"project_{project_id}" / repo_name
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _inject_token(url: str, token: str | None) -> str:
+        """Embed *token* into HTTPS git URL if provided."""
+
+        if token and url.startswith("https://"):
+            # Avoid duplicating credentials if already present
+            if "@" not in url.split("//", 1)[1]:
+                return url.replace("https://", f"https://{token}@")
+        return url
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _temp_ssh_key_env(key_material: str | None):  # noqa: D401 – CM helper
+        """Context manager that writes *key_material* to a temp file and sets
+        ``GIT_SSH_COMMAND`` to use it.  If *key_material* is *None* the context
+        does nothing.
+        """
+
+        if key_material is None:
+            # Nothing to do – behave as a no-op context manager
+            yield None
+            return
+
+        # Write key to a secure temporary file
+        with tempfile.NamedTemporaryFile("w", delete=False, prefix="ssh_key_", suffix=".pem") as tmp:
+            tmp.write(key_material)
+            key_path = tmp.name
+
+        # Restrict permissions (0600) – required by ssh
+        os.chmod(key_path, stat.S_IRUSR | stat.S_IWUSR)
+
+        original_git_ssh_cmd = os.environ.get("GIT_SSH_COMMAND")
+        os.environ[
+            "GIT_SSH_COMMAND"
+        ] = f"ssh -i {key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
 
         try:
-            # Clone or update
-            if repo_path.exists():
-                repo = await asyncio.to_thread(git.Repo, repo_path)
-                origin = await asyncio.to_thread(repo.remote, "origin")
-
-                # Fetch and checkout branch
-                await asyncio.to_thread(origin.fetch)
-
-                # Try to checkout branch
-                try:
-                    await asyncio.to_thread(repo.git.checkout, branch)
-                    await asyncio.to_thread(origin.pull)
-                except git.exc.GitCommandError:
-                    # Branch doesn't exist, try main/master
-                    for fallback in ["main", "master"]:
-                        try:
-                            await asyncio.to_thread(repo.git.checkout, fallback)
-                            await asyncio.to_thread(origin.pull)
-                            branch = fallback
-                            break
-                        except git.exc.GitCommandError:
-                            continue
+            yield key_path  # expose in case callers need it
+        finally:
+            # Restore previous env var
+            if original_git_ssh_cmd is None:
+                os.environ.pop("GIT_SSH_COMMAND", None)
             else:
-                # New clone: first try with specified branch, then fall back
-                repo_path.parent.mkdir(parents=True, exist_ok=True)
-                try:
-                    repo = await asyncio.to_thread(
-                        git.Repo.clone_from, repo_url, repo_path, branch=branch, depth=1
-                    )
-                except git.exc.GitCommandError:
-                    logger.warning(
-                        "Branch '%s' not found on initial clone, trying default branches.",
-                        branch,
-                    )
-                    # Retry without branch arg, letting git pick the default
-                    repo = await asyncio.to_thread(
-                        git.Repo.clone_from, repo_url, repo_path, depth=1
-                    )
-                    branch = repo.active_branch.name
+                os.environ["GIT_SSH_COMMAND"] = original_git_ssh_cmd
 
-            # Get file list
-            files = await self._get_repo_files(repo, repo_path, include_patterns, exclude_patterns)
-            commit_sha = await asyncio.to_thread(lambda: repo.head.commit.hexsha)
-            active_branch = await asyncio.to_thread(lambda: repo.active_branch.name)
+            # Best-effort cleanup of the temporary key
+            with contextlib.suppress(OSError):
+                os.remove(key_path)
 
-            return {
-                "repo_path": str(repo_path),
-                "repo_name": repo_name,
-                "commit_sha": commit_sha,
-                "branch": active_branch,
-                "files": files,
-                "total_files": len(files),
-            }
+    # ------------------------------------------------------------------
+    # Public helpers
+    # ------------------------------------------------------------------
+
+    async def clone_repository(
+        self,
+        repo_url: str,
+        project_id: int,
+        branch: str = "main",
+        token: str | None = None,
+        ssh_key: str | None = None,
+        include_patterns: List[str] | None = None,
+        exclude_patterns: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        """Clone a repository and return file list."""
+        # Inject personal-access token for HTTPS URLs when provided ----------------
+
+        repo_url = self._inject_token(repo_url, token)
+
+        repo_name = self._extract_repo_name(repo_url)
+
+        # Use a *job-specific* clone directory to avoid collisions between
+        # concurrent import jobs targeting the same project / repository.
+        # Falling back to a deterministic path when it is safe to do so will
+        # speed up subsequent incremental syncs, but for the first
+        # implementation we choose correctness over reuse.
+
+        from uuid import uuid4
+
+        repo_path = self.base_path / f"project_{project_id}" / f"tmp_{uuid4().hex}" / repo_name
+
+        try:
+            # Use provided SSH private key for the entire git operation block
+            with self._temp_ssh_key_env(ssh_key):
+
+                # ---------------------------------------------------------
+                # Clone or update repository
+                # ---------------------------------------------------------
+
+                if repo_path.exists():
+                    repo = await asyncio.to_thread(git.Repo, repo_path)
+                    origin = await asyncio.to_thread(repo.remote, "origin")
+
+                    # Fetch shallow history to keep clone small
+                    await asyncio.to_thread(origin.fetch, depth=1, prune=True, tags=False)
+
+                    # Checkout requested branch – fail loudly if missing
+                    try:
+                        await asyncio.to_thread(repo.git.checkout, branch)
+                        await asyncio.to_thread(origin.pull)
+                    except git.exc.GitCommandError as exc:
+                        raise ValueError(f"Branch '{branch}' not found in repository") from exc
+                else:
+                    # New clone: first try with specified branch, then fall back
+                    repo_path.parent.mkdir(parents=True, exist_ok=True)
+                    # Try cloning with explicit branch; if that fails due to
+                    # missing branch, surface error to caller instead of
+                    # silently falling back.
+
+                    try:
+                        repo = await asyncio.to_thread(
+                            git.Repo.clone_from,
+                            repo_url,
+                            repo_path,
+                            branch=branch,
+                            depth=1,
+                        )
+                    except git.exc.GitCommandError as exc:
+                        raise ValueError(
+                            f"Branch '{branch}' not found in repository"
+                        ) from exc
+
+                # ---------------------------------------------------------
+                # Build file manifest
+                # ---------------------------------------------------------
+
+                files = await self._get_repo_files(
+                    repo, repo_path, include_patterns, exclude_patterns
+                )
+                commit_sha = await asyncio.to_thread(lambda: repo.head.commit.hexsha)
+                active_branch = await asyncio.to_thread(lambda: repo.active_branch.name)
+
+                return {
+                    "repo_path": str(repo_path),
+                    "repo_name": repo_name,
+                    "commit_sha": commit_sha,
+                    "branch": active_branch,
+                    "files": files,
+                    "total_files": len(files),
+                }
 
         except git.exc.GitError as e:
             logger.error("Git operation failed: %s", e)
@@ -130,14 +216,18 @@ class GitManager:
     def _should_process_file(self, file_path: str, full_path: Path, include_patterns: List[str] = None, exclude_patterns: List[str] = None) -> bool:
         """Check if file should be processed based on extension, path, and content."""
         
-        # Apply user-defined patterns if provided
-        if include_patterns:
-            if not any(fnmatch.fnmatch(file_path, pattern) for pattern in include_patterns):
-                return False
-        
-        if exclude_patterns:
-            if any(fnmatch.fnmatch(file_path, pattern) for pattern in exclude_patterns):
-                return False
+        # ------------------------------------------------------------------
+        # 0. User-supplied include / exclude patterns
+        # ------------------------------------------------------------------
+        # Precedence rules (mirroring gitignore & ripgrep semantics):
+        #   1. If a file matches *include_patterns* → always keep it.
+        #   2. Otherwise, if it matches *exclude_patterns* → drop it.
+
+        if include_patterns and any(fnmatch.fnmatch(file_path, p) for p in include_patterns):
+            return True
+
+        if exclude_patterns and any(fnmatch.fnmatch(file_path, p) for p in exclude_patterns):
+            return False
         
         # 1. File size limit (e.g., 2 MB)
         try:
@@ -161,7 +251,13 @@ class GitManager:
         # 3. Supported extensions
         extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".mjs", ".md", ".rst", ".txt"}
 
-        # 4. Skip common non-code directories
+        # 4. Skip common non-code directories.
+        # `path.parents` returns a sequence of Path objects, not their string
+        # names, so previously an intersection against `skip_dirs` (a set of
+        # strings) always evaluated to an empty set. That made the filter
+        # ineffective and caused heavy traversal of huge folders (e.g.
+        # `node_modules`). We now inspect the individual path *parts* instead.
+
         skip_dirs = {
             "node_modules",
             ".git",
@@ -174,19 +270,21 @@ class GitManager:
             ".pytest_cache",
             "venv",
             "env",
-            ".env",
             "tmp",
             "temp",
             ".vscode",
             ".idea",
         }
 
-        # Check path components against skip list
-        if set(path.parents).intersection(skip_dirs):
+        # If any segment of the path matches a skipped directory, exclude it.
+        if any(segment in skip_dirs for segment in path.parts):
             return False
 
-        # 5. Skip hidden files
-        if any(part.startswith(".") for part in path.parts):
+        # 5. Skip hidden *directories* (".git", ".idea" …) but allow
+        # individual dot-files such as `.env.example` that users often want
+        # indexed for context.
+
+        if any(part.startswith(".") for part in path.parts[:-1]):
             return False
 
         # 6. Check extension
@@ -212,13 +310,23 @@ class GitManager:
         except ValueError:
             raise ValueError("File path outside repository") from None
 
+        MAX_BYTES = 2 * 1024 * 1024  # 2 MB safety cap
+
         try:
-            async with aiofiles.open(full_path, "r", encoding="utf-8") as f:
-                return await f.read()
+            async with aiofiles.open(full_path, "rb") as f:
+                data = await f.read(MAX_BYTES + 1)
+        except OSError as exc:
+            logger.warning("Failed to read file %s: %s", full_path, exc)
+            raise
+
+        if len(data) > MAX_BYTES:
+            raise ValueError("File too large to display")
+
+        # Attempt UTF-8 first, then latin-1 fallback
+        try:
+            return data.decode("utf-8")
         except UnicodeDecodeError:
-            # Try with latin-1 as fallback
-            async with aiofiles.open(full_path, "r", encoding="latin-1") as f:
-                return await f.read()
+            return data.decode("latin-1", errors="replace")
 
     async def get_file_diff(
         self, repo_path: str, file_path: str, from_commit: Optional[str] = None
