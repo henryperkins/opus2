@@ -253,6 +253,50 @@ class SearchAPI {
   }
 
   /**
+   * Smart search method (used by SmartKnowledgeSearch component)
+   * @param {string} projectId
+   * @param {object} options
+   * @returns {Promise<object>}
+   */
+  async smartSearch(projectId, options) {
+    const searchOptions = {
+      query: options.query,
+      project_ids: [parseInt(projectId)],
+      limit: options.max_results || 20,
+      filters: {
+        language: options.language,
+        file_type: options.type !== 'all' ? options.type : undefined
+      },
+      search_types: ['hybrid']
+    };
+
+    const response = await this.search(searchOptions);
+    
+    // Map backend field names to frontend expectations
+    const mappedResults = response.results.map(result => ({
+      ...result,
+      path: result.file_path, // Map file_path to path
+      highlights: result.content ? [result.content] : []
+    }));
+
+    return {
+      ...response,
+      results: mappedResults
+    };
+  }
+
+  /**
+   * Add search to history
+   * @param {string} projectId
+   * @param {string} query
+   * @returns {Promise<void>}
+   */
+  async addToHistory(projectId, query) {
+    // For now, just log - could be implemented to save local history
+    console.log('Adding to search history:', { projectId, query });
+  }
+
+  /**
    * Search project content (legacy method for backward compatibility)
    * @param {string} projectId
    * @param {string} query

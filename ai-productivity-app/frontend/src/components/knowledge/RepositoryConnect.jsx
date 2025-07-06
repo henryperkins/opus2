@@ -1,7 +1,9 @@
-// Git repository connection interface for knowledge base integration
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { GitBranch, Globe, Lock, RefreshCw, CheckCircle, AlertCircle, Loader, ExternalLink } from 'lucide-react';
 import PropTypes from 'prop-types';
+import { api } from '../../utils/api'; 
+import { useWebSocketChannel } from '../../hooks/useWebSocketChannel';
+import CredentialsModal from './CredentialsModal';
 
 const REPO_TYPES = {
   public: { icon: Globe, label: 'Public Repository', color: 'text-green-600' },
@@ -19,20 +21,24 @@ export default function RepositoryConnect({
     branch: 'main',
     repo_type: 'public',
     include_patterns: ['*.md', '*.txt', '*.rst', 'README*', 'docs/**/*'],
-    exclude_patterns: ['node_modules/**/*', '.git/**/*', '*.log', '*.tmp']
+    exclude_patterns: ['node_modules/**/*', '.git/**/*', '*.log', '*.tmp'],
+    token: '',
   });
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [repoInfo, setRepoInfo] = useState(null);
   const [validationError, setValidationError] = useState('');
+  const [progress, setProgress] = useState({ phase: '', percent: 0 });
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const validateGitUrl = useCallback((url) => {
-    const gitUrlPattern = /^(https?:\/\/)?([\w\.-]+@)?[\w\.-]+[:\/][\w\.-]+\/[\w\.-]+\.git?$/;
-    const githubPattern = /^https:\/\/github\.com\/[\w\.-]+\/[\w\.-]+\/?$/;
+    const gitUrlPattern = /^(https?:\/\/|ssh:\/\/git@)[\w\.-]+[:\/][\w\.-]+\/[\w\.-]+\.git?$/i;
+    const githubPattern = /^https:\/\/github\.com\/[\w\.-]+\/[\w\.-]+\/?$/i;
     
     if (!url) return 'Repository URL is required';
+    if (/\s/.test(url)) return 'URL must not contain whitespace';
     if (!gitUrlPattern.test(url) && !githubPattern.test(url)) {
-      return 'Invalid Git repository URL format';
+      return 'Invalid Git repository URL format. Use HTTPS or git@gihub.com:user/repo.git format.';
     }
     return '';
   }, []);
@@ -58,86 +64,116 @@ export default function RepositoryConnect({
     }));
   }, []);
 
-  const parseRepoUrl = useCallback((url) => {
-    try {
-      if (url.includes('github.com')) {
-        const match = url.match(/github\.com[\/:]([^\/]+)\/([^\/\.]+)/);
-        if (match) {
-          return {
-            platform: 'GitHub',
-            owner: match[1],
-            name: match[2],
-            url: `https://github.com/${match[1]}/${match[2]}`
-          };
-        }
+  const handleWebSocketMessage = useCallback((event) => {
+    if (event.type === 'import' && event.job_id) {
+      setProgress({ phase: event.phase, percent: event.percent });
+      if (event.phase === 'completed') {
+        setLoading(false);
+        setConnected(true);
+        // You might want to fetch final repo info here
+      } else if (event.phase === 'failed') {
+        setLoading(false);
+        onError?.(event.message || 'Import failed');
       }
-      
-      // Generic Git URL parsing
-      const match = url.match(/([^\/]+)\/([^\/\.]+)\.git?$/);
-      if (match) {
-        return {
-          platform: 'Git',
-          owner: match[1],
-          name: match[2],
-          url: url
-        };
-      }
-    } catch (error) {
-      console.error('Error parsing repo URL:', error);
     }
-    return null;
-  }, []);
+  }, [onError]);
 
-  const connectRepository = useCallback(async () => {
+  useWebSocketChannel('import', handleWebSocketMessage);
+
+  const connectRepository = useCallback(async (token = '') => {
     if (loading || validationError) return;
 
     setLoading(true);
+    setProgress({ phase: 'validating', percent: 0 });
 
     try {
-      // Parse repository information
-      const repoData = parseRepoUrl(formData.repo_url);
-      if (!repoData) {
-        throw new Error('Unable to parse repository URL');
-      }
+      const headers = token ? { 'X-Git-Token': token } : {};
+      
+      // 1. Validate the repository
+      const validationResponse = await api.post('/import/git/validate', {
+        repo_url: formData.repo_url,
+        branch: formData.branch,
+      }, { headers });
+      
+      setFormData(prev => ({ ...prev, branch: validationResponse.data.branch }));
 
-      // Mock repository connection - in production, this would integrate with code ingestion API
-      const mockResponse = await new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            success: true,
-            data: {
-              id: `repo_${Date.now()}`,
-              ...repoData,
-              branch: formData.branch,
-              status: 'connected',
-              last_sync: new Date().toISOString(),
-              files_indexed: Math.floor(Math.random() * 500) + 50,
-              documents_added: Math.floor(Math.random() * 100) + 10
-            }
-          });
-        }, 2000);
+      // 2. Start the import job
+      const importResponse = await api.post('/import/git', {
+        project_id: projectId,
+        repo_url: formData.repo_url,
+        branch: validationResponse.data.branch, // Use validated branch
+        include_patterns: formData.include_patterns,
+        exclude_patterns: formData.exclude_patterns,
+      }, { headers });
+
+      setRepoInfo({
+        ...validationResponse.data,
+        id: `job_${importResponse.data.job_id}`,
+        status: 'connecting',
+        last_sync: new Date().toISOString(),
       });
+      onConnectSuccess?.(repoInfo);
 
-      if (mockResponse.success) {
-        setRepoInfo(mockResponse.data);
-        setConnected(true);
-        onConnectSuccess?.(mockResponse.data);
-      } else {
-        throw new Error(mockResponse.message || 'Failed to connect repository');
-      }
     } catch (error) {
-      console.error('Repository connection error:', error);
-      onError?.(error.message);
-    } finally {
+      const errorMessage = error.response?.data?.detail || error.message || 'An unknown error occurred.';
+      console.error('Repository connection error:', errorMessage);
+      onError?.(errorMessage);
+      setValidationError(errorMessage);
       setLoading(false);
     }
-  }, [formData, loading, validationError, parseRepoUrl, onConnectSuccess, onError]);
+  }, [formData, loading, validationError, projectId, onConnectSuccess, onError, repoInfo]);
+
+  const handleConnectClick = () => {
+    if (formData.repo_type === 'private') {
+      setIsModalOpen(true);
+    } else {
+      connectRepository();
+    }
+  };
+
+  const handleModalSubmit = (token) => {
+    setFormData(prev => ({ ...prev, token }));
+    connectRepository(token);
+  };
 
   const disconnectRepository = useCallback(() => {
     setConnected(false);
     setRepoInfo(null);
-    setFormData(prev => ({ ...prev, repo_url: '' }));
+    setProgress({ phase: '', percent: 0 });
+    setFormData(prev => ({ ...prev, repo_url: '', token: '' }));
   }, []);
+
+  const syncRepository = useCallback(async () => {
+    if (!repoInfo || loading) return;
+
+    setLoading(true);
+    setProgress({ phase: 'syncing', percent: 0 });
+
+    try {
+      // Start a new import job for the same repository
+      const importResponse = await api.post('/import/git', {
+        project_id: projectId,
+        repo_url: repoInfo.repo_url || formData.repo_url,
+        branch: repoInfo.branch || formData.branch,
+        include_patterns: formData.include_patterns,
+        exclude_patterns: formData.exclude_patterns,
+      });
+
+      // Update repo info with new job ID
+      setRepoInfo(prev => ({
+        ...prev,
+        id: `job_${importResponse.data.job_id}`,
+        status: 'syncing',
+        last_sync: new Date().toISOString(),
+      }));
+      
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || error.message || 'Sync failed';
+      console.error('Repository sync error:', errorMessage);
+      onError?.(errorMessage);
+      setLoading(false);
+    }
+  }, [repoInfo, loading, projectId, formData, onError]);
 
   const RepoTypeIcon = REPO_TYPES[formData.repo_type]?.icon || Globe;
 
@@ -163,7 +199,7 @@ export default function RepositoryConnect({
             <div className="flex items-center space-x-2">
               <GitBranch className="w-4 h-4 text-gray-500" />
               <span className="text-sm text-gray-700">
-                <strong>{repoInfo.owner}/{repoInfo.name}</strong> ({repoInfo.branch})
+                <strong>{repoInfo.repo_name}</strong> ({repoInfo.branch})
               </span>
               <a
                 href={repoInfo.url}
@@ -176,8 +212,7 @@ export default function RepositoryConnect({
             </div>
 
             <div className="text-xs text-gray-600 space-y-1">
-              <div>Files indexed: {repoInfo.files_indexed}</div>
-              <div>Documents added: {repoInfo.documents_added}</div>
+              <div>Files indexed: {repoInfo.total_files}</div>
               <div>Last sync: {new Date(repoInfo.last_sync).toLocaleString()}</div>
             </div>
           </div>
@@ -187,8 +222,9 @@ export default function RepositoryConnect({
         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
           <span className="text-sm text-gray-700">Repository knowledge base</span>
           <button
-            className="flex items-center space-x-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-            disabled={disabled}
+            onClick={syncRepository}
+            className="flex items-center space-x-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            disabled={disabled || loading}
           >
             <RefreshCw className="w-3 h-3" />
             <span>Sync Now</span>
@@ -198,8 +234,26 @@ export default function RepositoryConnect({
     );
   }
 
+  if (loading) {
+    return (
+      <div className="p-4 border rounded-lg text-center">
+        <Loader className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+        <p className="mt-2 text-sm font-medium text-gray-700 capitalize">{progress.phase}...</p>
+        <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+          <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${progress.percent}%` }}></div>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">{progress.percent}% complete</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      <CredentialsModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleModalSubmit}
+      />
       {/* Repository URL Input */}
       <div>
         <label htmlFor="repo_url" className="block text-sm font-medium text-gray-700 mb-1">
@@ -320,7 +374,7 @@ export default function RepositoryConnect({
 
       {/* Connect Button */}
       <button
-        onClick={connectRepository}
+        onClick={handleConnectClick}
         disabled={disabled || loading || !formData.repo_url || validationError}
         className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-sm font-medium"
       >

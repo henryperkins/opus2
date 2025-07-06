@@ -149,3 +149,31 @@ When adding new features:
 - Configure proper CORS origins for your domain
 - Set strong `JWT_SECRET_KEY` (required, will fail startup if using default)
 - Consider Qdrant for production vector search at scale
+
+## Docker Services Architecture
+
+The application runs as a multi-service Docker stack:
+
+- **backend** - FastAPI application (port 8000)
+- **frontend** - React/Vite application (port 5173) 
+- **redis** - Session storage and rate limiting (port 6380)
+- **qdrant** - Vector database for embeddings (port 6333)
+- **render-svc** - Rendering service for complex outputs (port 8001)
+
+**Quick Start Alternative**
+```bash
+./start.sh  # Alternative to make dev, handles Docker automatically
+```
+
+## Key Development Files
+
+- `start.sh` - Quick start script for new developers
+- `docker-compose.yml` - Multi-service container orchestration
+- `backend/alembic/` - Database migrations (use `alembic revision --autogenerate`)
+- `.env` - Environment variables (required for development)
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

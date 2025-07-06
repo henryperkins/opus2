@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 import git
 import aiofiles
+import fnmatch
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class GitManager:
         self.base_path.mkdir(exist_ok=True)
 
     async def clone_repository(
-        self, repo_url: str, project_id: int, branch: str = "main"
+        self, repo_url: str, project_id: int, branch: str = "main", token: str = None, include_patterns: List[str] = None, exclude_patterns: List[str] = None
     ) -> Dict[str, Any]:
         """Clone a repository and return file list."""
         repo_name = self._extract_repo_name(repo_url)
@@ -29,41 +30,54 @@ class GitManager:
         try:
             # Clone or update
             if repo_path.exists():
-                repo = git.Repo(repo_path)
-                origin = repo.remote("origin")
+                repo = await asyncio.to_thread(git.Repo, repo_path)
+                origin = await asyncio.to_thread(repo.remote, "origin")
 
                 # Fetch and checkout branch
                 await asyncio.to_thread(origin.fetch)
 
                 # Try to checkout branch
                 try:
-                    repo.git.checkout(branch)
+                    await asyncio.to_thread(repo.git.checkout, branch)
                     await asyncio.to_thread(origin.pull)
                 except git.exc.GitCommandError:
                     # Branch doesn't exist, try main/master
                     for fallback in ["main", "master"]:
                         try:
-                            repo.git.checkout(fallback)
+                            await asyncio.to_thread(repo.git.checkout, fallback)
                             await asyncio.to_thread(origin.pull)
                             branch = fallback
                             break
                         except git.exc.GitCommandError:
                             continue
             else:
-                # New clone
+                # New clone: first try with specified branch, then fall back
                 repo_path.parent.mkdir(parents=True, exist_ok=True)
-                repo = await asyncio.to_thread(
-                    git.Repo.clone_from, repo_url, repo_path, branch=branch
-                )
+                try:
+                    repo = await asyncio.to_thread(
+                        git.Repo.clone_from, repo_url, repo_path, branch=branch, depth=1
+                    )
+                except git.exc.GitCommandError:
+                    logger.warning(
+                        "Branch '%s' not found on initial clone, trying default branches.",
+                        branch,
+                    )
+                    # Retry without branch arg, letting git pick the default
+                    repo = await asyncio.to_thread(
+                        git.Repo.clone_from, repo_url, repo_path, depth=1
+                    )
+                    branch = repo.active_branch.name
 
             # Get file list
-            files = await self._get_repo_files(repo, repo_path)
+            files = await self._get_repo_files(repo, repo_path, include_patterns, exclude_patterns)
+            commit_sha = await asyncio.to_thread(lambda: repo.head.commit.hexsha)
+            active_branch = await asyncio.to_thread(lambda: repo.active_branch.name)
 
             return {
                 "repo_path": str(repo_path),
                 "repo_name": repo_name,
-                "commit_sha": repo.head.commit.hexsha,
-                "branch": repo.active_branch.name,
+                "commit_sha": commit_sha,
+                "branch": active_branch,
                 "files": files,
                 "total_files": len(files),
             }
@@ -72,50 +86,82 @@ class GitManager:
             logger.error("Git operation failed: %s", e)
             # Clean up on failure
             if repo_path.exists():
-                shutil.rmtree(repo_path, ignore_errors=True)
+                await asyncio.to_thread(shutil.rmtree, repo_path, ignore_errors=True)
             raise
 
-    async def _get_repo_files(self, repo: git.Repo, repo_path: Path) -> List[Dict]:
+    async def _get_repo_files(self, repo: git.Repo, repo_path: Path, include_patterns: List[str] = None, exclude_patterns: List[str] = None) -> List[Dict]:
         """Get list of processable files from repository."""
         files = []
 
         # Get all files from git
         try:
-            tree = repo.head.commit.tree
+            tree = await asyncio.to_thread(lambda: repo.head.commit.tree)
 
-            for item in tree.traverse():
-                if item.type == "blob":  # It's a file
-                    file_path = str(item.path)
+            # This loop can be long, run it in a thread
+            def _traverse_and_collect():
+                collected = []
+                for item in tree.traverse():
+                    if item.type == "blob":  # It's a file
+                        file_path = str(item.path)
 
-                    if self._should_process_file(file_path):
                         full_path = repo_path / file_path
+                        if self._should_process_file(file_path, full_path, include_patterns, exclude_patterns):
+                            try:
+                                stat = full_path.stat()
+                                collected.append(
+                                    {
+                                        "path": file_path,
+                                        "size": stat.st_size,
+                                        "modified": datetime.fromtimestamp(stat.st_mtime),
+                                        "sha": item.binsha.hex(),
+                                    }
+                                )
+                            except OSError as e:
+                                logger.warning("Failed to stat file %s: %s", file_path, e)
+                return collected
 
-                        # Get file info
-                        try:
-                            stat = full_path.stat()
-                            files.append(
-                                {
-                                    "path": file_path,
-                                    "size": stat.st_size,
-                                    "modified": datetime.fromtimestamp(stat.st_mtime),
-                                    "sha": item.binsha.hex(),
-                                }
-                            )
-                        except OSError as e:
-                            logger.warning("Failed to stat file %s: %s", file_path, e)
+            files = await asyncio.to_thread(_traverse_and_collect)
+
         except git.exc.GitError as e:
             logger.error("Failed to traverse git tree: %s", e)
 
         return files
 
-    def _should_process_file(self, file_path: str) -> bool:
-        """Check if file should be processed based on extension and path."""
+    def _should_process_file(self, file_path: str, full_path: Path, include_patterns: List[str] = None, exclude_patterns: List[str] = None) -> bool:
+        """Check if file should be processed based on extension, path, and content."""
+        
+        # Apply user-defined patterns if provided
+        if include_patterns:
+            if not any(fnmatch.fnmatch(file_path, pattern) for pattern in include_patterns):
+                return False
+        
+        if exclude_patterns:
+            if any(fnmatch.fnmatch(file_path, pattern) for pattern in exclude_patterns):
+                return False
+        
+        # 1. File size limit (e.g., 2 MB)
+        try:
+            if full_path.stat().st_size > 2 * 1024 * 1024:
+                logger.warning("Skipping large file: %s", file_path)
+                return False
+        except OSError:
+            return False  # Cannot stat, skip
+
+        # 2. Binary file detection
+        try:
+            with open(full_path, "rb") as f:
+                if b"\0" in f.read(8192):
+                    logger.warning("Skipping binary file: %s", file_path)
+                    return False
+        except OSError:
+            return False  # Cannot read, skip
+
         path = Path(file_path)
 
-        # Supported extensions
+        # 3. Supported extensions
         extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".mjs"}
 
-        # Skip common non-code directories
+        # 4. Skip common non-code directories
         skip_dirs = {
             "node_modules",
             ".git",
@@ -135,16 +181,15 @@ class GitManager:
             ".idea",
         }
 
-        # Check path components
-        path_parts = set(path.parts)
-        if path_parts & skip_dirs:
+        # Check path components against skip list
+        if set(path.parents).intersection(skip_dirs):
             return False
 
-        # Skip hidden files
+        # 5. Skip hidden files
         if any(part.startswith(".") for part in path.parts):
             return False
 
-        # Check extension
+        # 6. Check extension
         return path.suffix.lower() in extensions
 
     def _extract_repo_name(self, repo_url: str) -> str:

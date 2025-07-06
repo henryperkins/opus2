@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status, Header
 
 from app.dependencies import CurrentUserRequired, DatabaseDep
 from app.models.import_job import ImportJob, ImportStatus
@@ -34,6 +35,23 @@ def _extract(obj: dict, key: str, default=None):
     return v
 
 
+def _validate_repo_url(url: str) -> None:
+    """Security: Sanity-check git URL to prevent command injection / local file access."""
+    allowed_protocols = ("https://", "ssh://git@")
+    if not url.startswith(allowed_protocols):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid repository URL. Must start with 'https://' or 'ssh://git@'.",
+        )
+
+    # Disallow whitespace or " --" which could be used for arg injection
+    if re.search(r"\s|--", url):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid repository URL. Contains whitespace or '--'.",
+        )
+
+
 ###############################################################################
 # Validation endpoint (quick HEAD clone)
 ###############################################################################
@@ -42,14 +60,18 @@ def _extract(obj: dict, key: str, default=None):
 @router.post("/validate")
 async def validate_repo(
     payload: Annotated[dict, Body()],
+    x_git_token: Annotated[str | None, Header()] = None,
 ):
     """Light-weight clone to verify URL / auth without creating ImportJob."""
 
     repo_url = _extract(payload, "repo_url")
+    _validate_repo_url(repo_url)
     branch = payload.get("branch", "main")
 
     try:
-        info = await _GIT_MANAGER.clone_repository(repo_url, project_id=0, branch=branch)  # tmp path
+        info = await _GIT_MANAGER.clone_repository(
+            repo_url, project_id=0, branch=branch, token=x_git_token
+        )  # tmp path
     except Exception as exc:  # noqa: BLE001
         logger.warning("validate_repo failed: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc))
@@ -59,6 +81,62 @@ async def validate_repo(
         "repo_name": info["repo_name"],
         "commit_sha": info["commit_sha"],
         "total_files": info["total_files"],
+    }
+
+
+###############################################################################
+# Repository status endpoint
+###############################################################################
+
+
+@router.get("/repository/{project_id}")
+async def get_repository_status(
+    project_id: int,
+    current_user: CurrentUserRequired,
+    db: DatabaseDep,
+):
+    """Get repository connection status and stats for a project."""
+    
+    # Verify project access
+    project = db.query(Project).filter_by(id=project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied: You don't own this project")
+    
+    # Get latest import job for this project
+    latest_job = db.query(ImportJob).filter_by(project_id=project_id).order_by(ImportJob.created_at.desc()).first()
+    
+    if not latest_job:
+        return {
+            "connected": False,
+            "status": "not_connected",
+            "repo_info": None,
+            "stats": {"total_files": 0, "documents_added": 0}
+        }
+    
+    # Get document count for this project
+    from app.models.code import CodeDocument
+    document_count = db.query(CodeDocument).filter_by(project_id=project_id).count()
+    
+    return {
+        "connected": latest_job.status == ImportStatus.COMPLETED,
+        "status": latest_job.status.value,
+        "repo_info": {
+            "repo_url": latest_job.repo_url,
+            "branch": latest_job.branch,
+            "commit_sha": latest_job.commit_sha,
+            "last_sync": latest_job.updated_at.isoformat() if latest_job.updated_at else None,
+        },
+        "stats": {
+            "total_files": document_count,
+            "documents_added": document_count
+        },
+        "progress": {
+            "phase": latest_job.status.value,
+            "percent": latest_job.progress_pct
+        }
     }
 
 
@@ -78,12 +156,18 @@ async def start_import(
 
     project_id = int(_extract(payload, "project_id"))
     repo_url = _extract(payload, "repo_url")
+    _validate_repo_url(repo_url)
     branch = payload.get("branch", "main")
+    include_patterns = payload.get("include_patterns", [])
+    exclude_patterns = payload.get("exclude_patterns", [])
 
-    # Authorisation
+    # Authorisation - verify project exists and user owns it
     project = db.query(Project).filter_by(id=project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied: You don't own this project")
 
     # Create job
     job = ImportJob(
@@ -91,6 +175,8 @@ async def start_import(
         requested_by=current_user.id,
         repo_url=repo_url,
         branch=branch,
+        include_patterns=include_patterns,
+        exclude_patterns=exclude_patterns,
     )
     db.add(job)
     db.commit()
@@ -143,7 +229,13 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
         await _notify(phase="cloning", percent=0)
 
         try:
-            clone_info = await _GIT_MANAGER.clone_repository(job.repo_url, project_id=job.project_id, branch=job.branch)
+            clone_info = await _GIT_MANAGER.clone_repository(
+                job.repo_url, 
+                project_id=job.project_id, 
+                branch=job.branch,
+                include_patterns=job.include_patterns,
+                exclude_patterns=job.exclude_patterns
+            )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Clone failed")
             job.status = ImportStatus.FAILED
@@ -168,51 +260,59 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
         # Import here to avoid circular issues at top of module
         from app.database.transactions import atomic  # local import inside fn
 
+        tasks = []
         with atomic(db):
             for idx, file_meta in enumerate(files):
                 file_path = file_meta["path"]
                 full_path = clone_info["repo_path"] + "/" + file_path
 
                 try:
-                    with open(full_path, "r", encoding="utf-8", errors="ignore") as fp:
-                        content = fp.read()
+                    # Reading file content is blocking, move to thread
+                    content = await asyncio.to_thread(
+                        _read_file_content, full_path
+                    )
+                    if content is None:
+                        continue
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("Skip file %s: %s", file_path, exc)
                     continue
 
                 doc = CodeDocument(
                     project_id=job.project_id,
+                    commit_sha=job.commit_sha,  # Propagate commit SHA
                     file_path=file_path,
                     file_size=file_meta.get("size", 0),
                     content_hash=file_meta.get("sha", ""),
                     language=detect_language(file_path, content),
+                    is_indexed=True,  # Mark as indexed by parser
                 )
                 db.add(doc)
                 db.flush()  # ensure PK assigned so background task can query
 
-                # Kick background parsing *after* the doc has been flushed but
-                # before the surrounding transaction commits.  The background
-                # task opens a new session so it will simply poll for the row
-                # – if the current transaction rolls back the task becomes a
-                # no-op.
-                # Schedule synchronous file-processing logic inside a
-                # background *thread* so that ``asyncio.create_task`` receives
-                # a proper coroutine.  This eliminates the runtime error
-                # “TypeError: a coroutine was expected, got None” while keeping
-                # the import pipeline non-blocking.
-                asyncio.create_task(
+                task = asyncio.create_task(
                     asyncio.to_thread(
                         _process_code_file, db, doc.id, content, doc.language
                     )
                 )
+                tasks.append(task)
 
-                # Update progress in memory (frequent commits are no longer
-                # needed thanks to the enclosing transaction).
+                # Update progress in memory
                 pct = 10 + int((idx / total) * 60)
                 if pct > job.progress_pct:
                     job.progress_pct = pct
                     job.touch()
                     await _notify(phase="indexing", percent=job.progress_pct)
+        
+        # Await all parsing tasks
+        try:
+            await asyncio.gather(*tasks)
+        except Exception as exc:
+            logger.exception("Code processing task failed")
+            job.status = ImportStatus.FAILED
+            job.error = f"Code processing error: {exc}"
+            db.commit()
+            await _notify(phase="failed", message=job.error)
+            return
 
         # ------------------------------------------------------------------
         # 3. Wait until embedding finished (simplified – check flag)
@@ -226,7 +326,10 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
 
         deadline = time.time() + 600
         while time.time() < deadline:
-            remaining = db.query(CodeDocument).filter_by(project_id=job.project_id, is_indexed=False).count()
+            # Use a thread for the blocking DB call
+            remaining = await asyncio.to_thread(
+                db.query(CodeDocument).filter_by(project_id=job.project_id, is_indexed=False).count
+            )
             if remaining == 0:
                 break
             await asyncio.sleep(5)
@@ -248,3 +351,13 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
             await _notify(phase="failed", message=str(exc))
     finally:
         db.close()
+
+
+def _read_file_content(path: str) -> str | None:
+    """Read file content with error handling."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as fp:
+            return fp.read()
+    except Exception as exc:
+        logger.warning("Could not read file %s: %s", path, exc)
+        return None

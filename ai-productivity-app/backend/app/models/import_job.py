@@ -5,7 +5,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, JSON
 from sqlalchemy.orm import relationship
 
 from .base import Base, TimestampMixin
@@ -35,6 +35,10 @@ class ImportJob(Base, TimestampMixin):
     repo_url = Column(String, nullable=False)
     branch = Column(String, default="main", nullable=False)
     commit_sha = Column(String, nullable=True)
+    
+    # File filtering patterns
+    include_patterns = Column(JSON, nullable=True)
+    exclude_patterns = Column(JSON, nullable=True)
 
     status = Column(Enum(ImportStatus), default=ImportStatus.QUEUED, nullable=False)
     progress_pct = Column(Integer, default=0, nullable=False)

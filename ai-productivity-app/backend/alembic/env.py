@@ -16,7 +16,7 @@ from app.models.base import Base  # type: ignore  # noqa: F401 – imported for 
 from importlib import import_module
 
 # Core tables that never pull heavy third-party libraries.
-for _mod in ("user", "project", "session", "timeline", "code", "chat"):
+for _mod in ("user", "project", "session", "timeline", "code", "chat", "import_job"):
     import_module(f"app.models.{_mod}")  # noqa: WPS421 – import for side-effects
 
 # Optional embedding models – safe to ignore when dependencies are absent.
