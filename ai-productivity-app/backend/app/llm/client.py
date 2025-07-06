@@ -49,9 +49,7 @@ import sys
 # continuing with a fake implementation.
 # ---------------------------------------------------------------------------
 
-_IN_SANDBOX = (
-    os.getenv("APP_CI_SANDBOX") == "1" or "pytest" in sys.modules
-)
+_IN_SANDBOX = os.getenv("APP_CI_SANDBOX") == "1" or "pytest" in sys.modules
 
 try:
     from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore
@@ -80,37 +78,53 @@ logger = logging.getLogger(__name__)
 
 def _is_reasoning_model(model_name: str) -> bool:
     """Return True if the model is a reasoning model (o1/o3/o4 series).
-    
+
     Reasoning models use special parameters and don't support temperature, streaming, etc.
     """
     if not model_name:
         return False
-    
+
     model_lower = model_name.lower()
     reasoning_models = {
-        "o1", "o1-mini", "o1-preview", "o1-pro",
-        "o3", "o3-mini", "o3-pro",
-        "o4-mini"
+        "o1",
+        "o1-mini",
+        "o1-preview",
+        "o1-pro",
+        "o3",
+        "o3-mini",
+        "o3-pro",
+        "o4-mini",
     }
-    
+
     return model_lower in reasoning_models
 
 
 def _model_requires_responses_api(model_name: str) -> bool:
     """Return True if the model requires the Responses API by default.
-    
-    Certain models like o3, gpt-4.1, and o4-mini should automatically use
-    the Responses API regardless of the global API version setting.
+
+    Based on Azure OpenAI documentation, these models are available in the Responses API:
+    - gpt-4o, gpt-4o-mini (regular chat models)
+    - o3, o4-mini, computer-use-preview (advanced models)
+    - All reasoning models (o1 series)
     """
     if not model_name:
         return False
-    
+
     model_lower = model_name.lower()
     responses_api_models = {
-        "o3", "gpt-4.1", "o4-mini", "o3-mini", "o3-pro", 
-        "o1", "o1-mini", "o1-preview", "o1-pro"
+        "gpt-4o",
+        "gpt-4o-mini",
+        "computer-use-preview",
+        "o3",
+        "o3-mini",
+        "o3-pro",
+        "o4-mini",
+        "o1",
+        "o1-mini",
+        "o1-preview",
+        "o1-pro",
     }
-    
+
     return model_lower in responses_api_models
 
 
@@ -119,22 +133,26 @@ def _is_responses_api_enabled(model_name: str = None) -> bool:
     *Responses API* variant.
 
     The Responses API is enabled when:
-    1. provider == "azure" **and** api_version == "preview"  → Responses API
+    1. provider == "azure" **and** api_version == "preview" or "2025-04-01-preview"
     2. provider == "azure" **and** model requires Responses API by default
-    3. everything else                                       → Chat Completions
+    3. everything else → Chat Completions
+
+    Per Azure documentation, Responses API is the new stateful API combining
+    chat completions and assistants capabilities.
     """
-    
+
     if settings.llm_provider.lower() != "azure":
         return False
-    
+
     # Check if API version explicitly enables Responses API
     api_version_enabled = getattr(settings, "azure_openai_api_version", "").lower() in {
-        "preview", "2025-04-01-preview"
+        "preview",
+        "2025-04-01-preview",
     }
-    
+
     # Check if model requires Responses API by default
     model_requires = model_name and _model_requires_responses_api(model_name)
-    
+
     return api_version_enabled or model_requires
 
 
@@ -143,7 +161,7 @@ def _sanitize_messages(messages: Sequence[Dict[str, Any]]) -> List[Dict[str, Any
     OpenAI SDK expects.  The helper **does not** perform any advanced
     validation – it simply converts the sequence to a *list* and casts the
     *role* / *content* values to ``str``.
-    
+
     Also handles Azure Responses API format messages which may have 'type' instead of 'role'.
     """
 
@@ -198,7 +216,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self) -> None:
         self.provider: str = settings.llm_provider.lower()
-        
+
         # The active *model* (or *deployment name* in Azure terminology).  We
         # prioritise the new ``llm_default_model`` field and fall back to the
         # (deprecated) ``llm_model`` environment variable for backwards
@@ -206,7 +224,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         self.active_model: str = (
             settings.llm_default_model or settings.llm_model or "gpt-3.5-turbo"
         )
-        
+
         # Determine if Responses API should be used (considers both API version and model type)
         self.use_responses_api: bool = _is_responses_api_enabled(self.active_model)
 
@@ -226,6 +244,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         """Get current runtime configuration, falling back to static settings."""
         try:
             from app.services.config_cache import get_config
+
             return get_config()
         except Exception as e:
             logger.debug(f"Failed to load config from cache: {e}")
@@ -240,15 +259,19 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         """Check if client needs reinitialization due to provider change."""
         return self.provider != new_provider.lower()
 
-    async def reconfigure(self,
-                         provider: str | None = None,
-                         model: str | None = None,
-                         use_responses_api: bool | None = None) -> None:
+    async def reconfigure(
+        self,
+        provider: str | None = None,
+        model: str | None = None,
+        use_responses_api: bool | None = None,
+    ) -> None:
         """Dynamically reconfigure the client with new provider/model settings."""
         runtime_config = self._get_runtime_config()
 
         # Use runtime config values or provided parameters
-        new_provider = (provider or runtime_config.get("provider", self.provider)).lower()
+        new_provider = (
+            provider or runtime_config.get("provider", self.provider)
+        ).lower()
         new_model = model or runtime_config.get("chat_model") or self.active_model
         new_responses_api = (
             use_responses_api
@@ -267,17 +290,23 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         # Update model and responses API settings
         self.active_model = new_model
-        
+
         # Determine Responses API usage: explicit setting or model-based auto-detection
         if new_responses_api is not None:
             # Explicit setting takes precedence
             self.use_responses_api = new_responses_api and new_provider == "azure"
         else:
             # Auto-detect based on model and provider
-            self.use_responses_api = _is_responses_api_enabled(new_model) and new_provider == "azure"
+            self.use_responses_api = (
+                _is_responses_api_enabled(new_model) and new_provider == "azure"
+            )
 
-        logger.info("LLM client reconfigured - Provider: %s, Model: %s, ResponsesAPI: %s",
-                   self.provider, self.active_model, self.use_responses_api)
+        logger.info(
+            "LLM client reconfigured - Provider: %s, Model: %s, ResponsesAPI: %s",
+            self.provider,
+            self.active_model,
+            self.use_responses_api,
+        )
 
     # ---------------------------------------------------------------------
     # Provider-specific initialisation helpers
@@ -303,20 +332,31 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         # the unit tests we only need a handful of attributes.
 
         endpoint = (
-            settings.azure_openai_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT") or "https://example.openai.azure.com"
+            settings.azure_openai_endpoint
+            or os.getenv("AZURE_OPENAI_ENDPOINT")
+            or "https://example.openai.azure.com"
         )
 
         api_key = (
-            settings.azure_openai_api_key or os.getenv("AZURE_OPENAI_API_KEY") or "test-key"
+            settings.azure_openai_api_key
+            or os.getenv("AZURE_OPENAI_API_KEY")
+            or "test-key"
         )
 
         # Determine API version - use preview for models that require special APIs
-        api_version = getattr(settings, "azure_openai_api_version", "2025-04-01-preview")
-        if (_model_requires_responses_api(self.active_model) or _is_reasoning_model(self.active_model)) and api_version not in {"preview", "2025-04-01-preview"}:
+        api_version = getattr(
+            settings, "azure_openai_api_version", "2025-04-01-preview"
+        )
+        if (
+            _model_requires_responses_api(self.active_model)
+            or _is_reasoning_model(self.active_model)
+        ) and api_version not in {"preview", "2025-04-01-preview"}:
             # Auto-upgrade to preview API version for models that require special handling
             api_version = "2025-04-01-preview"
-            logger.info("Auto-upgrading to preview API version for model: %s", self.active_model)
-        
+            logger.info(
+                "Auto-upgrading to preview API version for model: %s", self.active_model
+            )
+
         extra_kwargs: Dict[str, Any] = {
             "azure_endpoint": endpoint,
             "api_version": api_version,
@@ -341,12 +381,20 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         self,
         messages: Sequence[Dict[str, Any]] | None = None,  # Deprecated, use input
         *,
-        input: Sequence[Dict[str, Any]] | str | None = None,  # Input can be string or message array
+        input: (
+            Sequence[Dict[str, Any]] | str | None
+        ) = None,  # Input can be string or message array
         temperature: float | int | None = None,
         stream: bool = False,
         background: bool = False,  # Run as background task for long-running requests
         tools: Any | None = None,
-        reasoning: Dict[str, Any] | bool | None = None,  # Reasoning config: {"effort": "medium", "summary": "detailed"}
+        tool_choice: (
+            str | Dict[str, Any] | None
+        ) = None,  # "auto", "none", "required", or specific function
+        parallel_tool_calls: bool = True,  # Enable parallel function calling
+        reasoning: (
+            Dict[str, Any] | bool | None
+        ) = None,  # Reasoning config: {"effort": "medium", "summary": "detailed"}
         max_tokens: int | None = None,
         model: str | None = None,  # Allow per-request model override
     ) -> Any | AsyncIterator[str]:  # Returns AsyncIterator[str] when stream=True
@@ -368,22 +416,29 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         # Apply runtime configuration with parameter precedence
         active_model = model or runtime_config.get("chat_model") or self.active_model
-        active_temperature = temperature if temperature is not None else runtime_config.get("temperature", 0.7)
+        active_temperature = (
+            temperature
+            if temperature is not None
+            else runtime_config.get("temperature", 0.7)
+        )
         active_max_tokens = max_tokens or runtime_config.get("max_tokens")
 
         # Auto-reconfigure if model/provider changed
-        if active_model != self.active_model or runtime_config.get("provider", self.provider).lower() != self.provider:
+        if (
+            active_model != self.active_model
+            or runtime_config.get("provider", self.provider).lower() != self.provider
+        ):
             await self.reconfigure(
                 provider=runtime_config.get("provider"),
                 model=active_model,
-                use_responses_api=runtime_config.get("use_responses_api")
+                use_responses_api=runtime_config.get("use_responses_api"),
             )
 
         # Unify input and messages parameters for backward compatibility
         chat_turns = input or messages
         if chat_turns is None:
             raise ValueError("Either 'input' or 'messages' parameter is required")
-        
+
         # Handle different input formats
         if isinstance(chat_turns, str):
             # Convert string input to message format
@@ -397,7 +452,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 messages = list(chat_turns)
             else:
                 messages = _sanitize_messages(chat_turns)
-        
+
         # For reasoning models, convert system messages to developer messages
         if _is_reasoning_model(active_model):
             for msg in messages:
@@ -407,11 +462,11 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         try:
             if self.use_responses_api:
                 # Azure Responses API - follows the official documentation pattern
-                
+
                 # Initialize variables outside conditional scope to prevent UnboundLocalError
                 input_messages: List[Dict[str, Any]] = []
                 system_instructions: str | None = None
-                
+
                 # Handle direct string input vs message arrays
                 if isinstance(chat_turns, str):
                     # For direct string input, pass it directly to the Responses API
@@ -431,7 +486,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                                 input_msg = {
                                     "role": "developer",
                                     "content": msg["content"],
-                                    "type": "message"
+                                    "type": "message",
                                 }
                                 input_messages.append(input_msg)
                             else:
@@ -444,7 +499,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                             # Convert to Responses API format
                             input_msg = {
                                 "role": msg["role"],
-                                "content": msg.get("content", "")
+                                "content": msg.get("content", ""),
                             }
                             # Add type field for user/assistant messages
                             if msg["role"] in ["user", "assistant", "developer"]:
@@ -453,7 +508,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                         else:
                             # Unknown message format - try to preserve it
                             input_messages.append(msg)
-                    
+
                     responses_input = input_messages
 
                 # Create parameters dict following Azure Responses API spec
@@ -461,7 +516,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     "model": active_model,
                     "input": responses_input,
                 }
-                
+
                 # Add background processing if requested
                 if background:
                     responses_kwargs["background"] = True
@@ -493,21 +548,47 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 if not isinstance(chat_turns, str) and system_instructions:
                     responses_kwargs["instructions"] = system_instructions
 
-                # Add tools if provided (Responses API supports tools) – ensure
-                # each entry includes the mandatory "type" field ("function"
-                # is the only allowed value at the moment).
+                # Add tools if provided (Responses API supports tools)
+                # Follow OpenAI Responses API function calling documentation format
                 if tools:
                     resp_tools: List[Dict[str, Any]] = []
                     for t in tools:
-                        t_copy = dict(t)
-                        # Azure requires explicit type declaration
-                        t_copy.setdefault("type", "function")
-                        resp_tools.append(t_copy)
+                        # Ensure tools follow the correct OpenAI Responses API format
+                        if "function" in t:
+                            # Already in correct format, ensure strict mode if not specified
+                            tool_copy = dict(t)
+                            if "strict" not in tool_copy:
+                                tool_copy["strict"] = True  # Default to strict mode
+                            resp_tools.append(tool_copy)
+                        else:
+                            # Convert legacy format to OpenAI Responses API format
+                            tool_def = {
+                                "type": "function",
+                                "function": {
+                                    "name": t.get("name"),
+                                    "description": t.get("description"),
+                                    "parameters": t.get("parameters", {}),
+                                },
+                                "strict": True,  # Enable strict mode by default
+                            }
+                            # Validate and enhance the schema
+                            validated_tool = self.validate_function_schema(tool_def)
+                            resp_tools.append(validated_tool)
 
                     responses_kwargs["tools"] = resp_tools
 
+                    # Add tool choice parameter
+                    if tool_choice is not None:
+                        responses_kwargs["tool_choice"] = tool_choice
+
+                    # Add parallel tool calls parameter
+                    if not parallel_tool_calls:
+                        responses_kwargs["parallel_tool_calls"] = False
+
                 # Remove None values to avoid sending JSON null
-                clean_responses_kwargs = {k: v for k, v in responses_kwargs.items() if v is not None}
+                clean_responses_kwargs = {
+                    k: v for k, v in responses_kwargs.items() if v is not None
+                }
 
                 # Log API request for debugging (only if debug logging enabled)
                 if logger.isEnabledFor(logging.DEBUG):
@@ -516,17 +597,21 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     logger.debug(f"Temperature: {active_temperature}, Stream: {stream}")
                     logger.debug(f"Input Messages: {len(input_messages)} total")
                     # Only log full payload in debug mode
-                    logger.debug(f"Request Payload: {json.dumps(clean_responses_kwargs, indent=2)}")
+                    logger.debug(
+                        f"Request Payload: {json.dumps(clean_responses_kwargs, indent=2)}"
+                    )
 
                 try:
-                    response = await self.client.responses.create(**clean_responses_kwargs)
-                    
+                    response = await self.client.responses.create(
+                        **clean_responses_kwargs
+                    )
+
                     # Check for Responses API error field in response
-                    if hasattr(response, 'error') and response.error:
+                    if hasattr(response, "error") and response.error:
                         error_msg = f"Responses API error: {response.error}"
                         logger.error(error_msg)
                         raise RuntimeError(error_msg)
-                        
+
                 except Exception as exc:  # noqa: BLE001
                     # ------------------------------------------------------------------ #
                     # Graceful fallback when the *Responses* deployment is missing
@@ -554,10 +639,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     # ---------------------
                     _is_missing_deployment = isinstance(exc, NotFoundError)
 
-                    _is_tool_schema_error = (
-                        isinstance(exc, BadRequestError)
-                        and "tools[0].type" in str(exc)
-                    )
+                    _is_tool_schema_error = isinstance(
+                        exc, BadRequestError
+                    ) and "tools[0].type" in str(exc)
 
                     # Detect 400 responses complaining about unsupported
                     # sampling parameters (e.g. "Unsupported parameter:
@@ -576,7 +660,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                         self.provider == "azure"
                         and self.use_responses_api
                         and (
-                            _is_missing_deployment or _is_tool_schema_error or _is_parameter_unsupported_error
+                            _is_missing_deployment
+                            or _is_tool_schema_error
+                            or _is_parameter_unsupported_error
                         )
                     ):
                         logger.warning(
@@ -600,13 +686,32 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                             completions_kwargs["stream"] = False
 
                         if tools:
-                            # Ensure tools have the required type field for Chat Completions API
+                            # Ensure tools have the required format for Chat Completions API
                             chat_tools: List[Dict[str, Any]] = []
                             for t in tools:
-                                t_copy = dict(t)
-                                t_copy.setdefault("type", "function")
-                                chat_tools.append(t_copy)
+                                if "function" in t:
+                                    # Already in correct format
+                                    chat_tools.append(t)
+                                else:
+                                    # Convert legacy format
+                                    tool_def = {
+                                        "type": "function",
+                                        "function": {
+                                            "name": t.get("name"),
+                                            "description": t.get("description"),
+                                            "parameters": t.get("parameters", {}),
+                                        },
+                                    }
+                                    chat_tools.append(tool_def)
                             completions_kwargs["tools"] = chat_tools
+
+                            # Add tool choice for Chat Completions API fallback
+                            if tool_choice is not None:
+                                completions_kwargs["tool_choice"] = tool_choice
+
+                            # Add parallel tool calls
+                            if not parallel_tool_calls:
+                                completions_kwargs["parallel_tool_calls"] = False
 
                         completions_kwargs = {
                             k: v for k, v in completions_kwargs.items() if v is not None
@@ -621,13 +726,17 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 # Log API response for debugging (only if debug logging enabled)
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug("=== AZURE RESPONSES API RESPONSE ===")
-                    if hasattr(response, 'usage') and response.usage:
+                    if hasattr(response, "usage") and response.usage:
                         logger.debug(f"Token Usage: {response.usage}")
-                    logger.debug(f"Response Status: {getattr(response, 'status', 'unknown')}")
+                    logger.debug(
+                        f"Response Status: {getattr(response, 'status', 'unknown')}"
+                    )
                     # Only log full response in debug mode
-                    if hasattr(response, 'output_text') and response.output_text:
-                        logger.debug(f"Response Text Length: {len(response.output_text)}")
-                    elif hasattr(response, 'output') and response.output:
+                    if hasattr(response, "output_text") and response.output_text:
+                        logger.debug(
+                            f"Response Text Length: {len(response.output_text)}"
+                        )
+                    elif hasattr(response, "output") and response.output:
                         logger.debug(f"Response Output Items: {len(response.output)}")
 
                 # Handle streaming response - check actual stream value used in request
@@ -676,13 +785,32 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     call_kwargs["max_tokens"] = active_max_tokens
 
             if tools:
-                # Ensure tools have the required type field for Chat Completions API
+                # Ensure tools have the required format for Chat Completions API
                 chat_tools: List[Dict[str, Any]] = []
                 for t in tools:
-                    t_copy = dict(t)
-                    t_copy.setdefault("type", "function")
-                    chat_tools.append(t_copy)
+                    if "function" in t:
+                        # Already in correct format
+                        chat_tools.append(t)
+                    else:
+                        # Convert legacy format to OpenAI standard
+                        tool_def = {
+                            "type": "function",
+                            "function": {
+                                "name": t.get("name"),
+                                "description": t.get("description"),
+                                "parameters": t.get("parameters", {}),
+                            },
+                        }
+                        chat_tools.append(tool_def)
                 call_kwargs["tools"] = chat_tools
+
+                # Add tool choice for Chat Completions API
+                if tool_choice is not None:
+                    call_kwargs["tool_choice"] = tool_choice
+
+                # Add parallel tool calls
+                if not parallel_tool_calls:
+                    call_kwargs["parallel_tool_calls"] = False
 
             # The same graceful-degradation logic we added for the Responses
             # branch above: when *tools* is rejected by an older model we
@@ -696,7 +824,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 logger.debug("=== CHAT COMPLETIONS API REQUEST ===")
                 logger.debug(f"Provider: {self.provider}, Model: {active_model}")
                 logger.debug(f"Temperature: {active_temperature}, Stream: {stream}")
-                logger.debug(f"Messages: {len(messages)} total, Tools: {tools is not None}")
+                logger.debug(
+                    f"Messages: {len(messages)} total, Tools: {tools is not None}"
+                )
                 # Only log full payload in debug mode
                 logger.debug(f"Request Payload: {json.dumps(clean_kwargs, indent=2)}")
 
@@ -709,11 +839,21 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     if hasattr(response, "choices") and response.choices:
                         choice = response.choices[0]
                         logger.debug(f"Finish Reason: {choice.finish_reason}")
-                        if hasattr(choice, 'message') and hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
-                            logger.debug(f"Tool Calls: {len(choice.message.tool_calls)} calls")
-                        if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
-                            logger.debug(f"Response Content Length: {len(choice.message.content or '')}")
-                    if hasattr(response, 'usage'):
+                        if (
+                            hasattr(choice, "message")
+                            and hasattr(choice.message, "tool_calls")
+                            and choice.message.tool_calls
+                        ):
+                            logger.debug(
+                                f"Tool Calls: {len(choice.message.tool_calls)} calls"
+                            )
+                        if hasattr(choice, "message") and hasattr(
+                            choice.message, "content"
+                        ):
+                            logger.debug(
+                                f"Response Content Length: {len(choice.message.content or '')}"
+                            )
+                    if hasattr(response, "usage"):
                         logger.debug(f"Token Usage: {response.usage}")
 
                 # Handle streaming response - check actual stream value used in request
@@ -721,7 +861,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 if actual_stream:
                     return self._stream_response(response)
                 return response
-            except Exception as exc:  # noqa: BLE001 – capture BadRequest / TypeError alike
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 – capture BadRequest / TypeError alike
                 # 1. The newest SDK raises *TypeError* when an unexpected
                 #    keyword parameter is supplied.
                 # 2. The HTTP backend (or older SDK versions) raise
@@ -734,7 +876,8 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
                 if has_tools and (
                     isinstance(exc, TypeError)
-                    or exc.__class__.__name__ in {  # guard against stub types
+                    or exc.__class__.__name__
+                    in {  # guard against stub types
                         "BadRequestError",
                         "InvalidRequestError",
                     }
@@ -742,7 +885,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     legacy_kwargs = dict(call_kwargs)
                     legacy_kwargs.pop("tools")
                     legacy_kwargs["functions"] = tools  # type: ignore[arg-type]
-                    legacy_kwargs = {k: v for k, v in legacy_kwargs.items() if v is not None}
+                    legacy_kwargs = {
+                        k: v for k, v in legacy_kwargs.items() if v is not None
+                    }
                     return await self.client.chat.completions.create(**legacy_kwargs)
 
                 # Re-raise unchanged – caller handles logging / user feedback.
@@ -759,7 +904,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
     async def _stream_response(self, response: Any) -> AsyncIterator[str]:
         """Convert OpenAI/Azure streaming response to string chunks."""
-        logger.debug(f"Starting stream response, use_responses_api: {self.use_responses_api}")
+        logger.debug(
+            f"Starting stream response, use_responses_api: {self.use_responses_api}"
+        )
         chunk_count = 0
 
         try:
@@ -778,8 +925,29 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     # ``ResponseOutputItem...`` are handled separately
                     # below.
 
+                    # Handle different OpenAI Responses API streaming events
+                    event_type = getattr(chunk, "type", None)
+
+                    if event_type == "response.output_item.added":
+                        # Function call started - log but don't yield
+                        item = getattr(chunk, "item", {})
+                        if getattr(item, "type", None) == "function_call":
+                            logger.debug(
+                                f"Function call started: {getattr(item, 'name', 'unknown')}"
+                            )
+
+                    elif event_type == "response.function_call_arguments.delta":
+                        # Function call arguments streaming - could yield progress indicator
+                        delta = getattr(chunk, "delta", "")
+                        logger.debug(f"Function arguments delta: {delta[:20]}...")
+                        # Note: We don't yield function call deltas as content
+
+                    elif event_type == "response.function_call_arguments.done":
+                        # Function call complete - log completion
+                        logger.debug("Function call arguments complete")
+
                     # ResponseTextDeltaEvent → incremental token fragment
-                    if hasattr(chunk, 'delta') and chunk.delta:
+                    elif hasattr(chunk, "delta") and chunk.delta:
                         logger.debug(
                             "Yielding delta content: %s...",
                             chunk.delta[:50],
@@ -788,9 +956,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
                     # ResponseOutputItemDoneEvent → list of output items –
                     # stream the *content* field when present.
-                    elif hasattr(chunk, 'output') and chunk.output:
+                    elif hasattr(chunk, "output") and chunk.output:
                         for item in chunk.output:
-                            if hasattr(item, 'content') and item.content:
+                            if hasattr(item, "content") and item.content:
                                 logger.debug(
                                     "Yielding content: %s...",
                                     item.content[:50],
@@ -809,11 +977,29 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     chunk_count += 1
                     logger.debug(f"Received chunk {chunk_count}: {type(chunk)}")
 
-                    if hasattr(chunk, 'choices') and chunk.choices:
+                    if hasattr(chunk, "choices") and chunk.choices:
                         choice = chunk.choices[0]
-                        if hasattr(choice, 'delta') and choice.delta:
-                            if hasattr(choice.delta, 'content') and choice.delta.content:
-                                logger.debug(f"Yielding choice content: {choice.delta.content[:50]}...")
+                        if hasattr(choice, "delta") and choice.delta:
+                            # Handle tool call streaming in Chat Completions
+                            if (
+                                hasattr(choice.delta, "tool_calls")
+                                and choice.delta.tool_calls
+                            ):
+                                # Function call streaming - log but don't yield as content
+                                for tool_call_delta in choice.delta.tool_calls:
+                                    logger.debug(
+                                        f"Tool call delta received for index {getattr(tool_call_delta, 'index', 0)}"
+                                    )
+                                # Note: Tool call content is handled separately by the processor
+
+                            # Regular content streaming
+                            elif (
+                                hasattr(choice.delta, "content")
+                                and choice.delta.content
+                            ):
+                                logger.debug(
+                                    f"Yielding choice content: {choice.delta.content[:50]}..."
+                                )
                                 yield choice.delta.content
         except Exception as e:
             logger.error(f"Error in _stream_response: {e}", exc_info=True)
@@ -843,6 +1029,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         This method is deprecated and will warn when used. Use chat() instead.
         """
         import warnings
+
         warnings.warn(
             "`respond()` is deprecated; use `chat()`", DeprecationWarning, stacklevel=2
         )
@@ -869,6 +1056,87 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 f"File: {path} lines {start}-{end}\n" + "-" * 20 + f"\n{content}\n"
             )
         return "\n\n".join(parts)
+
+    async def create_completion_with_functions(
+        self,
+        messages: Sequence[Dict[str, Any]],
+        functions: List[Dict[str, Any]],
+        function_call: str | Dict[str, str] | None = "auto",
+        **kwargs,
+    ) -> Any:
+        """Legacy function calling interface for backward compatibility.
+
+        Converts old-style function definitions to new tool format following
+        OpenAI Responses API documentation patterns.
+        """
+        import warnings
+
+        warnings.warn(
+            "create_completion_with_functions() is deprecated; use complete() with tools parameter",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        # Convert functions to tools format
+        tools = []
+        for func in functions:
+            tool = {
+                "type": "function",
+                "function": func,
+                "strict": True,  # Enable strict mode by default
+            }
+            tools.append(tool)
+
+        # Convert function_call to tool_choice
+        tool_choice = None
+        if function_call == "auto":
+            tool_choice = "auto"
+        elif function_call == "none":
+            tool_choice = "none"
+        elif isinstance(function_call, dict):
+            tool_choice = {"type": "function", "function": function_call}
+
+        return await self.complete(
+            messages=messages, tools=tools, tool_choice=tool_choice, **kwargs
+        )
+
+    @staticmethod
+    def validate_function_schema(func: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate and enhance function schema for OpenAI Responses API.
+
+        Follows OpenAI function calling best practices:
+        - Ensures additionalProperties is False for strict mode
+        - Validates required fields are present
+        - Adds strict mode if not specified
+        """
+        validated = dict(func)
+
+        # Ensure proper structure
+        if "function" in validated:
+            # Already in new format
+            function_def = validated["function"]
+        else:
+            # Legacy format - convert
+            function_def = validated
+            validated = {"type": "function", "function": function_def, "strict": True}
+
+        # Validate function definition
+        if "parameters" in function_def:
+            params = function_def["parameters"]
+            if isinstance(params, dict) and params.get("type") == "object":
+                # Ensure additionalProperties is False for strict mode
+                if "additionalProperties" not in params:
+                    params["additionalProperties"] = False
+
+                # For strict mode, all properties should be in required
+                if "properties" in params and "required" not in params:
+                    params["required"] = list(params["properties"].keys())
+
+        # Enable strict mode by default
+        if "strict" not in validated:
+            validated["strict"] = True
+
+        return validated
 
 
 # ---------------------------------------------------------------------------

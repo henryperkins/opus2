@@ -103,7 +103,9 @@ class ChatProcessor:
                     role="assistant",
                 )
             except Exception as broadcast_exc:
-                logger.error("Failed to send error message: %s", broadcast_exc, exc_info=True)
+                logger.error(
+                    "Failed to send error message: %s", broadcast_exc, exc_info=True
+                )
 
     # ------------------------------------------------------------------ #
     # INTERNAL HELPERS – top-level workflow
@@ -175,15 +177,16 @@ class ChatProcessor:
                 rag_metadata["search_query_used"] = message.content
                 # Use unified token counting for consistency
                 from app.utils.token_counter import count_tokens
+
                 rag_metadata["context_tokens_used"] = count_tokens(ctx_kb["context"])
 
                 # Calculate confidence score
                 confidence = self.confidence_service.calculate_rag_confidence(kb_hits)
                 rag_metadata["rag_confidence"] = confidence
-                rag_metadata[
-                    "rag_status"
-                ] = self.confidence_service.calculate_degradation_status(
-                    confidence, kb_hits
+                rag_metadata["rag_status"] = (
+                    self.confidence_service.calculate_degradation_status(
+                        confidence, kb_hits
+                    )
                 )
             else:
                 # No knowledge base hits - keep RAG as unused and standard status
@@ -204,7 +207,7 @@ class ChatProcessor:
             # Differentiate between *expected* configuration gaps
             # (knowledge base disabled) and *real* runtime errors. Only the
             # latter should surface as a RAG error in the UI.
-            # 
+            #
             # IMPORTANT: Only set error status for genuine failures that should
             # be shown to users. For configuration issues, keep rag_used=False
             # and rag_status="standard" to avoid confusing UI indicators.
@@ -338,13 +341,34 @@ class ChatProcessor:
 
         # ------------------------------------------------------------------ #
         # TOOL-CALL LOOP – start with non-stream request so we can inspect
+        # Apply o3/o4-mini guidance: don't induce additional reasoning for reasoning models
         # ------------------------------------------------------------------ #
+
+        # Check if we're using a reasoning model to adjust parameters
+        active_model = cfg.get("chat_model", llm_client.active_model)
+        is_reasoning_model = (
+            llm_client._is_reasoning_model(active_model)
+            if hasattr(llm_client, "_is_reasoning_model")
+            else False
+        )
+
+        # Apply tool limits based on OpenAI guidance (ideally <100 tools for best performance)
+        tools_to_use = (
+            llm_tools.TOOL_SCHEMAS[: settings.max_tools_per_request]
+            if hasattr(settings, "max_tools_per_request")
+            else llm_tools.TOOL_SCHEMAS
+        )
+
         response = await llm_client.complete(
             messages=messages,
             temperature=cfg.get("temperature"),
             stream=False,
-            tools=llm_tools.TOOL_SCHEMAS,
-            reasoning=settings.enable_reasoning,
+            tools=tools_to_use,
+            tool_choice="auto",  # Let model decide when to use tools
+            parallel_tool_calls=True,  # Enable parallel function calling
+            reasoning=(
+                settings.enable_reasoning if not is_reasoning_model else None
+            ),  # Don't force reasoning for reasoning models
             max_tokens=cfg.get("max_tokens"),
         )
 
@@ -360,7 +384,9 @@ class ChatProcessor:
                 messages=messages,
                 temperature=cfg.get("temperature"),
                 stream=False,
-                tools=llm_tools.TOOL_SCHEMAS,
+                tools=tools_to_use,
+                tool_choice="auto",
+                parallel_tool_calls=True,
                 max_tokens=cfg.get("max_tokens"),
             )
 
@@ -374,6 +400,7 @@ class ChatProcessor:
             messages=messages,
             temperature=cfg.get("temperature"),
             stream=True,
+            tools=None,  # No tools for final streaming call to avoid function calls
             max_tokens=cfg.get("max_tokens"),
         )
 
@@ -446,9 +473,16 @@ class ChatProcessor:
             max_tokens=avail_ctx // 2,
         )
 
+        # Apply o3/o4-mini prompting best practices: clear context and role definition
         system_prompt = (
-            "You are an AI coding assistant with deep knowledge of the code-base.\n"
-            "Explain, test and refactor code. Use file paths & line numbers."
+            "You are an AI coding assistant with deep knowledge of this codebase. "
+            "Your role is to help users understand, modify, and improve their code.\n\n"
+            "Key guidelines:\n"
+            "- Be proactive in using available tools to accomplish the user's goals\n"
+            "- Use file paths and line numbers when referencing code\n"
+            "- Don't stop at the first failure - try alternative approaches\n"
+            "- Provide clear, actionable explanations and suggestions\n"
+            "- When generating tests, ensure comprehensive coverage of edge cases"
         )
         messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
 
@@ -521,15 +555,19 @@ class ChatProcessor:
         # Handle citations from knowledge service (backend)
         citations: dict = ctx.get("citations", {})
         if citations:
-            lines.extend([
-                "## Knowledge Base Results",
-                "",
-            ])
-            
+            lines.extend(
+                [
+                    "## Knowledge Base Results",
+                    "",
+                ]
+            )
+
             for marker, meta in citations.items():
                 title = meta.get("title", "Document")
                 src = meta.get("source", "unknown")
-                content = meta.get("excerpt") or ctx["knowledge"].split(marker, 1)[1].strip()
+                content = (
+                    meta.get("excerpt") or ctx["knowledge"].split(marker, 1)[1].strip()
+                )
 
                 lines.append(f"### {marker} {title}")
                 lines.append(f"**Source:** {src}")
@@ -539,21 +577,25 @@ class ChatProcessor:
         # Handle direct knowledge content
         knowledge_content = ctx.get("knowledge", "")
         if knowledge_content and not citations:
-            lines.extend([
-                "## Relevant Information",
-                "",
-                knowledge_content,
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Relevant Information",
+                    "",
+                    knowledge_content,
+                    "",
+                ]
+            )
 
         # Handle structured context from frontend (user selections)
         frontend_context = ctx.get("frontend_context", [])
         if frontend_context:
-            lines.extend([
-                "## Selected Context Items",
-                "",
-            ])
-            
+            lines.extend(
+                [
+                    "## Selected Context Items",
+                    "",
+                ]
+            )
+
             for idx, item in enumerate(frontend_context, 1):
                 item_type = item.get("type", "document")
                 source = item.get("source", "Unknown source")
@@ -562,7 +604,7 @@ class ChatProcessor:
 
                 lines.append(f"### [{idx}] {item_type.title()} - {source}")
                 lines.append(f"**Relevance:** {relevance:.2f}")
-                
+
                 if item.get("language") and item_type == "code":
                     lines.append(f"**Language:** {item['language']}")
                     lines.append(f"```{item['language']}")
@@ -595,24 +637,45 @@ class ChatProcessor:
                     llm_tools.call_tool(name, args, self.db),
                     timeout=getattr(settings, "tool_timeout", 30),
                 )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Tool '%s' timed out after %s seconds",
+                    name,
+                    getattr(settings, "tool_timeout", 30),
+                )
+                result = {
+                    "success": False,
+                    "error": f"Tool execution timed out after {getattr(settings, 'tool_timeout', 30)} seconds",
+                    "error_type": "timeout",
+                }
             except Exception as exc:
                 logger.error("Tool '%s' failed: %s", name, exc, exc_info=True)
-                result = {"error": str(exc)}
+                result = {
+                    "success": False,
+                    "error": str(exc),
+                    "error_type": "execution_exception",
+                }
+
+            # Format result for API following OpenAI documentation
+            formatted_output = llm_tools.format_tool_result_for_api(result)
 
             if getattr(llm_client, "use_responses_api", False):
+                # Azure Responses API format for function call results
                 deltas.append(
                     {
                         "type": "function_call_output",
                         "call_id": call.get("id", "unknown"),
-                        "output": json.dumps(result),
+                        "output": formatted_output,
                     },
                 )
             else:
+                # Standard Chat Completions API format for tool results
                 deltas.append(
                     {
                         "role": "tool",
+                        "tool_call_id": call.get("id", "unknown"),
                         "name": name,
-                        "content": json.dumps(result),
+                        "content": formatted_output,
                     },
                 )
 
@@ -661,8 +724,10 @@ class ChatProcessor:
                     response_id = getattr(response, "id", "unknown")
                     status = getattr(response, "status", "unknown")
                     created_at = getattr(response, "created_at", "unknown")
-                    logger.debug(f"Responses API - ID: {response_id}, Status: {status}, Created: {created_at}")
-                    
+                    logger.debug(
+                        f"Responses API - ID: {response_id}, Status: {status}, Created: {created_at}"
+                    )
+
                     if hasattr(response, "usage"):
                         logger.debug(f"Token usage: {response.usage}")
 
@@ -704,8 +769,10 @@ class ChatProcessor:
     @staticmethod
     def _has_tool_calls(response: Any) -> bool:
         try:
-            if (getattr(response, "choices", None) and
-                    getattr(response.choices[0], "finish_reason", None) == "tool_calls"):
+            if (
+                getattr(response, "choices", None)
+                and getattr(response.choices[0], "finish_reason", None) == "tool_calls"
+            ):
                 return True
 
             if hasattr(response, "output") and response.output:
@@ -722,15 +789,31 @@ class ChatProcessor:
         calls: list[Dict[str, Any]] = []
 
         try:
+            # Chat Completions API format
             if getattr(response, "choices", None):
-                for call in getattr(response.choices[0].message, "tool_calls", []) or []:
-                    calls.append(
-                        {
-                            "id": getattr(call, "id", "unknown"),
-                            "name": getattr(call, "name", "unknown"),
-                            "arguments": getattr(call, "arguments", "{}"),
-                        },
-                    )
+                choice = response.choices[0]
+                if hasattr(choice, "message") and hasattr(choice.message, "tool_calls"):
+                    for call in choice.message.tool_calls or []:
+                        # Extract function details from nested structure
+                        function_name = (
+                            getattr(call.function, "name", "unknown")
+                            if hasattr(call, "function")
+                            else getattr(call, "name", "unknown")
+                        )
+                        function_args = (
+                            getattr(call.function, "arguments", "{}")
+                            if hasattr(call, "function")
+                            else getattr(call, "arguments", "{}")
+                        )
+
+                        calls.append(
+                            {
+                                "id": getattr(call, "id", "unknown"),
+                                "name": function_name,
+                                "arguments": function_args,
+                            },
+                        )
+            # Azure Responses API format
             elif hasattr(response, "output") and response.output:
                 for item in response.output:
                     if getattr(item, "type", None) == "function_call":
@@ -771,9 +854,9 @@ class ChatProcessor:
                 ),
                 1.0,
             )
-            completeness = min(
-                (len(response_content) / 500) * 0.7, 0.7
-            ) + (0.3 if has_structure else 0)
+            completeness = min((len(response_content) / 500) * 0.7, 0.7) + (
+                0.3 if has_structure else 0
+            )
 
             payload = {
                 "message_id": message_id,

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { GitBranch, Globe, Lock, RefreshCw, CheckCircle, AlertCircle, Loader, ExternalLink } from 'lucide-react';
 import PropTypes from 'prop-types';
-import { api } from '../../utils/api'; 
+import api from '../../api/client'; 
 import { useWebSocketChannel } from '../../hooks/useWebSocketChannel';
 import CredentialsModal from './CredentialsModal';
 
@@ -30,6 +30,10 @@ export default function RepositoryConnect({
   const [validationError, setValidationError] = useState('');
   const [progress, setProgress] = useState({ phase: '', percent: 0 });
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentJobId, setCurrentJobId] = useState(null);
+  const [privateRepoToken, setPrivateRepoToken] = useState('');
+  const [lastError, setLastError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   const validateGitUrl = useCallback((url) => {
     const gitUrlPattern = /^(https?:\/\/|ssh:\/\/git@)[\w\.-]+[:\/][\w\.-]+\/[\w\.-]+\.git?$/i;
@@ -38,7 +42,7 @@ export default function RepositoryConnect({
     if (!url) return 'Repository URL is required';
     if (/\s/.test(url)) return 'URL must not contain whitespace';
     if (!gitUrlPattern.test(url) && !githubPattern.test(url)) {
-      return 'Invalid Git repository URL format. Use HTTPS or git@gihub.com:user/repo.git format.';
+      return 'Invalid Git repository URL format. Use HTTPS or git@github.com:user/repo.git format.';
     }
     return '';
   }, []);
@@ -64,27 +68,68 @@ export default function RepositoryConnect({
     }));
   }, []);
 
+  const fetchRepositoryInfo = useCallback(async () => {
+    try {
+      const response = await api.get(`/import/git/repository/${projectId}`);
+      if (response.data.connected) {
+        const repoData = response.data.repo_info;
+        setRepoInfo({
+          id: `project_${projectId}`,
+          repo_name: repoData.repo_url.split('/').pop().replace('.git', ''),
+          repo_url: repoData.repo_url,
+          url: repoData.repo_url,
+          branch: repoData.branch,
+          commit_sha: repoData.commit_sha,
+          total_files: response.data.stats.total_files,
+          last_sync: repoData.last_sync,
+          status: response.data.status
+        });
+        setConnected(true);
+        setFormData(prev => ({ 
+          ...prev, 
+          repo_url: repoData.repo_url,
+          branch: repoData.branch 
+        }));
+        return response.data;
+      }
+    } catch (error) {
+      console.error('Failed to fetch repository info:', error);
+    }
+    return null;
+  }, [projectId]);
+
   const handleWebSocketMessage = useCallback((event) => {
-    if (event.type === 'import' && event.job_id) {
+    if (event.type === 'import' && event.job_id === currentJobId) {
       setProgress({ phase: event.phase, percent: event.percent });
       if (event.phase === 'completed') {
         setLoading(false);
-        setConnected(true);
-        // You might want to fetch final repo info here
+        fetchRepositoryInfo().then((data) => {
+          if (data) {
+            onConnectSuccess?.(data);
+          }
+        });
       } else if (event.phase === 'failed') {
         setLoading(false);
+        setCurrentJobId(null);
+        setLastError(event.message || 'Import failed');
         onError?.(event.message || 'Import failed');
       }
     }
-  }, [onError]);
+  }, [currentJobId, onError, fetchRepositoryInfo, onConnectSuccess]);
 
   useWebSocketChannel('import', handleWebSocketMessage);
+
+  // Check for existing repository connection on mount
+  useEffect(() => {
+    fetchRepositoryInfo();
+  }, [fetchRepositoryInfo]);
 
   const connectRepository = useCallback(async (token = '') => {
     if (loading || validationError) return;
 
     setLoading(true);
     setProgress({ phase: 'validating', percent: 0 });
+    setLastError(null);
 
     try {
       const headers = token ? { 'X-Git-Token': token } : {};
@@ -106,20 +151,26 @@ export default function RepositoryConnect({
         exclude_patterns: formData.exclude_patterns,
       }, { headers });
 
-      setRepoInfo({
+      setCurrentJobId(importResponse.data.job_id);
+      
+      const newRepoInfo = {
         ...validationResponse.data,
         id: `job_${importResponse.data.job_id}`,
         status: 'connecting',
         last_sync: new Date().toISOString(),
-      });
-      onConnectSuccess?.(repoInfo);
+        repo_url: formData.repo_url,
+        branch: validationResponse.data.branch
+      };
+      setRepoInfo(newRepoInfo);
 
     } catch (error) {
       const errorMessage = error.response?.data?.detail || error.message || 'An unknown error occurred.';
       console.error('Repository connection error:', errorMessage);
       onError?.(errorMessage);
       setValidationError(errorMessage);
+      setLastError(errorMessage);
       setLoading(false);
+      setRetryCount(prev => prev + 1);
     }
   }, [formData, loading, validationError, projectId, onConnectSuccess, onError, repoInfo]);
 
@@ -133,14 +184,27 @@ export default function RepositoryConnect({
 
   const handleModalSubmit = (token) => {
     setFormData(prev => ({ ...prev, token }));
+    setPrivateRepoToken(token);
     connectRepository(token);
   };
+
+  const retryLastOperation = useCallback(() => {
+    if (formData.repo_type === 'private' && privateRepoToken) {
+      connectRepository(privateRepoToken);
+    } else {
+      connectRepository();
+    }
+  }, [formData.repo_type, privateRepoToken, connectRepository]);
 
   const disconnectRepository = useCallback(() => {
     setConnected(false);
     setRepoInfo(null);
     setProgress({ phase: '', percent: 0 });
     setFormData(prev => ({ ...prev, repo_url: '', token: '' }));
+    setPrivateRepoToken('');
+    setCurrentJobId(null);
+    setLastError(null);
+    setRetryCount(0);
   }, []);
 
   const syncRepository = useCallback(async () => {
@@ -150,6 +214,8 @@ export default function RepositoryConnect({
     setProgress({ phase: 'syncing', percent: 0 });
 
     try {
+      const headers = privateRepoToken ? { 'X-Git-Token': privateRepoToken } : {};
+      
       // Start a new import job for the same repository
       const importResponse = await api.post('/import/git', {
         project_id: projectId,
@@ -157,8 +223,10 @@ export default function RepositoryConnect({
         branch: repoInfo.branch || formData.branch,
         include_patterns: formData.include_patterns,
         exclude_patterns: formData.exclude_patterns,
-      });
+      }, { headers });
 
+      setCurrentJobId(importResponse.data.job_id);
+      
       // Update repo info with new job ID
       setRepoInfo(prev => ({
         ...prev,
@@ -254,6 +322,29 @@ export default function RepositoryConnect({
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleModalSubmit}
       />
+      
+      {/* Error Display with Retry Option */}
+      {lastError && !loading && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <div className="flex items-start space-x-2">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm text-red-800 font-medium">Import Failed</p>
+              <p className="text-xs text-red-700 mt-1">{lastError}</p>
+              {retryCount > 0 && (
+                <p className="text-xs text-red-600 mt-1">Retry attempt {retryCount}</p>
+              )}
+            </div>
+            <button
+              onClick={retryLastOperation}
+              className="text-xs text-red-700 hover:text-red-900 underline"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+      
       {/* Repository URL Input */}
       <div>
         <label htmlFor="repo_url" className="block text-sm font-medium text-gray-700 mb-1">

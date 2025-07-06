@@ -11,13 +11,11 @@ from typing import Optional, ClassVar
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict, Field, field_validator
 
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
-    model_config = ConfigDict(
-        extra="allow",
-        env_file=".env",
-        case_sensitive=False
-    )
+
+    model_config = ConfigDict(extra="allow", env_file=".env", case_sensitive=False)
 
     # Application
     app_name: str = "AI Productivity App"
@@ -33,7 +31,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------
     vector_store_type: str = Field(
         default="pgvector",
-        description="Vector store backend. Supported: 'pgvector', 'qdrant'"
+        description="Vector store backend. Supported: 'pgvector', 'qdrant'",
     )
 
     @field_validator("vector_store_type")
@@ -56,28 +54,60 @@ class Settings(BaseSettings):
         return v_lower
 
     # PostgreSQL vector settings
-    postgres_vector_table: str = Field(default="embeddings", description="Table name for pgvector embeddings")
-    embedding_vector_size: int = Field(default=1536, description="Vector size for embeddings")
+    postgres_vector_table: str = Field(
+        default="embeddings", description="Table name for pgvector embeddings"
+    )
+    embedding_vector_size: int = Field(
+        default=1536, description="Vector size for embeddings"
+    )
 
     # Vector search settings
-    vector_search_limit: int = Field(default=10, description="Default vector search result limit")
-    vector_score_threshold: float = Field(default=0.7, description="Minimum similarity score threshold")
+    vector_search_limit: int = Field(
+        default=10, description="Default vector search result limit"
+    )
+    vector_score_threshold: float = Field(
+        default=0.7, description="Minimum similarity score threshold"
+    )
 
     # Embedding processing settings
-    embedding_model_token_limit: int = Field(default=8000, description="Token limit for embedding model")
-    embedding_safety_margin: int = Field(default=200, description="Safety margin for token calculation")
-    embedding_max_batch_rows: int = Field(default=100, description="Maximum rows to fetch per batch")
-    embedding_max_retries: int = Field(default=5, description="Maximum retries for embedding operations")
-    embedding_max_concurrency: int = Field(default=1, description="Maximum concurrent embedding requests")
+    embedding_model_token_limit: int = Field(
+        default=8000, description="Token limit for embedding model"
+    )
+    embedding_safety_margin: int = Field(
+        default=200, description="Safety margin for token calculation"
+    )
+    embedding_max_batch_rows: int = Field(
+        default=100, description="Maximum rows to fetch per batch"
+    )
+    embedding_max_retries: int = Field(
+        default=5, description="Maximum retries for embedding operations"
+    )
+    embedding_max_concurrency: int = Field(
+        default=1, description="Maximum concurrent embedding requests"
+    )
 
     # Deprecated settings - kept for backward compatibility during migration
-    qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant server URL (deprecated)")
-    qdrant_host: str = Field(default="localhost", description="Qdrant server host (deprecated)")
-    qdrant_port: int = Field(default=6333, description="Qdrant server port (deprecated)")
-    qdrant_api_key: Optional[str] = Field(default=None, description="Qdrant API key (deprecated)")
-    qdrant_vector_size: int = Field(default=1536, description="Vector size for embeddings (deprecated)")
-    qdrant_timeout: int = Field(default=30, description="Qdrant client timeout in seconds (deprecated)")
-    qdrant_max_workers: int = Field(default=16, description="Threadpool size for Qdrant operations (deprecated)")
+    qdrant_url: str = Field(
+        default="http://localhost:6333", description="Qdrant server URL (deprecated)"
+    )
+    qdrant_host: str = Field(
+        default="localhost", description="Qdrant server host (deprecated)"
+    )
+    qdrant_port: int = Field(
+        default=6333, description="Qdrant server port (deprecated)"
+    )
+    qdrant_api_key: Optional[str] = Field(
+        default=None, description="Qdrant API key (deprecated)"
+    )
+    qdrant_vector_size: int = Field(
+        default=1536, description="Vector size for embeddings (deprecated)"
+    )
+    qdrant_timeout: int = Field(
+        default=30, description="Qdrant client timeout in seconds (deprecated)"
+    )
+    qdrant_max_workers: int = Field(
+        default=16, description="Threadpool size for Qdrant operations (deprecated)"
+    )
 
     # -------------------------------------------------------------------
     # Database
@@ -111,15 +141,13 @@ class Settings(BaseSettings):
 
     # Build absolute path <repo_root>/ai-productivity-app/data/app.db (SQLite fallback)
     _DEFAULT_DB_PATH: ClassVar[Path] = (
-        Path(__file__).resolve().parents[2]  # …/ai-productivity-app
-        / "data"
-        / "app.db"
+        Path(__file__).resolve().parents[2] / "data" / "app.db"  # …/ai-productivity-app
     )
 
     # Production database connection (Neon PostgreSQL)
     database_url: str = Field(
         default="postgresql://neondb_owner:npg_5odQclNUW6Pj@ep-hidden-salad-a8jlsv5j-pooler.eastus2.azure.neon.tech/neondb?sslmode=require&channel_binding=require",
-        description="Database connection URL"
+        description="Database connection URL",
     )
     database_echo: bool = False
 
@@ -171,7 +199,9 @@ class Settings(BaseSettings):
     csrf_secret: Optional[str] = None
 
     # CORS
-    cors_origins: str = "http://localhost:5173,http://localhost:3000,https://lakefrontdigital.io"
+    cors_origins: str = (
+        "http://localhost:5173,http://localhost:3000,https://lakefrontdigital.io"
+    )
 
     # API Keys (for future phases)
     openai_api_key: Optional[str] = None
@@ -209,8 +239,10 @@ class Settings(BaseSettings):
     # via the ``LLM_MODEL`` environment variable.  The old *llm_model* field
     # remains for backwards-compatibility but is deprecated and should not be
     # referenced by new code.
+    #
+    # Updated to use gpt-4o which is available in Azure Responses API
 
-    llm_default_model: str = Field("gpt-4.1", alias="LLM_MODEL")
+    llm_default_model: str = Field("gpt-4o", alias="LLM_MODEL")
 
     # Deprecated – kept to avoid breaking existing environment variables /
     # database fixtures.  New code should rely on *llm_default_model*.
@@ -218,12 +250,21 @@ class Settings(BaseSettings):
     max_context_tokens: int = 200000
 
     # --- Reasoning enrichment ---------------------------------------------
-    # Enable Azure Responses API *reasoning enrichment* (self_check / chain of
-    # thought).  When turned on the backend requests a *summary* of the model
-    # reasoning and forwards it to the frontend over WebSocket so advanced
-    # users can inspect why the model arrived at an answer.
+    # Enable Azure Responses API *reasoning enrichment* for supported models.
+    # Per o3/o4-mini documentation: reasoning models produce internal chain of thought
+    # automatically - don't try to induce additional reasoning.
+    # This setting applies to non-reasoning models when using Responses API.
 
     enable_reasoning: bool = False
+
+    # Tool calling optimization settings (based on o3/o4-mini guidance)
+    max_tools_per_request: int = Field(
+        default=10,
+        description="Maximum number of tools to include per request (ideally <100 for best performance)",
+    )
+    tool_timeout: int = Field(
+        default=30, description="Timeout for individual tool execution in seconds"
+    )
 
     # WebSocket settings
     websocket_ping_interval: int = 30
@@ -238,28 +279,28 @@ class Settings(BaseSettings):
     disable_rate_limiter: bool = Field(
         default=False,
         alias="DISABLE_RATE_LIMITER",
-        description="Disable Redis rate-limiter and fall back to in-memory"
+        description="Disable Redis rate-limiter and fall back to in-memory",
     )
 
     # Toggle correlation-ID middleware (can be turned off for benchmarks)
     disable_correlation_id: bool = Field(
         default=False,
         alias="DISABLE_CORRELATION_ID",
-        description="Disable request correlation IDs middleware"
+        description="Disable request correlation IDs middleware",
     )
 
     # Skip external OpenAI health-check in CI (no network access)
     skip_openai_health: bool = Field(
         default=True,
         alias="SKIP_OPENAI_HEALTH",
-        description="Skip OpenAI connectivity check in readiness probe"
+        description="Skip OpenAI connectivity check in readiness probe",
     )
 
     # WebSocket task tracking – can be disabled to reduce overhead
     ws_task_tracking: bool = Field(
         default=True,
         alias="WS_TASK_TRACKING",
-        description="Enable WebSocket per-connection task tracking"
+        description="Enable WebSocket per-connection task tracking",
     )
 
     # URL where the user-facing frontend is served.  Used to build absolute
@@ -269,25 +310,22 @@ class Settings(BaseSettings):
 
     # Upload configuration
     upload_root: str = Field(
-        default="./data/uploads",
-        description="Root directory for file uploads"
+        default="./data/uploads", description="Root directory for file uploads"
     )
     upload_path_validation: str = Field(
-        default="strict",
-        description="Path validation mode: strict, warn, or disabled"
+        default="strict", description="Path validation mode: strict, warn, or disabled"
     )
     max_upload_size: int = Field(
         default=10 * 1024 * 1024,  # 10MB
-        description="Maximum file upload size in bytes"
+        description="Maximum file upload size in bytes",
     )
 
     # Rendering service configuration
     render_service_url: Optional[str] = Field(
         default=None,
         alias="RENDER_SERVICE_URL",
-        description="External rendering service endpoint URL"
+        description="External rendering service endpoint URL",
     )
-
 
     @property
     def effective_secret_key(self) -> str:
@@ -309,6 +347,7 @@ class Settings(BaseSettings):
         # ------------------------------------------------------------------
         try:
             import json  # local import to avoid unnecessary global dependency
+
             parsed = json.loads(value)
             if isinstance(parsed, list):
                 return [str(origin).strip() for origin in parsed if str(origin).strip()]
