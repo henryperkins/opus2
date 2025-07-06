@@ -35,6 +35,7 @@ from .chat import ChatSession, ChatMessage
 from .timeline import TimelineEvent
 from .config import RuntimeConfig, ConfigHistory
 from .prompt import PromptTemplate
+from .feedback import UserFeedback, FeedbackSummary
 
 __all__ = [
     # infrastructure
@@ -61,6 +62,9 @@ __all__ = [
     "RuntimeConfig",
     "ConfigHistory",
     "PromptTemplate",
+    # feedback
+    "UserFeedback",
+    "FeedbackSummary",
 ]
 
 # --------------------------------------------------------------------------- #

@@ -12,6 +12,7 @@ re-using the helper regex logic from the earlier version.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.code import CodeDocument, CodeEmbedding
 from app.models.chat import ChatMessage
+from app.services.content_filter import content_filter
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +77,15 @@ class ContextBuilder:
                 seen.add(key)
                 uniq.append(ch)
 
-        ctx["chunks"] = uniq
+        # Apply final content filtering to all chunks
+        filtered_chunks, final_warnings = content_filter.filter_and_validate_chunks(uniq)
+        
+        if final_warnings:
+            logger.info(f"Final content filtering warnings: {'; '.join(final_warnings)}")
+            # Store warnings in context for potential user notification
+            ctx["content_filter_warnings"] = final_warnings
+            
+        ctx["chunks"] = filtered_chunks
         return ctx
 
     # ------------------------------------------------------------------ #
@@ -161,7 +171,15 @@ class ContextBuilder:
             )
 
         chunks = (await self.db.execute(c_stmt)).scalars().all()
-        return [self._format_chunk(ch) for ch in chunks]
+        formatted_chunks = [self._format_chunk(ch) for ch in chunks]
+        
+        # Filter chunks for sensitive content
+        filtered_chunks, warnings = content_filter.filter_and_validate_chunks(formatted_chunks)
+        
+        if warnings:
+            logger.info(f"Content filtering warnings for file context: {'; '.join(warnings)}")
+            
+        return filtered_chunks
 
     async def search_symbol(self, project_id: int, symbol: str) -> List[Dict[str, Any]]:
         stmt = (
@@ -185,7 +203,15 @@ class ContextBuilder:
             result = await self.db.execute(stmt)
             chunks = result.scalars().all()
 
-        return [self._format_chunk(ch) for ch in chunks]
+        formatted_chunks = [self._format_chunk(ch) for ch in chunks]
+        
+        # Filter chunks for sensitive content
+        filtered_chunks, warnings = content_filter.filter_and_validate_chunks(formatted_chunks)
+        
+        if warnings:
+            logger.info(f"Content filtering warnings for symbol search: {'; '.join(warnings)}")
+            
+        return filtered_chunks
 
     async def build_conversation_context(
         self,

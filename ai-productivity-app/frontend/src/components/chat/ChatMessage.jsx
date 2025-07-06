@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Copy, Download, Play, Search, MoreHorizontal, Clock } from 'lucide-react';
 import PropTypes from 'prop-types';
+import MessageFeedback from './MessageFeedback';
+import ConfidenceWarning from './ConfidenceWarning';
 
 // Simple streaming text component
 function StreamingText({ content }) {
@@ -69,7 +71,8 @@ export default function ChatMessage({
   isStreaming = false,
   onAction,
   onMessageSelect,
-  showActions = true
+  showActions = true,
+  onFeedbackSubmit
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const isUser = message.role === 'user';
@@ -152,6 +155,14 @@ export default function ChatMessage({
           )}
         </div>
 
+        {/* Confidence Warnings for assistant messages */}
+        {isAssistant && !isStreaming && message.metadata?.confidence_warnings && (
+          <ConfidenceWarning 
+            warnings={message.metadata.confidence_warnings}
+            ragMetadata={message.metadata.rag_metadata}
+          />
+        )}
+
         {/* Actions - only show for assistant messages and if enabled */}
         {showActions && isAssistant && !isStreaming && (
           <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -233,6 +244,16 @@ export default function ChatMessage({
                 )}
               </div>
             </div>
+
+            {/* Message Feedback */}
+            {onFeedbackSubmit && (
+              <MessageFeedback
+                messageId={message.id}
+                onFeedbackSubmit={onFeedbackSubmit}
+                initialFeedback={message.feedback}
+                className="mt-2"
+              />
+            )}
           </div>
         )}
       </div>
@@ -247,12 +268,14 @@ ChatMessage.propTypes = {
     content: PropTypes.string.isRequired,
     created_at: PropTypes.string,
     user_id: PropTypes.string,
-    metadata: PropTypes.object
+    metadata: PropTypes.object,
+    feedback: PropTypes.object
   }).isRequired,
   isStreaming: PropTypes.bool,
   onAction: PropTypes.func,
   onMessageSelect: PropTypes.func,
-  showActions: PropTypes.bool
+  showActions: PropTypes.bool,
+  onFeedbackSubmit: PropTypes.func
 };
 
 StreamingText.propTypes = {

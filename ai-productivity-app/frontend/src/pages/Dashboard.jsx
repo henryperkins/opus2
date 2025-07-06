@@ -57,8 +57,20 @@ function Dashboard() {
     };
 
     checkHealth();
-    const interval = setInterval(checkHealth, 30000);
-    return () => clearInterval(interval);
+    // Use requestIdleCallback for non-blocking health checks
+    const scheduleNextCheck = () => {
+      setTimeout(() => {
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(checkHealth, { timeout: 5000 });
+        } else {
+          checkHealth();
+        }
+        scheduleNextCheck();
+      }, 30000);
+    };
+    
+    scheduleNextCheck();
+    return () => {}; // No interval to clear
   }, []);
 
   return (

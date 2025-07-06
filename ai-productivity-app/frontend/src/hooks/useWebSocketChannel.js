@@ -279,13 +279,27 @@ export function useWebSocketChannel({
 
             // Poll health-check before attempting to reconnect so we don't
             // spam connection attempts during long deploys.
+            let pollInterval = 2000; // Start with 2s
             const poll = setInterval(async () => {
               const healthy = await checkBackendHealth();
               if (healthy) {
                 clearInterval(poll);
                 connect();
+              } else {
+                // Increase polling interval to reduce load during extended outages
+                pollInterval = Math.min(pollInterval * 1.2, 10000); // Max 10s
+                clearInterval(poll);
+                setTimeout(() => {
+                  const newPoll = setInterval(async () => {
+                    const isHealthy = await checkBackendHealth();
+                    if (isHealthy) {
+                      clearInterval(newPoll);
+                      connect();
+                    }
+                  }, pollInterval);
+                }, pollInterval);
               }
-            }, 2000);
+            }, pollInterval);
             return; // Exit early – will reconnect from poll
           }
 

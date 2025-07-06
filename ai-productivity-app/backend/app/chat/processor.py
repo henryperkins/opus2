@@ -408,13 +408,18 @@ class ChatProcessor:
         full_response = await handler.stream_response(stream, ai_msg.id)
 
         # ------------------------------------------------------------------ #
+        # Add confidence warnings if needed
+        # ------------------------------------------------------------------ #
+        enhanced_response = await self._add_confidence_warnings(full_response, context)
+        
+        # ------------------------------------------------------------------ #
         # Persist and broadcast
         # ------------------------------------------------------------------ #
         # Update the message using the service to avoid transaction issues
         await self.chat_service.update_message_content(
             message_id=ai_msg.id,
-            content=full_response,
-            code_snippets=self._extract_code_snippets(full_response),
+            content=enhanced_response,
+            code_snippets=self._extract_code_snippets(enhanced_response),
             broadcast=True,  # This will be the only broadcast for this message
         )
 
@@ -425,7 +430,96 @@ class ChatProcessor:
             ),
         )
 
-        return full_response
+        return enhanced_response
+
+    async def _add_confidence_warnings(
+        self, response: str, context: Dict[str, Any]
+    ) -> str:
+        """Add confidence warnings to response if needed."""
+        rag_metadata = context.get("rag_metadata", {})
+        
+        if not rag_metadata.get("rag_used", False):
+            # No RAG was used - add a general disclaimer for knowledge-based questions
+            if self._seems_like_knowledge_question(response):
+                warning = (
+                    "\n\n*Note: This response is based on general knowledge rather than "
+                    "specific documentation from your codebase. For the most accurate "
+                    "and up-to-date information, please check your project documentation.*"
+                )
+                return response + warning
+            return response
+            
+        rag_confidence = rag_metadata.get("rag_confidence")
+        rag_status = rag_metadata.get("rag_status", "standard")
+        knowledge_sources_count = rag_metadata.get("knowledge_sources_count", 0)
+        
+        warnings = []
+        
+        # Low confidence warnings
+        if rag_confidence is not None:
+            if rag_confidence < 0.3:
+                warnings.append(
+                    "⚠️ **Low Confidence**: This response is based on limited or potentially "
+                    "irrelevant sources from your codebase."
+                )
+            elif rag_confidence < 0.6:
+                warnings.append(
+                    "⚠️ **Moderate Confidence**: This response may not be fully comprehensive. "
+                    "Consider checking additional sources."
+                )
+                
+        # Status-based warnings
+        if rag_status == "poor":
+            warnings.append(
+                "⚠️ **Limited Sources**: Very few relevant sources were found in your codebase."
+            )
+        elif rag_status == "degraded":
+            warnings.append(
+                "⚠️ **Quality Notice**: The available sources may not be the most authoritative."
+            )
+        elif rag_status == "error":
+            warnings.append(
+                "⚠️ **Search Error**: There was an issue retrieving information from your codebase."
+            )
+            
+        # Source count warnings
+        if knowledge_sources_count == 0:
+            warnings.append(
+                "⚠️ **No Sources**: This response is based on general knowledge only."
+            )
+        elif knowledge_sources_count == 1:
+            warnings.append(
+                "ℹ️ **Single Source**: This response is based on only one source from your codebase."
+            )
+            
+        # Content filtering warnings
+        if context.get("content_filter_warnings"):
+            warnings.append(
+                "ℹ️ **Content Filtered**: Some sensitive content was filtered from the sources."
+            )
+            
+        if warnings:
+            warning_text = "\n\n---\n\n" + "\n\n".join(warnings)
+            return response + warning_text
+            
+        return response
+        
+    def _seems_like_knowledge_question(self, response: str) -> bool:
+        """Heuristic to detect if a question seems like it needs specific knowledge."""
+        # Check if response contains general disclaimers or seems to lack specific details
+        general_phrases = [
+            "generally", "typically", "usually", "in most cases", 
+            "it depends", "you should", "you might want to",
+            "without seeing", "without knowing", "would need to see"
+        ]
+        
+        response_lower = response.lower()
+        
+        # Count general phrases
+        general_count = sum(1 for phrase in general_phrases if phrase in response_lower)
+        
+        # If response is short and has many general phrases, it's probably general knowledge
+        return len(response) < 500 and general_count >= 2
 
     # ------------------------------------------------------------------ #
     # INTERNAL HELPERS – smaller pieces

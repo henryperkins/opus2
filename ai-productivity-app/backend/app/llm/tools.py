@@ -139,6 +139,92 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         },
         "strict": True,
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_commits",
+            "description": "Search commit messages and history for information about code changes, bug fixes, or feature implementations.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search term for commit messages (e.g., 'fix authentication', 'add feature')",
+                    },
+                    "project_id": {
+                        "type": "integer",
+                        "description": "Current project identifier",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of commits to return",
+                        "default": 10,
+                        "minimum": 1,
+                        "maximum": 50,
+                    },
+                },
+                "required": ["query", "project_id"],
+                "additionalProperties": False,
+            },
+        },
+        "strict": True,
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_blame",
+            "description": "Get blame information for a specific file and line to see who last modified code and when.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to blame",
+                    },
+                    "line_number": {
+                        "type": "integer",
+                        "description": "Specific line number to get blame for",
+                    },
+                    "project_id": {
+                        "type": "integer",
+                        "description": "Current project identifier",
+                    },
+                },
+                "required": ["file_path", "project_id"],
+                "additionalProperties": False,
+            },
+        },
+        "strict": True,
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_code_quality",
+            "description": "Run static analysis on code to identify potential issues, style violations, or improvements.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to file or directory to analyze",
+                    },
+                    "project_id": {
+                        "type": "integer",
+                        "description": "Current project identifier",
+                    },
+                    "analysis_type": {
+                        "type": "string",
+                        "description": "Type of analysis to run",
+                        "enum": ["linting", "security", "complexity", "all"],
+                        "default": "linting"
+                    },
+                },
+                "required": ["file_path", "project_id"],
+                "additionalProperties": False,
+            },
+        },
+        "strict": True,
+    },
 ]
 
 
@@ -300,11 +386,147 @@ async def _tool_similar_code(
     return {"similar": out}
 
 
+async def _tool_search_commits(
+    args: Dict[str, Any], db: Session | AsyncSession
+) -> Dict[str, Any]:
+    """Search commit history for a project."""
+    from app.models.project import Project
+    from app.services.git_history_searcher import GitHistorySearcher
+    
+    query: str = args["query"]
+    project_id: int = int(args["project_id"])
+    limit: int = int(args.get("limit", 10))
+    
+    try:
+        # Get project to find repository path
+        if isinstance(db, AsyncSession):
+            from sqlalchemy import select
+            project_stmt = select(Project).where(Project.id == project_id)
+            result = await db.execute(project_stmt)
+            project = result.scalar_one_or_none()
+        else:
+            project = db.query(Project).filter_by(id=project_id).first()
+            
+        if not project:
+            return {"error": "Project not found"}
+            
+        # Construct repository path - this would typically be stored in project metadata
+        repo_path = f"repos/project_{project_id}"
+        
+        git_searcher = GitHistorySearcher(repo_path)
+        commits = git_searcher.search_commits(query, limit)
+        
+        return {"commits": commits}
+        
+    except Exception as e:
+        logger.error(f"Commit search failed: {e}")
+        return {"error": f"Failed to search commits: {str(e)}"}
+
+
+async def _tool_git_blame(
+    args: Dict[str, Any], db: Session | AsyncSession
+) -> Dict[str, Any]:
+    """Get git blame information for a file and line."""
+    from app.models.project import Project
+    from app.services.git_history_searcher import GitHistorySearcher
+    
+    file_path: str = args["file_path"]
+    project_id: int = int(args["project_id"])
+    line_number: int = args.get("line_number")
+    
+    try:
+        # Get project to find repository path
+        if isinstance(db, AsyncSession):
+            from sqlalchemy import select
+            project_stmt = select(Project).where(Project.id == project_id)
+            result = await db.execute(project_stmt)
+            project = result.scalar_one_or_none()
+        else:
+            project = db.query(Project).filter_by(id=project_id).first()
+            
+        if not project:
+            return {"error": "Project not found"}
+            
+        repo_path = f"repos/project_{project_id}"
+        
+        git_searcher = GitHistorySearcher(repo_path)
+        
+        if line_number:
+            blame_info = git_searcher.get_blame(file_path, line_number)
+        else:
+            # Get blame for entire file (first 50 lines)
+            blame_info = git_searcher.get_blame(file_path, 1, context_lines=50)
+            
+        return {"blame": blame_info}
+        
+    except Exception as e:
+        logger.error(f"Git blame failed: {e}")
+        return {"error": f"Failed to get blame information: {str(e)}"}
+
+
+async def _tool_analyze_code_quality(
+    args: Dict[str, Any], db: Session | AsyncSession
+) -> Dict[str, Any]:
+    """Run static analysis on code."""
+    from app.models.project import Project
+    from app.services.static_analysis_searcher import StaticAnalysisSearcher
+    
+    file_path: str = args["file_path"]
+    project_id: int = int(args["project_id"])
+    analysis_type: str = args.get("analysis_type", "linting")
+    
+    try:
+        # Get project to find repository path
+        if isinstance(db, AsyncSession):
+            from sqlalchemy import select
+            project_stmt = select(Project).where(Project.id == project_id)
+            result = await db.execute(project_stmt)
+            project = result.scalar_one_or_none()
+        else:
+            project = db.query(Project).filter_by(id=project_id).first()
+            
+        if not project:
+            return {"error": "Project not found"}
+            
+        repo_path = f"repos/project_{project_id}"
+        
+        analyzer = StaticAnalysisSearcher(repo_path)
+        
+        if analysis_type == "linting":
+            results = analyzer.run_pylint(file_path)
+        elif analysis_type == "security":
+            results = analyzer.run_security_analysis(file_path)
+        elif analysis_type == "complexity":
+            results = analyzer.analyze_complexity(file_path)
+        elif analysis_type == "all":
+            # Run all analysis types
+            lint_results = analyzer.run_pylint(file_path)
+            security_results = analyzer.run_security_analysis(file_path)
+            complexity_results = analyzer.analyze_complexity(file_path)
+            
+            results = {
+                "linting": lint_results,
+                "security": security_results,
+                "complexity": complexity_results
+            }
+        else:
+            return {"error": f"Unknown analysis type: {analysis_type}"}
+            
+        return {"analysis": results}
+        
+    except Exception as e:
+        logger.error(f"Code analysis failed: {e}")
+        return {"error": f"Failed to analyze code: {str(e)}"}
+
+
 _HANDLERS: Dict[str, Callable[[Dict[str, Any], Session | AsyncSession], Any]] = {
     "file_search": _tool_file_search,
     "explain_code": _tool_explain_code,
     "generate_tests": _tool_generate_tests,
     "similar_code": _tool_similar_code,
+    "search_commits": _tool_search_commits,
+    "git_blame": _tool_git_blame,
+    "analyze_code_quality": _tool_analyze_code_quality,
 }
 
 

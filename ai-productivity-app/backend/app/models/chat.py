@@ -234,6 +234,7 @@ class ChatMessage(Base, TimestampMixin):
     # ------------------------------------------------------------------ #
     session = relationship("ChatSession", back_populates="messages")
     user = relationship("User")
+    feedback = relationship("UserFeedback", back_populates="message", cascade="all, delete-orphan")
 
     # ------------------------------------------------------------------ #
     # Validators

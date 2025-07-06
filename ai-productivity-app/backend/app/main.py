@@ -42,6 +42,7 @@ from .routers import copilot as copilot_router
 from .routers import prompts as prompts_router
 from .routers import repositories as repositories_router
 from .routers import project_search as project_search_router
+from .routers import feedback as feedback_router
 from .chat import admin_routes as admin_router
 from .chat import confidence_routes as confidence_router
 
@@ -139,6 +140,7 @@ app.include_router(copilot_router.router)
 app.include_router(prompts_router.router)
 app.include_router(repositories_router.router)
 app.include_router(project_search_router.router)
+app.include_router(feedback_router.router)
 app.include_router(admin_router.router, prefix="/admin", tags=["Admin"])
 app.include_router(confidence_router.router, prefix="/confidence", tags=["Confidence"])
 

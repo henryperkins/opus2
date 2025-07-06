@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -99,6 +99,15 @@ export default function FileViewer() {
   
   const { isMobile } = useMediaQuery();
   const navigate = useNavigate();
+
+  // Debounced navigation to prevent click handler delays
+  const debouncedNavigate = useMemo(() => {
+    let timeout;
+    return (path) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => navigate(path), 100);
+    };
+  }, [navigate]);
 
   // selection tracking for context-menu with throttling
   const { selectionText, position: selectionPos } = useTextSelection();
@@ -476,11 +485,11 @@ export default function FileViewer() {
 
   const SelectionMenu = () => {
     // Do not show when search/dialogs are open or no text selected
-    if (!selectionText || searchOpen || gotoLineOpen) return null;
+    if (!throttledSelectionText || searchOpen || gotoLineOpen) return null;
 
     // Clamp inside viewport a bit
-    const left = Math.min(window.innerWidth - 120, Math.max(60, selectionPos.x));
-    const top = Math.max(50, selectionPos.y);
+    const left = Math.min(window.innerWidth - 120, Math.max(60, throttledSelectionPos.x));
+    const top = Math.max(50, throttledSelectionPos.y);
 
     return (
       <div
@@ -488,13 +497,13 @@ export default function FileViewer() {
         className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg flex divide-x divide-gray-200 dark:divide-gray-700 select-none"
       >
         <button
-          onClick={() => copySelection(selectionText)}
+          onClick={() => copySelection(throttledSelectionText)}
           className="px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
         >
           Copy
         </button>
         <button
-          onClick={() => searchFor(selectionText)}
+          onClick={() => searchFor(throttledSelectionText)}
           className="px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
         >
           Search
@@ -932,7 +941,7 @@ export default function FileViewer() {
               {!headerCollapsed && (
                 <Breadcrumbs
                   path={decodedPath}
-                  onNavigate={(sub) => navigate(`/viewer/${encodeURIComponent(sub)}`)}
+                  onNavigate={(sub) => debouncedNavigate(`/viewer/${encodeURIComponent(sub)}`)}
                 />
               )}
               {headerCollapsed && isMobile && (
