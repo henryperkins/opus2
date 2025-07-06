@@ -53,6 +53,45 @@ class Settings(BaseSettings):
             )
         return v_lower
 
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, v: str) -> str:
+        """Ensure *llm_provider* is one of the supported providers."""
+        allowed = {"openai", "azure", "anthropic"}
+        v_lower = v.lower()
+        if v_lower not in allowed:
+            raise ValueError(
+                f"Unsupported llm_provider: {v}. "
+                "Supported values are: openai, azure, anthropic."
+            )
+        return v_lower
+
+    @field_validator("claude_thinking_mode")
+    @classmethod
+    def validate_claude_thinking_mode(cls, v: str) -> str:
+        """Ensure *claude_thinking_mode* is one of the supported modes."""
+        allowed = {"off", "enabled", "aggressive"}
+        v_lower = v.lower()
+        if v_lower not in allowed:
+            raise ValueError(
+                f"Unsupported claude_thinking_mode: {v}. "
+                "Supported values are: off, enabled, aggressive."
+            )
+        return v_lower
+
+    @field_validator("reasoning_effort")
+    @classmethod
+    def validate_reasoning_effort(cls, v: str) -> str:
+        """Ensure *reasoning_effort* is one of the supported levels."""
+        allowed = {"low", "medium", "high"}
+        v_lower = v.lower()
+        if v_lower not in allowed:
+            raise ValueError(
+                f"Unsupported reasoning_effort: {v}. "
+                "Supported values are: low, medium, high."
+            )
+        return v_lower
+
     # PostgreSQL vector settings
     postgres_vector_table: str = Field(
         default="embeddings", description="Table name for pgvector embeddings"
@@ -215,6 +254,11 @@ class Settings(BaseSettings):
     azure_openai_api_key: Optional[str] = None
     azure_openai_endpoint: Optional[str] = None
 
+    # Anthropic API credentials – required when ``llm_provider`` is set to
+    # "anthropic".  Similar to Azure OpenAI, we keep this optional for
+    # local development flexibility.
+    anthropic_api_key: Optional[str] = None
+
     # The *api_version* parameter is mandatory for Azure OpenAI requests.  We
     # expose it as a setting with a sane default matching the SDK's examples
     # so users can easily pin a different version when Microsoft publishes a
@@ -249,13 +293,45 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     max_context_tokens: int = 200000
 
-    # --- Reasoning enrichment ---------------------------------------------
+    # --- Reasoning enrichment (Azure OpenAI / OpenAI only) ---------------
     # Enable Azure Responses API *reasoning enrichment* for supported models.
     # Per o3/o4-mini documentation: reasoning models produce internal chain of thought
     # automatically - don't try to induce additional reasoning.
     # This setting applies to non-reasoning models when using Responses API.
+    # Only applies when llm_provider is "azure" or "openai"
 
     enable_reasoning: bool = False
+    
+    # Reasoning effort levels for Azure/OpenAI models: "low", "medium", "high"
+    reasoning_effort: str = Field(
+        default="medium",
+        description="Reasoning effort level for Azure/OpenAI models"
+    )
+
+    # --- Extended Thinking Configuration (Anthropic Claude only) ----------
+    # Claude extended thinking settings for transparent reasoning
+    # Only applies when llm_provider is "anthropic"
+    
+    # Enable extended thinking for Claude models (Opus 4, Sonnet 4, Sonnet 3.7)
+    claude_extended_thinking: bool = True
+    
+    # Default thinking token budget (minimum 1024, recommended 16k+ for complex tasks)
+    claude_thinking_budget_tokens: int = 16384
+    
+    # Thinking modes: "off", "enabled", "aggressive"
+    claude_thinking_mode: str = Field(
+        default="enabled",
+        description="Extended thinking mode for Claude models only"
+    )
+    
+    # Enable thinking transparency in responses for Claude
+    claude_show_thinking_process: bool = True
+    
+    # Auto-adjust thinking budget based on task complexity
+    claude_adaptive_thinking_budget: bool = True
+    
+    # Maximum thinking budget for complex tasks
+    claude_max_thinking_budget: int = 65536
 
     # Tool calling optimization settings (based on o3/o4-mini guidance)
     max_tools_per_request: int = Field(

@@ -73,9 +73,17 @@ async def switch_model(
         config_service = ConfigService(db)
         
         # Update configuration using the real system
+        provider = "openai"  # default
+        if "gpt" in request.model_id.lower():
+            provider = "openai"
+        elif "claude" in request.model_id.lower():
+            provider = "anthropic"
+        else:
+            provider = "azure"
+        
         update_data = {
             "chat_model": request.model_id,
-            "provider": "openai" if "gpt" in request.model_id.lower() else "azure"
+            "provider": provider
         }
         
         config_service.set_multiple_config(update_data, updated_by="models_api_deprecated")

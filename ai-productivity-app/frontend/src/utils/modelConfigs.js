@@ -97,5 +97,23 @@ export const modelInfo = {
     contextLength: 16385,
     costPer1kTokens: { input: 0.0005, output: 0.0015 },
     capabilities: ['function-calling']
+  },
+  'claude-opus-4-20250514': {
+    id: 'claude-opus-4-20250514',
+    name: 'Claude Opus 4',
+    contextLength: 200000,
+    costPer1kTokens: { input: 0.015, output: 0.075 },
+    capabilities: ['multimodal', 'function-calling', 'reasoning', 'vision'],
+    recommended: true,
+    provider: 'anthropic'
+  },
+  'claude-sonnet-4-20250514': {
+    id: 'claude-sonnet-4-20250514',
+    name: 'Claude Sonnet 4',
+    contextLength: 200000,
+    costPer1kTokens: { input: 0.003, output: 0.015 },
+    capabilities: ['multimodal', 'function-calling', 'reasoning', 'vision'],
+    recommended: true,
+    provider: 'anthropic'
   }
 };

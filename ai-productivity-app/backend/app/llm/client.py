@@ -66,6 +66,27 @@ except ModuleNotFoundError as exc:
             "layer to avoid silent mis-configuration."
         ) from exc
 
+# Anthropic SDK import with similar fallback handling
+try:
+    from anthropic import AsyncAnthropic  # type: ignore
+except ModuleNotFoundError as exc:
+    if _IN_SANDBOX:
+        # Create a stub for testing environments
+        class AsyncAnthropic:
+            def __init__(self, **kwargs):
+                self.messages = types.SimpleNamespace()
+                self.messages.create = lambda **kwargs: types.SimpleNamespace(
+                    content=[types.SimpleNamespace(text="Test response")],
+                    usage=types.SimpleNamespace(input_tokens=10, output_tokens=20)
+                )
+    else:
+        # Production/dev requires real Anthropic SDK
+        logger.warning(
+            "Anthropic SDK not found. Install via `pip install anthropic` "
+            "to use Claude models. OpenAI models will continue to work."
+        )
+        AsyncAnthropic = None
+
 
 from app.config import settings
 
@@ -235,6 +256,8 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         try:
             if self.provider == "azure":
                 self._init_azure_client()
+            elif self.provider == "anthropic":
+                self._init_anthropic_client()
             else:
                 self._init_openai_client()
         except Exception as exc:  # noqa: BLE001 – propagate but record in Sentry
@@ -284,6 +307,8 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             self.provider = new_provider
             if new_provider == "azure":
                 self._init_azure_client()
+            elif new_provider == "anthropic":
+                self._init_anthropic_client()
             else:
                 self._init_openai_client()
             logger.info("LLM client reinitialized for provider: %s", new_provider)
@@ -373,6 +398,151 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         self.client = AsyncAzureOpenAI(**extra_kwargs)
 
+    def _init_anthropic_client(self) -> None:
+        """Create *AsyncAnthropic* instance for Claude models."""
+        
+        if AsyncAnthropic is None:
+            raise RuntimeError(
+                "Anthropic SDK not available. Install via `pip install anthropic` "
+                "to use Claude models."
+            )
+        
+        api_key = (
+            settings.anthropic_api_key
+            or os.getenv("ANTHROPIC_API_KEY")
+            or "test-key"
+        )
+        
+        if not api_key or api_key == "test-key":
+            logger.info("Anthropic API key missing – continuing with stub client")
+        
+        self.client = AsyncAnthropic(api_key=api_key)
+
+    def _supports_thinking(self, model: str) -> bool:
+        """Check if the model supports Claude extended thinking."""
+        thinking_models = {
+            "claude-opus-4-20250514",
+            "claude-sonnet-4-20250514", 
+            "claude-3-5-sonnet-20241022",  # Claude Sonnet 3.7
+            "claude-3-5-sonnet-latest"
+        }
+        return model.lower() in {m.lower() for m in thinking_models}
+
+    async def _handle_anthropic_request(
+        self, 
+        messages: List[Dict[str, Any]], 
+        temperature: float,
+        max_tokens: int | None,
+        model: str,
+        stream: bool = False,
+        tools: Any | None = None,
+        tool_choice: str | Dict[str, Any] | None = None,
+        thinking: Dict[str, Any] | None = None
+    ) -> Any:
+        """Handle Anthropic Claude API requests."""
+        
+        if self.client is None:
+            raise RuntimeError("Anthropic client not initialized")
+        
+        # Extract system message from messages
+        system_message = None
+        filtered_messages = []
+        
+        for msg in messages:
+            if msg.get("role") == "system":
+                system_message = msg.get("content", "")
+            else:
+                filtered_messages.append(msg)
+        
+        # Build request parameters
+        request_params = {
+            "model": model,
+            "messages": filtered_messages,
+            "max_tokens": max_tokens or 1024,
+            "temperature": temperature,
+            "stream": stream
+        }
+        
+        # Add system message if present
+        if system_message:
+            request_params["system"] = system_message
+        
+        # Add thinking configuration for Claude models if enabled
+        if thinking and self._supports_thinking(model):
+            # Claude extended thinking configuration
+            thinking_config = {
+                "type": "enabled",
+                "budget_tokens": thinking.get("budget_tokens", settings.claude_thinking_budget_tokens)
+            }
+            request_params["thinking"] = thinking_config
+            
+            logger.debug(f"Enabled Claude thinking with budget: {thinking_config['budget_tokens']} tokens")
+        
+        # Handle tools if provided
+        if tools:
+            anthropic_tools = []
+            for tool in tools:
+                if "function" in tool:
+                    # Convert OpenAI format to Anthropic format
+                    func = tool["function"]
+                    anthropic_tools.append({
+                        "name": func["name"],
+                        "description": func.get("description", ""),
+                        "input_schema": func.get("parameters", {})
+                    })
+                else:
+                    # Already in Anthropic format or legacy format
+                    anthropic_tools.append(tool)
+            
+            request_params["tools"] = anthropic_tools
+        
+        # Log API request for debugging
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("=== ANTHROPIC API REQUEST ===")
+            logger.debug(f"Model: {model}, Temperature: {temperature}, Stream: {stream}")
+            logger.debug(f"Messages: {len(filtered_messages)} total, Tools: {tools is not None}")
+        
+        try:
+            response = await self.client.messages.create(**request_params)
+            
+            # Log API response for debugging
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("=== ANTHROPIC API RESPONSE ===")
+                if hasattr(response, "usage"):
+                    logger.debug(f"Token Usage: {response.usage}")
+            
+            if stream:
+                return self._stream_anthropic_response(response)
+            return response
+            
+        except Exception as exc:
+            logger.error(f"Anthropic API error: {exc}")
+            raise
+
+    async def _stream_anthropic_response(self, response: Any) -> AsyncIterator[str]:
+        """Convert Anthropic streaming response to string chunks."""
+        logger.debug("Processing Anthropic API stream")
+        chunk_count = 0
+        
+        try:
+            async for chunk in response:
+                chunk_count += 1
+                logger.debug(f"Received chunk {chunk_count}: {type(chunk)}")
+                
+                if hasattr(chunk, "delta") and hasattr(chunk.delta, "text"):
+                    logger.debug(f"Yielding delta text: {chunk.delta.text[:50]}...")
+                    yield chunk.delta.text
+                elif hasattr(chunk, "content") and chunk.content:
+                    # Handle content block
+                    for content_block in chunk.content:
+                        if hasattr(content_block, "text"):
+                            logger.debug(f"Yielding content text: {content_block.text[:50]}...")
+                            yield content_block.text
+        except Exception as e:
+            logger.error(f"Error in _stream_anthropic_response: {e}", exc_info=True)
+        
+        logger.debug(f"Anthropic stream processing complete, processed {chunk_count} chunks")
+
     # ---------------------------------------------------------------------
     # Public helpers
     # ---------------------------------------------------------------------
@@ -460,7 +630,39 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     msg["role"] = "developer"
 
         try:
-            if self.use_responses_api:
+            # Handle Anthropic Claude models
+            if self.provider == "anthropic":
+                # Prepare thinking configuration for Claude
+                thinking_config = None
+                if settings.claude_extended_thinking and settings.claude_thinking_mode != "off":
+                    budget_tokens = settings.claude_thinking_budget_tokens
+                    
+                    # Adjust budget based on task complexity if adaptive mode is enabled
+                    if settings.claude_adaptive_thinking_budget:
+                        # Simple heuristics for budget adjustment
+                        message_length = sum(len(str(msg.get("content", ""))) for msg in messages)
+                        if message_length > 2000:  # Long messages = complex task
+                            budget_tokens = min(settings.claude_max_thinking_budget, budget_tokens * 2)
+                        elif tools:  # Tool usage = complex task
+                            budget_tokens = min(settings.claude_max_thinking_budget, budget_tokens * 1.5)
+                    
+                    thinking_config = {
+                        "type": settings.claude_thinking_mode,
+                        "budget_tokens": int(budget_tokens)
+                    }
+                
+                return await self._handle_anthropic_request(
+                    messages=messages,
+                    temperature=active_temperature,
+                    max_tokens=active_max_tokens,
+                    model=active_model,
+                    stream=stream,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    thinking=thinking_config
+                )
+            
+            elif self.use_responses_api:
                 # Azure Responses API - follows the official documentation pattern
 
                 # Initialize variables outside conditional scope to prevent UnboundLocalError
@@ -1153,4 +1355,5 @@ __all__ = [
     "llm_client",
     "AsyncOpenAI",
     "AsyncAzureOpenAI",
+    "AsyncAnthropic",
 ]

@@ -259,11 +259,11 @@ export function ModelProvider({ children }) {
       let recommendedModel = state.currentModel;
 
       if (taskType === 'code_generation' || taskType === 'code_analysis') {
-        recommendedModel = 'gpt-4o'; // Better for code tasks
+        recommendedModel = 'claude-sonnet-4-20250514'; // Excellent for code tasks
       } else if (taskType === 'chat' || taskType === 'general') {
-        recommendedModel = 'gpt-4o-mini'; // Good balance for general tasks
+        recommendedModel = 'claude-sonnet-4-20250514'; // Good balance for general tasks
       } else if (taskType === 'complex_reasoning') {
-        recommendedModel = 'gpt-4o'; // Best for complex tasks
+        recommendedModel = 'claude-opus-4-20250514'; // Best for complex reasoning tasks
       }
 
       // Only switch if different from current model

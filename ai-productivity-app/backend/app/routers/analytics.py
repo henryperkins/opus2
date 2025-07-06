@@ -53,7 +53,7 @@ class Metric(BaseModel):
 
 
 class BatchPayload(BaseModel):
-    metrics: conlist(Metric, min_items=1)  # at least one metric
+    metrics: conlist(Metric, min_length=1)  # at least one metric
     metadata: Dict[str, Any] | None = None
 
 

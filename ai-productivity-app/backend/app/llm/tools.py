@@ -225,6 +225,81 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         },
         "strict": True,
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_documentation",
+            "description": "Fetch and analyze documentation from web URLs or API endpoints. Use this when you need current information about libraries, frameworks, APIs, or technologies that might not be in your training data.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "URL to fetch documentation from (e.g., official API docs, GitHub README, documentation sites)",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Specific query or topic to focus on when analyzing the documentation",
+                    },
+                    "format": {
+                        "type": "string",
+                        "description": "Expected format of the documentation",
+                        "enum": ["markdown", "html", "json", "text", "auto"],
+                        "default": "auto"
+                    },
+                    "max_length": {
+                        "type": "integer",
+                        "description": "Maximum content length to process (in characters)",
+                        "default": 50000,
+                        "minimum": 1000,
+                        "maximum": 200000
+                    }
+                },
+                "required": ["url", "query"],
+                "additionalProperties": False,
+            },
+        },
+        "strict": True,
+    },
+    {
+        "type": "function", 
+        "function": {
+            "name": "comprehensive_analysis",
+            "description": "Perform deep, multi-step analysis of code, documentation, or complex problems using structured thinking approaches. This tool enables Chain-of-Thought, Tree-of-Thought, and reflection-based reasoning.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "description": "The complex task or problem to analyze",
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "Additional context, code snippets, or relevant information",
+                    },
+                    "thinking_mode": {
+                        "type": "string",
+                        "description": "Type of comprehensive thinking to apply",
+                        "enum": ["chain_of_thought", "tree_of_thought", "reflection", "step_by_step", "pros_cons", "root_cause"],
+                        "default": "chain_of_thought"
+                    },
+                    "depth": {
+                        "type": "string",
+                        "description": "Depth of analysis required",
+                        "enum": ["surface", "detailed", "comprehensive", "exhaustive"],
+                        "default": "detailed"
+                    },
+                    "project_id": {
+                        "type": "integer",
+                        "description": "Current project identifier for context",
+                    }
+                },
+                "required": ["task", "project_id"],
+                "additionalProperties": False,
+            },
+        },
+        "strict": True,
+    }
 ]
 
 
@@ -519,6 +594,301 @@ async def _tool_analyze_code_quality(
         return {"error": f"Failed to analyze code: {str(e)}"}
 
 
+async def _tool_fetch_documentation(
+    args: Dict[str, Any], db: Session | AsyncSession
+) -> Dict[str, Any]:
+    """Fetch and analyze documentation from web URLs."""
+    import aiohttp
+    import asyncio
+    from urllib.parse import urlparse
+    from bs4 import BeautifulSoup
+    import markdownify
+    
+    url: str = args["url"]
+    query: str = args["query"]
+    format_type: str = args.get("format", "auto")
+    max_length: int = int(args.get("max_length", 50000))
+    
+    try:
+        # Validate URL
+        parsed_url = urlparse(url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            return {"error": "Invalid URL provided"}
+        
+        # Fetch content with timeout
+        timeout = aiohttp.ClientTimeout(total=30)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; AI Documentation Fetcher)"
+        }
+        
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    return {"error": f"HTTP {response.status}: Unable to fetch documentation"}
+                
+                content_type = response.headers.get("content-type", "").lower()
+                raw_content = await response.text()
+        
+        # Process content based on format
+        processed_content = ""
+        
+        if format_type == "auto":
+            # Auto-detect format based on content type and URL
+            if "application/json" in content_type:
+                format_type = "json"
+            elif "text/markdown" in content_type or url.endswith(".md"):
+                format_type = "markdown"
+            elif "text/html" in content_type or "html" in content_type:
+                format_type = "html"
+            else:
+                format_type = "text"
+        
+        if format_type == "html":
+            # Parse HTML and convert to markdown for better processing
+            soup = BeautifulSoup(raw_content, 'html.parser')
+            
+            # Remove script and style elements
+            for script in soup(["script", "style", "nav", "header", "footer"]):
+                script.decompose()
+            
+            # Convert to markdown
+            processed_content = markdownify.markdownify(str(soup), heading_style="ATX")
+            
+        elif format_type == "json":
+            # Pretty format JSON for analysis
+            import json
+            try:
+                json_data = json.loads(raw_content)
+                processed_content = json.dumps(json_data, indent=2)
+            except json.JSONDecodeError:
+                processed_content = raw_content
+                
+        elif format_type == "markdown":
+            processed_content = raw_content
+            
+        else:  # text
+            processed_content = raw_content
+        
+        # Truncate if too long
+        if len(processed_content) > max_length:
+            processed_content = processed_content[:max_length] + "\n\n[Content truncated...]"
+        
+        # Use LLM to analyze the documentation based on the query
+        analysis_prompt = f"""Analyze the following documentation and answer this specific query: {query}
+
+Documentation from {url}:
+---
+{processed_content}
+---
+
+Please provide a comprehensive analysis focusing on the query. Extract relevant information, code examples, configuration details, and any important notes or warnings."""
+
+        response = await llm_client.complete(
+            messages=[{"role": "user", "content": analysis_prompt}], 
+            stream=False
+        )
+        
+        analysis = _extract_llm_response_content(response)
+        
+        return {
+            "url": url,
+            "query": query,
+            "content_length": len(processed_content),
+            "format": format_type,
+            "analysis": analysis,
+            "raw_content": processed_content[:2000] + "..." if len(processed_content) > 2000 else processed_content
+        }
+        
+    except asyncio.TimeoutError:
+        return {"error": "Request timed out while fetching documentation"}
+    except Exception as e:
+        logger.error(f"Documentation fetch failed: {e}")
+        return {"error": f"Failed to fetch documentation: {str(e)}"}
+
+
+async def _tool_comprehensive_analysis(
+    args: Dict[str, Any], db: Session | AsyncSession
+) -> Dict[str, Any]:
+    """Perform comprehensive analysis using structured thinking approaches."""
+    
+    task: str = args["task"]
+    context: str = args.get("context", "")
+    thinking_mode: str = args.get("thinking_mode", "chain_of_thought")
+    depth: str = args.get("depth", "detailed")
+    project_id: int = int(args["project_id"])
+    
+    try:
+        # Build comprehensive analysis prompt based on thinking mode
+        if thinking_mode == "chain_of_thought":
+            thinking_prompt = f"""Let's approach this step by step using Chain of Thought reasoning:
+
+Task: {task}
+
+Context: {context}
+
+Please work through this systematically:
+1. First, let me understand what is being asked
+2. Then identify the key components and relationships
+3. Analyze each component carefully
+4. Consider implications and dependencies
+5. Synthesize findings into a comprehensive solution
+
+Let me think through each step:"""
+
+        elif thinking_mode == "tree_of_thought":
+            thinking_prompt = f"""Let's explore this using Tree of Thought reasoning, considering multiple paths:
+
+Task: {task}
+Context: {context}
+
+I'll explore different approaches and evaluate them:
+
+Branch 1: [Direct approach]
+Branch 2: [Alternative approach] 
+Branch 3: [Creative approach]
+
+For each branch, I'll evaluate:
+- Feasibility
+- Pros and cons
+- Potential outcomes
+- Resource requirements
+
+Then select the best path forward:"""
+
+        elif thinking_mode == "reflection":
+            thinking_prompt = f"""Let me analyze this using reflective reasoning:
+
+Task: {task}
+Context: {context}
+
+Initial thoughts:
+[First assessment]
+
+Let me step back and reconsider:
+- What assumptions am I making?
+- What might I be missing?
+- Are there alternative perspectives?
+- What could go wrong?
+
+Revised analysis:
+[Updated understanding]
+
+Final reflection:
+[Comprehensive conclusion]"""
+
+        elif thinking_mode == "step_by_step":
+            thinking_prompt = f"""I'll break this down into clear, sequential steps:
+
+Task: {task}
+Context: {context}
+
+Step 1: Problem Definition
+Step 2: Requirements Analysis  
+Step 3: Solution Design
+Step 4: Implementation Planning
+Step 5: Risk Assessment
+Step 6: Testing Strategy
+Step 7: Final Recommendations
+
+Let me work through each step methodically:"""
+
+        elif thinking_mode == "pros_cons":
+            thinking_prompt = f"""Let me analyze this using pros and cons methodology:
+
+Task: {task}
+Context: {context}
+
+Pros (Benefits/Advantages):
+- 
+-
+-
+
+Cons (Drawbacks/Challenges):
+-
+-
+-
+
+Neutral Considerations:
+-
+-
+
+Risk Assessment:
+-
+-
+
+Final Recommendation:
+Based on this analysis:"""
+
+        elif thinking_mode == "root_cause":
+            thinking_prompt = f"""Let me perform root cause analysis:
+
+Task: {task}
+Context: {context}
+
+What is the core problem we're trying to solve?
+
+Why does this problem exist?
+- Level 1: Immediate causes
+- Level 2: Underlying factors  
+- Level 3: Root causes
+
+What are the contributing factors?
+
+What would happen if we don't address this?
+
+What are the most effective intervention points?
+
+Comprehensive solution addressing root causes:"""
+
+        # Adjust detail level based on depth parameter
+        if depth == "surface":
+            thinking_prompt += "\n\nProvide a concise analysis focusing on key points."
+        elif depth == "comprehensive": 
+            thinking_prompt += "\n\nProvide an in-depth analysis covering all aspects, edge cases, and implications."
+        elif depth == "exhaustive":
+            thinking_prompt += "\n\nProvide an exhaustive analysis covering every possible angle, alternative, and consideration."
+        
+        # Get relevant project context if available
+        if project_id:
+            ctx_builder = ContextBuilder(db)  # type: ignore[arg-type]
+            project_context = await ctx_builder.extract_context(task, project_id)
+            if project_context.get("chunks"):
+                context_summary = "\n".join([
+                    f"File: {chunk.get('file_path', 'unknown')}\n{chunk.get('content', '')[:500]}..."
+                    for chunk in project_context["chunks"][:3]
+                ])
+                thinking_prompt += f"\n\nRelevant project context:\n{context_summary}"
+        
+        # Execute the analysis with appropriate thinking configuration
+        if settings.claude_extended_thinking and settings.claude_thinking_mode != "off":
+            # Use Claude's extended thinking for this analysis
+            response = await llm_client.complete(
+                messages=[{"role": "user", "content": thinking_prompt}],
+                stream=False
+            )
+        else:
+            # Use regular completion
+            response = await llm_client.complete(
+                messages=[{"role": "user", "content": thinking_prompt}], 
+                stream=False
+            )
+        
+        analysis_result = _extract_llm_response_content(response)
+        
+        return {
+            "task": task,
+            "thinking_mode": thinking_mode,
+            "depth": depth,
+            "analysis": analysis_result,
+            "context_used": bool(context),
+            "project_context_available": bool(project_id and project_context.get("chunks")) if project_id else False
+        }
+        
+    except Exception as e:
+        logger.error(f"Comprehensive analysis failed: {e}")
+        return {"error": f"Failed to perform analysis: {str(e)}"}
+
+
 _HANDLERS: Dict[str, Callable[[Dict[str, Any], Session | AsyncSession], Any]] = {
     "file_search": _tool_file_search,
     "explain_code": _tool_explain_code,
@@ -527,6 +897,8 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any], Session | AsyncSession], Any]] = 
     "search_commits": _tool_search_commits,
     "git_blame": _tool_git_blame,
     "analyze_code_quality": _tool_analyze_code_quality,
+    "fetch_documentation": _tool_fetch_documentation,
+    "comprehensive_analysis": _tool_comprehensive_analysis,
 }
 
 
