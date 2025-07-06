@@ -70,7 +70,7 @@ export default function RepositoryConnect({
 
   const fetchRepositoryInfo = useCallback(async () => {
     try {
-      const response = await api.get(`/import/git/repository/${projectId}`);
+      const response = await api.get(`/api/import/git/repository/${projectId}`);
       if (response.data.connected) {
         const repoData = response.data.repo_info;
         setRepoInfo({
@@ -135,7 +135,7 @@ export default function RepositoryConnect({
       const headers = token ? { 'X-Git-Token': token } : {};
       
       // 1. Validate the repository
-      const validationResponse = await api.post('/import/git/validate', {
+      const validationResponse = await api.post('/api/import/git/validate', {
         repo_url: formData.repo_url,
         branch: formData.branch,
       }, { headers });
@@ -143,7 +143,7 @@ export default function RepositoryConnect({
       setFormData(prev => ({ ...prev, branch: validationResponse.data.branch }));
 
       // 2. Start the import job
-      const importResponse = await api.post('/import/git', {
+      const importResponse = await api.post('/api/import/git', {
         project_id: projectId,
         repo_url: formData.repo_url,
         branch: validationResponse.data.branch, // Use validated branch
@@ -217,7 +217,7 @@ export default function RepositoryConnect({
       const headers = privateRepoToken ? { 'X-Git-Token': privateRepoToken } : {};
       
       // Start a new import job for the same repository
-      const importResponse = await api.post('/import/git', {
+      const importResponse = await api.post('/api/import/git', {
         project_id: projectId,
         repo_url: repoInfo.repo_url || formData.repo_url,
         branch: repoInfo.branch || formData.branch,
