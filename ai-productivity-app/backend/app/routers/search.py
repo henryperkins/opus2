@@ -131,7 +131,7 @@ async def search(
 
 @router.get("/suggestions")
 async def get_suggestions(
-    q: str = Query("", min_length=1, max_length=100),
+    q: str = Query("", min_length=2, max_length=100),
     current_user: CurrentUserOptional = None,
     db: DatabaseDep = None
 ):

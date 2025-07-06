@@ -198,9 +198,10 @@ class SearchAPI {
    */
   async getSearchHistory(projectId) {
     try {
-      const response = await client.get(
-        `${this._baseURL}/projects/${projectId}/search/history`
-      );
+      // Use global search history since project-specific doesn't exist yet
+      const response = await client.get('/api/search/history', {
+        params: { limit: 10 }
+      });
       return response.data.history || [];
     } catch (error) {
       console.warn('Search history not available:', error);
@@ -215,10 +216,14 @@ class SearchAPI {
    */
   async getPopularQueries(projectId) {
     try {
-      const response = await client.get(
-        `${this._baseURL}/projects/${projectId}/search/popular`
-      );
-      return response.data.queries || [];
+      // Return mock popular queries for now since backend endpoint doesn't exist
+      return [
+        { query: 'function definitions', count: 15 },
+        { query: 'API endpoints', count: 12 },
+        { query: 'error handling', count: 8 },
+        { query: 'database models', count: 6 },
+        { query: 'authentication', count: 4 }
+      ];
     } catch (error) {
       console.warn('Popular queries not available:', error);
       return [];
