@@ -4,6 +4,22 @@ This document outlines mandatory guard rails (constraints, standards, and best p
 
 ---
 
+## File-extension conventions
+
+| Layer | Purpose | Mandatory extension | Notes |
+|-------|---------|---------------------|-------|
+| **Frontend (React)** | UI components using JSX/TSX | `.tsx` | All visual components **must** be typed. No plain `.jsx`.
+| | Non-JSX helpers (utils, hooks, stores) | `.ts` | Hooks must start with `use`. No transitive state in utils.
+| **Backend (FastAPI + Python 3.11+)** | Application source | `.py` | Use absolute imports rooted at `app.` namespace.
+| **Database Migrations** | Alembic revisions | `<rev>_<slug>.py` | Auto-generated + hand-edited — keep `upgrade` / `downgrade` idempotent.
+| **SQL Seeds** | Raw SQL fixtures | `.sql` | Only for deterministic seed data, not schema.
+| **Documentation** | Markdown docs | `.md` | Keep within `docs/`; cross-link using relative paths.
+| **Env samples** | Example env files | `.env.example` | Never commit real secrets.
+
+Any deviation will be blocked by the *file-extension* pre-commit hook (`scripts/check_filenames.sh`).
+
+---
+
 ## Single Sources of Truth (SSOT)
 
 The following are implementation-verified single sources of truth. All contributors MUST reference and update these concrete sources, as established in code, to avoid duplication, drift, or ambiguity in business logic, configuration, data, and application state.
@@ -80,6 +96,12 @@ The following are implementation-verified single sources of truth. All contribut
   - [`useMediaQuery`](frontend/src/hooks/useMediaQuery.js): Responsive design helper for breakpoint management
   - Mobile-optimized layouts in primary interfaces (ProjectChatPage, knowledge panels)
 
+- **Chat Configuration System**
+  - [`chat-settings.js`](frontend/src/config/chat-settings.js): Central configuration for chat behavior
+    - Default chat settings for knowledge, models, rendering, quality, and performance
+    - Flow configurations for knowledge base, model selection, and response rendering
+    - Validation utilities for configuration validation
+
 _Legacy SWR has been fully removed as of 2025-W22._
 
 ### Global/Platform SSOTs
@@ -98,7 +120,7 @@ _Legacy SWR has been fully removed as of 2025-W22._
 ### Documentation SSOT
 
 - **Team/Public Process/Architecture**
-  - Markdown documents in [`docs/`](docs/), including [`GUARDRAILS.md`](GUARDRAILS.md).
+  - Markdown documents in [`docs/`](docs/), including [`GUARDRAILS.md`](docs/GUARDRAILS.md).
   - Process and operational changes must be reflected here and tied to their technical SSOT references.
 
 ---
@@ -113,6 +135,24 @@ _Legacy SWR has been fully removed as of 2025-W22._
 
 **Mandate:**
 All pull requests or changes impacting these artifacts *must* explicitly reference the affected SSOT(s) in their description or changelogs. Any implementation ambiguity must be triaged by examining these concrete sources in code.
+
+---
+
+## Coding patterns (lint-enforced)
+
+1. **React**
+   * Use function components + hooks only; no class components.
+   * All props and state must be typed — `any` is forbidden. ESLint rule `@typescript-eslint/no-explicit-any` is in *error* mode.
+   * Hooks **must** start with `use` and reside in `frontend/src/hooks/`.
+
+2. **Python**
+   * Routers: `@router.<method>(path)` with **dependency-injected** `db: Session = Depends(get_db)`; never `SessionLocal()` inside functions.
+   * All pydantic models live in `backend/app/schemas/`; they are the only accepted request/response bodies.
+   * Business logic must live in `services/`; routers may orchestrate but not compute.
+
+3. **Streaming**
+   * WebSocket events must use the envelope `{type, message_id, content?, done?}` — see `frontend/src/components/chat/StreamingMessage.tsx`.
+   * `done` flag **must** be sent exactly once per message_id. Server violations are CI-tested via `tests/test_streaming_contract.py`.
 
 ---
 
@@ -262,6 +302,8 @@ The following application logic patterns and modules are essential for the corre
   - Streaming messages must use [`StreamingMessage`](frontend/src/components/chat/StreamingMessage.jsx) component
   - Citations must be rendered via [`CitationRenderer`](frontend/src/components/chat/CitationRenderer.jsx)
   - Interactive elements must be processed through established callback patterns
+  - Response transformation must use [`ResponseTransformer`](frontend/src/components/chat/ResponseTransformer.jsx)
+  - RAG status indicators must use [`RAGStatusIndicator`](frontend/src/components/chat/RAGStatusIndicator.jsx)
   - Never implement custom message rendering outside these established components
 
 - **Unified State Management Patterns:**
@@ -573,6 +615,9 @@ These layers collectively enforce application invariants, trust boundaries, and 
 **Chat System:**
 - [`backend/app/services/chat_service.py`](backend/app/services/chat_service.py) - Chat business logic
 - [`backend/app/websocket/manager.py`](backend/app/websocket/manager.py) - WebSocket management
+- [`frontend/src/components/chat/EnhancedMessageRenderer.jsx`](frontend/src/components/chat/EnhancedMessageRenderer.jsx) - Message rendering
+- [`frontend/src/components/chat/StreamingMessage.tsx`](frontend/src/components/chat/StreamingMessage.tsx) - Streaming support
+- [`frontend/src/config/chat-settings.js`](frontend/src/config/chat-settings.js) - Chat configuration
 
 ### Development Commands
 

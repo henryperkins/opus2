@@ -470,6 +470,12 @@ class ConfigService:
                         timeout=30,
                     )
                     # Handle different response structures for reasoning models
+                    resp_text = ""
+                    
+                    # Check if the response has a status and handle incomplete responses
+                    if hasattr(resp, 'status') and resp.status == 'incomplete':
+                        return False, "Azure OpenAI Responses API returned incomplete response - this may indicate a configuration issue or model limitation"
+                    
                     if hasattr(resp, "output") and resp.output:
                         last_output = resp.output[-1]
                         if hasattr(last_output, 'content'):
@@ -485,7 +491,8 @@ class ConfigService:
                             # Fallback to string representation
                             resp_text = str(last_output)
                     else:
-                        resp_text = str(resp)
+                        # No output available - this is likely an incomplete response
+                        return False, "Azure OpenAI Responses API returned no output - this may indicate a configuration issue"
                 except asyncio.TimeoutError:
                     return False, "Responses-API test timed out after 30 seconds"
             else:
