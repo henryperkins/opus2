@@ -9,7 +9,15 @@ repository root should be executed.
 import pathlib
 
 
-def pytest_ignore_collect(path, _config):  # noqa: D401
+# NOTE: The hook signature changed in pytest ≥8 where the second parameter was
+# renamed from ``_config`` to ``config``.  Using the outdated name leads to a
+# PluginValidationError during test collection.  Accept both names by keeping
+# the parameter but aligning with the new spec – pytest will still pass the
+# argument positionally, so this change remains backward-compatible with older
+# versions.
+
+
+def pytest_ignore_collect(path, config):  # noqa: D401
     """Skip duplicate files inside *backend/data/uploads*.
 
     The upload folder contains an embedded snapshot of the whole repository
@@ -19,4 +27,16 @@ def pytest_ignore_collect(path, _config):  # noqa: D401
     here tells pytest to ignore anything below that path.
     """
 
-    return "backend/data/uploads" in str(path)
+    p_str = str(path)
+
+    # Ignore duplicate repository snapshot as well as vendored virtual envs
+    if "backend/data/uploads" in p_str:
+        return True
+
+    # Skip bundled *venv* directories to avoid importing third-party test
+    # suites (e.g. SciPy, NetworkX) which pull heavy native dependencies like
+    # NumPy that are not present in the sandbox.
+    if "/backend/venv/" in p_str or "/.venv/" in p_str:
+        return True
+
+    return False

@@ -109,12 +109,18 @@ async def handle_chat_connection(
             elif data['type'] == 'request_config':
                 # Send current configuration to requesting client
                 try:
-                    from app.services.config_cache import get_config
-                    current_config = get_config(max_age=0)  # always fresh on explicit request
+                    from app.services.unified_config_service import UnifiedConfigService
+                    from app.database import SessionLocal
+                    
+                    with SessionLocal() as db:
+                        unified_service = UnifiedConfigService(db)
+                        current_config = unified_service.get_current_config()
+                        # Convert to legacy format for WebSocket compatibility
+                        config_dict = current_config.to_runtime_config()
                     
                     await websocket.send_json({
                         'type': 'config_update', 
-                        'config': current_config,
+                        'config': config_dict,
                         'requested': True
                     })
                 except Exception as e:

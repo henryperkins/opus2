@@ -306,11 +306,16 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 return value
 
         try:
-            from app.services.config_cache import get_config
+            from app.services.unified_config_service import UnifiedConfigService
+            from app.database import SessionLocal
             
-            config = get_config()
-            self._config_cache['runtime_config'] = (config, datetime.utcnow())
-            return config
+            with SessionLocal() as db:
+                unified_service = UnifiedConfigService(db)
+                current_config = unified_service.get_current_config()
+                # Convert to legacy format for backward compatibility
+                config = current_config.to_runtime_config()
+                self._config_cache['runtime_config'] = (config, datetime.utcnow())
+                return config
         except Exception as e:
             logger.debug(f"Failed to load config from cache: {e}")
             # Final fallback to static settings

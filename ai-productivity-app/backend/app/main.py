@@ -48,9 +48,14 @@ from .chat import confidence_routes as confidence_router
 # Conditional router imports based on feature flag
 if settings.enable_unified_config:
     from .routers import unified_config as ai_config_router
+    models_router = None  # type: ignore
 else:
-    from .routers import config as config_router
-    from .routers import models as models_router
+    # Legacy fallback – use shimmed routers for backward compatibility
+    from .routers import config as ai_config_router  # type: ignore
+    from .routers import models as models_router  # noqa: F401
+
+# Alias for legacy variable name used further below
+config_router = ai_config_router  # type: ignore
 
 
 @asynccontextmanager
@@ -145,6 +150,8 @@ register_security_middleware(app)
 
 # Include routers
 app.include_router(auth.router)
+# Note: the "models_router" shim may be missing when unified config is enabled
+# Include only when present to avoid FastAPI errors.
 app.include_router(projects.router)
 app.include_router(monitoring.router)
 app.include_router(code_router.router)
@@ -168,7 +175,7 @@ app.include_router(confidence_router.router, prefix="/confidence", tags=["Confid
 if settings.enable_unified_config:
     app.include_router(ai_config_router.router)
 else:
-    app.include_router(config_router.router)
+    app.include_router(ai_config_router.router)
     app.include_router(models_router.router)
 
 

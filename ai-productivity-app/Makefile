@@ -24,18 +24,18 @@ install: ## Install all dependencies
 
 dev: ## Start development environment with Docker
 	@echo "$(GREEN)Starting development environment...$(NC)"
-	docker-compose up --build
+	docker compose up --build
 
 up: ## Start containers in background
 	@echo "$(GREEN)Starting containers...$(NC)"
-	docker-compose up -d
+	docker compose up -d
 
 down: ## Stop all containers
 	@echo "$(GREEN)Stopping containers...$(NC)"
-	docker-compose down
+	docker compose down
 
 logs: ## View container logs
-	docker-compose logs -f
+	docker compose logs -f
 
 test: ## Run all tests
 	@echo "$(GREEN)Running backend tests...$(NC)"
@@ -45,7 +45,7 @@ test: ## Run all tests
 
 clean: ## Clean up all generated files and containers
 	@echo "$(GREEN)Cleaning up...$(NC)"
-	docker-compose down -v
+	docker compose down -v
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 	rm -rf backend/.coverage
@@ -75,7 +75,7 @@ check: ## Run pre-commit checks
 db-reset: ## Reset the database
 	@echo "$(GREEN)Resetting database...$(NC)"
 	rm -f data/app.db
-	docker-compose exec backend python -c "from app.database import init_db; init_db()"
+	docker compose exec backend python -c "from app.database import init_db; init_db()"
 
 db-shell: ## Open database shell
 	@echo "$(GREEN)Opening database shell...$(NC)"
@@ -84,13 +84,13 @@ db-shell: ## Open database shell
 # Docker commands
 build: ## Build Docker images
 	@echo "$(GREEN)Building Docker images...$(NC)"
-	docker-compose build
+	docker compose build
 
 shell-backend: ## Open shell in backend container
-	docker-compose exec backend /bin/bash
+	docker compose exec backend /bin/bash
 
 shell-frontend: ## Open shell in frontend container
-	docker-compose exec frontend /bin/sh
+	docker compose exec frontend /bin/sh
 
 # Monitoring
 status: ## Check status of all services

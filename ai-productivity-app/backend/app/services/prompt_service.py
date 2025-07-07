@@ -9,9 +9,9 @@ from app.models.prompt import PromptTemplate
 from app.models.user import User
 from app.schemas.prompt import (
     PromptTemplateCreate, PromptTemplateUpdate, PromptTemplateResponse,
-    PromptDuplicateRequest, PromptExecuteRequest, PromptExecuteResponse,
-    ModelPreferences
+    PromptDuplicateRequest, PromptExecuteRequest, PromptExecuteResponse
 )
+from app.schemas.generation import UnifiedModelConfig
 import logging
 
 logger = logging.getLogger(__name__)
@@ -247,20 +247,21 @@ class PromptService:
                 override_dict = execute_data.llm_overrides.model_dump(exclude_unset=True, by_alias=True)
                 final_model_prefs.update(override_dict)
 
-            # Get runtime config and enhance with ModelConfiguration defaults
-            from app.services.config_service import ConfigService
-            from app.services.config_cache import get_config
-
-            runtime_cfg = get_config()
-            config_service = ConfigService(self.db)
+            # Get runtime config using unified configuration service
+            from app.services.unified_config_service import UnifiedConfigService
+            
+            unified_service = UnifiedConfigService(self.db)
+            current_config = unified_service.get_current_config()
 
             # Get the model configuration for the specified model
-            model_id = final_model_prefs.get("model_id") or runtime_cfg.get("chat_model")
+            model_id = final_model_prefs.get("model_id") or current_config.model_id
             if model_id:
-                model_cfg = config_service.get_model_configuration(model_id)
-                if model_cfg:
-                    # Use merged_params to combine defaults with overrides
-                    final_model_prefs = model_cfg.merged_params(final_model_prefs)
+                model_info = unified_service.get_model_info(model_id)
+                if model_info:
+                    # Merge current config with template preferences and overrides
+                    config_dict = current_config.model_dump(exclude_unset=True)
+                    config_dict.update(final_model_prefs)
+                    final_model_prefs = config_dict
 
             # Increment usage count
             template.increment_usage()
@@ -269,7 +270,7 @@ class PromptService:
             return PromptExecuteResponse(
                 system_prompt=template.system_prompt,
                 user_prompt=rendered_prompt,
-                llm_preferences=ModelPreferences(**final_model_prefs)
+                llm_preferences=UnifiedModelConfig(**final_model_prefs)
             )
 
         except ValueError as e:

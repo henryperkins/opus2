@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from sqlalchemy.orm import Session
 from app.database import get_db, engine
 from app.models.config import ModelConfiguration
-from app.services.config_service import ConfigService
+from app.services.unified_config_service import UnifiedConfigService
 
 def add_claude_models():
     """Add Claude Sonnet and Opus 4 models to the database."""
@@ -79,7 +79,7 @@ def add_claude_models():
     
     # Create a database session
     db = next(get_db())
-    config_service = ConfigService(db)
+    config_service = UnifiedConfigService(db)
     
     try:
         for model_data in claude_models:

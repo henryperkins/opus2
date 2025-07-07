@@ -4,21 +4,8 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback } 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 
-// Use the existing API client pattern from the codebase
-// This would import from '../api/client' in the actual implementation
-const apiClient = {
-  get: (url) => fetch(url).then(res => res.json()),
-  put: (url, data) => fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  }).then(res => res.json()),
-  post: (url, data) => fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  }).then(res => res.json())
-};
+// Use the existing API client for proper authentication handling
+import { apiClient } from '../api/client';
 
 // API client
 const API_BASE = '/api/v1/ai-config';

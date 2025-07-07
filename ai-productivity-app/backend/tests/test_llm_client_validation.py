@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi import HTTPException
 
 from app.llm.client import LLMClient
-from app.services.config_service import ConfigService
+from app.services.unified_config_service import UnifiedConfigService
 
 
 class TestLLMClientValidation:
@@ -113,16 +113,18 @@ class TestLLMClientValidation:
     @pytest.mark.asyncio
     async def test_config_validation_error_handling(self):
         """Test that validation errors return 422, not 500."""
-        config_service = ConfigService()
+        from app.database import SessionLocal
+        with SessionLocal() as db:
+            config_service = UnifiedConfigService(db)
         
         # Mock the LLM client to raise UnboundLocalError (simulating the original bug)
         with patch('app.llm.client.LLMClient.complete') as mock_complete:
             mock_complete.side_effect = UnboundLocalError("cannot access local variable 'input_messages' where it is not associated with a value")
             
             # This should handle the error gracefully
-            is_valid, error = await config_service.validate_config({
+            is_valid, error = config_service.validate_config({
                 "provider": "azure", 
-                "chat_model": "o3",
+                "model_id": "o3",
                 "use_responses_api": True,
                 "reasoning_effort": "high"
             })
@@ -213,7 +215,9 @@ class TestConfigServiceValidation:
     @pytest.fixture
     def config_service(self):
         """Create config service instance for testing."""
-        return ConfigService()
+        from app.database import SessionLocal
+        with SessionLocal() as db:
+            return UnifiedConfigService(db)
 
     @pytest.mark.asyncio
     async def test_validation_with_valid_config(self, config_service):
@@ -223,9 +227,9 @@ class TestConfigServiceValidation:
             mock_client.complete.return_value = MagicMock()
             mock_client_class.return_value = mock_client
             
-            is_valid, error = await config_service.validate_config({
+            is_valid, error = config_service.validate_config({
                 "provider": "azure",
-                "chat_model": "o3", 
+                "model_id": "o3", 
                 "use_responses_api": True,
                 "reasoning_effort": "high"
             })
@@ -241,9 +245,9 @@ class TestConfigServiceValidation:
             mock_client.complete.side_effect = UnboundLocalError("cannot access local variable 'input_messages'")
             mock_client_class.return_value = mock_client
             
-            is_valid, error = await config_service.validate_config({
+            is_valid, error = config_service.validate_config({
                 "provider": "azure",
-                "chat_model": "o3",
+                "model_id": "o3",
                 "use_responses_api": True
             })
             
@@ -258,9 +262,9 @@ class TestConfigServiceValidation:
             mock_client.complete.side_effect = ValueError("Invalid model configuration")
             mock_client_class.return_value = mock_client
             
-            is_valid, error = await config_service.validate_config({
+            is_valid, error = config_service.validate_config({
                 "provider": "azure",
-                "chat_model": "invalid-model"
+                "model_id": "invalid-model"
             })
             
             assert is_valid is False

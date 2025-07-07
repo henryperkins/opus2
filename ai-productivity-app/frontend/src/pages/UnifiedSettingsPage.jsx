@@ -3,9 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigation } from '../contexts/NavigationContext';
 import { NavigationManager } from '../utils/navigation';
 import UnifiedModal from '../components/common/UnifiedModal';
-import ModelConfiguration from '../components/settings/ModelConfiguration';
-import AIProviderInfo from '../components/settings/AIProviderInfo';
-import ThinkingConfiguration from '../components/settings/ThinkingConfiguration';
+import UnifiedAISettings from '../components/settings/UnifiedAISettings';
 import ToolUsagePanel from '../components/chat/ToolUsagePanel';
 import useAuthStore from '../stores/authStore';
 import { authAPI } from '../api/auth';
@@ -50,17 +48,16 @@ export default function UnifiedSettingsPage() {
       case 'models':
         return (
           <div>
-            <h2 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-gray-100">AI Models</h2>
-            <ModelConfiguration />
-            <div className="mt-8">
-              <AIProviderInfo />
-            </div>
+            <UnifiedAISettings />
           </div>
         );
       case 'thinking':
         return (
           <div className="space-y-8">
-            <ThinkingConfiguration />
+            <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+              <p>Thinking and tools configuration has been consolidated into the AI Models section.</p>
+              <p>Please use the AI Models tab for all configuration options.</p>
+            </div>
             <div className="border-t border-gray-200 pt-8">
               <div className="flex items-center gap-3 mb-6">
                 <Wrench className="h-6 w-6 text-blue-500" />

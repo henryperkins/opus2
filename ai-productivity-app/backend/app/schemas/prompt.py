@@ -1,6 +1,6 @@
 # Pydantic schemas for prompt templates
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime
 import re
 
@@ -22,16 +22,6 @@ class PromptVariable(BaseModel):
         return v
 
 
-class ModelPreferences(BaseModel):
-    """Schema for model-specific preferences"""
-    temperature: Optional[float] = Field(None, ge=0.0, le=2.0, description="Model temperature")
-    max_tokens: Optional[int] = Field(None, ge=1, le=8192, description="Maximum tokens", alias="maxTokens")
-    top_p: Optional[float] = Field(None, ge=0.0, le=1.0, description="Top-p sampling", alias="topP")
-    frequency_penalty: Optional[float] = Field(None, ge=-2.0, le=2.0, description="Frequency penalty", alias="frequencyPenalty")
-    presence_penalty: Optional[float] = Field(None, ge=-2.0, le=2.0, description="Presence penalty", alias="presencePenalty")
-
-    model_config = {"populate_by_name": True}
-
 
 class PromptTemplateBase(BaseModel):
     """Base schema for prompt templates"""
@@ -41,7 +31,7 @@ class PromptTemplateBase(BaseModel):
     system_prompt: Optional[str] = Field(None, description="System prompt for AI", alias="systemPrompt")
     user_prompt_template: str = Field(..., min_length=1, description="User prompt template", alias="userPromptTemplate")
     variables: List[PromptVariable] = Field(default_factory=list, description="Template variables")
-    llm_preferences: ModelPreferences = Field(default_factory=ModelPreferences, description="Model preferences", alias="llmPreferences")
+    llm_preferences: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Model preferences", alias="llmPreferences")
     is_public: bool = Field(False, description="Whether template is public", alias="isPublic")
 
     model_config = {"populate_by_name": True, "protected_namespaces": ()}
@@ -71,7 +61,7 @@ class PromptTemplateUpdate(BaseModel):
     system_prompt: Optional[str] = Field(None, description="System prompt for AI", alias="systemPrompt")
     user_prompt_template: Optional[str] = Field(None, min_length=1, description="User prompt template", alias="userPromptTemplate")
     variables: Optional[List[PromptVariable]] = Field(None, description="Template variables")
-    llm_preferences: Optional[ModelPreferences] = Field(None, description="Model preferences", alias="llmPreferences")
+    llm_preferences: Optional[Dict[str, Any]] = Field(None, description="Model preferences", alias="llmPreferences")
     is_public: Optional[bool] = Field(None, description="Whether template is public", alias="isPublic")
 
     model_config = {"populate_by_name": True, "protected_namespaces": ()}
@@ -116,7 +106,7 @@ class PromptExecuteRequest(BaseModel):
     """Schema for executing prompt templates"""
     template_id: int = Field(..., description="Template ID", alias="templateId")
     variables: Dict[str, str] = Field(default_factory=dict, description="Variable values")
-    llm_overrides: Optional[ModelPreferences] = Field(None, description="Model preference overrides", alias="llmOverrides")
+    llm_overrides: Optional[Dict[str, Any]] = Field(None, description="Model preference overrides", alias="llmOverrides")
 
     model_config = {"populate_by_name": True, "protected_namespaces": ()}
 
@@ -125,7 +115,7 @@ class PromptExecuteResponse(BaseModel):
     """Schema for prompt execution response"""
     system_prompt: Optional[str] = Field(None, description="System prompt", alias="systemPrompt")
     user_prompt: str = Field(..., description="Rendered user prompt", alias="userPrompt")
-    llm_preferences: ModelPreferences = Field(..., description="Final model preferences", alias="llmPreferences")
+    llm_preferences: Dict[str, Any] = Field(..., description="Final model preferences", alias="llmPreferences")
 
     model_config = {"populate_by_name": True, "protected_namespaces": ()}
 
