@@ -5,10 +5,12 @@ import { NavigationManager } from '../utils/navigation';
 import UnifiedModal from '../components/common/UnifiedModal';
 import ModelConfiguration from '../components/settings/ModelConfiguration';
 import AIProviderInfo from '../components/settings/AIProviderInfo';
+import ThinkingConfiguration from '../components/settings/ThinkingConfiguration';
+import ToolUsagePanel from '../components/chat/ToolUsagePanel';
 import useAuthStore from '../stores/authStore';
 import { authAPI } from '../api/auth';
 import { toast } from '../components/common/Toast';
-import { User, Shield, Palette, Bell, Code, Database, Eye, EyeOff } from 'lucide-react';
+import { User, Shield, Palette, Bell, Code, Database, Eye, EyeOff, Brain, Wrench } from 'lucide-react';
 
 const SETTINGS_SECTIONS = [
   { id: 'profile', label: 'Profile', icon: User },
@@ -16,6 +18,7 @@ const SETTINGS_SECTIONS = [
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'models', label: 'AI Models', icon: Code },
+  { id: 'thinking', label: 'Thinking & Tools', icon: Brain },
   { id: 'data', label: 'Data & Privacy', icon: Database }
 ];
 
@@ -26,6 +29,8 @@ export default function UnifiedSettingsPage() {
   const [activeSection, setActiveSection] = useState('profile');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [show2FAModal, setShow2FAModal] = useState(false);
+  const [enabledTools, setEnabledTools] = useState(['file_search', 'explain_code', 'comprehensive_analysis']);
+  const [recentToolCalls, setRecentToolCalls] = useState([]);
 
   const renderSectionContent = () => {
     switch (activeSection) {
@@ -49,6 +54,43 @@ export default function UnifiedSettingsPage() {
             <ModelConfiguration />
             <div className="mt-8">
               <AIProviderInfo />
+            </div>
+          </div>
+        );
+      case 'thinking':
+        return (
+          <div className="space-y-8">
+            <ThinkingConfiguration />
+            <div className="border-t border-gray-200 pt-8">
+              <div className="flex items-center gap-3 mb-6">
+                <Wrench className="h-6 w-6 text-blue-500" />
+                <h2 className="text-xl font-semibold text-gray-900">Tool Management</h2>
+              </div>
+              <ToolUsagePanel
+                enabledTools={enabledTools}
+                onToolToggle={(toolId, enabled) => {
+                  if (enabled) {
+                    setEnabledTools(prev => [...prev, toolId]);
+                  } else {
+                    setEnabledTools(prev => prev.filter(id => id !== toolId));
+                  }
+                }}
+                recentToolCalls={recentToolCalls}
+                onRunTool={(toolId) => {
+                  console.log('Running tool:', toolId);
+                  // Add test tool call to recent calls
+                  const testCall = {
+                    toolId,
+                    toolName: toolId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                    description: 'Test execution',
+                    status: 'success',
+                    duration: Math.random() * 3000 + 500,
+                    timestamp: new Date().toISOString()
+                  };
+                  setRecentToolCalls(prev => [testCall, ...prev.slice(0, 9)]);
+                }}
+                compact={false}
+              />
             </div>
           </div>
         );

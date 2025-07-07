@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Send, Hash, Plus, X } from 'lucide-react';
 import PropTypes from 'prop-types';
+import ThinkingModeSelector from './ThinkingModeSelector';
 
 // Simple command suggestions component
 function CommandSuggestions({ query, onSelect, onClose }) {
@@ -99,6 +100,8 @@ export default function ChatInput({
   const [showCommands, setShowCommands] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [thinkingMode, setThinkingMode] = useState('off');
+  const [thinkingDepth, setThinkingDepth] = useState('detailed');
 
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -186,7 +189,9 @@ export default function ChatInput({
       const messageData = {
         content: message.trim(),
         attachments: attachments.length > 0 ? attachments : undefined,
-        projectId
+        projectId,
+        thinkingMode: thinkingMode !== 'off' ? thinkingMode : undefined,
+        thinkingDepth: thinkingMode !== 'off' ? thinkingDepth : undefined
       };
 
       await onSend(messageData);
@@ -229,6 +234,18 @@ export default function ChatInput({
           attachments={attachments}
           onRemove={removeAttachment}
         />
+
+        {/* Thinking Mode Selector */}
+        <div className="mb-3">
+          <ThinkingModeSelector
+            value={thinkingMode}
+            depth={thinkingDepth}
+            onChange={setThinkingMode}
+            onDepthChange={setThinkingDepth}
+            disabled={disabled || isSending}
+            compact={true}
+          />
+        </div>
 
         {/* Main input area */}
         <div className="relative">

@@ -22,7 +22,9 @@ import logging
 import os
 import types
 import json  # Add json import for logging
+
 from typing import Any, Dict, List, Sequence, AsyncIterator
+from app.config import settings
 
 # ---------------------------------------------------------------------------
 # Optional dependencies – fall back to the stub implementation installed in
@@ -51,6 +53,9 @@ import sys
 
 _IN_SANDBOX = os.getenv("APP_CI_SANDBOX") == "1" or "pytest" in sys.modules
 
+# Logger must be initialised before optional dependency warning logs
+logger = logging.getLogger(__name__)
+
 try:
     from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore
 except ModuleNotFoundError as exc:
@@ -69,7 +74,7 @@ except ModuleNotFoundError as exc:
 # Anthropic SDK import with similar fallback handling
 try:
     from anthropic import AsyncAnthropic  # type: ignore
-except ModuleNotFoundError as exc:
+except ModuleNotFoundError:
     if _IN_SANDBOX:
         # Create a stub for testing environments
         class AsyncAnthropic:
@@ -87,10 +92,6 @@ except ModuleNotFoundError as exc:
         )
         AsyncAnthropic = None
 
-
-from app.config import settings
-
-logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Helper utilities
@@ -400,37 +401,37 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
     def _init_anthropic_client(self) -> None:
         """Create *AsyncAnthropic* instance for Claude models."""
-        
+
         if AsyncAnthropic is None:
             raise RuntimeError(
                 "Anthropic SDK not available. Install via `pip install anthropic` "
                 "to use Claude models."
             )
-        
+
         api_key = (
             settings.anthropic_api_key
             or os.getenv("ANTHROPIC_API_KEY")
             or "test-key"
         )
-        
+
         if not api_key or api_key == "test-key":
             logger.info("Anthropic API key missing – continuing with stub client")
-        
+
         self.client = AsyncAnthropic(api_key=api_key)
 
     def _supports_thinking(self, model: str) -> bool:
         """Check if the model supports Claude extended thinking."""
         thinking_models = {
             "claude-opus-4-20250514",
-            "claude-sonnet-4-20250514", 
+            "claude-sonnet-4-20250514",
             "claude-3-5-sonnet-20241022",  # Claude Sonnet 3.7
             "claude-3-5-sonnet-latest"
         }
         return model.lower() in {m.lower() for m in thinking_models}
 
     async def _handle_anthropic_request(
-        self, 
-        messages: List[Dict[str, Any]], 
+        self,
+        messages: List[Dict[str, Any]],
         temperature: float,
         max_tokens: int | None,
         model: str,
@@ -440,20 +441,20 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         thinking: Dict[str, Any] | None = None
     ) -> Any:
         """Handle Anthropic Claude API requests."""
-        
+
         if self.client is None:
             raise RuntimeError("Anthropic client not initialized")
-        
+
         # Extract system message from messages
         system_message = None
         filtered_messages = []
-        
+
         for msg in messages:
             if msg.get("role") == "system":
                 system_message = msg.get("content", "")
             else:
                 filtered_messages.append(msg)
-        
+
         # Build request parameters
         request_params = {
             "model": model,
@@ -462,11 +463,11 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             "temperature": temperature,
             "stream": stream
         }
-        
+
         # Add system message if present
         if system_message:
             request_params["system"] = system_message
-        
+
         # Add thinking configuration for Claude models if enabled
         if thinking and self._supports_thinking(model):
             # Claude extended thinking configuration
@@ -475,9 +476,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 "budget_tokens": thinking.get("budget_tokens", settings.claude_thinking_budget_tokens)
             }
             request_params["thinking"] = thinking_config
-            
+
             logger.debug(f"Enabled Claude thinking with budget: {thinking_config['budget_tokens']} tokens")
-        
+
         # Handle tools if provided
         if tools:
             anthropic_tools = []
@@ -493,28 +494,28 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 else:
                     # Already in Anthropic format or legacy format
                     anthropic_tools.append(tool)
-            
+
             request_params["tools"] = anthropic_tools
-        
+
         # Log API request for debugging
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("=== ANTHROPIC API REQUEST ===")
             logger.debug(f"Model: {model}, Temperature: {temperature}, Stream: {stream}")
             logger.debug(f"Messages: {len(filtered_messages)} total, Tools: {tools is not None}")
-        
+
         try:
             response = await self.client.messages.create(**request_params)
-            
+
             # Log API response for debugging
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("=== ANTHROPIC API RESPONSE ===")
                 if hasattr(response, "usage"):
                     logger.debug(f"Token Usage: {response.usage}")
-            
+
             if stream:
                 return self._stream_anthropic_response(response)
             return response
-            
+
         except Exception as exc:
             logger.error(f"Anthropic API error: {exc}")
             raise
@@ -523,12 +524,12 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         """Convert Anthropic streaming response to string chunks."""
         logger.debug("Processing Anthropic API stream")
         chunk_count = 0
-        
+
         try:
             async for chunk in response:
                 chunk_count += 1
                 logger.debug(f"Received chunk {chunk_count}: {type(chunk)}")
-                
+
                 if hasattr(chunk, "delta") and hasattr(chunk.delta, "text"):
                     logger.debug(f"Yielding delta text: {chunk.delta.text[:50]}...")
                     yield chunk.delta.text
@@ -540,7 +541,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                             yield content_block.text
         except Exception as e:
             logger.error(f"Error in _stream_anthropic_response: {e}", exc_info=True)
-        
+
         logger.debug(f"Anthropic stream processing complete, processed {chunk_count} chunks")
 
     # ---------------------------------------------------------------------
@@ -636,7 +637,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 thinking_config = None
                 if settings.claude_extended_thinking and settings.claude_thinking_mode != "off":
                     budget_tokens = settings.claude_thinking_budget_tokens
-                    
+
                     # Adjust budget based on task complexity if adaptive mode is enabled
                     if settings.claude_adaptive_thinking_budget:
                         # Simple heuristics for budget adjustment
@@ -645,12 +646,12 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                             budget_tokens = min(settings.claude_max_thinking_budget, budget_tokens * 2)
                         elif tools:  # Tool usage = complex task
                             budget_tokens = min(settings.claude_max_thinking_budget, budget_tokens * 1.5)
-                    
+
                     thinking_config = {
                         "type": settings.claude_thinking_mode,
                         "budget_tokens": int(budget_tokens)
                     }
-                
+
                 return await self._handle_anthropic_request(
                     messages=messages,
                     temperature=active_temperature,
@@ -661,7 +662,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     tool_choice=tool_choice,
                     thinking=thinking_config
                 )
-            
+
             elif self.use_responses_api:
                 # Azure Responses API - follows the official documentation pattern
 
@@ -1095,7 +1096,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 # Re-raise unchanged – caller handles logging / user feedback.
                 raise
 
-        except Exception as exc:  # noqa: BLE001 – broad for logging / Sentry
+        except Exception:  # noqa: BLE001 – broad for logging / Sentry
             # Forward exception after capturing telemetry so calling code can
             # decide how to react (retry, user-facing error, …).
             raise  # re-raise unchanged

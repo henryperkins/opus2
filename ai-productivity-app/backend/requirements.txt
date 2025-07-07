@@ -48,11 +48,13 @@ black==23.12.1
 flake8==7.0.0
 mypy==1.8.0
 tiktoken
+anthropic==0.57.1
 
 # Scientific computing library required for vector store math operations
 numpy==1.26.4
 # LLM provider
 openai
+anthropic  # For Claude models
 azure-identity==1.15.0  # For Azure OpenAI authentication
 
 # Optional: Qdrant vector database (will be removed in PostgreSQL-only migration)
