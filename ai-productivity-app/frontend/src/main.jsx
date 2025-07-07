@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client';
 import { AuthProvider } from './contexts/AuthContext';
 import { ModelProvider } from './contexts/ModelContext';
 import { KnowledgeProvider } from './contexts/KnowledgeContext';
+import { AIConfigProvider } from './contexts/AIConfigContext';
 import AppRouter from './router';
 import { ThemeProvider } from './hooks/useTheme';
 import { ToastContainer } from './components/common/Toast';
@@ -24,12 +25,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AuthProvider>
-            <ModelProvider>
-              <KnowledgeProvider>
-                <AppRouter />
-                <ToastContainer />
-              </KnowledgeProvider>
-            </ModelProvider>
+            <AIConfigProvider>
+              <ModelProvider>
+                <KnowledgeProvider>
+                  <AppRouter />
+                  <ToastContainer />
+                </KnowledgeProvider>
+              </ModelProvider>
+            </AIConfigProvider>
           </AuthProvider>
           {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
         </ThemeProvider>

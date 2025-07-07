@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 from .utils.redis_client import close_redis
 from .middleware.correlation_id import CorrelationIdMiddleware
 from .middleware.security import register_security_middleware
-from .routers import auth, projects, monitoring, config as config_router
+from .routers import auth, projects, monitoring
 from .routers import code as code_router
 from .routers import email as email_router
 from .routers import notifications as notify_router
@@ -36,7 +36,6 @@ from .routers import timeline as timeline_router
 from .routers import search as search_router
 from .routers import analytics as analytics_router
 from .routers import knowledge as knowledge_router
-from .routers import models as models_router
 from .routers import rendering as rendering_router
 from .routers import copilot as copilot_router
 from .routers import prompts as prompts_router
@@ -45,6 +44,13 @@ from .routers import project_search as project_search_router
 from .routers import feedback as feedback_router
 from .chat import admin_routes as admin_router
 from .chat import confidence_routes as confidence_router
+
+# Conditional router imports based on feature flag
+if settings.enable_unified_config:
+    from .routers import unified_config as ai_config_router
+else:
+    from .routers import config as config_router
+    from .routers import models as models_router
 
 
 @asynccontextmanager
@@ -68,6 +74,14 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
         logger.info("Vector store (%s) initialized successfully", settings.vector_store_type)
     except Exception as exc:
         logger.error("Failed to initialize vector store (%s): %s", settings.vector_store_type, exc)
+
+    # Initialize unified configuration if enabled
+    if settings.enable_unified_config:
+        from app.services.unified_config_service import UnifiedConfigService
+        from app.database import SessionLocal
+        with SessionLocal() as db:
+            service = UnifiedConfigService(db)
+            service.initialize_defaults()
 
     yield
     # Shutdown
@@ -126,7 +140,6 @@ app.include_router(projects.router)
 app.include_router(monitoring.router)
 app.include_router(code_router.router)
 app.include_router(chat_router.router)
-app.include_router(config_router.router)
 app.include_router(email_router.router)
 app.include_router(notify_router.router)
 app.include_router(import_git_router.router)
@@ -134,7 +147,6 @@ app.include_router(timeline_router.router)
 app.include_router(search_router.router)
 app.include_router(analytics_router.router)
 app.include_router(knowledge_router.router)
-app.include_router(models_router.router)
 app.include_router(rendering_router.router)
 app.include_router(copilot_router.router)
 app.include_router(prompts_router.router)
@@ -143,6 +155,12 @@ app.include_router(project_search_router.router)
 app.include_router(feedback_router.router)
 app.include_router(admin_router.router, prefix="/admin", tags=["Admin"])
 app.include_router(confidence_router.router, prefix="/confidence", tags=["Confidence"])
+
+if settings.enable_unified_config:
+    app.include_router(ai_config_router.router)
+else:
+    app.include_router(config_router.router)
+    app.include_router(models_router.router)
 
 
 @app.get("/health")

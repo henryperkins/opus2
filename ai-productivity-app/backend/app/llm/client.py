@@ -265,6 +265,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
     _DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 
     def __init__(self) -> None:
+        from datetime import timedelta
         self.provider: str = settings.llm_provider.lower()
 
         # The active *model* (or *deployment name* in Azure terminology).  We
@@ -281,6 +282,10 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         # Underlying OpenAI SDK client – differs for public vs. Azure.
         self.client: Any | None = None
 
+        # TTL Cache for runtime config
+        self._config_cache: Dict[str, tuple[Any, datetime]] = {}
+        self._cache_ttl = timedelta(seconds=5)
+
         # Provider-specific initialisation.
         try:
             if self.provider == "azure":
@@ -294,10 +299,18 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
     def _get_runtime_config(self) -> Dict[str, Any]:
         """Get current runtime configuration, falling back to static settings."""
+        # Check cache with TTL
+        if 'runtime_config' in self._config_cache:
+            value, timestamp = self._config_cache['runtime_config']
+            if datetime.utcnow() - timestamp < self._cache_ttl:
+                return value
+
         try:
             from app.services.config_cache import get_config
-
-            return get_config()
+            
+            config = get_config()
+            self._config_cache['runtime_config'] = (config, datetime.utcnow())
+            return config
         except Exception as e:
             logger.debug(f"Failed to load config from cache: {e}")
             # Final fallback to static settings
