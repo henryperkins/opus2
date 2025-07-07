@@ -474,7 +474,13 @@ class ConfigService:
                     
                     # Check if the response has a status and handle incomplete responses
                     if hasattr(resp, 'status') and resp.status == 'incomplete':
-                        return False, "Azure OpenAI Responses API returned incomplete response - this may indicate a configuration issue or model limitation"
+                        error_message = (
+                            "Azure OpenAI Responses API returned an incomplete response. "
+                            "This may indicate a configuration issue, such as an invalid model "
+                            "or a model that does not support the 'responses' feature. "
+                            "Please verify the model name and its capabilities."
+                        )
+                        return False, error_message
                     
                     if hasattr(resp, "output") and resp.output:
                         last_output = resp.output[-1]

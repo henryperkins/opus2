@@ -5,6 +5,7 @@ import logging
 from openai import AsyncOpenAI, RateLimitError, APITimeoutError
 
 from .base import LLMProvider
+from .utils import validate_tools, build_openai_chat_params
 
 logger = logging.getLogger(__name__)
 
@@ -38,28 +39,17 @@ class OpenAIProvider(LLMProvider):
     ) -> Any:
         """Execute OpenAI completion."""
 
-        # Build request parameters
-        params = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "stream": stream
-        }
-
-        if max_tokens:
-            params["max_tokens"] = max_tokens
-
-        if tools:
-            params["tools"] = self.validate_tools(tools)
-            if tool_choice:
-                params["tool_choice"] = tool_choice
-            params["parallel_tool_calls"] = parallel_tool_calls
-
-        # Add any additional parameters
-        params.update(kwargs)
-
-        # Remove None values
-        params = {k: v for k, v in params.items() if v is not None}
+        params = build_openai_chat_params(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=stream,
+            tools=tools,
+            tool_choice=tool_choice,
+            parallel_tool_calls=parallel_tool_calls,
+            **kwargs
+        )
 
         logger.debug(f"OpenAI request: model={model}, stream={stream}, tools={len(tools or [])}")
 
@@ -73,22 +63,7 @@ class OpenAIProvider(LLMProvider):
 
     def validate_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Validate tools are in OpenAI format."""
-        validated = []
-        for tool in tools:
-            if "function" in tool:
-                # Already in correct format
-                validated.append(tool)
-            else:
-                # Convert from legacy format
-                validated.append({
-                    "type": "function",
-                    "function": {
-                        "name": tool.get("name"),
-                        "description": tool.get("description"),
-                        "parameters": tool.get("parameters", {})
-                    }
-                })
-        return validated
+        return validate_tools(tools)
 
     def extract_content(self, response: Any) -> str:
         """Extract text content from OpenAI response."""

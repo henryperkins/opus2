@@ -475,6 +475,15 @@ def _install_pydantic_stub():
 
     _pydantic_mod.confloat = _identity_factory(float)
     _pydantic_mod.conint = _identity_factory(int)
+    from typing import List as _List  # local import to avoid top-level dependency
+
+    def _conlist_factory(item_type, *, min_length=0, max_length=None):  # noqa: D401 – mimic API
+        def _factory(seq: _List[item_type] | None = None):  # type: ignore[var-annotated]
+            return seq or []
+
+        return _factory
+
+    _pydantic_mod.conlist = _conlist_factory  # type: ignore[attr-defined]
     _pydantic_mod.field_validator = _validator
 
     _pydantic_dc = _types.ModuleType("pydantic.dataclasses")
@@ -678,9 +687,201 @@ def _install_numpy_stub():
             super().__init__(name)
             self.norm = _norm
 
+# add linalg module registration
     np.linalg = _LinalgModule("numpy.linalg")
 
     _sys.modules["numpy"] = np
+
+
+# ---------------------------------------------------------------------------
+# Prometheus client stub (Summary & Gauge)
+# ---------------------------------------------------------------------------
+
+
+def _install_prometheus_stub():  # noqa: D401 – mimic external API
+    """Provide a minimal *prometheus_client* replacement.
+
+    The real library exposes classes like ``Summary`` and ``Gauge`` whose
+    instances are used as decorators (``@Summary.time()``) or chained calls
+    (``Gauge.labels(...).inc()``).  The stub implements the same callables as
+    no-ops so the business logic can import the package without running the
+    heavy runtime.
+    """
+
+    import sys as _sys
+    import types as _types
+
+    prom_mod = _types.ModuleType("prometheus_client")
+
+    class _Metric:  # pylint: disable=too-few-public-methods
+        def __init__(self, *_, **__):
+            pass
+
+        def time(self):  # noqa: D401 – decorator
+            return lambda fn: fn
+
+        def labels(self, *_, **__):  # noqa: D401 – chainable
+            return self
+
+        def inc(self, *_):  # noqa: D401 – no-op
+            return None
+
+    prom_mod.Summary = _Metric  # type: ignore
+    prom_mod.Gauge = _Metric  # type: ignore
+
+    _sys.modules["prometheus_client"] = prom_mod
+
+
+# ---------------------------------------------------------------------------
+# Tenacity stub – provides retry decorators used in the code base
+# ---------------------------------------------------------------------------
+
+
+def _install_tenacity_stub():  # noqa: D401 – mimic API
+    """Register a *tenacity* replacement with no-op decorators."""
+
+    import sys as _sys
+    import types as _types
+
+    t_module = _types.ModuleType("tenacity")
+
+    def _retry(*dargs, **_dkwargs):  # noqa: D401
+        """Return decorator that executes the function without retry."""
+
+        def decorator(fn):
+            return fn
+
+        # Support both @retry and @retry(...) syntaxes
+        if dargs and callable(dargs[0]):
+            return decorator(dargs[0])
+        return decorator
+
+    t_module.retry = _retry
+
+    def _identity(x):  # noqa: D401
+        return x
+
+    # Common helpers used in the code
+    t_module.stop_after_attempt = lambda *_a, **_kw: None  # type: ignore
+    t_module.wait_exponential = lambda *_a, **_kw: None  # type: ignore
+    t_module.retry_if_exception_type = _identity  # type: ignore
+    t_module.before_sleep_log = lambda *_a, **_kw: None  # type: ignore
+    t_module.retry_if_exception = _identity  # type: ignore
+    
+    class RetryError(Exception):
+        pass
+
+    t_module.RetryError = RetryError
+
+    _sys.modules["tenacity"] = t_module
+
+
+# ---------------------------------------------------------------------------
+# Qdrant stub
+# ---------------------------------------------------------------------------
+
+
+def _install_qdrant_stub():
+    """Register a dummy *qdrant_client* module with the minimal surface.
+
+    The backend uses only *QdrantClient* and the *models* sub-module with a
+    handful of attribute-like enums / classes.  We replicate just enough so
+    that ``import qdrant_client`` succeeds and type-checks evaluating
+    ``qdrant_client.models.Distance.COSINE`` do not crash.
+    """
+
+    import sys as _sys
+    import types as _types
+
+    qdrant_mod = _types.ModuleType("qdrant_client")
+
+    class _FakeClient:  # pylint: disable=too-few-public-methods
+        def __init__(self, *_, **__):
+            pass
+
+        # Public methods accessed by the wrapper. They all return trivial
+        # placeholders so the higher level code can still inspect the
+        # response structure without crashing.
+
+        def get_collections(self):  # noqa: D401 – signature parity
+            return _types.SimpleNamespace(collections=[])
+
+        def create_collection(self, *_, **__):
+            return None
+
+        def upsert(self, *_, **__):
+            return _types.SimpleNamespace(status="COMPLETED")
+
+        def delete(self, *_, **__):
+            return None
+
+        def search(self, *_, **__):
+            return []
+
+        def get_collection(self, *_):
+            return _types.SimpleNamespace(points_count=0)
+
+    qdrant_mod.QdrantClient = _FakeClient
+
+    # models sub-module with Distance enum and minimal PointStruct etc.
+    models_mod = _types.ModuleType("qdrant_client.models")
+
+    class _Distance:  # pylint: disable=too-few-public-methods
+        COSINE = "cosine"
+
+    models_mod.Distance = _Distance
+
+    class _PointStruct(dict):  # pragma: no cover – placeholder only
+        def __init__(self, **kw):  # noqa: D401 – mimic attrs
+            super().__init__(**kw)
+
+    models_mod.PointStruct = _PointStruct
+
+    class _FieldCondition(dict):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+
+    models_mod.FieldCondition = _FieldCondition
+
+    class _MatchAny(dict):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+
+    models_mod.MatchAny = _MatchAny
+
+    class _MatchValue(dict):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+
+    models_mod.MatchValue = _MatchValue
+
+    class _Filter(dict):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+
+    models_mod.Filter = _Filter
+
+    class _VectorParams(dict):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+
+    models_mod.VectorParams = _VectorParams
+
+    class _HnswConfigDiff(dict):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+
+    models_mod.HnswConfigDiff = _HnswConfigDiff
+
+    class _UpdateStatus:  # pylint: disable=too-few-public-methods
+        COMPLETED = "COMPLETED"
+
+    models_mod.UpdateStatus = _UpdateStatus
+
+    qdrant_mod.models = models_mod
+
+    _sys.modules["qdrant_client"] = qdrant_mod
+    _sys.modules["qdrant_client.models"] = models_mod
 
 
 def _install_openai_stub():
@@ -802,6 +1003,12 @@ def install_stubs():
         ("git", _install_gitpython_stub),
         ("aiofiles", _install_aiofiles_stub),
         ("numpy", _install_numpy_stub),
+        ("prometheus_client", _install_prometheus_stub),
+        ("tenacity", _install_tenacity_stub),
+        # Qdrant client is imported by the vector store service layer. Provide
+        # a minimal stub so that test collection does not bail out early when
+        # the binary wheels are unavailable in the sandbox.
+        ("qdrant_client", _install_qdrant_stub),
     ]
     for pkg, fn in installers:
         try:

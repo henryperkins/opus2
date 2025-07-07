@@ -368,14 +368,11 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
     def _init_openai_client(self) -> None:
         """Create *AsyncOpenAI* instance for the public endpoint."""
 
-        api_key = os.getenv("OPENAI_API_KEY", settings.openai_api_key)
+        # Centralised client creation – avoids duplicated logic between
+        # EmbeddingGenerator and LLMClient.
+        from app.llm.client_factory import get_openai_client
 
-        if not api_key:
-            logger.info("OpenAI API key missing – continuing with stub client")
-
-        # The stub implementation happily accepts arbitrary keyword args so we
-        # can pass the *api_key* without conditional checks.
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = get_openai_client()
 
     def _init_azure_client(self) -> None:  # noqa: C901 – complexity not critical here
         """Create *AsyncAzureOpenAI* instance for Azure."""
@@ -384,47 +381,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         # support the full range of authentication flows.  For the purpose of
         # the unit tests we only need a handful of attributes.
 
-        endpoint = (
-            settings.azure_openai_endpoint
-            or os.getenv("AZURE_OPENAI_ENDPOINT")
-            or "https://example.openai.azure.com"
-        )
+        from app.llm.client_factory import get_azure_client
 
-        api_key = (
-            settings.azure_openai_api_key
-            or os.getenv("AZURE_OPENAI_API_KEY")
-            or "test-key"
-        )
-
-        # Determine API version - use preview for models that require special APIs
-        api_version = getattr(
-            settings, "azure_openai_api_version", "2025-04-01-preview"
-        )
-        if (
-            _model_requires_responses_api(self.active_model)
-            or _is_reasoning_model(self.active_model)
-        ) and api_version not in {"preview", "2025-04-01-preview"}:
-            # Auto-upgrade to preview API version for models that require special handling
-            api_version = "2025-04-01-preview"
-            logger.info(
-                "Auto-upgrading to preview API version for model: %s", self.active_model
-            )
-
-        extra_kwargs: Dict[str, Any] = {
-            "azure_endpoint": endpoint,
-            "api_version": api_version,
-        }
-
-        # Default authentication method → API key
-        auth_method = getattr(settings, "azure_auth_method", "api_key").lower()
-        if auth_method == "api_key":
-            extra_kwargs["api_key"] = api_key
-        else:
-            # The tests never hit the *entra_id* flow – we still include a
-            # placeholder for completeness.
-            extra_kwargs["azure_ad_token_provider"] = lambda: "dummy-token"
-
-        self.client = AsyncAzureOpenAI(**extra_kwargs)
+        self.client = get_azure_client()
 
     def _init_anthropic_client(self) -> None:
         """Create *AsyncAnthropic* instance for Claude models."""

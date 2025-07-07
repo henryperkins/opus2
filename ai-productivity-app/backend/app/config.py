@@ -13,18 +13,11 @@ from pydantic import ConfigDict, Field, field_validator
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables"""
-
-    model_config = ConfigDict(extra="allow", env_file=".env", case_sensitive=False)
-
-    # Application
+    """Application settings."""
     app_name: str = "AI Productivity App"
     app_version: str = "0.1.0"
-    # Enable *debug* by default in the test environment so that auxiliary
-    # services (like the internal email micro-service) fall back to
-    # *log-only* mode instead of attempting outbound network connections
-    # which are blocked in the sandbox.
-    debug: bool = True
+    debug: bool = False
+    debug_sql: bool = False
 
     # -------------------------------------------------------------------
     # Vector Store Configuration
@@ -332,6 +325,12 @@ class Settings(BaseSettings):
     
     # Maximum thinking budget for complex tasks
     claude_max_thinking_budget: int = 65536
+
+    # Comma-separated list of Claude models that support the "thinking" feature
+    claude_thinking_models: str = Field(
+        default="claude-opus-4-20250514,claude-sonnet-4-20250514,claude-3-5-sonnet-20241022,claude-3-5-sonnet-latest",
+        description="Comma-separated list of Claude models that support the 'thinking' feature"
+    )
 
     # Tool calling optimization settings (based on o3/o4-mini guidance)
     max_tools_per_request: int = Field(

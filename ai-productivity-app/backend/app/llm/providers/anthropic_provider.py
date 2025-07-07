@@ -4,6 +4,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 import logging
 from anthropic import AsyncAnthropic
 
+from app.config import settings
 from .base import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,6 @@ class AnthropicProvider(LLMProvider):
         max_tokens: Optional[int] = None,
         stream: bool = False,
         tools: Optional[List[Dict[str, Any]]] = None,
-        tool_choice: Optional[str | Dict[str, Any]] = None,
         thinking: Optional[Dict[str, Any]] = None,
         **kwargs
     ) -> Any:
@@ -148,13 +148,8 @@ class AnthropicProvider(LLMProvider):
 
     def _supports_thinking(self, model: str) -> bool:
         """Check if model supports extended thinking."""
-        thinking_models = {
-            "claude-opus-4-20250514",
-            "claude-sonnet-4-20250514",
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-sonnet-latest"
-        }
-        return model.lower() in {m.lower() for m in thinking_models}
+        thinking_models = {m.strip().lower() for m in settings.claude_thinking_models.split(',')}
+        return model.lower() in thinking_models
 
     def get_supported_features(self) -> set[str]:
         """Anthropic supports additional features."""

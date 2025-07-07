@@ -39,7 +39,7 @@ logs: ## View container logs
 
 test: ## Run all tests
 	@echo "$(GREEN)Running backend tests...$(NC)"
-	cd backend && python -m pytest -v --cov=app --cov-report=term-missing
+	cd backend && python3 -m pytest -v --cov=app --cov-report=term-missing
 	@echo "$(GREEN)Running frontend tests...$(NC)"
 	cd frontend && npm test
 

@@ -368,11 +368,8 @@ def start_background_loop() -> None:
         connect_args["ssl"] = True
 
     engine = create_async_engine(
-        async_db_url,
-        echo=False,
-        pool_size=5,
-        max_overflow=10,
-        connect_args=connect_args,
+        str(settings.database_url),
+        echo=settings.debug_sql,
     )
     session_maker = async_sessionmaker(engine, expire_on_commit=False)
 

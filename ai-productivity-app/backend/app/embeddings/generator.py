@@ -225,50 +225,21 @@ class EmbeddingGenerator:
     # ------------------------------------------------------------------ #
     def _init_client(self) -> None:
         """Instantiate AsyncOpenAI or AsyncAzureOpenAI client."""
+        """Use shared factory helpers to create an SDK client."""
+
         provider = settings.llm_provider.lower()
+        try:
+            if provider == "azure":
+                from app.llm.client_factory import get_azure_client
 
-        if provider == "azure":
-            if not settings.azure_openai_endpoint:
-                logger.warning(
-                    "Azure provider chosen but AZURE_OPENAI_ENDPOINT missing"
-                )
-                return
+                self.client = get_azure_client()
+            else:
+                from app.llm.client_factory import get_openai_client
 
-            auth_method = getattr(settings, "azure_auth_method", "api_key").lower()
-            kwargs: Dict[str, str] = {
-                "azure_endpoint": settings.azure_openai_endpoint,
-                "api_version": getattr(
-                    settings, "azure_openai_api_version", "2025-04-01-preview"
-                ),
-            }
-
-            try:
-                if auth_method == "entra_id":
-                    if not HAS_AZURE_IDENTITY:
-                        raise RuntimeError("`azure-identity` not installed")
-                    token_provider = get_bearer_token_provider(
-                        DefaultAzureCredential(),
-                        "https://cognitiveservices.azure.com/.default",
-                    )
-                    kwargs["azure_ad_token_provider"] = token_provider
-                else:  # default to API-key
-                    if not settings.azure_openai_api_key:
-                        raise RuntimeError("AZURE_OPENAI_API_KEY missing")
-                    kwargs["api_key"] = settings.azure_openai_api_key
-
-                self.client = AsyncAzureOpenAI(**kwargs)
-            except Exception as exc:  # pylint: disable=broad-except
-                logger.error("Azure client init failed: %s", exc)
-                self.client = None
-        else:  # public OpenAI
-            if not settings.openai_api_key:
-                logger.warning("OpenAI provider chosen but OPENAI_API_KEY missing")
-                return
-            try:
-                self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-            except Exception as exc:  # pylint: disable=broad-except
-                logger.error("OpenAI client init failed: %s", exc)
-                self.client = None
+                self.client = get_openai_client()
+        except Exception as exc:  # pragma: no cover – defensive catch
+            logger.error("Embedding client init failed: %s", exc)
+            self.client = None
 
     # ------------------------------------------------------------------ #
     # Public helpers
