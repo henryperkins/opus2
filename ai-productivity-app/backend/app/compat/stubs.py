@@ -207,9 +207,9 @@ def _install_fastapi_stub():
             """Stub add_middleware."""
             self.middleware.append((mw_cls, kwargs))
 
-        def include_router(self, router):
-            """Stub include_router."""
-            self.routes.update(router.routes)
+        def include_router(self, router, **_):  # noqa: D401 – ignore extra args
+            """Attach *router* routes, silently ignoring FastAPI kwargs."""
+            self.routes.update(getattr(router, "routes", {}))
 
         def add_exception_handler(self, *_):
             """Stub add_exception_handler."""
@@ -733,6 +733,54 @@ def _install_prometheus_stub():  # noqa: D401 – mimic external API
 
 
 # ---------------------------------------------------------------------------
+# anyio stub – exposes *only* the parts used by the code base
+# ---------------------------------------------------------------------------
+
+
+def _install_anyio_stub():  # noqa: D401 – mimic tiny subset
+    """Install a minimal *anyio* shim.
+
+    Vector store backends rely on ``anyio.to_thread.run_sync`` to delegate
+    blocking DB/io tasks to a background thread when *asyncio* is active. The
+    complete *anyio* distribution is hefty and often unavailable in the
+    constrained execution sandbox running the test-suite.  Instead of adding
+    the heavyweight dependency we register a lightweight fake that provides
+    exactly the symbols accessed by the backend:
+
+    • ``anyio.to_thread.run_sync(func, *args, **kwargs)`` – executes *func*
+      synchronously (test environment does not require real thread offloading).
+    • ``anyio.sleep(delay)`` – async no-op placeholder so callers can
+      ``await anyio.sleep`` without errors.
+    • ``anyio.run(func, *args, **kwargs)`` – simple pass-through helper used by
+      some external libraries.
+    """
+
+    import sys as _sys
+    import types as _types
+
+    anyio_mod = _types.ModuleType("anyio")
+
+    # async helpers ------------------------------------------------------ #
+
+    async def _run_sync(func, /, *args, **kwargs):  # noqa: D401
+        return func(*args, **kwargs)
+
+    anyio_mod.to_thread = _types.SimpleNamespace(run_sync=_run_sync)
+
+    async def _sleep(_):  # noqa: D401 – do nothing
+        return None
+
+    anyio_mod.sleep = _sleep  # type: ignore[attr-defined]
+
+    def _run(func, *args, **kwargs):  # noqa: D401 – sync wrapper
+        return func(*args, **kwargs)
+
+    anyio_mod.run = _run  # type: ignore[attr-defined]
+
+    _sys.modules["anyio"] = anyio_mod
+
+
+# ---------------------------------------------------------------------------
 # Tenacity stub – provides retry decorators used in the code base
 # ---------------------------------------------------------------------------
 
@@ -774,6 +822,103 @@ def _install_tenacity_stub():  # noqa: D401 – mimic API
     t_module.RetryError = RetryError
 
     _sys.modules["tenacity"] = t_module
+
+
+# ---------------------------------------------------------------------------
+# Jedi stub – static analysis placeholder
+# ---------------------------------------------------------------------------
+
+
+def _install_jedi_stub():  # noqa: D401 – minimal API for usage_searcher
+    """Provide a lightweight stub for the *jedi* static analysis library.
+
+    The backend's *UsageSearcher* relies on:
+
+    • ``jedi.Project(path=...)`` – constructor, no behaviour needed.
+    • ``jedi.Script(code, path, project)`` – constructor with method
+      ``get_references`` returning an *iterable* of reference objects that
+      expose attributes ``line``, ``column``, ``module_path``, ``name`` and a
+      method ``get_line_code()``.
+
+    Unit-tests never inspect the actual static analysis result. Returning an
+    *empty list* is therefore sufficient as long as the call chain does not
+    raise *AttributeError*.
+    """
+
+    import sys as _sys
+    import types as _types
+
+    jedi_mod = _types.ModuleType("jedi")
+
+    class _Project:  # pylint: disable=too-few-public-methods
+        def __init__(self, *_, **__):
+            pass
+
+    class _Reference:  # pylint: disable=too-few-public-methods
+        def __init__(self):
+            self.line = 0
+            self.column = 0
+            self.module_path = ""
+            self.name = ""
+
+        # Same method signature as real jedi Reference
+        def get_line_code(self):  # noqa: D401
+            return ""
+
+    class _Script:  # pylint: disable=too-few-public-methods
+        def __init__(self, *_, **__):
+            pass
+
+        def get_references(self, *_, **__):  # noqa: D401
+            return []
+
+    jedi_mod.Project = _Project
+    jedi_mod.Script = _Script
+
+    _sys.modules["jedi"] = jedi_mod
+
+
+# ---------------------------------------------------------------------------
+# pgvector stub – provides SQLAlchemy "Vector" type placeholder
+# ---------------------------------------------------------------------------
+
+
+def _install_pgvector_stub():  # noqa: D401 – minimal implementation
+    """Register a minimal *pgvector* shim so imports succeed in the sandbox.
+
+    Only the *Vector* type from ``pgvector.sqlalchemy`` is required by the
+    backend. We therefore expose a tiny class with the same public name and
+    register it under the expected module paths.  No vector operations are
+    executed in the unit-tests so behaviour can be a no-op.
+    """
+
+    import sys as _sys
+    import types as _types
+
+    # Parent package module
+    pgvector_mod = _types.ModuleType("pgvector")
+
+    # Sub-module for SQLAlchemy integration
+    sa_mod = _types.ModuleType("pgvector.sqlalchemy")
+
+    class Vector:  # pylint: disable=too-few-public-methods
+        """Stub SQLAlchemy column type."""
+
+        cache_ok = True  # Compatibility attribute
+
+        def __init__(self, _dim: int | None = None):  # noqa: D401 – mimic API
+            self.dim = _dim
+
+        def compile(self, dialect=None):  # noqa: D401 – mimic SQL compilation
+            return "VECTOR"
+
+    # Attach to sub-module
+    sa_mod.Vector = Vector
+
+    # Register both modules
+    pgvector_mod.sqlalchemy = sa_mod
+    _sys.modules["pgvector"] = pgvector_mod
+    _sys.modules["pgvector.sqlalchemy"] = sa_mod
 
 
 # ---------------------------------------------------------------------------
@@ -882,6 +1027,51 @@ def _install_qdrant_stub():
 
     _sys.modules["qdrant_client"] = qdrant_mod
     _sys.modules["qdrant_client.models"] = models_mod
+
+
+# ---------------------------------------------------------------------------
+# tiktoken stub – naive tokenizer replacement
+# ---------------------------------------------------------------------------
+
+
+def _install_tiktoken_stub():  # noqa: D401 – simple char-based encoder
+    """Register a lightweight *tiktoken* stub.
+
+    The real *tiktoken* package is a compiled extension unavailable in the
+    sandbox.  For the purpose of the unit-tests we only need *approximate*
+    token counts – character count is good enough.  The backend uses:
+
+    • ``tiktoken.get_encoding(name)``
+    • ``tiktoken.encoding_for_model(model)``
+    • tokeniser object's ``encode(text, disallowed_special=())`` returning
+      ``List[int]`` with length equal to the token count.
+    """
+
+    import sys as _sys
+    import types as _types
+
+    t_mod = _types.ModuleType("tiktoken")
+
+    class _FakeEncoding:  # pylint: disable=too-few-public-methods
+        def encode(self, txt, *_, **__):  # noqa: D401 – mimic API
+            # Very rough approximation: 1 char = 1 token
+            return list(range(len(txt)))
+
+    # Simple registry of encodings by name
+    _ENCODINGS = {}
+
+    def _get_encoding(name):  # noqa: D401 – mimic tiktoken API
+        if name not in _ENCODINGS:
+            _ENCODINGS[name] = _FakeEncoding()
+        return _ENCODINGS[name]
+
+    def _encoding_for_model(_model):  # noqa: D401
+        return _get_encoding("default")
+
+    t_mod.get_encoding = _get_encoding  # type: ignore[attr-defined]
+    t_mod.encoding_for_model = _encoding_for_model  # type: ignore[attr-defined]
+
+    _sys.modules["tiktoken"] = t_mod
 
 
 def _install_openai_stub():
@@ -1005,6 +1195,16 @@ def install_stubs():
         ("numpy", _install_numpy_stub),
         ("prometheus_client", _install_prometheus_stub),
         ("tenacity", _install_tenacity_stub),
+        # pgvector stub to satisfy PostgresVectorService imports
+        ("pgvector", _install_pgvector_stub),
+        ("jedi", _install_jedi_stub),
+        ("tiktoken", _install_tiktoken_stub),
+        # ``anyio`` is a heavy-weight async framework rarely available in the
+        # restricted execution sandbox.  A **tiny** shim that only exposes the
+        # subset needed by the vector services (``to_thread.run_sync``) is
+        # sufficient for unit-tests and avoids *ModuleNotFoundError* during
+        # import time.
+        ("anyio", _install_anyio_stub),
         # Qdrant client is imported by the vector store service layer. Provide
         # a minimal stub so that test collection does not bail out early when
         # the binary wheels are unavailable in the sandbox.
