@@ -446,6 +446,13 @@ class ConfigService:
         temperature = config_dict.get("temperature", 0.7)
         max_tokens = config_dict.get("max_tokens", 50)
         use_responses = config_dict.get("use_responses_api", False)
+        
+        # o3 and reasoning models need much higher token limits for their internal reasoning process
+        # These models generate "reasoning tokens" internally before producing output
+        # Microsoft recommends generous max_completion_tokens for reasoning models
+        if model in ["o3", "o3-mini", "o1", "o1-mini", "o1-pro", "o4-mini"] and max_tokens < 500:
+            max_tokens = 100000  # Set very high limit for reasoning models as per MS docs
+            logger.info(f"Increased max_tokens to {max_tokens} for reasoning model {model}")
 
         try:
             client = LLMClient()
@@ -459,16 +466,41 @@ class ConfigService:
             if provider == "azure" and use_responses:
                 # Test Responses API
                 try:
-                    reasoning_effort = config_dict.get("reasoning_effort", "high")
+                    reasoning_effort = config_dict.get("reasoning_effort", "medium")
                     resp = await asyncio.wait_for(
                         client.complete(
                             input="Say 'test successful' briefly.",
-                            reasoning={"effort": reasoning_effort, "summary": "auto"},
+                            reasoning={"effort": reasoning_effort, "summary": "detailed"},
                             max_tokens=max_tokens,
                             stream=False,
+                            tools=None,  # Explicitly set tools to None to avoid empty array
                         ),
                         timeout=30,
                     )
+                    
+                    # LOG RAW RESPONSE FOR DEBUGGING
+                    import json
+                    try:
+                        if hasattr(resp, 'model_dump'):
+                            raw_response = resp.model_dump()
+                        elif hasattr(resp, 'dict'):
+                            raw_response = resp.dict()
+                        else:
+                            raw_response = str(resp)
+                        
+                        logger.error(f"RAW AZURE RESPONSES API RESPONSE: {json.dumps(raw_response, indent=2, default=str)}")
+                        logger.error(f"Response Type: {type(resp)}")
+                        logger.error(f"Response Attributes: {dir(resp)}")
+                        
+                        # Also log the raw response length
+                        resp_str = str(resp)
+                        logger.error(f"Response Text Length: {len(resp_str)}")
+                        logger.error(f"Response String: {resp_str}")
+                        
+                    except Exception as log_error:
+                        logger.error(f"Failed to log raw response: {log_error}")
+                        logger.error(f"Response object: {resp}")
+                    
                     # Handle different response structures for reasoning models
                     resp_text = ""
                     
@@ -519,6 +551,30 @@ class ConfigService:
                         ),
                         timeout=30,
                     )
+                    
+                    # LOG RAW RESPONSE FOR DEBUGGING
+                    import json
+                    try:
+                        if hasattr(resp, 'model_dump'):
+                            raw_response = resp.model_dump()
+                        elif hasattr(resp, 'dict'):
+                            raw_response = resp.dict()
+                        else:
+                            raw_response = str(resp)
+                        
+                        logger.error(f"RAW CHAT COMPLETIONS API RESPONSE: {json.dumps(raw_response, indent=2, default=str)}")
+                        logger.error(f"Response Type: {type(resp)}")
+                        logger.error(f"Response Attributes: {dir(resp)}")
+                        
+                        # Also log the raw response length
+                        resp_str = str(resp)
+                        logger.error(f"Response Text Length: {len(resp_str)}")
+                        logger.error(f"Response String: {resp_str}")
+                        
+                    except Exception as log_error:
+                        logger.error(f"Failed to log raw response: {log_error}")
+                        logger.error(f"Response object: {resp}")
+                        
                 except asyncio.TimeoutError:
                     return False, "Chat test timed out after 30 seconds"
 
