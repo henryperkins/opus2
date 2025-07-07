@@ -2,6 +2,12 @@
 import asyncio
 import json
 from pathlib import Path
+"""Seed the **model catalogue** table with a built-in fixtures file.
+
+The script is designed to be idempotent – running it multiple times will not
+create duplicates thanks to the *primary-key* constraint on ``model_id``.
+"""
+
 from sqlalchemy import select, func
 from app.database import AsyncSessionLocal
 from app.models.config import ModelConfiguration

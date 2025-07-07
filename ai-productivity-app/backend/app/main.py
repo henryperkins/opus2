@@ -83,6 +83,15 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
             service = UnifiedConfigService(db)
             service.initialize_defaults()
 
+        # Seed model catalogue if empty (quick-win – avoids empty dropdown)
+        try:
+            from app.cli.seed_models import seed_models  # local import to avoid heavy deps
+            import asyncio
+
+            await seed_models()  # noqa: SLF001 – util coroutine
+        except Exception as exc:  # pragma: no cover – non-critical
+            logger.warning("Model seeding skipped: %s", exc)
+
     yield
     # Shutdown
     await close_redis()  # Close Redis connection pool

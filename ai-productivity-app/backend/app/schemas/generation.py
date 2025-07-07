@@ -4,12 +4,49 @@
 Unified schema definitions for AI model configuration.
 Single source of truth for all generation parameters, reasoning settings, and provider options.
 """
-from typing import Optional, List, Dict, Any, Literal
+"""Pydantic schemas for the *Unified AI Configuration* system.
+
+This file is the **single source of truth** for all runtime-configurable
+parameters related to language-model selection and inference.  It purposefully
+groups the previously scattered *generation*, *reasoning* and *chat* settings
+into a composable hierarchy of mixins that can be re-used across API layers.
+"""
+
+from typing import Optional, List, Dict, Any, Literal, Union
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
+# ``to_camel`` is used for automatic alias generation such that **all** outward
+# JSON payloads adhere to the camelCase naming convention expected by the
+# existing frontend, while our Python code continues to use snake_case.
 from app.utils.naming import to_camel
 
-class GenerationParams(BaseModel):
+# ---------------------------------------------------------------------------
+# Base model with camelCase alias generation
+# ---------------------------------------------------------------------------
+
+
+class CamelModel(BaseModel):
+    """Base model that **automatically** exposes camelCase aliases.
+
+    By using this base-class all inheriting schemas will *serialize* to JSON in
+    camelCase (``by_alias=True`` is FastAPI's default) while still allowing
+    snake_case access in Python code and accepting both key styles during
+    deserialization.
+    """
+
+    model_config = ConfigDict(
+        populate_by_name=True,  # accept field aliases on input as well
+        alias_generator=to_camel,
+        protected_namespaces=(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Generation-level parameters
+# ---------------------------------------------------------------------------
+
+
+class GenerationParams(CamelModel):
     """Core generation parameters supported by all providers."""
     
     temperature: Optional[float] = Field(
@@ -50,11 +87,26 @@ class GenerationParams(BaseModel):
         default=None,
         description="Random seed for reproducibility"
     )
+
+    # Whether to stream partial results back (supported models/providers only)
+    stream: bool = Field(
+        default=False,
+        description="Stream partial token deltas in real-time"
+    )
     
-    model_config = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=to_camel,
+        protected_namespaces=(),
+    )
 
 
-class ReasoningParams(BaseModel):
+# ---------------------------------------------------------------------------
+# Reasoning / thinking parameters
+# ---------------------------------------------------------------------------
+
+
+class ReasoningParams(CamelModel):
     """Reasoning and thinking parameters for advanced models."""
     
     # General reasoning settings
@@ -104,7 +156,12 @@ class ReasoningParams(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
 
-class ProviderConfig(BaseModel):
+# ---------------------------------------------------------------------------
+# Provider configuration
+# ---------------------------------------------------------------------------
+
+
+class ProviderConfig(CamelModel):
     """Provider-specific configuration."""
     
     provider: Literal["openai", "azure", "anthropic"] = Field(
@@ -135,7 +192,12 @@ class ProviderConfig(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
 
-class ModelCapabilities(BaseModel):
+# ---------------------------------------------------------------------------
+# Model capability descriptor
+# ---------------------------------------------------------------------------
+
+
+class ModelCapabilities(CamelModel):
     """Model capabilities and limits."""
     
     supports_functions: bool = True
@@ -150,7 +212,12 @@ class ModelCapabilities(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
 
-class ModelInfo(BaseModel):
+# ---------------------------------------------------------------------------
+# Model catalogue entry
+# ---------------------------------------------------------------------------
+
+
+class ModelInfo(CamelModel):
     """Complete model information."""
     
     model_id: str = Field(..., description="Unique model identifier")
@@ -182,6 +249,11 @@ class ModelInfo(BaseModel):
     recommended_use_cases: List[str] = Field(default_factory=list)
     
     model_config = ConfigDict(protected_namespaces=())
+
+
+# ---------------------------------------------------------------------------
+# Combined model configuration (generation + reasoning + selection)
+# ---------------------------------------------------------------------------
 
 
 class UnifiedModelConfig(GenerationParams, ReasoningParams):
@@ -262,7 +334,7 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
 
 
 # Request/Response schemas for API
-class ConfigUpdateRequest(BaseModel):
+class ConfigUpdateRequest(CamelModel):
     """Request schema for configuration updates."""
     
     config: Optional[UnifiedModelConfig] = None
@@ -272,7 +344,7 @@ class ConfigUpdateRequest(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
 
-class ConfigResponse(BaseModel):
+class ConfigResponse(CamelModel):
     """Response schema for configuration endpoints."""
     
     current: UnifiedModelConfig
