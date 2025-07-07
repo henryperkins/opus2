@@ -164,62 +164,22 @@ def sparse_clone(
     Perform a depth-1, blob-free, sparse clone, then materialise *includes*.
     Returns True on success.
     """
-    # no-cone sparse workflow: clone without checkout, then set patterns.
-
-    clone_cmd = [
+    base_cmd = [
         "git",
         "clone",
         "--filter=blob:none",
         "--depth",
         "1",
+        "--sparse",
     ]
     if ref:
-        clone_cmd += ["--branch", ref]
-    clone_cmd += ["--no-checkout", url, str(dest)]
+        base_cmd += ["--branch", ref]
+    base_cmd += [url, str(dest)]
 
     try:
-        # 1. bare clone (work-tree empty)
-        subprocess.run(clone_cmd, check=True, stdout=subprocess.DEVNULL)
-
-        # 2. initialise sparse-checkout in *no-cone* mode
+        subprocess.run(base_cmd, check=True, stdout=subprocess.DEVNULL)
         subprocess.run(
-            [
-                "git",
-                "-C",
-                str(dest),
-                "sparse-checkout",
-                "init",
-                "--no-cone",
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
-
-        # 3. Only materialise the explicit sub-trees we were asked for
-        patterns = [f"{p}/**" for p in includes]
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(dest),
-                "sparse-checkout",
-                "set",
-                *patterns,
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
-
-        # populate work-tree with the selected paths only
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(dest),
-                "checkout",
-                "--",
-                "HEAD",
-            ],
+            ["git", "-C", str(dest), "sparse-checkout", "set", "--cone", *includes],
             check=True,
             stdout=subprocess.DEVNULL,
         )
