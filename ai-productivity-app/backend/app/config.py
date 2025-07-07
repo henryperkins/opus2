@@ -341,6 +341,20 @@ class Settings(BaseSettings):
     tool_timeout: int = Field(
         default=30, description="Timeout for individual tool execution in seconds"
     )
+    
+    # LLM retry configuration
+    llm_max_retries: int = Field(
+        default=3,
+        description="Maximum retry attempts for LLM calls"
+    )
+    llm_retry_max_wait: int = Field(
+        default=60,
+        description="Maximum wait time between retries in seconds"
+    )
+    llm_timeout_seconds: int = Field(
+        default=300,
+        description="Timeout for LLM API calls in seconds"
+    )
 
     # WebSocket settings
     websocket_ping_interval: int = 30

@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..llm.client import llm_client
-from ..llm.streaming import StreamingHandler
+from ..llm.streaming import StreamingHandler, EnhancedStreamingHandler
 from ..llm import tools as llm_tools
 from ..models.chat import ChatMessage, ChatSession
 from ..services.chat_service import ChatService
@@ -340,7 +340,7 @@ class ChatProcessor:
         cfg = llm_client._get_runtime_config()
 
         # ------------------------------------------------------------------ #
-        # TOOL-CALL LOOP – start with non-stream request so we can inspect
+        # ENHANCED STREAMING – single-pass with tools enabled
         # Apply o3/o4-mini guidance: don't induce additional reasoning for reasoning models
         # ------------------------------------------------------------------ #
 
@@ -359,53 +359,61 @@ class ChatProcessor:
             else llm_tools.TOOL_SCHEMAS
         )
 
-        response = await llm_client.complete(
-            messages=messages,
-            temperature=cfg.get("temperature"),
-            stream=False,
-            tools=tools_to_use,
-            tool_choice="auto",  # Let model decide when to use tools
-            parallel_tool_calls=True,  # Enable parallel function calling
-            reasoning=(
-                settings.enable_reasoning if not is_reasoning_model else None
-            ),  # Don't force reasoning for reasoning models
-            max_tokens=cfg.get("max_tokens"),
-        )
-
-        round_no = 0
-        while self._has_tool_calls(response) and round_no < MAX_TOOL_CALL_ROUNDS:
-            round_no += 1
-            logger.info("Tool-calling round %d", round_no)
-
-            tool_results = await self._run_tool_calls(response)
-            messages.extend(tool_results["message_deltas"])
-
-            response = await llm_client.complete(
-                messages=messages,
-                temperature=cfg.get("temperature"),
-                stream=False,
-                tools=tools_to_use,
-                tool_choice="auto",
-                parallel_tool_calls=True,
-                max_tokens=cfg.get("max_tokens"),
-            )
-
-        if round_no >= MAX_TOOL_CALL_ROUNDS:
-            logger.warning("Aborting tool loop after %d rounds", round_no)
-
-        # ------------------------------------------------------------------ #
-        # SECOND CALL – true streaming (no function calls left)
-        # ------------------------------------------------------------------ #
+        # NEW: Single streaming call with tools enabled
+        logger.info("Starting streaming completion with tools enabled")
         stream = await llm_client.complete(
             messages=messages,
             temperature=cfg.get("temperature"),
-            stream=True,
-            tools=None,  # No tools for final streaming call to avoid function calls
+            stream=True,  # Enable streaming from the start
+            tools=tools_to_use,  # Include tools in streaming call
+            tool_choice="auto",
+            parallel_tool_calls=True,
+            reasoning=(
+                settings.enable_reasoning if not is_reasoning_model else None
+            ),
             max_tokens=cfg.get("max_tokens"),
         )
 
-        handler = StreamingHandler(websocket)
-        full_response = await handler.stream_response(stream, ai_msg.id)
+        # Use enhanced handler for streaming with tool support
+        handler = EnhancedStreamingHandler(websocket)
+        full_response, tool_calls = await handler.stream_response_with_tools(stream, ai_msg.id)
+
+        # Process any tool calls that came through
+        rounds = 0
+        while tool_calls and rounds < MAX_TOOL_CALL_ROUNDS:
+            rounds += 1
+            logger.info(f"Processing {len(tool_calls)} tool calls (round {rounds})")
+
+            # Notify client about tool execution
+            await websocket.send_json({
+                'type': 'ai_tools_executing',
+                'message_id': ai_msg.id,
+                'tool_count': len(tool_calls),
+                'tools': [{"name": tc["name"]} for tc in tool_calls]
+            })
+
+            # Execute tools in parallel
+            tool_results = await self._run_parallel_tool_calls(tool_calls)
+            messages.extend(tool_results["message_deltas"])
+
+            # Stream the response after tool execution
+            logger.info("Streaming response after tool execution")
+            stream = await llm_client.complete(
+                messages=messages,
+                temperature=cfg.get("temperature"),
+                stream=True,
+                tools=tools_to_use if rounds < MAX_TOOL_CALL_ROUNDS - 1 else None,
+                tool_choice="auto" if rounds < MAX_TOOL_CALL_ROUNDS - 1 else None,
+                max_tokens=cfg.get("max_tokens"),
+            )
+
+            # Continue streaming
+            handler = EnhancedStreamingHandler(websocket)
+            tool_response, tool_calls = await handler.stream_response_with_tools(stream, ai_msg.id)
+            full_response += "\n\n" + tool_response if full_response else tool_response
+
+        if rounds >= MAX_TOOL_CALL_ROUNDS:
+            logger.warning(f"Reached max tool rounds ({MAX_TOOL_CALL_ROUNDS})")
 
         # ------------------------------------------------------------------ #
         # Add confidence warnings if needed
@@ -772,6 +780,70 @@ class ChatProcessor:
                         "content": formatted_output,
                     },
                 )
+
+        return {"message_deltas": deltas}
+
+    async def _run_parallel_tool_calls(
+        self,
+        tool_calls: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Execute multiple tool calls in parallel."""
+
+        async def execute_single_tool(call: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+            """Execute a single tool and return (call, result)."""
+            name = call["name"]
+            try:
+                args = json.loads(call["arguments"])
+            except Exception as exc:
+                logger.error(f"Tool call argument decode failed: {exc}")
+                args = {}
+
+            logger.info(f"Executing tool {name}")
+            try:
+                result = await asyncio.wait_for(
+                    llm_tools.call_tool(name, args, self.db),
+                    timeout=getattr(settings, "tool_timeout", 30),
+                )
+                return call, result
+            except asyncio.TimeoutError:
+                logger.error(f"Tool '{name}' timed out")
+                return call, {
+                    "success": False,
+                    "error": f"Tool execution timed out after {getattr(settings, 'tool_timeout', 30)} seconds",
+                    "error_type": "timeout",
+                }
+            except Exception as exc:
+                logger.error(f"Tool '{name}' failed: {exc}", exc_info=True)
+                return call, {
+                    "success": False,
+                    "error": str(exc),
+                    "error_type": "execution_exception",
+                }
+
+        # Execute all tools in parallel
+        results = await asyncio.gather(
+            *[execute_single_tool(call) for call in tool_calls],
+            return_exceptions=False
+        )
+
+        # Format results for message deltas
+        deltas = []
+        for call, result in results:
+            formatted_output = llm_tools.format_tool_result_for_api(result)
+
+            if getattr(llm_client, "use_responses_api", False):
+                deltas.append({
+                    "type": "function_call_output",
+                    "call_id": call.get("id", "unknown"),
+                    "output": formatted_output,
+                })
+            else:
+                deltas.append({
+                    "role": "tool",
+                    "tool_call_id": call.get("id", "unknown"),
+                    "name": call["name"],
+                    "content": formatted_output,
+                })
 
         return {"message_deltas": deltas}
 

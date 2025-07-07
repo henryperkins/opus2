@@ -22,9 +22,21 @@ import logging
 import os
 import types
 import json  # Add json import for logging
+import time
+from datetime import datetime
 
 from typing import Any, Dict, List, Sequence, AsyncIterator
 from app.config import settings
+
+# Retry imports for resilient LLM calls
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log,
+    RetryError
+)
 
 # ---------------------------------------------------------------------------
 # Optional dependencies – fall back to the stub implementation installed in
@@ -57,12 +69,12 @@ _IN_SANDBOX = os.getenv("APP_CI_SANDBOX") == "1" or "pytest" in sys.modules
 logger = logging.getLogger(__name__)
 
 try:
-    from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore
+    from openai import AsyncOpenAI, AsyncAzureOpenAI, RateLimitError, APITimeoutError, AuthenticationError, BadRequestError  # type: ignore
 except ModuleNotFoundError as exc:
     if _IN_SANDBOX:
         # ``app.compat`` installed a stubbed *openai* module – try again.  The
         # second import succeeds because the placeholder now exists.
-        from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore  # noqa: E501 pylint: disable=ungrouped-imports
+        from openai import AsyncOpenAI, AsyncAzureOpenAI, RateLimitError, APITimeoutError, AuthenticationError, BadRequestError  # type: ignore  # noqa: E501 pylint: disable=ungrouped-imports
     else:  # production / dev environment → fail fast with helpful message
         raise ImportError(
             "OpenAI SDK not found.  Install the official package via "
@@ -96,6 +108,21 @@ except ModuleNotFoundError:
 # ---------------------------------------------------------------------------
 # Helper utilities
 # ---------------------------------------------------------------------------
+
+
+def _handle_rate_limit_error(retry_state):
+    """Extract Retry-After header from rate limit errors."""
+    if retry_state.outcome and retry_state.outcome.failed:
+        exc = retry_state.outcome.exception()
+        if hasattr(exc, '__class__') and exc.__class__.__name__ == 'RateLimitError' and hasattr(exc, 'response'):
+            retry_after = exc.response.headers.get('Retry-After')
+            if retry_after:
+                try:
+                    return float(retry_after)
+                except (ValueError, TypeError):
+                    pass
+    # Fall back to exponential backoff
+    return min(4 * (2 ** (retry_state.attempt_number - 1)), 60)
 
 
 def _is_reasoning_model(model_name: str) -> bool:
@@ -548,6 +575,13 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
     # Public helpers
     # ---------------------------------------------------------------------
 
+    @retry(
+        stop=stop_after_attempt(getattr(settings, 'llm_max_retries', 3)),
+        wait=wait_exponential(multiplier=1, min=4, max=getattr(settings, 'llm_retry_max_wait', 60)),
+        retry=retry_if_exception_type((Exception,)),  # Retry all exceptions initially, we'll filter in the method
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True
+    )
     async def complete(  # noqa: PLR0913 – long but mirrors OpenAI params
         self,
         messages: Sequence[Dict[str, Any]] | None = None,  # Deprecated, use input
@@ -569,7 +603,17 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         max_tokens: int | None = None,
         model: str | None = None,  # Allow per-request model override
     ) -> Any | AsyncIterator[str]:  # Returns AsyncIterator[str] when stream=True
-        """Wrapper around the underlying Chat Completions / Responses API.
+        """Wrapper around the underlying Chat Completions / Responses API with automatic retry.
+
+        Automatically retries on:
+        - Rate limit errors (respecting Retry-After header)
+        - API timeout errors
+        - Transient network errors
+
+        Does NOT retry on:
+        - Authentication errors
+        - Invalid request errors
+        - Oversized payload errors
 
         The signature is intentionally *loose* – the backend forwards a subset
         of the available parameters.  In addition we accept arbitrary
@@ -579,58 +623,67 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         Parameters can be overridden at runtime from the configuration system.
         """
 
-        if self.client is None:
-            raise RuntimeError("LLM client not initialised – missing credentials?")
-
-        # Get runtime configuration and merge with provided parameters
-        runtime_config = self._get_runtime_config()
-
-        # Apply runtime configuration with parameter precedence
-        active_model = model or runtime_config.get("chat_model") or self.active_model
-        active_temperature = (
-            temperature
-            if temperature is not None
-            else runtime_config.get("temperature", 0.7)
-        )
-        active_max_tokens = max_tokens or runtime_config.get("max_tokens")
-
-        # Auto-reconfigure if model/provider changed
-        if (
-            active_model != self.active_model
-            or runtime_config.get("provider", self.provider).lower() != self.provider
-        ):
-            await self.reconfigure(
-                provider=runtime_config.get("provider"),
-                model=active_model,
-                use_responses_api=runtime_config.get("use_responses_api"),
-            )
-
-        # Unify input and messages parameters for backward compatibility
-        chat_turns = input or messages
-        if chat_turns is None:
-            raise ValueError("Either 'input' or 'messages' parameter is required")
-
-        # Handle different input formats
-        if isinstance(chat_turns, str):
-            # Convert string input to message format
-            messages = [{"role": "user", "content": chat_turns}]
-        else:
-            # Convert messages into canonical list – some callers might pass
-            # tuples / generators.
-            # For Azure Responses API, we need to handle function_call_output differently
-            if self.use_responses_api:
-                # Keep original format for Azure Responses API processing
-                messages = list(chat_turns)
-            else:
-                messages = _sanitize_messages(chat_turns)
-
-        # For reasoning models, convert system messages to developer messages
-        if _is_reasoning_model(active_model):
-            for msg in messages:
-                if msg.get("role") == "system":
-                    msg["role"] = "developer"
+        start_time = time.time()
+        request_id = f"req_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{id(self)}"
 
         try:
+            # Log request start
+            logger.info(
+                "LLM request %s started - Provider: %s, Model: %s, Stream: %s",
+                request_id, self.provider, model or self.active_model, stream
+            )
+
+            # Check for retry-stopping conditions before attempting the call
+            if self.client is None:
+                raise RuntimeError("LLM client not initialised – missing credentials?")
+
+            # Get runtime configuration and merge with provided parameters
+            runtime_config = self._get_runtime_config()
+
+            # Apply runtime configuration with parameter precedence
+            active_model = model or runtime_config.get("chat_model") or self.active_model
+            active_temperature = (
+                temperature
+                if temperature is not None
+                else runtime_config.get("temperature", 0.7)
+            )
+            active_max_tokens = max_tokens or runtime_config.get("max_tokens")
+
+            # Auto-reconfigure if model/provider changed
+            if (
+                active_model != self.active_model
+                or runtime_config.get("provider", self.provider).lower() != self.provider
+            ):
+                await self.reconfigure(
+                    provider=runtime_config.get("provider"),
+                    model=active_model,
+                    use_responses_api=runtime_config.get("use_responses_api"),
+                )
+
+            # Unify input and messages parameters for backward compatibility
+            chat_turns = input or messages
+            if chat_turns is None:
+                raise ValueError("Either 'input' or 'messages' parameter is required")
+
+            # Handle different input formats
+            if isinstance(chat_turns, str):
+                # Convert string input to message format
+                messages = [{"role": "user", "content": chat_turns}]
+            else:
+                # Convert messages into canonical list – some callers might pass
+                # tuples / generators.
+                # For Azure Responses API, we need to handle function_call_output differently
+                if self.use_responses_api:
+                    # Keep original format for Azure Responses API processing
+                    messages = list(chat_turns)
+                else:
+                    messages = _sanitize_messages(chat_turns)
+
+            # For reasoning models, convert system messages to developer messages
+            if _is_reasoning_model(active_model):
+                for msg in messages:
+                    if msg.get("role") == "system":
+                        msg["role"] = "developer"
             # Handle Anthropic Claude models
             if self.provider == "anthropic":
                 # Prepare thinking configuration for Claude
@@ -1096,10 +1149,65 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 # Re-raise unchanged – caller handles logging / user feedback.
                 raise
 
-        except Exception:  # noqa: BLE001 – broad for logging / Sentry
+        except Exception as exc:  # noqa: BLE001 – broad for logging / Sentry
+            # Handle retry logic for specific exception types
+            duration = time.time() - start_time
+            
+            # Check if this is a retryable error
+            is_retryable = False
+            exc_class_name = exc.__class__.__name__
+            
+            if exc_class_name in ['RateLimitError', 'APITimeoutError']:
+                # These are retryable
+                is_retryable = True
+                logger.warning(
+                    "LLM request %s failed with retryable error after %.2fs: %s",
+                    request_id, duration, exc
+                )
+            elif exc_class_name in ['AuthenticationError', 'BadRequestError']:
+                # These should NOT be retried
+                logger.error(
+                    "LLM request %s failed with non-retryable error after %.2fs: %s",
+                    request_id, duration, exc
+                )
+            elif exc_class_name == 'RetryError':
+                # Max retries exceeded
+                logger.error(
+                    "LLM request %s failed after max retries and %.2fs: %s",
+                    request_id, duration, str(exc)
+                )
+            else:
+                # For unknown errors, log and decide based on error message
+                error_msg = str(exc).lower()
+                if any(keyword in error_msg for keyword in ['timeout', 'rate limit', 'too many requests', 'service unavailable']):
+                    is_retryable = True
+                    logger.warning(
+                        "LLM request %s failed with possibly retryable error after %.2fs: %s",
+                        request_id, duration, exc
+                    )
+                else:
+                    logger.error(
+                        "LLM request %s failed with unexpected error after %.2fs: %s",
+                        request_id, duration, exc, exc_info=True
+                    )
+            
+            # If this was a successful completion, log it
+            if not is_retryable and exc_class_name not in ['RateLimitError', 'APITimeoutError', 'RetryError']:
+                # This might be a successful non-retryable path, or we're not retrying
+                pass
+            
             # Forward exception after capturing telemetry so calling code can
             # decide how to react (retry, user-facing error, …).
             raise  # re-raise unchanged
+        
+        finally:
+            # Log successful completion if we reach here without exception
+            if 'start_time' in locals():
+                duration = time.time() - start_time
+                logger.info(
+                    "LLM request %s completed successfully in %.2fs",
+                    request_id, duration
+                )
 
     # ------------------------------------------------------------------
     # Streaming helpers

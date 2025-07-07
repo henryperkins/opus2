@@ -1,8 +1,12 @@
+# Complete implementation for partial function call streaming
+# This reduces API calls from 3 to 1-2 per user message
+
+# ========== app/llm/streaming.py - Enhanced streaming handler ==========
+
 import asyncio
 import json
 from datetime import datetime
 from typing import AsyncIterator, Optional, List, Dict, Any, Tuple
-
 from fastapi import WebSocket
 import logging
 
@@ -18,157 +22,7 @@ class StreamingHandler:
         self.buffer = []
         self.total_tokens = 0
 
-    async def stream_response(
-        self,
-        response_generator: AsyncIterator[str],
-        message_id: int
-    ):
-        """Stream LLM response chunks to WebSocket."""
-        self.message_id = message_id
-
-        # Defensive guard: if the caller forgot stream=True, fall back to non-streaming
-        if not hasattr(response_generator, "__aiter__"):
-            # Extract response content from non-streaming response using same logic as processor
-            full_text = ""
-            
-            # Azure Responses API format
-            if hasattr(response_generator, 'output') and response_generator.output:
-                for item in response_generator.output:
-                    if (getattr(item, "type", None) == "message" and
-                            hasattr(item, "content") and item.content):
-                        if isinstance(item.content, str):
-                            full_text = item.content
-                            break
-                        # Handle structured content (e.g., with reasoning)
-                        elif isinstance(item.content, list) and item.content:
-                            text_parts = []
-                            for content_item in item.content:
-                                if hasattr(content_item, "text"):
-                                    text_parts.append(content_item.text)
-                            full_text = "\n".join(text_parts) if text_parts else str(item.content[0])
-                            break
-                        else:
-                            full_text = str(item.content)
-                            break
-            # Legacy formats
-            elif hasattr(response_generator, 'output_text'):
-                full_text = response_generator.output_text or ""
-            elif hasattr(response_generator, 'choices') and response_generator.choices:
-                full_text = response_generator.choices[0].message.content or ""
-            else:
-                full_text = str(response_generator)
-            
-            # Ensure we don't return empty content
-            if not full_text.strip():
-                full_text = "I apologize, but I wasn't able to generate a response. Please try again."
-            
-            # Send as single complete message
-            await self.websocket.send_json({
-                'type': 'ai_stream',
-                'message_id': message_id,
-                'content': full_text,
-                'done': True,
-                'message': {
-                    'id': message_id,
-                    'content': full_text,
-                    'role': 'assistant',
-                    'created_at': datetime.now().isoformat()
-                }
-            })
-            return full_text
-
-        try:
-            async for chunk in response_generator:
-                self.buffer.append(chunk)
-                self.total_tokens += len(chunk) // 4  # Rough estimate
-
-                # Send chunk
-                chunk_data = {
-                    'type': 'ai_stream',
-                    'message_id': message_id,
-                    'content': chunk,
-                    'done': False
-                }
-                await self.websocket.send_json(chunk_data)
-
-                # Small delay to prevent overwhelming client
-                await asyncio.sleep(0.01)
-
-            # Send completion
-            full_content = ''.join(self.buffer)
-            
-            # Ensure we don't return empty content (violates database constraint)
-            if not full_content.strip():
-                full_content = "I apologize, but I wasn't able to generate a response. Please try again."
-            
-            await self.websocket.send_json({
-                'type': 'ai_stream',
-                'message_id': message_id,
-                'content': '',
-                'done': True,
-                'message': {
-                    'id': message_id,
-                    'content': full_content,
-                    'role': 'assistant',
-                    'created_at': datetime.now().isoformat()
-                }
-            })
-
-            return full_content
-
-        except Exception as e:
-            logger.error(f"Streaming error: {e}")
-
-            # Send error message
-            await self.websocket.send_json({
-                'type': 'ai_stream',
-                'message_id': message_id,
-                'error': str(e),
-                'done': True
-            })
-
-            raise
-
-    async def handle_code_generation(
-        self,
-        content: str,
-        language: str,
-        websocket: WebSocket
-    ):
-        """Special handling for code generation responses."""
-        # Track code blocks
-        code_blocks = []
-        current_block = []
-        in_code_block = False
-        current_language = None
-
-        lines = content.split('\n')
-
-        for line in lines:
-            if line.startswith('```'):
-                if in_code_block:
-                    # End of code block
-                    code_blocks.append({
-                        'language': current_language or language,
-                        'code': '\n'.join(current_block)
-                    })
-                    current_block = []
-                    in_code_block = False
-                else:
-                    # Start of code block
-                    in_code_block = True
-                    current_language = line[3:].strip() or language
-            elif in_code_block:
-                current_block.append(line)
-
-        # Send code blocks separately for highlighting
-        for i, block in enumerate(code_blocks):
-            await websocket.send_json({
-                'type': 'code_block',
-                'index': i,
-                'language': block['language'],
-                'code': block['code']
-            })
+    # ... existing methods remain the same ...
 
 
 class EnhancedStreamingHandler(StreamingHandler):
@@ -368,3 +222,214 @@ class EnhancedStreamingHandler(StreamingHandler):
                 "name": call["function"]["name"],
                 "arguments": call["function"]["arguments"]
             })
+
+
+# ========== app/chat/processor.py - Modified chat processor ==========
+
+# Replace the _respond_with_llm method with this enhanced version:
+
+async def _respond_with_llm(
+    self,
+    *,
+    session_id: int,
+    prompt: str,
+    context: Dict[str, Any],
+    websocket: WebSocket,
+) -> str:
+    """End-to-end LLM orchestration with single-pass streaming and tool calls."""
+
+    # Create placeholder message
+    ai_msg = await self.chat_service.create_message(
+        session_id=session_id,
+        content="Generating response…",
+        role="assistant",
+        rag_metadata=context.get("rag_metadata", {}),
+        broadcast=False,
+    )
+
+    # Build prompt messages
+    messages, _ = await self._assemble_llm_messages(
+        session_id=session_id,
+        prompt=prompt,
+        context=context,
+    )
+
+    # Get runtime configuration
+    cfg = llm_client._get_runtime_config()
+    active_model = cfg.get("chat_model", llm_client.active_model)
+    is_reasoning_model = (
+        llm_client._is_reasoning_model(active_model)
+        if hasattr(llm_client, "_is_reasoning_model")
+        else False
+    )
+
+    # Get tools to use
+    tools_to_use = (
+        llm_tools.TOOL_SCHEMAS[: settings.max_tools_per_request]
+        if hasattr(settings, "max_tools_per_request")
+        else llm_tools.TOOL_SCHEMAS
+    )
+
+    # NEW: Single streaming call with tools enabled
+    logger.info("Starting streaming completion with tools enabled")
+    stream = await llm_client.complete(
+        messages=messages,
+        temperature=cfg.get("temperature"),
+        stream=True,  # Enable streaming from the start
+        tools=tools_to_use,  # Include tools in streaming call
+        tool_choice="auto",
+        parallel_tool_calls=True,
+        reasoning=(
+            settings.enable_reasoning if not is_reasoning_model else None
+        ),
+        max_tokens=cfg.get("max_tokens"),
+    )
+
+    # Use enhanced handler for streaming with tool support
+    handler = EnhancedStreamingHandler(websocket)
+    full_response, tool_calls = await handler.stream_response_with_tools(stream, ai_msg.id)
+
+    # Process any tool calls that came through
+    rounds = 0
+    while tool_calls and rounds < MAX_TOOL_CALL_ROUNDS:
+        rounds += 1
+        logger.info(f"Processing {len(tool_calls)} tool calls (round {rounds})")
+
+        # Notify client about tool execution
+        await websocket.send_json({
+            'type': 'ai_tools_executing',
+            'message_id': ai_msg.id,
+            'tool_count': len(tool_calls),
+            'tools': [{"name": tc["name"]} for tc in tool_calls]
+        })
+
+        # Execute tools in parallel
+        tool_results = await self._run_parallel_tool_calls(tool_calls)
+        messages.extend(tool_results["message_deltas"])
+
+        # Stream the response after tool execution
+        logger.info("Streaming response after tool execution")
+        stream = await llm_client.complete(
+            messages=messages,
+            temperature=cfg.get("temperature"),
+            stream=True,
+            tools=tools_to_use if rounds < MAX_TOOL_CALL_ROUNDS - 1 else None,
+            tool_choice="auto" if rounds < MAX_TOOL_CALL_ROUNDS - 1 else None,
+            max_tokens=cfg.get("max_tokens"),
+        )
+
+        # Continue streaming
+        handler = EnhancedStreamingHandler(websocket)
+        tool_response, tool_calls = await handler.stream_response_with_tools(stream, ai_msg.id)
+        full_response += "\n\n" + tool_response if full_response else tool_response
+
+    if rounds >= MAX_TOOL_CALL_ROUNDS:
+        logger.warning(f"Reached max tool rounds ({MAX_TOOL_CALL_ROUNDS})")
+
+    # Add confidence warnings if needed
+    enhanced_response = await self._add_confidence_warnings(full_response, context)
+
+    # Update message
+    await self.chat_service.update_message_content(
+        message_id=ai_msg.id,
+        content=enhanced_response,
+        code_snippets=self._extract_code_snippets(enhanced_response),
+        broadcast=True,
+    )
+
+    # Track analytics
+    asyncio.create_task(
+        self._track_response_quality(
+            ai_msg.id, ai_msg.session_id, context, full_response
+        )
+    )
+
+    return enhanced_response
+
+
+# Add new parallel tool execution method:
+async def _run_parallel_tool_calls(
+    self,
+    tool_calls: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Execute multiple tool calls in parallel."""
+
+    async def execute_single_tool(call: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Execute a single tool and return (call, result)."""
+        name = call["name"]
+        try:
+            args = json.loads(call["arguments"])
+        except Exception as exc:
+            logger.error(f"Tool call argument decode failed: {exc}")
+            args = {}
+
+        logger.info(f"Executing tool {name}")
+        try:
+            result = await asyncio.wait_for(
+                llm_tools.call_tool(name, args, self.db),
+                timeout=getattr(settings, "tool_timeout", 30),
+            )
+            return call, result
+        except asyncio.TimeoutError:
+            logger.error(f"Tool '{name}' timed out")
+            return call, {
+                "success": False,
+                "error": f"Tool execution timed out after {getattr(settings, 'tool_timeout', 30)} seconds",
+                "error_type": "timeout",
+            }
+        except Exception as exc:
+            logger.error(f"Tool '{name}' failed: {exc}", exc_info=True)
+            return call, {
+                "success": False,
+                "error": str(exc),
+                "error_type": "execution_exception",
+            }
+
+    # Execute all tools in parallel
+    results = await asyncio.gather(
+        *[execute_single_tool(call) for call in tool_calls],
+        return_exceptions=False
+    )
+
+    # Format results for message deltas
+    deltas = []
+    for call, result in results:
+        formatted_output = llm_tools.format_tool_result_for_api(result)
+
+        if getattr(llm_client, "use_responses_api", False):
+            deltas.append({
+                "type": "function_call_output",
+                "call_id": call.get("id", "unknown"),
+                "output": formatted_output,
+            })
+        else:
+            deltas.append({
+                "role": "tool",
+                "tool_call_id": call.get("id", "unknown"),
+                "name": call["name"],
+                "content": formatted_output,
+            })
+
+    return {"message_deltas": deltas}
+
+
+# ========== app/config.py - Add new settings ==========
+
+class Settings(BaseSettings):
+    # ... existing settings ...
+
+    # Tool execution settings
+    max_tools_per_request: int = Field(
+        default=10,
+        description="Maximum number of tools to send per request"
+    )
+    tool_timeout: int = Field(
+        default=30,
+        description="Timeout for individual tool execution in seconds"
+    )
+
+    # Streaming settings
+    stream_chunk_delay_ms: int = Field(
+        default=1,
+        description="Delay between streaming chunks in milliseconds"
+    )
