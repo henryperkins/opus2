@@ -163,6 +163,7 @@ def _model_requires_responses_api(model_name: str) -> bool:
     responses_api_models = {
         "gpt-4o",
         "gpt-4o-mini",
+        "gpt-4.1",
         "computer-use-preview",
         "o3",
         "o3-mini",
