@@ -82,6 +82,9 @@ class AnthropicProvider(LLMProvider):
                 for block in chunk.content:
                     if hasattr(block, "text"):
                         yield block.text
+            # Older streaming versions populated *chunk.text* directly.
+            elif hasattr(chunk, "text"):
+                yield chunk.text
 
     def validate_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert tools to Anthropic format."""

@@ -52,9 +52,20 @@ class UnifiedConfigService:
         # Get current config
         current = self.get_current_config()
 
-        # Apply updates
+        # Apply updates – accept both snake_case (backend) *and* camelCase
+        # (frontend) field names.  Today only *useResponsesApi* deviates from
+        # the internal attribute ``use_responses_api`` but the helper is
+        # forward-compatible with additional aliases.
+
+        def _normalise_key(key: str) -> str:
+            # Simple heuristic – convert camelCase to snake_case for known
+            # fields, otherwise return as-is.
+            if key in {"useResponsesApi", "use_responses_api"}:
+                return "use_responses_api"
+            return key
+
         updated_dict = current.model_dump()
-        updated_dict.update(updates)
+        updated_dict.update({_normalise_key(k): v for k, v in updates.items()})
 
         # Create new config instance for validation
         try:

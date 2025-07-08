@@ -201,10 +201,26 @@ class AzureOpenAIProvider(LLMProvider):
             params["max_output_tokens"] = max_tokens
 
         # Reasoning models don't support tools
-        if tools and not is_reasoning:
-            params["tools"] = validate_tools(tools)
-            if tool_choice:
+        # Attach *tools* and *tool_choice* for normal chat models (the Azure
+        # *reasoning* family ignores both).  We purposely *do not* require
+        # that a non-empty *tools* list accompanies *tool_choice* because the
+        # SDK accepts the latter on its own when the tool definitions were
+        # provided earlier in the conversation.
+        if not is_reasoning:
+            if tools:
+                params["tools"] = validate_tools(tools)
+            if tool_choice is not None:
                 params["tool_choice"] = tool_choice
+        # The Responses API *does* support tool_choice in the same way as the
+        # Chat Completions endpoint.  Earlier versions of this provider left
+        # the parameter un-used which meant that callers could *request* a
+        # specific tool call but the model kept choosing tools automatically.
+        #
+        # We therefore forward *tool_choice* unconditionally when it is
+        # supplied (and the model is not a reasoning model which would ignore
+        # the field anyway).  The conditional above already ensures we do not
+        # attach the argument when *tool_choice* is *None* or when the model
+        # doesn’t allow tools in the first place.
 
         # Add reasoning configuration for reasoning models
         if reasoning and is_reasoning:
