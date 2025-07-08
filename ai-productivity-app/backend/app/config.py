@@ -394,7 +394,7 @@ class Settings(BaseSettings):
 
     # Enable the new unified AI configuration system
     enable_unified_config: bool = Field(
-        default=False,
+        default=True,
         alias="ENABLE_UNIFIED_CONFIG",
         description="Enable the new unified AI configuration system",
     )

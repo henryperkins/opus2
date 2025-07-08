@@ -91,7 +91,8 @@ function KnowledgeAssistantCore({
       const result = await buildContextForQuery(query);
       setContext(result);
     } catch (err) {
-      setError(err);
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Search failed';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

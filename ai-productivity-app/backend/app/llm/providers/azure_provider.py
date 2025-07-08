@@ -6,6 +6,7 @@ from openai import AsyncAzureOpenAI
 
 from .base import LLMProvider
 from .utils import validate_tools, build_openai_chat_params
+from .openai_provider import OpenAIProvider
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,19 @@ class AzureOpenAIProvider(LLMProvider):
         super().__init__(**kwargs)
         self.use_responses_api = kwargs.get("use_responses_api", False)
         self.api_version = kwargs.get("api_version", "2025-04-01-preview")
+
+    def _is_reasoning_model(self, model: str) -> bool:
+        """Check if the model is a reasoning model (o1/o3/o4 series)."""
+        if not model:
+            return False
+        
+        model_lower = model.lower()
+        reasoning_models = {
+            "o1", "o1-mini", "o1-preview", "o1-pro",
+            "o3", "o3-mini", "o3-pro", 
+            "o4-mini"
+        }
+        return model_lower in reasoning_models
 
     def _initialize_client(self) -> None:
         """Initialize Azure OpenAI client."""
@@ -86,17 +100,43 @@ class AzureOpenAIProvider(LLMProvider):
         **kwargs
     ) -> Any:
         """Use standard Chat Completions API."""
-        params = build_openai_chat_params(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=stream,
-            tools=tools,
-            tool_choice=tool_choice,
-            parallel_tool_calls=parallel_tool_calls,
-            **kwargs
-        )
+        is_reasoning = self._is_reasoning_model(model)
+        
+        # Convert system messages to developer messages for reasoning models
+        processed_messages = []
+        for msg in messages:
+            if is_reasoning and msg.get("role") == "system":
+                processed_messages.append({
+                    "role": "developer",
+                    "content": msg["content"]
+                })
+            else:
+                processed_messages.append(msg)
+        
+        if is_reasoning:
+            # Reasoning models use max_completion_tokens and don't support temperature/streaming
+            params = {
+                "model": model,
+                "messages": processed_messages,
+                "stream": False
+            }
+            if max_tokens:
+                params["max_completion_tokens"] = max_tokens
+            # Don't add tools, temperature, or streaming for reasoning models
+        else:
+            # Regular models support all features
+            params = build_openai_chat_params(
+                model=model,
+                messages=processed_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=stream,
+                tools=tools,
+                tool_choice=tool_choice,
+                parallel_tool_calls=parallel_tool_calls,
+                **kwargs
+            )
+        
         return await self.client.chat.completions.create(**params)
 
     async def _complete_responses_api(
@@ -112,6 +152,7 @@ class AzureOpenAIProvider(LLMProvider):
         **kwargs
     ) -> Any:
         """Use Azure Responses API."""
+        is_reasoning = self._is_reasoning_model(model)
 
         # Convert messages to Responses API format
         input_messages = []
@@ -123,6 +164,13 @@ class AzureOpenAIProvider(LLMProvider):
                     instructions += "\n\n" + msg["content"]
                 else:
                     instructions = msg["content"]
+            elif msg["role"] == "developer" or (is_reasoning and msg["role"] == "system"):
+                # For reasoning models, handle developer messages properly
+                input_messages.append({
+                    "role": "developer",
+                    "content": msg["content"],
+                    "type": "message"
+                })
             else:
                 input_messages.append({
                     "role": msg["role"],
@@ -130,26 +178,51 @@ class AzureOpenAIProvider(LLMProvider):
                     "type": "message"
                 })
 
-        params = {
-            "model": model,
-            "input": input_messages,
-            "temperature": temperature,
-            "stream": stream
-        }
+        # For reasoning models, use simple input format as shown in the docs
+        if is_reasoning and len(input_messages) == 1 and input_messages[0]["role"] == "user":
+            # Use simple string input format for single user messages
+            params = {
+                "model": model,
+                "input": input_messages[0]["content"]
+            }
+        else:
+            # Use message array format for complex conversations
+            params = {
+                "model": model,
+                "input": input_messages
+            }
+            
+        # Reasoning models don't support temperature or streaming
+        if not is_reasoning:
+            params["temperature"] = temperature
+            params["stream"] = stream
+        else:
+            params["stream"] = False
 
-        if instructions:
+        if instructions and not is_reasoning:
             params["instructions"] = instructions
 
         if max_tokens:
             params["max_output_tokens"] = max_tokens
 
-        if tools:
+        # Reasoning models don't support tools
+        if tools and not is_reasoning:
             params["tools"] = self.validate_tools(tools)
             if tool_choice:
                 params["tool_choice"] = tool_choice
 
-        if reasoning:
-            params["reasoning"] = reasoning
+        # Add reasoning configuration for reasoning models
+        if reasoning and is_reasoning:
+            # Ensure proper reasoning format: {"effort": "medium", "summary": "detailed"}
+            reasoning_config = {}
+            if isinstance(reasoning, dict):
+                reasoning_config["effort"] = reasoning.get("effort", "medium")
+                # summary is only supported for o3 and o4-mini models
+                if model.lower() in ["o3", "o3-mini", "o3-pro", "o4-mini"]:
+                    reasoning_config["summary"] = reasoning.get("summary", "detailed")
+            else:
+                reasoning_config["effort"] = "medium"
+            params["reasoning"] = reasoning_config
 
         params.update(kwargs)
         params = {k: v for k, v in params.items() if v is not None}
@@ -225,4 +298,32 @@ class AzureOpenAIProvider(LLMProvider):
         if self.use_responses_api:
             features.add("reasoning")
             features.add("stateful_conversations")
+        # Add reasoning model support
+        features.add("reasoning_models")
+        features.add("developer_messages")
         return features
+
+    def get_model_info(self, model: str) -> Dict[str, Any]:
+        """Get information about a specific model."""
+        is_reasoning = self._is_reasoning_model(model)
+        
+        if is_reasoning:
+            return {
+                "supports_tools": False,
+                "supports_streaming": False,
+                "supports_temperature": False,
+                "max_tokens": 200000,  # Large context window for reasoning models
+                "supports_reasoning": True,
+                "supports_json_mode": False,
+                "model_type": "reasoning"
+            }
+        else:
+            return {
+                "supports_tools": True,
+                "supports_streaming": True,
+                "supports_temperature": True,
+                "max_tokens": 128000,
+                "supports_reasoning": False,
+                "supports_json_mode": True,
+                "model_type": "chat"
+            }

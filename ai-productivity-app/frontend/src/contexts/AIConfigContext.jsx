@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 
 // Use the existing API client for proper authentication handling
-import { apiClient } from '../api/client';
+// The client is exported as the default export, so import it accordingly.
+import apiClient from '../api/client';
 
 // API client
 const API_BASE = '/api/v1/ai-config';

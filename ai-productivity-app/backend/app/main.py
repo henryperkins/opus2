@@ -48,14 +48,9 @@ from .chat import confidence_routes as confidence_router
 # Conditional router imports based on feature flag
 if settings.enable_unified_config:
     from .routers import unified_config as ai_config_router
-    models_router = None  # type: ignore
 else:
-    # Legacy fallback – use shimmed routers for backward compatibility
-    from .routers import config as ai_config_router  # type: ignore
-    from .routers import models as models_router  # noqa: F401
-
-# Alias for legacy variable name used further below
-config_router = ai_config_router  # type: ignore
+    from .routers import config as ai_config_router  # Legacy config router
+    from .routers import models as models_router
 
 
 @asynccontextmanager
@@ -175,8 +170,8 @@ app.include_router(confidence_router.router, prefix="/confidence", tags=["Confid
 if settings.enable_unified_config:
     app.include_router(ai_config_router.router)
 else:
-    app.include_router(ai_config_router.router)
-    app.include_router(models_router.router)
+    app.include_router(ai_config_router.router)  # Legacy config router
+    app.include_router(models_router.router)     # Legacy models router
 
 
 @app.get("/health")

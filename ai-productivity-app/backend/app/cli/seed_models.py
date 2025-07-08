@@ -17,7 +17,12 @@ MODELS_FIXTURE = Path(__file__).parent / "fixtures" / "models.json"
 async def seed_models():
     async with AsyncSessionLocal() as session:
         # Check if already seeded
-        existing = await session.execute(select(func.count(ModelConfiguration.id)))
+        # Use the correct primary-key column for the count check.
+        # ``ModelConfiguration`` defines ``model_id`` as the primary key –
+        # there is no generic ``id`` column. Referencing the non-existent
+        # attribute raised an ``AttributeError`` which bubbled up to the
+        # startup routine and caused model seeding to be skipped.
+        existing = await session.execute(select(func.count(ModelConfiguration.model_id)))
         if existing.scalar() > 0:
             print("Models already seeded")
             return
