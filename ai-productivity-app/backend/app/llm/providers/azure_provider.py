@@ -17,7 +17,11 @@ class AzureOpenAIProvider(LLMProvider):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.use_responses_api = kwargs.get("use_responses_api", False)
-        self.api_version = kwargs.get("api_version", "2025-04-01-preview")
+        from app.config import settings
+        self.api_version = kwargs.get(
+            "api_version",
+            settings.azure_openai_api_version
+        )
 
     # ------------------------------------------------------------------
     # Helper shortcuts – kept for backward compatibility only
@@ -138,15 +142,14 @@ class AzureOpenAIProvider(LLMProvider):
                 processed_messages.append(msg)
         
         if is_reasoning:
-            # Reasoning models use max_completion_tokens and don't support temperature/streaming
             params = {
                 "model": model,
                 "messages": processed_messages,
-                "stream": False
+                "stream": False,
             }
             if max_tokens:
                 params["max_completion_tokens"] = max_tokens
-            # Don't add tools, temperature, or streaming for reasoning models
+        # Do *not* set temperature for reasoning models
         else:
             # Regular models support all features
             params = build_openai_chat_params(
@@ -279,6 +282,11 @@ class AzureOpenAIProvider(LLMProvider):
                     for item in chunk.output:
                         if hasattr(item, "content"):
                             yield item.content
+            # Flush remaining output when stream closed
+            if self.use_responses_api and hasattr(response, "output"):
+                for item in response.output:
+                    if getattr(item, "content", None):
+                        yield item.content
         else:
             # Standard Chat API streaming
             async for chunk in response:
@@ -306,7 +314,7 @@ class AzureOpenAIProvider(LLMProvider):
                 for item in response.output:
                     if getattr(item, "type", None) == "function_call":
                         tool_calls.append({
-                            "id": item.call_id,
+                            "id": getattr(item, "id", getattr(item, "call_id", None)),
                             "name": item.name,
                             "arguments": item.arguments
                         })

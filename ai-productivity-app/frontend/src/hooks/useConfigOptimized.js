@@ -3,10 +3,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { configAPI } from '../api/config';
 import { toast } from 'react-hot-toast';
-import { createConfigData } from '../constants/modelDefaults';
+import { useDefaults } from './useDefaults';
 
 export function useConfigOptimized() {
   const queryClient = useQueryClient();
+  const { data: defaults } = useDefaults();
 
   // Query for fetching config with optimized caching
   const {
@@ -18,8 +19,9 @@ export function useConfigOptimized() {
     queryKey: ['config'],
     queryFn: async () => {
       const data = await configAPI.getConfig();
-      return createConfigData(data);
+      return createConfigData(data, defaults);
     },
+    enabled: !!defaults, // only run if defaults are loaded
     staleTime: 30000, // Consider data fresh for 30 seconds
     cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
     refetchOnWindowFocus: false, // Prevent excessive refetching
@@ -42,9 +44,12 @@ export function useConfigOptimized() {
   // Mutation for updating model config with optimistic updates
   const updateModelConfigMutation = useMutation({
     mutationFn: async (updates) => {
+      const defaultProvider = defaults?.provider || 'openai';
+      const defaultModel = defaults?.model || 'gpt-4o-mini';
+
       return await configAPI.updateModelConfig({
-        provider: updates.provider || config?.current.provider || 'openai',
-        chat_model: updates.chat_model || config?.current.chat_model || 'gpt-4o-mini',
+        provider: updates.provider || config?.current.provider || defaultProvider,
+        chat_model: updates.chat_model || config?.current.chat_model || defaultModel,
         useResponsesApi: updates.useResponsesApi ?? config?.current.useResponsesApi ?? false,
         temperature: updates.temperature,
         maxTokens: updates.maxTokens,
@@ -110,7 +115,7 @@ export function useConfigOptimized() {
       queryKey: ['config'],
       queryFn: async () => {
         const data = await configAPI.getConfig();
-        return createConfigData(data);
+        return createConfigData(data, defaults);
       },
       staleTime: 30000,
     });
@@ -138,5 +143,33 @@ export function useConfig() {
     error: optimized.error,
     refetch: optimized.refetch,
     updateConfig: optimized.updateConfig,
+  };
+}
+
+
+// Helper function to create a default config structure
+export function createConfigData(data, defaults) {
+  const defaultProvider = defaults?.provider || 'openai';
+  const defaultModel = defaults?.model || 'gpt-4o-mini';
+  const defaultTemperature = defaults?.temperature ?? 0.7;
+
+  return {
+    current: {
+      provider: data?.provider || defaultProvider,
+      chat_model: data?.chat_model || defaultModel,
+      temperature: data?.temperature ?? defaultTemperature,
+      maxTokens: data?.maxTokens ?? 4096,
+      topP: data?.topP ?? 1.0,
+      frequencyPenalty: data?.frequencyPenalty ?? 0.0,
+      presencePenalty: data?.presencePenalty ?? 0.0,
+      systemPrompt: data?.systemPrompt || '',
+      useResponsesApi: data?.useResponsesApi ?? false,
+      reasoning_effort: data?.reasoning_effort || 'auto',
+    },
+    available: {
+      models: data?.available_models || [],
+      providers: data?.available_providers || [],
+    },
+    lastUpdated: new Date().toISOString(),
   };
 }

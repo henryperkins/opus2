@@ -3,9 +3,8 @@ import { createContext, useContext, useReducer, useEffect, useCallback } from 'r
 import { useQueryClient } from '@tanstack/react-query';
 import PropTypes from 'prop-types';
 import { useConfigOptimized } from '../hooks/useConfigOptimized';
+import { useDefaults } from '../hooks/useDefaults';
 import {
-  DEFAULT_PROVIDER,
-  DEFAULT_MODEL,
   DEFAULT_GENERATION_PARAMS,
   DEFAULT_MODEL_STATS,
   DEFAULT_MODEL_HISTORY,
@@ -129,6 +128,29 @@ function modelReducer(state, action) {
 
 // ModelProvider component
 export function ModelProvider({ children }) {
+  const { data: defaults } = useDefaults();
+  const defaultModel    = defaults?.model || 'gpt-4o-mini';   // fallback
+  const defaultProvider = defaults?.provider || 'openai';
+
+  // Initial state for model context
+  const initialState = {
+    // Current model configuration
+    currentModel: defaultModel,
+    currentProvider: defaultProvider,
+    modelConfig: DEFAULT_GENERATION_PARAMS,
+
+    // Model performance tracking
+    modelStats: DEFAULT_MODEL_STATS,
+    modelHistory: DEFAULT_MODEL_HISTORY,
+
+    // UI state
+    ...DEFAULT_UI_STATE,
+
+    // Available models and providers
+    availableModels: [],
+    availableProviders: []
+  };
+
   const [state, dispatch] = useReducer(modelReducer, initialState);
   const queryClient = useQueryClient();
   const { config, updateConfig } = useConfigOptimized();

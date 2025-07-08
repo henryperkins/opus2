@@ -14,6 +14,7 @@ from app.schemas.generation import (
     UnifiedModelConfig,
     ModelInfo,
     validate_config_consistency,
+    UnifiedModelConfig,
 )
 from app.config import settings
 
@@ -170,15 +171,15 @@ class UnifiedConfigService:
 
     async def test_config(self, config: UnifiedModelConfig) -> Dict[str, Any]:
         """Test configuration with actual API call."""
-        from app.llm.client import LLMClient
+        from app.llm.client import llm_client as client
         import asyncio
         import time
 
         start_time = time.time()
+        snapshot = client.snapshot()
 
         try:
             # Create temporary client with test config
-            client = LLMClient()
             await client.reconfigure(
                 provider=config.provider,
                 model=config.model_id,
@@ -226,6 +227,8 @@ class UnifiedConfigService:
                 "message": "Configuration test failed",
                 "error": str(e),
             }
+        finally:
+            await client.restore(snapshot)
 
     # Private methods
 
@@ -312,6 +315,7 @@ class UnifiedConfigService:
 
         try:
             self.db.commit()
+            self.db.expire_all()    # ensure subsequent reads hit DB
         except IntegrityError as e:
             self.db.rollback()
             logger.error(f"Configuration update failed due to integrity constraint: {e}")
@@ -398,4 +402,14 @@ class UnifiedConfigService:
             deprecation_date=getattr(model, 'deprecation_date', None),
             recommended_use_cases=getattr(model, 'recommended_use_cases', []) or [],
         )
+
+    # ------------------------------------------------------------------
+    # Defaults helper
+    # ------------------------------------------------------------------
+    def get_defaults(self) -> dict[str, Any]:
+        """
+        Return the *authoritative* default configuration in camelCase
+        so the frontend never hard-codes fallback values.
+        """
+        return self._get_default_config().model_dump(by_alias=True)
 

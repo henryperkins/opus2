@@ -4,7 +4,7 @@ Unified API router for all AI configuration endpoints.
 Replaces scattered config, models, and provider endpoints.
 """
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -100,6 +100,22 @@ async def get_configuration(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load configuration",
         )
+
+
+from app.dependencies import CurrentUserRequired, get_current_user
+from app.models.user import User
+
+...
+
+@router.get("/defaults", response_model=dict, summary="Built-in defaults")
+async def get_defaults(
+    service: UnifiedConfigService = Depends(get_config_service),
+    user: Optional[User] = Depends(get_current_user)
+) -> dict:
+    """
+    Return the canonical default provider / model / generation parameters.
+    """
+    return service.get_defaults()
 
 
 @router.put("", response_model=UnifiedModelConfig)

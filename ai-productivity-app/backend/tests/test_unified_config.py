@@ -118,6 +118,20 @@ class TestUnifiedConfigAPI:
             assert "modelId" in model  # camelCase
             assert "displayName" in model  # camelCase
             
+    def test_config_test_route_reuses_singleton(self, authenticated_user, monkeypatch):
+        from app.llm.client import llm_client
+        orig_id = id(llm_client)
+
+        resp = client.post(
+            "/api/v1/ai-config/test",
+            cookies=authenticated_user["cookies"],
+            json={"provider": "openai", "modelId": "test-gpt-4o"}
+        )
+        assert resp.status_code == 200
+        # singleton still the same object
+        from app.llm.client import llm_client as after
+        assert id(after) == orig_id
+
     def test_update_config_accepts_snake_case(self, authenticated_user, seeded_config):
         """Test that PUT accepts snake_case input and returns camelCase."""
         # Test with snake_case input
@@ -282,6 +296,13 @@ class TestUnifiedConfigAPI:
         
         response = client.get("/api/v1/ai-config/models")
         assert response.status_code == 401
+
+    def test_defaults(self, seeded_config):
+        resp = client.get("/api/v1/ai-config/defaults")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["provider"]           # basic smoke check
+        assert body["temperature"] == 0.7
 
 
 class TestUnifiedConfigService:

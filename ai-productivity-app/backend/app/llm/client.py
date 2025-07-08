@@ -421,6 +421,19 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             self.use_responses_api,
         )
 
+    # --------------------------------------------------------------
+    # Convenience for temporary reconfiguration
+    # --------------------------------------------------------------
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider,
+            "active_model": self.active_model,
+            "use_responses_api": self.use_responses_api,
+        }
+
+    async def restore(self, state: dict[str, Any]) -> None:
+        await self.reconfigure(**state)
+
     # ---------------------------------------------------------------------
     # Provider-specific initialisation helpers
     # ---------------------------------------------------------------------

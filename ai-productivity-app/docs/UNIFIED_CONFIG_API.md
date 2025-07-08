@@ -130,6 +130,29 @@ Update AI configuration with validation.
 }
 ```
 
+### GET /api/v1/ai-config/defaults
+
+Return the canonical default provider / model / generation parameters.
+
+**Response**:
+```json
+{
+  "provider": "openai",
+  "modelId": "gpt-4o-mini",
+  "temperature": 0.7,
+  "maxTokens": null,
+  "topP": 1.0,
+  "frequencyPenalty": 0.0,
+  "presencePenalty": 0.0,
+  "enableReasoning": true,
+  "reasoningEffort": "medium",
+  "claudeExtendedThinking": false,
+  "claudeThinkingMode": "off",
+  "claudeThinkingBudgetTokens": 8192,
+  "useResponsesApi": false
+}
+```
+
 ### POST /api/v1/ai-config/test
 
 Test AI configuration with actual API call.
