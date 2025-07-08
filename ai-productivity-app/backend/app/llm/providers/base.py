@@ -1,7 +1,12 @@
 """Base provider interface for LLM implementations."""
 
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Dict, List, Optional, Literal, Sequence
+from typing import Any, AsyncIterator, Dict, List, Optional, Sequence
+
+# Utility helper for tool validation in the canonical OpenAI format.  By
+# importing *locally* we avoid a potential circular import when the utils
+# module itself tries to import the provider base.
+from .utils import validate_tools as _validate_tools
 import logging
 
 logger = logging.getLogger(__name__)
@@ -44,13 +49,31 @@ class LLMProvider(ABC):
         """Convert provider response to unified streaming format."""
         pass
 
-    @abstractmethod
-    def validate_tools(
-        self,
-        tools: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Validate and format tools for this provider."""
-        pass
+    # NOTE: The majority of providers accept the *OpenAI* tool calling
+    # schema.  The shared helper in :pymod:`app.llm.providers.utils`
+    # converts *bare* ``{"name": ..., "parameters": ...}`` objects to the
+    # fully-qualified format expected by the SDK.  Providers that require a
+    # **different** representation (e.g. Anthropic Claude) can still
+    # override this method – but everyone else now automatically inherits a
+    # robust implementation and we avoid the previous code duplication.
+
+    def validate_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:  # noqa: D401 – simple description
+        """Return *tools* converted to the canonical OpenAI format.
+
+        This default implementation acts as a thin wrapper around
+        :pyfunc:`app.llm.providers.utils.validate_tools`.  It is adequate for
+        all providers that understand the OpenAI schema.  Providers with a
+        custom format should override the method and *first* delegate to
+        ``super().validate_tools`` (or call the helper directly) to benefit
+        from the conversion logic.
+        """
+
+        # Quick exit for *None* or empty input – helps callers that forward
+        # optional arguments without additional checks.
+        if not tools:
+            return []
+
+        return _validate_tools(tools)
 
     @abstractmethod
     def extract_content(self, response: Any) -> str:

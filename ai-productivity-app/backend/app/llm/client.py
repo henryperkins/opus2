@@ -132,40 +132,38 @@ def _handle_rate_limit_error(retry_state):
     return min(4 * (2 ** (retry_state.attempt_number - 1)), 60)
 
 
-def _is_reasoning_model(model_name: str) -> bool:
-    """Return True if the model is a reasoning model (o1/o3/o4 series)."""
+def _is_reasoning_model(model_name: str) -> bool:  # noqa: D401 – simple description
+    """Light-weight check whether *model_name* belongs to the *reasoning* family.
+
+    The application previously duplicated this logic across multiple helper
+    functions.  The authoritative source is now
+    :pyfunc:`app.services.model_service.ModelService.is_reasoning_model_static` –
+    a static, dependency-free utility that can be invoked during early
+    start-up when no database session exists yet.  We therefore delegate
+    directly.
+    """
+
     if not model_name:
         return False
 
-    try:
-        from app.database import SessionLocal
-        from app.services.model_service import ModelService
-        
-        with SessionLocal() as db:
-            model_service = ModelService(db)
-            return model_service.is_reasoning_model(model_name)
-    except Exception:
-        # Fallback to simple pattern matching if DB/service fails
-        from app.services.model_service import ModelService
-        return ModelService.is_reasoning_model_static(model_name)
+    from app.services.model_service import ModelService
+
+    return ModelService.is_reasoning_model_static(model_name)
 
 
-def _model_requires_responses_api(model_name: str) -> bool:
-    """Return True if the model requires the Responses API by default."""
+def _model_requires_responses_api(model_name: str) -> bool:  # noqa: D401 – simple description
+    """Return **True** when *model_name* must be queried via Azure *Responses API*.
+
+    For start-up convenience and to eliminate code duplication we again defer
+    to the static helper on :pyclass:`~app.services.model_service.ModelService`.
+    """
+
     if not model_name:
         return False
 
-    try:
-        from app.database import SessionLocal
-        from app.services.model_service import ModelService
-        
-        with SessionLocal() as db:
-            model_service = ModelService(db)
-            return model_service.requires_responses_api(model_name)
-    except Exception:
-        # Fallback to simple pattern matching if DB/service fails
-        from app.services.model_service import ModelService
-        return ModelService.requires_responses_api_static(model_name)
+    from app.services.model_service import ModelService
+
+    return ModelService.requires_responses_api_static(model_name)
 
 
 def _is_responses_api_enabled(model_name: str = None) -> bool:
@@ -715,25 +713,42 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 for msg in messages:
                     if msg.get("role") == "system":
                         msg["role"] = "developer"
-            # Handle Anthropic Claude models
-            if self.provider == "anthropic":
-                # Prepare thinking configuration for Claude
-                thinking_config = None
-                if settings.claude_extended_thinking and settings.claude_thinking_mode != "off":
-                    budget_tokens = settings.claude_thinking_budget_tokens
+            # ------------------------------------------------------------------
+            # Anthropic Claude – Extended "thinking" support
+            # ------------------------------------------------------------------
 
-                    # Adjust budget based on task complexity if adaptive mode is enabled
-                    if settings.claude_adaptive_thinking_budget:
-                        # Simple heuristics for budget adjustment
+            if self.provider == "anthropic":
+                # Prefer *runtime_config* values so the feature can be toggled
+                # at runtime via the unified configuration API.  Fall back to
+                # static *settings* when the fields are absent (e.g. during
+                # early bootstrapping when no DB entries exist).
+
+                def _cfg(key: str, default: Any = None):
+                    return runtime_config.get(key, getattr(settings, key, default))
+
+                extended_thinking_enabled: bool = _cfg("claude_extended_thinking", True)
+                thinking_mode: str = _cfg("claude_thinking_mode", "enabled")
+
+                thinking_config = None
+                if extended_thinking_enabled and thinking_mode != "off":
+                    budget_tokens: int = int(_cfg("claude_thinking_budget_tokens", 16384))
+
+                    # Adjust budget heuristically when *adaptive* mode is on.
+                    if _cfg("claude_adaptive_thinking_budget", True):
                         message_length = sum(len(str(msg.get("content", ""))) for msg in messages)
-                        if message_length > 2000:  # Long messages = complex task
-                            budget_tokens = min(settings.claude_max_thinking_budget, budget_tokens * 2)
-                        elif tools:  # Tool usage = complex task
-                            budget_tokens = min(settings.claude_max_thinking_budget, budget_tokens * 1.5)
+
+                        if message_length > 2000:  # Large prompt → complex task
+                            budget_tokens = min(
+                                _cfg("claude_max_thinking_budget", 65536), budget_tokens * 2
+                            )
+                        elif tools:  # Tool usage hints at complexity as well
+                            budget_tokens = min(
+                                _cfg("claude_max_thinking_budget", 65536), int(budget_tokens * 1.5)
+                            )
 
                     thinking_config = {
-                        "type": settings.claude_thinking_mode,
-                        "budget_tokens": int(budget_tokens)
+                        "type": thinking_mode,
+                        "budget_tokens": budget_tokens,
                     }
 
                 return await self._handle_anthropic_request(

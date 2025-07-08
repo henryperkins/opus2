@@ -5,7 +5,7 @@ import logging
 from openai import AsyncAzureOpenAI
 
 from .base import LLMProvider
-from .utils import build_openai_chat_params, validate_tools
+from .utils import build_openai_chat_params
 from .openai_provider import OpenAIProvider
 
 logger = logging.getLogger(__name__)
@@ -19,22 +19,20 @@ class AzureOpenAIProvider(LLMProvider):
         self.use_responses_api = kwargs.get("use_responses_api", False)
         self.api_version = kwargs.get("api_version", "2025-04-01-preview")
 
-    def _is_reasoning_model(self, model: str) -> bool:
-        """Check if the model is a reasoning model (o1/o3/o4 series)."""
-        if not model:
-            return False
-        
-        from app.services.model_service import ModelService
-        return ModelService.is_reasoning_model_static(model)
+    # ------------------------------------------------------------------
+    # Helper shortcuts – kept for backward compatibility only
+    # ------------------------------------------------------------------
+    #
+    # Earlier versions of *AzureOpenAIProvider* exposed their own
+    # ``_is_reasoning_model`` / ``_requires_responses_api`` wrappers.  The
+    # logic is now centralised in :pymeth:`app.services.model_service.ModelService`
+    # static helpers.  We therefore alias the new single source of truth to
+    # avoid large-scale refactors elsewhere in the provider implementation.
 
-    def _requires_responses_api(self, model: str) -> bool:
-        """Return *True* when *model* should be called via the Responses API.
+    from app.services.model_service import ModelService as _MS  # type: ignore
 
-        Uses the fast static helper so the function remains usable during
-        early application bootstrap where no DB session is available.
-        """
-        from app.services.model_service import ModelService
-        return ModelService.requires_responses_api_static(model)
+    _is_reasoning_model = staticmethod(_MS.is_reasoning_model_static)  # type: ignore
+    _requires_responses_api = staticmethod(_MS.requires_responses_api_static)  # type: ignore
 
     def _initialize_client(self) -> None:
         """Initialize Azure OpenAI client."""
@@ -239,7 +237,7 @@ class AzureOpenAIProvider(LLMProvider):
         # provided earlier in the conversation.
         if not is_reasoning:
             if tools:
-                params["tools"] = validate_tools(tools)
+                params["tools"] = self.validate_tools(tools)
             if tool_choice is not None:
                 params["tool_choice"] = tool_choice
         # The Responses API *does* support tool_choice in the same way as the
