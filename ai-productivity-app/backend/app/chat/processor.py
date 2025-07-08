@@ -39,6 +39,7 @@ from ..models.chat import ChatMessage, ChatSession
 from ..services.chat_service import ChatService
 from ..services.knowledge_service import KnowledgeService
 from ..services.confidence_service import ConfidenceService
+from ..services.unified_config_service import UnifiedConfigService
 from ..embeddings.generator import EmbeddingGenerator
 from ..websocket.manager import connection_manager
 from .commands import command_registry
@@ -60,6 +61,7 @@ class ChatProcessor:
         self.chat_service = ChatService(db)
         self.context_builder = ContextBuilder(db)
         self.confidence_service = ConfidenceService()
+        self.config_service = UnifiedConfigService(db)
         self._kb = kb
 
     # --------------------------------------------------------------------- #
@@ -369,7 +371,7 @@ class ChatProcessor:
             tool_choice="auto",
             parallel_tool_calls=True,
             reasoning=(
-                settings.enable_reasoning if not is_reasoning_model else None
+                self.config_service.get_current_config().enable_reasoning if not is_reasoning_model else None
             ),
             max_tokens=cfg.get("max_tokens"),
         )

@@ -374,17 +374,3 @@ async def _broadcast_config_update(
         logger.warning(f"Failed to broadcast config update: {e}")
 
 
-# Initialize defaults on startup
-@router.on_event("startup")
-async def initialize_configuration():
-    """Initialize default configuration on startup."""
-    from app.database import SessionLocal
-
-    try:
-        with SessionLocal() as db:
-            service = UnifiedConfigService(db)
-            service.initialize_defaults()
-            logger.info("AI configuration initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize configuration: {e}")
-        # Don't fail startup, allow application to continue

@@ -392,12 +392,6 @@ class Settings(BaseSettings):
         description="Enable WebSocket per-connection task tracking",
     )
 
-    # Enable the new unified AI configuration system
-    enable_unified_config: bool = Field(
-        default=True,
-        alias="ENABLE_UNIFIED_CONFIG",
-        description="Enable the new unified AI configuration system",
-    )
 
     # URL where the user-facing frontend is served.  Used to build absolute
     # links in transactional emails (e.g. password-reset).  Defaults to

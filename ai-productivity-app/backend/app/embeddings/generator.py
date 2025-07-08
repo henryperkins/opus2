@@ -223,11 +223,24 @@ class EmbeddingGenerator:
     # ------------------------------------------------------------------ #
     # Client initialisation
     # ------------------------------------------------------------------ #
+    def _get_current_provider(self) -> str:
+        """Get current provider from unified config."""
+        try:
+            from app.services.unified_config_service import UnifiedConfigService
+            from app.database import SessionLocal
+            
+            with SessionLocal() as db:
+                service = UnifiedConfigService(db)
+                config = service.get_current_config()
+                return config.provider.lower()
+        except Exception as e:
+            logger.debug(f"Failed to get provider from unified config: {e}")
+            return settings.llm_provider.lower()
     def _init_client(self) -> None:
         """Instantiate AsyncOpenAI or AsyncAzureOpenAI client."""
         """Use shared factory helpers to create an SDK client."""
 
-        provider = settings.llm_provider.lower()
+        provider = self._get_current_provider()
         try:
             if provider == "azure":
                 from app.llm.client_factory import get_azure_client

@@ -14,8 +14,7 @@ import json
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-# Ensure unified config is enabled for tests BEFORE importing app
-os.environ["ENABLE_UNIFIED_CONFIG"] = "true"
+# Unified config is now always enabled
 
 from app.main import app
 from app.models.user import User

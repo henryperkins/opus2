@@ -266,18 +266,13 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self) -> None:
         from datetime import timedelta
-        self.provider: str = settings.llm_provider.lower()
-
-        # The active *model* (or *deployment name* in Azure terminology).  We
-        # prioritise the new ``llm_default_model`` field and fall back to the
-        # (deprecated) ``llm_model`` environment variable for backwards
-        # compatibility.
-        self.active_model: str = (
-            settings.llm_default_model or settings.llm_model or "gpt-3.5-turbo"
-        )
-
-        # Determine if Responses API should be used (considers both API version and model type)
-        self.use_responses_api: bool = _is_responses_api_enabled(self.active_model)
+        
+        # Get initial config from unified config service
+        config = self._get_current_config()
+        
+        self.provider: str = config.provider.lower()
+        self.active_model: str = config.model_id
+        self.use_responses_api: bool = config.use_responses_api
 
         # Underlying OpenAI SDK client – differs for public vs. Azure.
         self.client: Any | None = None
@@ -296,6 +291,25 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 self._init_openai_client()
         except Exception as exc:  # noqa: BLE001 – propagate but record in Sentry
             logger.error("Failed to initialise LLM client: %s", exc, exc_info=True)
+
+    def _get_current_config(self):
+        """Get current unified configuration."""
+        try:
+            from app.services.unified_config_service import UnifiedConfigService
+            from app.database import SessionLocal
+            
+            with SessionLocal() as db:
+                unified_service = UnifiedConfigService(db)
+                return unified_service.get_current_config()
+        except Exception as e:
+            logger.debug(f"Failed to load unified config: {e}")
+            # Fallback to creating a config from static settings
+            from app.schemas.generation import UnifiedModelConfig
+            return UnifiedModelConfig(
+                provider=settings.llm_provider,
+                model_id=settings.llm_default_model or settings.llm_model or "gpt-3.5-turbo",
+                use_responses_api=_is_responses_api_enabled(settings.llm_default_model or settings.llm_model or "gpt-3.5-turbo")
+            )
 
     def _get_runtime_config(self) -> Dict[str, Any]:
         """Get current runtime configuration, falling back to static settings."""

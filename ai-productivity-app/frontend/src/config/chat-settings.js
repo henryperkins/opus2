@@ -10,7 +10,7 @@ export const defaultChatSettings = {
         citationStyle: 'inline' // 'inline' | 'footnote'
     },
     models: {
-        default: 'gpt-4',
+        default: 'gpt-4o-mini',
         fallbacks: ['gpt-3.5-turbo', 'claude-3-sonnet'],
         autoSwitch: true,
         costLimit: 0.10 // dollars per request

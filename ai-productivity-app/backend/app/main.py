@@ -45,12 +45,8 @@ from .routers import feedback as feedback_router
 from .chat import admin_routes as admin_router
 from .chat import confidence_routes as confidence_router
 
-# Conditional router imports based on feature flag
-if settings.enable_unified_config:
-    from .routers import unified_config as ai_config_router
-else:
-    from .routers import config as ai_config_router  # Legacy config router
-    from .routers import models as models_router
+# Import unified config router
+from .routers import unified_config as ai_config_router
 
 
 @asynccontextmanager
@@ -75,22 +71,21 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
     except Exception as exc:
         logger.error("Failed to initialize vector store (%s): %s", settings.vector_store_type, exc)
 
-    # Initialize unified configuration if enabled
-    if settings.enable_unified_config:
-        from app.services.unified_config_service import UnifiedConfigService
-        from app.database import SessionLocal
-        with SessionLocal() as db:
-            service = UnifiedConfigService(db)
-            service.initialize_defaults()
+    # Initialize unified configuration
+    from app.services.unified_config_service import UnifiedConfigService
+    from app.database import SessionLocal
+    with SessionLocal() as db:
+        service = UnifiedConfigService(db)
+        service.initialize_defaults()
 
-        # Seed model catalogue if empty (quick-win – avoids empty dropdown)
-        try:
-            from app.cli.seed_models import seed_models  # local import to avoid heavy deps
-            import asyncio
+    # Seed model catalogue if empty (quick-win – avoids empty dropdown)
+    try:
+        from app.cli.seed_models import seed_models  # local import to avoid heavy deps
+        import asyncio
 
-            await seed_models()  # noqa: SLF001 – util coroutine
-        except Exception as exc:  # pragma: no cover – non-critical
-            logger.warning("Model seeding skipped: %s", exc)
+        await seed_models()  # noqa: SLF001 – util coroutine
+    except Exception as exc:  # pragma: no cover – non-critical
+        logger.warning("Model seeding skipped: %s", exc)
 
     yield
     # Shutdown
@@ -167,11 +162,7 @@ app.include_router(feedback_router.router)
 app.include_router(admin_router.router, prefix="/admin", tags=["Admin"])
 app.include_router(confidence_router.router, prefix="/confidence", tags=["Confidence"])
 
-if settings.enable_unified_config:
-    app.include_router(ai_config_router.router)
-else:
-    app.include_router(ai_config_router.router)  # Legacy config router
-    app.include_router(models_router.router)     # Legacy models router
+app.include_router(ai_config_router.router)
 
 
 @app.get("/health")

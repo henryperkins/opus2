@@ -48,7 +48,7 @@ export const navigationRoutes = [
     path: '/models',
     label: 'Model Settings',
     icon: Bot,
-    showInSidebar: false, // Hide until distinct Model Settings page exists
+    showInSidebar: true,
     breadcrumbLabel: 'Model Settings'
   }
 ];

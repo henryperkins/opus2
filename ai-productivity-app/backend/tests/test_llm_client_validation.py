@@ -275,62 +275,57 @@ class TestConfigRouterExceptionHandling:
     """Test that the config router handles exceptions properly."""
 
     @pytest.mark.asyncio
-    async def test_unbound_local_error_returns_422(self):
-        """Test that UnboundLocalError returns 422, not 500."""
-        from app.routers.config import update_model_config
-        from app.schemas.models import ModelConfig
+    async def test_unbound_local_error_validation(self):
+        """Test that UnboundLocalError is handled in validation."""
+        from app.database import SessionLocal
         
-        # Create mock payload
-        mock_payload = MagicMock()
-        mock_payload.dict.return_value = {
-            "provider": "azure",
-            "chat_model": "o3",
-            "use_responses_api": True
-        }
-        
-        # Mock config service to raise UnboundLocalError
-        mock_config_service = AsyncMock()
-        mock_config_service.validate_config.side_effect = UnboundLocalError("input_messages error")
-        
-        # Test that it raises HTTPException with 422 status
-        with pytest.raises(HTTPException) as exc_info:
-            await update_model_config(mock_payload, mock_config_service)
-        
-        assert exc_info.value.status_code == 422
-        assert "Configuration error" in str(exc_info.value.detail)
+        with SessionLocal() as db:
+            config_service = UnifiedConfigService(db)
+            
+            # Mock the LLM client to raise UnboundLocalError
+            with patch('app.llm.client.LLMClient.complete') as mock_complete:
+                mock_complete.side_effect = UnboundLocalError("input_messages error")
+                
+                # Test validation handles the error gracefully
+                is_valid, error = config_service.validate_config({
+                    "provider": "azure",
+                    "model_id": "o3",
+                    "use_responses_api": True
+                })
+                
+                assert is_valid is False
+                assert "input_messages" in error
 
     @pytest.mark.asyncio
-    async def test_value_error_returns_422(self):
-        """Test that ValueError returns 422, not 500."""
-        from app.routers.config import update_model_config
+    async def test_value_error_validation(self):
+        """Test that ValueError is handled in validation."""
+        from app.database import SessionLocal
         
-        mock_payload = MagicMock()
-        mock_payload.dict.return_value = {
-            "provider": "azure",
-            "chat_model": "invalid-model"
-        }
-        
-        mock_config_service = AsyncMock()
-        mock_config_service.validate_config.side_effect = ValueError("Invalid model")
-        
-        with pytest.raises(HTTPException) as exc_info:
-            await update_model_config(mock_payload, mock_config_service)
-        
-        assert exc_info.value.status_code == 422
-        assert "Invalid configuration" in str(exc_info.value.detail)
+        with SessionLocal() as db:
+            config_service = UnifiedConfigService(db)
+            
+            # Mock the LLM client to raise ValueError
+            with patch('app.llm.client.LLMClient.complete') as mock_complete:
+                mock_complete.side_effect = ValueError("Invalid model")
+                
+                is_valid, error = config_service.validate_config({
+                    "provider": "azure",
+                    "model_id": "invalid-model"
+                })
+                
+                assert is_valid is False
+                assert "Invalid model" in error
 
     @pytest.mark.asyncio
-    async def test_http_exception_preserves_status(self):
-        """Test that HTTPExceptions are re-raised with original status."""
-        from app.routers.config import update_model_config
+    async def test_empty_config_validation(self):
+        """Test that empty config is properly rejected."""
+        from app.database import SessionLocal
         
-        mock_payload = MagicMock()
-        mock_payload.dict.return_value = {}  # Empty config
-        
-        mock_config_service = AsyncMock()
-        
-        # Should raise 400 for empty config
-        with pytest.raises(HTTPException) as exc_info:
-            await update_model_config(mock_payload, mock_config_service)
-        
-        assert exc_info.value.status_code == 400
+        with SessionLocal() as db:
+            config_service = UnifiedConfigService(db)
+            
+            # Test with empty config
+            is_valid, error = config_service.validate_config({})
+            
+            assert is_valid is False
+            assert error is not None

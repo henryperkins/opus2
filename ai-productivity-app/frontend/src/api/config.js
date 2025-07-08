@@ -7,13 +7,13 @@ import client from './client';
 
 export const createModelConfig = (data = {}) => ({
   provider: data.provider || 'openai',
-  chat_model: data.chat_model || 'gpt-4o-mini',
+  modelId: data.modelId || data.model_id || 'gpt-4o-mini',
   temperature: data.temperature,
-  maxTokens: data.maxTokens,
-  topP: data.topP,
-  frequencyPenalty: data.frequencyPenalty,
-  presencePenalty: data.presencePenalty,
-  systemPrompt: data.systemPrompt,
+  maxTokens: data.maxTokens || data.max_tokens,
+  topP: data.topP || data.top_p,
+  frequencyPenalty: data.frequencyPenalty || data.frequency_penalty,
+  presencePenalty: data.presencePenalty || data.presence_penalty,
+  systemPrompt: data.systemPrompt || data.system_prompt,
 });
 
 export const createModelStats = (data = {}) => ({
@@ -33,7 +33,7 @@ export const createTestResult = (data = {}) => ({
 
 class ConfigAPI {
   constructor() {
-    this.baseURL = '/api/config';
+    this.baseURL = '/api/v1/ai-config';
   }
 
   async getConfig() {
@@ -49,20 +49,10 @@ class ConfigAPI {
     // in the Axios request config so the interceptor can honour it.
     const { __noRetry, ...payload } = config ?? {};
     const axiosCfg = __noRetry ? { __noRetry } : undefined;
-    const response = await client.put(`${this.baseURL}/model`, payload, axiosCfg);
+    const response = await client.put(this.baseURL, payload, axiosCfg);
 
-    // The endpoint returns only the **current** section. Fetch the full
-    // configuration so we can broadcast a consistent object that matches
-    // the shape returned by GET /api/config (required by useConfig).
-    let fullConfig;
-    try {
-      const getResp = await client.get(this.baseURL);
-      fullConfig = getResp.data;
-    } catch (_) {
-      // Fallback: synthesise minimal config with just `current` so header
-      // still updates if fetching fails (e.g. due to network race).
-      fullConfig = { current: response.data.current ?? config };
-    }
+    // The unified API returns the full updated config directly
+    const fullConfig = response.data;
 
     if (typeof window !== 'undefined') {
       try {
@@ -79,7 +69,7 @@ class ConfigAPI {
       }
     }
 
-    return response.data;
+    return fullConfig;
   }
 
   async testModelConfig(config) {
@@ -99,30 +89,18 @@ class ConfigAPI {
     return response.data;
   }
 
-  async getModelStats(model) {
-    const response = await client.get(`${this.baseURL}/models/${model}/stats`);
+  async getModelInfo(modelId) {
+    const response = await client.get(`${this.baseURL}/models/${modelId}`);
     return response.data;
   }
 
-  async getModelPricing() {
-    const response = await client.get(`${this.baseURL}/pricing`);
+  async validateConfiguration(config) {
+    const response = await client.post(`${this.baseURL}/validate`, config);
     return response.data;
   }
 
-  async validateApiKey(provider, apiKey) {
-    try {
-      const response = await client.post(`${this.baseURL}/validate-key`, {
-        provider,
-        apiKey,
-      });
-      return response.data.valid;
-    } catch {
-      return false;
-    }
-  }
-
-  async getQuota(provider) {
-    const response = await client.get(`${this.baseURL}/quota/${provider}`);
+  async getConfigurationPresets() {
+    const response = await client.get(`${this.baseURL}/presets`);
     return response.data;
   }
 }
