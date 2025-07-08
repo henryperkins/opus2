@@ -27,6 +27,15 @@ class AzureOpenAIProvider(LLMProvider):
         from app.services.model_service import ModelService
         return ModelService.is_reasoning_model_static(model)
 
+    def _requires_responses_api(self, model: str) -> bool:
+        """Return *True* when *model* should be called via the Responses API.
+
+        Uses the fast static helper so the function remains usable during
+        early application bootstrap where no DB session is available.
+        """
+        from app.services.model_service import ModelService
+        return ModelService.requires_responses_api_static(model)
+
     def _initialize_client(self) -> None:
         """Initialize Azure OpenAI client."""
         endpoint = self.config.get("endpoint")
@@ -71,16 +80,38 @@ class AzureOpenAIProvider(LLMProvider):
     ) -> Any:
         """Execute Azure OpenAI completion."""
 
-        if self.use_responses_api:
+        # Decide API variant.  *use_responses_api* can be forced by
+        # constructor kwargs but we also auto-enable it when the selected
+        # *model* requires the Responses API (o3/o4 or GPT-4o family).  This
+        # avoids silent 400 errors when callers forgot to set the flag.
+
+        auto_responses = self._is_reasoning_model(model) or self._requires_responses_api(model)
+
+        if self.use_responses_api or auto_responses:
             return await self._complete_responses_api(
-                messages, model, temperature, max_tokens, stream,
-                tools, tool_choice, reasoning, **kwargs
+                messages,
+                model,
+                temperature,
+                max_tokens,
+                stream,
+                tools,
+                tool_choice,
+                reasoning,
+                **kwargs,
             )
-        else:
-            return await self._complete_chat_api(
-                messages, model, temperature, max_tokens, stream,
-                tools, tool_choice, parallel_tool_calls, **kwargs
-            )
+
+        # Fallback to Chat Completions API
+        return await self._complete_chat_api(
+            messages,
+            model,
+            temperature,
+            max_tokens,
+            stream,
+            tools,
+            tool_choice,
+            parallel_tool_calls,
+            **kwargs,
+        )
 
     async def _complete_chat_api(
         self,

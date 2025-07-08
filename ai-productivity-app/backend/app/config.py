@@ -269,6 +269,30 @@ class Settings(BaseSettings):
     # Azure authentication method - can be "api_key" or "entra_id"
     azure_auth_method: str = "api_key"
 
+    # -------------------------------------------------------------------
+    # Validators ---------------------------------------------------------
+    # -------------------------------------------------------------------
+
+    @field_validator("azure_auth_method")
+    @classmethod
+    def validate_azure_auth_method(cls, v: str) -> str:
+        """Ensure *azure_auth_method* is either ``api_key`` or ``entra_id``.
+
+        The setting is referenced by :pyfile:`app.llm.providers.azure_provider`
+        to decide which authentication strategy to configure for
+        *AsyncAzureOpenAI*.  Any other value would lead to a silent fallback
+        to the default branch, therefore we fail early during application
+        start-up.
+        """
+        allowed = {"api_key", "entra_id"}
+        v_lower = v.lower()
+        if v_lower not in allowed:
+            raise ValueError(
+                f"Unsupported azure_auth_method: {v}. "
+                "Supported values are: api_key, entra_id."
+            )
+        return v_lower
+
     # LLM settings
     llm_provider: str = "openai"
 

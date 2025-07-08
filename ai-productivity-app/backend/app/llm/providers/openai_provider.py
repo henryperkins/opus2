@@ -2,10 +2,11 @@
 
 from typing import Any, AsyncIterator, Dict, List, Optional
 import logging
-from openai import AsyncOpenAI, RateLimitError, APITimeoutError
+from openai import AsyncOpenAI
 
 from .base import LLMProvider
-from .utils import validate_tools, build_openai_chat_params
+# Helper for parameter construction
+from .utils import build_openai_chat_params
 
 logger = logging.getLogger(__name__)
 
