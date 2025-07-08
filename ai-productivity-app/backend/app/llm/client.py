@@ -129,10 +129,24 @@ def _is_reasoning_model(model_name: str) -> bool:
     """Return True if the model is a reasoning model (o1/o3/o4 series).
 
     Reasoning models use special parameters and don't support temperature, streaming, etc.
+    First checks database for model capabilities, then falls back to pattern matching.
     """
     if not model_name:
         return False
 
+    # Try to get model info from database first
+    try:
+        from app.database import SessionLocal
+        from app.models.config import ModelConfiguration
+        
+        with SessionLocal() as db:
+            model_config = db.query(ModelConfiguration).filter_by(model_id=model_name).first()
+            if model_config and model_config.capabilities:
+                return model_config.capabilities.get('supports_reasoning', False)
+    except Exception:
+        pass  # Fall back to pattern matching
+
+    # Fallback to pattern matching
     model_lower = model_name.lower()
     reasoning_models = {
         "o1",
@@ -159,6 +173,19 @@ def _model_requires_responses_api(model_name: str) -> bool:
     if not model_name:
         return False
 
+    # Try to get model info from database first
+    try:
+        from app.database import SessionLocal
+        from app.models.config import ModelConfiguration
+        
+        with SessionLocal() as db:
+            model_config = db.query(ModelConfiguration).filter_by(model_id=model_name).first()
+            if model_config and model_config.model_metadata:
+                return model_config.model_metadata.get('requires_responses_api', False)
+    except Exception:
+        pass  # Fall back to pattern matching
+
+    # Fallback to pattern matching
     model_lower = model_name.lower()
     responses_api_models = {
         "gpt-4o",
@@ -305,10 +332,11 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             logger.debug(f"Failed to load unified config: {e}")
             # Fallback to creating a config from static settings
             from app.schemas.generation import UnifiedModelConfig
+            fallback_model = settings.llm_default_model or settings.llm_model or "gpt-4o-mini"
             return UnifiedModelConfig(
                 provider=settings.llm_provider,
-                model_id=settings.llm_default_model or settings.llm_model or "gpt-3.5-turbo",
-                use_responses_api=_is_responses_api_enabled(settings.llm_default_model or settings.llm_model or "gpt-3.5-turbo")
+                model_id=fallback_model,
+                use_responses_api=_is_responses_api_enabled(fallback_model)
             )
 
     def _get_runtime_config(self) -> Dict[str, Any]:
@@ -338,6 +366,44 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 "chat_model": settings.llm_default_model or settings.llm_model,
                 "use_responses_api": False,
             }
+    
+    def _get_model_info(self, model_id: str) -> Optional[Dict[str, Any]]:
+        """Get model information from database."""
+        cache_key = f'model_info_{model_id}'
+        
+        # Check cache
+        if cache_key in self._config_cache:
+            value, timestamp = self._config_cache[cache_key]
+            if datetime.utcnow() - timestamp < self._cache_ttl:
+                return value
+        
+        try:
+            from app.services.unified_config_service import UnifiedConfigService
+            from app.database import SessionLocal
+            
+            with SessionLocal() as db:
+                unified_service = UnifiedConfigService(db)
+                model_info = unified_service.get_model_info(model_id)
+                
+                if model_info:
+                    # Convert to dict for easier access
+                    info_dict = {
+                        'provider': model_info.provider,
+                        'capabilities': model_info.capabilities.model_dump() if model_info.capabilities else {},
+                        'cost_per_1k_input': model_info.cost_per_1k_input_tokens,
+                        'cost_per_1k_output': model_info.cost_per_1k_output_tokens,
+                        'max_tokens': model_info.capabilities.max_output_tokens if model_info.capabilities else 4096,
+                        'supports_reasoning': getattr(model_info.capabilities, 'supports_reasoning', False),
+                        'supports_streaming': getattr(model_info.capabilities, 'supports_streaming', True),
+                        'supports_functions': getattr(model_info.capabilities, 'supports_functions', True),
+                    }
+                    self._config_cache[cache_key] = (info_dict, datetime.utcnow())
+                    return info_dict
+                    
+        except Exception as e:
+            logger.debug(f"Failed to get model info for {model_id}: {e}")
+        
+        return None
 
     def _should_reinitialize(self, new_provider: str) -> bool:
         """Check if client needs reinitialization due to provider change."""

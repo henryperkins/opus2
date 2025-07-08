@@ -1,0 +1,326 @@
+[
+    {
+        "model_id": "gpt-4o-mini",
+        "name": "GPT-4 Omni Mini",
+        "provider": "openai",
+        "model_family": "gpt-4",
+        "version": "2024-07-18",
+        "capabilities": {
+            "supports_functions": true,
+            "supports_vision": true,
+            "supports_reasoning": false,
+            "supports_streaming": true,
+            "supports_json_mode": true,
+            "supports_parallel_tools": true,
+            "max_context_window": 128000,
+            "max_output_tokens": 16384
+        },
+        "default_params": {
+            "temperature": 0.7,
+            "top_p": 1.0,
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0
+        },
+        "max_tokens": 16384,
+        "context_window": 128000,
+        "cost_input_per_1k": 0.00015,
+        "cost_output_per_1k": 0.0006,
+        "avg_response_time_ms": 1200,
+        "throughput_tokens_per_sec": 80.0,
+        "is_available": true,
+        "is_deprecated": false,
+        "model_metadata": {
+            "tier": "fast",
+            "requires_responses_api": false,
+            "recommended_use_cases": ["general", "code", "analysis"],
+            "release_date": "2024-07-18"
+        }
+    },
+    {
+        "model_id": "gpt-4o",
+        "name": "GPT-4 Omni",
+        "provider": "openai",
+        "model_family": "gpt-4",
+        "version": "2024-08-06",
+        "capabilities": {
+            "supports_functions": true,
+            "supports_vision": true,
+            "supports_reasoning": false,
+            "supports_streaming": true,
+            "supports_json_mode": true,
+            "supports_parallel_tools": true,
+            "max_context_window": 128000,
+            "max_output_tokens": 16384
+        },
+        "default_params": {
+            "temperature": 0.7,
+            "top_p": 1.0,
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0
+        },
+        "max_tokens": 16384,
+        "context_window": 128000,
+        "cost_input_per_1k": 0.0025,
+        "cost_output_per_1k": 0.01,
+        "avg_response_time_ms": 2000,
+        "throughput_tokens_per_sec": 60.0,
+        "is_available": true,
+        "is_deprecated": false,
+        "model_metadata": {
+            "tier": "balanced",
+            "requires_responses_api": true,
+            "recommended_use_cases": ["complex", "code", "creative"],
+            "release_date": "2024-08-06"
+        }
+    },
+    {
+        "model_id": "gpt-4-turbo",
+        "name": "GPT-4 Turbo",
+        "provider": "openai",
+        "model_family": "gpt-4",
+        "version": "2024-04-09",
+        "capabilities": {
+            "supports_functions": true,
+            "supports_vision": true,
+            "supports_reasoning": false,
+            "supports_streaming": true,
+            "supports_json_mode": true,
+            "supports_parallel_tools": true,
+            "max_context_window": 128000,
+            "max_output_tokens": 4096
+        },
+        "default_params": {
+            "temperature": 0.7,
+            "top_p": 1.0,
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0
+        },
+        "max_tokens": 4096,
+        "context_window": 128000,
+        "cost_input_per_1k": 0.01,
+        "cost_output_per_1k": 0.03,
+        "avg_response_time_ms": 3000,
+        "throughput_tokens_per_sec": 40.0,
+        "is_available": true,
+        "is_deprecated": false,
+        "model_metadata": {
+            "tier": "powerful",
+            "requires_responses_api": false,
+            "recommended_use_cases": ["complex", "analysis", "creative"],
+            "release_date": "2024-04-09"
+        }
+    },
+    {
+        "model_id": "o1-preview",
+        "name": "O1 Preview",
+        "provider": "openai",
+        "model_family": "o1",
+        "version": "2024-09-12",
+        "capabilities": {
+            "supports_functions": false,
+            "supports_vision": false,
+            "supports_reasoning": true,
+            "supports_streaming": false,
+            "supports_json_mode": false,
+            "supports_parallel_tools": false,
+            "max_context_window": 128000,
+            "max_output_tokens": 65536
+        },
+        "default_params": {},
+        "max_tokens": 65536,
+        "context_window": 128000,
+        "cost_input_per_1k": 0.015,
+        "cost_output_per_1k": 0.06,
+        "avg_response_time_ms": 30000,
+        "throughput_tokens_per_sec": 20.0,
+        "is_available": true,
+        "is_deprecated": false,
+        "model_metadata": {
+            "tier": "reasoning",
+            "requires_responses_api": true,
+            "recommended_use_cases": ["reasoning", "math", "coding", "science"],
+            "release_date": "2024-09-12",
+            "notes": "No temperature control, no streaming"
+        }
+    },
+    {
+        "model_id": "o1-mini",
+        "name": "O1 Mini",
+        "provider": "openai",
+        "model_family": "o1",
+        "version": "2024-09-12",
+        "capabilities": {
+            "supports_functions": false,
+            "supports_vision": false,
+            "supports_reasoning": true,
+            "supports_streaming": false,
+            "supports_json_mode": false,
+            "supports_parallel_tools": false,
+            "max_context_window": 128000,
+            "max_output_tokens": 65536
+        },
+        "default_params": {},
+        "max_tokens": 65536,
+        "context_window": 128000,
+        "cost_input_per_1k": 0.003,
+        "cost_output_per_1k": 0.012,
+        "avg_response_time_ms": 15000,
+        "throughput_tokens_per_sec": 30.0,
+        "is_available": true,
+        "is_deprecated": false,
+        "model_metadata": {
+            "tier": "reasoning",
+            "requires_responses_api": true,
+            "recommended_use_cases": ["reasoning", "coding", "math"],
+            "release_date": "2024-09-12",
+            "notes": "Faster reasoning model"
+        }
+    },
+    {
+        "model_id": "claude-opus-4-20250514",
+        "name": "Claude Opus 4",
+        "provider": "anthropic",
+        "model_family": "claude-4",
+        "version": "20250514",
+        "capabilities": {
+            "supports_functions": true,
+            "supports_vision": true,
+            "supports_reasoning": false,
+            "supports_streaming": true,
+            "supports_json_mode": false,
+            "supports_parallel_tools": true,
+            "max_context_window": 200000,
+            "max_output_tokens": 8192
+        },
+        "default_params": {
+            "temperature": 0.7,
+            "top_p": 1.0
+        },
+        "max_tokens": 8192,
+        "context_window": 200000,
+        "cost_input_per_1k": 0.015,
+        "cost_output_per_1k": 0.075,
+        "avg_response_time_ms": 4000,
+        "throughput_tokens_per_sec": 40.0,
+        "is_available": true,
+        "is_deprecated": false,
+        "model_metadata": {
+            "tier": "powerful",
+            "supports_thinking": true,
+            "thinking_enabled": true,
+            "recommended_use_cases": ["complex", "creative", "analysis", "code"],
+            "release_date": "2025-05-14"
+        }
+    },
+    {
+        "model_id": "claude-sonnet-4-20250514",
+        "name": "Claude Sonnet 4",
+        "provider": "anthropic",
+        "model_family": "claude-4",
+        "version": "20250514",
+        "capabilities": {
+            "supports_functions": true,
+            "supports_vision": true,
+            "supports_reasoning": false,
+            "supports_streaming": true,
+            "supports_json_mode": false,
+            "supports_parallel_tools": true,
+            "max_context_window": 200000,
+            "max_output_tokens": 8192
+        },
+        "default_params": {
+            "temperature": 0.7,
+            "top_p": 1.0
+        },
+        "max_tokens": 8192,
+        "context_window": 200000,
+        "cost_input_per_1k": 0.003,
+        "cost_output_per_1k": 0.015,
+        "avg_response_time_ms": 2000,
+        "throughput_tokens_per_sec": 60.0,
+        "is_available": true,
+        "is_deprecated": false,
+        "model_metadata": {
+            "tier": "balanced",
+            "supports_thinking": true,
+            "thinking_enabled": true,
+            "recommended_use_cases": ["general", "code", "creative", "chat"],
+            "release_date": "2025-05-14"
+        }
+    },
+    {
+        "model_id": "claude-3-5-sonnet-20241022",
+        "name": "Claude 3.5 Sonnet",
+        "provider": "anthropic",
+        "model_family": "claude-3",
+        "version": "20241022",
+        "capabilities": {
+            "supports_functions": true,
+            "supports_vision": true,
+            "supports_reasoning": false,
+            "supports_streaming": true,
+            "supports_json_mode": false,
+            "supports_parallel_tools": true,
+            "max_context_window": 200000,
+            "max_output_tokens": 8192
+        },
+        "default_params": {
+            "temperature": 0.7,
+            "top_p": 1.0
+        },
+        "max_tokens": 8192,
+        "context_window": 200000,
+        "cost_input_per_1k": 0.003,
+        "cost_output_per_1k": 0.015,
+        "avg_response_time_ms": 2000,
+        "throughput_tokens_per_sec": 60.0,
+        "is_available": true,
+        "is_deprecated": false,
+        "model_metadata": {
+            "tier": "balanced",
+            "supports_thinking": true,
+            "thinking_enabled": true,
+            "recommended_use_cases": ["general", "code", "creative", "chat"],
+            "release_date": "2024-10-22"
+        }
+    },
+    {
+        "model_id": "gpt-3.5-turbo",
+        "name": "GPT-3.5 Turbo",
+        "provider": "openai",
+        "model_family": "gpt-3.5",
+        "version": "0125",
+        "capabilities": {
+            "supports_functions": true,
+            "supports_vision": false,
+            "supports_reasoning": false,
+            "supports_streaming": true,
+            "supports_json_mode": true,
+            "supports_parallel_tools": true,
+            "max_context_window": 16385,
+            "max_output_tokens": 4096
+        },
+        "default_params": {
+            "temperature": 0.7,
+            "top_p": 1.0,
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0
+        },
+        "max_tokens": 4096,
+        "context_window": 16385,
+        "cost_input_per_1k": 0.0005,
+        "cost_output_per_1k": 0.0015,
+        "avg_response_time_ms": 800,
+        "throughput_tokens_per_sec": 100.0,
+        "is_available": true,
+        "is_deprecated": true,
+        "deprecated_at": "2024-11-06T00:00:00Z",
+        "model_metadata": {
+            "tier": "fast",
+            "requires_responses_api": false,
+            "recommended_use_cases": ["general", "chat"],
+            "release_date": "2024-01-25",
+            "deprecation_notice": "Use gpt-4o-mini instead"
+        }
+    }
+]

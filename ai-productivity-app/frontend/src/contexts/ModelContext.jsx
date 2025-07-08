@@ -3,6 +3,14 @@ import { createContext, useContext, useReducer, useEffect, useCallback } from 'r
 import { useQueryClient } from '@tanstack/react-query';
 import PropTypes from 'prop-types';
 import { useConfigOptimized } from '../hooks/useConfigOptimized';
+import {
+  DEFAULT_PROVIDER,
+  DEFAULT_MODEL,
+  DEFAULT_GENERATION_PARAMS,
+  DEFAULT_MODEL_STATS,
+  DEFAULT_MODEL_HISTORY,
+  DEFAULT_UI_STATE
+} from '../constants/modelDefaults';
 
 // Model context for unified state management
 const ModelContext = createContext();
@@ -22,23 +30,16 @@ const MODEL_ACTIONS = {
 // Initial state for model context
 const initialState = {
   // Current model configuration
-  currentModel: 'gpt-4o-mini',
-  currentProvider: 'openai',
-  modelConfig: {
-    temperature: 0.7,
-    maxTokens: 4000,
-    topP: 1.0,
-    presencePenalty: 0,
-    frequencyPenalty: 0
-  },
+  currentModel: DEFAULT_MODEL,
+  currentProvider: DEFAULT_PROVIDER,
+  modelConfig: DEFAULT_GENERATION_PARAMS,
 
   // Model performance tracking
-  modelStats: new Map(),
-  modelHistory: [],
+  modelStats: DEFAULT_MODEL_STATS,
+  modelHistory: DEFAULT_MODEL_HISTORY,
 
   // UI state
-  loading: false,
-  error: null,
+  ...DEFAULT_UI_STATE,
 
   // Available models and providers
   availableModels: [],

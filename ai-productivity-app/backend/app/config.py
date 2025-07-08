@@ -279,7 +279,7 @@ class Settings(BaseSettings):
     #
     # Updated to use gpt-4o which is available in Azure Responses API
 
-    llm_default_model: str = Field("gpt-4o", alias="LLM_MODEL")
+    llm_default_model: str = Field("gpt-4o-mini", alias="LLM_MODEL")
 
     # Deprecated – kept to avoid breaking existing environment variables /
     # database fixtures.  New code should rely on *llm_default_model*.

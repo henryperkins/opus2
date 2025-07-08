@@ -85,11 +85,16 @@ class AnthropicProvider(LLMProvider):
 
     def validate_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert tools to Anthropic format."""
+        from .utils import validate_tools as base_validate_tools
+        
+        # First apply base validation to ensure consistent format
+        validated_tools = base_validate_tools(tools)
+        
+        # Then convert to Anthropic format
         anthropic_tools = []
-
-        for tool in tools:
+        for tool in validated_tools:
             if "function" in tool:
-                # Convert from OpenAI format
+                # Convert from OpenAI format to Anthropic format
                 func = tool["function"]
                 anthropic_tools.append({
                     "name": func["name"],

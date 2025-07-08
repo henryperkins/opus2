@@ -80,7 +80,6 @@ class UnifiedConfigService:
 
     def get_model_info(self, model_id: str) -> Optional[ModelInfo]:
         """Get detailed model information."""
-        # Try database first
         model_config = (
             self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
         )
@@ -88,16 +87,13 @@ class UnifiedConfigService:
         if model_config:
             return self._model_config_to_info(model_config)
 
-        # Fallback to static catalog
-        return self._get_static_model_info(model_id)
+        return None
 
     def get_available_models(
         self, provider: Optional[str] = None, include_deprecated: bool = False
     ) -> List[ModelInfo]:
-        """Get all available models."""
-        models = []
-
-        # Load from database
+        """Get all available models from database."""
+        # Load from database only
         query = self.db.query(ModelConfiguration)
         if provider:
             query = query.filter_by(provider=provider)
@@ -105,16 +101,7 @@ class UnifiedConfigService:
             query = query.filter_by(is_deprecated=False)
 
         db_models = query.all()
-        models.extend([self._model_config_to_info(m) for m in db_models])
-
-        # Add static models not in database
-        static_models = self._get_static_models()
-        existing_ids = {m.model_id for m in models}
-
-        for static_model in static_models:
-            if static_model.model_id not in existing_ids:
-                if not provider or static_model.provider == provider:
-                    models.append(static_model)
+        models = [self._model_config_to_info(m) for m in db_models]
 
         return sorted(models, key=lambda m: (m.provider, m.display_name))
 
@@ -141,13 +128,28 @@ class UnifiedConfigService:
     def validate_config(
         self, config_dict: Dict[str, Any]
     ) -> tuple[bool, Optional[str]]:
-        """Validate configuration dictionary."""
+        """Validate configuration dictionary with enhanced capability checking."""
         try:
             # Try to create UnifiedModelConfig
             config = UnifiedModelConfig(**config_dict)
 
-            # Validate consistency
-            return validate_config_consistency(config)
+            # Basic consistency validation
+            is_valid, error = validate_config_consistency(config)
+            if not is_valid:
+                return False, error
+
+            # Enhanced capability validation using ModelService
+            from app.services.model_service import ModelService
+            model_service = ModelService(self.db)
+            
+            # Validate model-specific capabilities
+            model_valid, model_error = model_service.validate_model_config(
+                config.model_id, config_dict
+            )
+            if not model_valid:
+                return False, model_error
+
+            return True, None
 
         except ValueError as e:
             return False, str(e)
@@ -301,13 +303,55 @@ class UnifiedConfigService:
             self.db.commit()
         except IntegrityError as e:
             self.db.rollback()
+            logger.error(f"Configuration update failed due to integrity constraint: {e}")
             raise ValueError(f"Configuration update failed: {e}")
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Unexpected error during configuration save: {e}")
+            raise RuntimeError(f"Configuration save failed: {e}")
 
     def _get_default_config(self) -> UnifiedModelConfig:
         """Get default configuration from settings."""
+        # Try to find a valid model from the database
+        default_provider = settings.llm_provider
+        default_model_id = settings.llm_default_model or settings.llm_model
+        
+        # Verify the model exists in database
+        model_config = self.db.query(ModelConfiguration).filter_by(
+            model_id=default_model_id,
+            is_available=True,
+            is_deprecated=False
+        ).first()
+        
+        # If not found, try to find any available model for the provider
+        if not model_config:
+            model_config = self.db.query(ModelConfiguration).filter_by(
+                provider=default_provider,
+                is_available=True,
+                is_deprecated=False
+            ).first()
+        
+        # If still not found, get any available model
+        if not model_config:
+            model_config = self.db.query(ModelConfiguration).filter_by(
+                is_available=True,
+                is_deprecated=False
+            ).first()
+        
+        # Use found model or fallback to settings
+        if model_config:
+            actual_provider = model_config.provider
+            actual_model_id = model_config.model_id
+        else:
+            logger.warning(
+                f"No valid model found in database, using settings: {default_provider}/{default_model_id}"
+            )
+            actual_provider = default_provider
+            actual_model_id = default_model_id
+        
         return UnifiedModelConfig(
-            provider=settings.llm_provider,
-            model_id=settings.llm_default_model or settings.llm_model,
+            provider=actual_provider,
+            model_id=actual_model_id,
             temperature=0.7,
             max_tokens=None,
             top_p=1.0,
@@ -344,50 +388,3 @@ class UnifiedConfigService:
             recommended_use_cases=getattr(model, 'recommended_use_cases', []) or [],
         )
 
-    def _get_static_models(self) -> List[ModelInfo]:
-        """Get static model catalog."""
-        # This would be populated from a configuration file or hardcoded catalog
-        # For now, returning common models
-        return [
-            ModelInfo(
-                model_id="gpt-4o-mini",
-                display_name="GPT-4 Omni Mini",
-                provider="openai",
-                model_family="gpt-4",
-                capabilities={
-                    "supports_functions": True,
-                    "supports_vision": True,
-                    "max_context_window": 128000,
-                    "max_output_tokens": 4096,
-                },
-                cost_per_1k_input_tokens=0.00015,
-                cost_per_1k_output_tokens=0.0006,
-                performance_tier="fast",
-                recommended_use_cases=["general", "code", "analysis"],
-            ),
-            ModelInfo(
-                model_id="gpt-4o",
-                display_name="GPT-4 Omni",
-                provider="openai",
-                model_family="gpt-4",
-                capabilities={
-                    "supports_functions": True,
-                    "supports_vision": True,
-                    "max_context_window": 128000,
-                    "max_output_tokens": 4096,
-                },
-                cost_per_1k_input_tokens=0.0025,
-                cost_per_1k_output_tokens=0.01,
-                performance_tier="balanced",
-                recommended_use_cases=["complex", "code", "creative"],
-            ),
-            # Add more models as needed
-        ]
-
-    def _get_static_model_info(self, model_id: str) -> Optional[ModelInfo]:
-        """Get static model info by ID."""
-        static_models = self._get_static_models()
-        for model in static_models:
-            if model.model_id == model_id:
-                return model
-        return None

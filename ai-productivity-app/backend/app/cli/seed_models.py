@@ -12,6 +12,8 @@ from sqlalchemy import select, func
 from app.database import AsyncSessionLocal
 from app.models.config import ModelConfiguration
 
+# Try comprehensive fixture first, then fallback to basic
+MODELS_FIXTURE_COMPLETE = Path(__file__).parent / "fixtures" / "models_complete.json"
 MODELS_FIXTURE = Path(__file__).parent / "fixtures" / "models.json"
 
 async def seed_models():
@@ -27,8 +29,9 @@ async def seed_models():
             print("Models already seeded")
             return
         
-        # Load fixture
-        with open(MODELS_FIXTURE) as f:
+        # Load fixture - prefer comprehensive if available
+        fixture_path = MODELS_FIXTURE_COMPLETE if MODELS_FIXTURE_COMPLETE.exists() else MODELS_FIXTURE
+        with open(fixture_path) as f:
             models = json.load(f)
         
         # Insert models

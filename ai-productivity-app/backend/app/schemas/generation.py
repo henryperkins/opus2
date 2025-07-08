@@ -330,15 +330,45 @@ def validate_config_consistency(
     config: UnifiedModelConfig,
 ) -> tuple[bool, Optional[str]]:
     """Validate configuration consistency across parameters."""
-
-    # Reasoning models don't support temperature
-    reasoning_models = ["o1", "o1-mini", "o3", "o3-mini", "o4-mini"]
-    if any(model in config.model_id for model in reasoning_models):
-        if config.temperature is not None and config.temperature != 1.0:
-            return (
-                False,
-                f"Reasoning model {config.model_id} does not support temperature control",
-            )
+    
+    # Try to get model capabilities from database
+    try:
+        from app.database import SessionLocal
+        from app.models.config import ModelConfiguration
+        
+        with SessionLocal() as db:
+            model_config = db.query(ModelConfiguration).filter_by(model_id=config.model_id).first()
+            if model_config and model_config.capabilities:
+                capabilities = model_config.capabilities
+                
+                # Check if reasoning model supports temperature
+                if capabilities.get('supports_reasoning', False):
+                    if config.temperature is not None and config.temperature != 1.0:
+                        return (
+                            False,
+                            f"Reasoning model {config.model_id} does not support temperature control",
+                        )
+                
+                # Check if model supports streaming when requested
+                if hasattr(config, 'stream') and config.stream:
+                    if not capabilities.get('supports_streaming', True):
+                        return (
+                            False,
+                            f"Model {config.model_id} does not support streaming",
+                        )
+                
+                # Check if model supports functions when tools are provided
+                # This would need to be checked at request time when tools are known
+                
+    except Exception:
+        # Fall back to pattern-based validation if database query fails
+        reasoning_patterns = ["o1", "o3", "o4-mini"]
+        if any(pattern in config.model_id.lower() for pattern in reasoning_patterns):
+            if config.temperature is not None and config.temperature != 1.0:
+                return (
+                    False,
+                    f"Reasoning model {config.model_id} does not support temperature control",
+                )
 
     # Claude models require specific thinking parameters
     if config.provider == "anthropic":

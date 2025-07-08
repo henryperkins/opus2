@@ -244,16 +244,62 @@ async def validate_configuration(
     """
     Validate configuration without saving.
 
-    Checks:
-    - Parameter value ranges
+    Enhanced validation checks:
+    - Parameter value ranges and types
     - Provider/model compatibility
-    - Reasoning model restrictions
+    - Model-specific capability restrictions
+    - Reasoning model limitations
+    - Function calling support
+    - Streaming compatibility
+    - Token limits
 
-    Returns validation result with specific error details if invalid.
+    Returns detailed validation result with specific error details and warnings.
     """
     is_valid, error = service.validate_config(config)
+    
+    # Additional capability information
+    capabilities_info = {}
+    warnings = []
+    
+    if "model_id" in config:
+        from app.services.model_service import ModelService
+        from app.database import get_db
+        
+        try:
+            db = next(get_db())
+            model_service = ModelService(db)
+            
+            model_id = config["model_id"]
+            capabilities_info = {
+                "supports_streaming": model_service.supports_streaming(model_id),
+                "supports_functions": model_service.supports_functions(model_id),
+                "supports_vision": model_service.supports_vision(model_id),
+                "supports_reasoning": model_service.is_reasoning_model(model_id),
+                "max_tokens": model_service.get_max_tokens(model_id),
+                "context_window": model_service.get_context_window(model_id)
+            }
+            
+            # Generate warnings for potentially incompatible settings
+            if config.get("stream", False) and not capabilities_info["supports_streaming"]:
+                warnings.append(f"Model {model_id} does not support streaming")
+            
+            if config.get("tools") and not capabilities_info["supports_functions"]:
+                warnings.append(f"Model {model_id} does not support function calling")
+            
+            max_tokens = config.get("max_tokens")
+            if max_tokens and max_tokens > capabilities_info["max_tokens"]:
+                warnings.append(f"Requested max_tokens ({max_tokens}) exceeds model limit ({capabilities_info['max_tokens']})")
+            
+        except Exception as e:
+            logger.warning(f"Could not get capability info: {e}")
 
-    return {"valid": is_valid, "error": error, "validated_at": datetime.utcnow()}
+    return {
+        "valid": is_valid, 
+        "error": error, 
+        "warnings": warnings,
+        "capabilities": capabilities_info,
+        "validated_at": datetime.utcnow()
+    }
 
 
 @router.get("/presets")

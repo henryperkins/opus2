@@ -3,16 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { configAPI } from '../api/config';
 import { toast } from 'react-hot-toast';
-
-// Factory functions for creating config objects
-export const createConfigData = (data = {}) => ({
-  providers: data.providers || {},
-  current: {
-    provider: data.current?.provider || 'openai',
-    chat_model: data.current?.chat_model || 'gpt-4o-mini',
-    useResponsesApi: data.current?.useResponsesApi ?? false,
-  }
-});
+import { createConfigData } from '../constants/modelDefaults';
 
 export function useConfigOptimized() {
   const queryClient = useQueryClient();
