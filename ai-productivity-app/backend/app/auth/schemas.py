@@ -26,6 +26,24 @@ class UserLogin(BaseModel):
     )
     password: str = Field(..., min_length=8, max_length=128)
 
+    # ------------------------------------------------------------------
+    # Backwards-compatibility: older clients (and several unit tests) send
+    # either a *username* **or** an *email* field instead of the consolidated
+    # *username_or_email* attribute introduced in v0.10.  The following
+    # *model validator* transparently copies whichever of the legacy fields
+    # is present so that downstream code can continue to rely on the single
+    # canonical attribute.
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def model_validate(cls, value):  # type: ignore[override]
+        if isinstance(value, dict):
+            if "username_or_email" not in value:
+                legacy_val = value.get("username") or value.get("email")
+                if legacy_val:
+                    value["username_or_email"] = legacy_val
+        return super().model_validate(value)
+
     @validator("username_or_email", pre=True)
     def strip_whitespace(cls, v: str) -> str:  # noqa: N805
         return v.strip().lower()

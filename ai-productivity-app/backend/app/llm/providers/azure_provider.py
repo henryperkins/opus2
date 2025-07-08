@@ -24,13 +24,8 @@ class AzureOpenAIProvider(LLMProvider):
         if not model:
             return False
         
-        model_lower = model.lower()
-        reasoning_models = {
-            "o1", "o1-mini", "o1-preview", "o1-pro",
-            "o3", "o3-mini", "o3-pro", 
-            "o4-mini"
-        }
-        return model_lower in reasoning_models
+        from app.services.model_service import ModelService
+        return ModelService.is_reasoning_model_static(model)
 
     def _initialize_client(self) -> None:
         """Initialize Azure OpenAI client."""

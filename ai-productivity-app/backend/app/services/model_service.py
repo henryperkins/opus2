@@ -65,18 +65,61 @@ class ModelService:
             return capabilities.get('supports_reasoning', False)
         
         # Fallback to pattern matching
-        model_lower = model_id.lower()
-        reasoning_models = {
-            "o1",
-            "o1-mini",
-            "o1-preview",
-            "o1-pro",
-            "o3",
-            "o3-mini",
-            "o3-pro",
-            "o4-mini",
-        }
-        return model_lower in reasoning_models
+        return ModelService.is_reasoning_model_static(model_id)
+
+    # ------------------------------------------------------------------
+    # Static helpers -----------------------------------------------------
+    # ------------------------------------------------------------------
+    #
+    # The application currently needs *light-weight* helper functions that
+    # can be called **early during startup** (e.g. from the Azure provider
+    # initialisation) where no database session is available yet.  To avoid
+    # spreading multiple hard-coded *reasoning model* sets across the code
+    # base we expose *static* variants that rely **only on the pattern
+    # fallback** above.  Whenever a SQLAlchemy session *is* available the
+    # instance methods should be preferred because they consult the
+    # database-backed capabilities column.
+    # ------------------------------------------------------------------
+
+    _REASONING_MODEL_PATTERNS: set[str] = {
+        "o1",
+        "o1-mini",
+        "o1-preview",
+        "o1-pro",
+        "o3",
+        "o3-mini",
+        "o3-pro",
+        "o4-mini",
+    }
+
+    _RESPONSES_API_MODEL_PATTERNS: set[str] = {
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4.1",
+        "computer-use-preview",
+        "o3",
+        "o3-mini",
+        "o3-pro",
+        "o4-mini",
+        "o1",
+        "o1-mini",
+        "o1-preview",
+        "o1-pro",
+    }
+
+    @staticmethod
+    def is_reasoning_model_static(model_id: str) -> bool:
+        """Fast pattern-based check that works without DB access."""
+        if not model_id:
+            return False
+        return model_id.lower() in ModelService._REASONING_MODEL_PATTERNS
+
+    @staticmethod
+    def requires_responses_api_static(model_id: str) -> bool:
+        """Fast pattern-based check for Responses-API requirement."""
+        if not model_id:
+            return False
+        return model_id.lower() in ModelService._RESPONSES_API_MODEL_PATTERNS
     
     def supports_streaming(self, model_id: str) -> bool:
         """Check if model supports streaming."""
@@ -128,22 +171,7 @@ class ModelService:
             return metadata.get('requires_responses_api', False)
         
         # Fallback to pattern matching
-        model_lower = model_id.lower()
-        responses_api_models = {
-            "gpt-4o",
-            "gpt-4o-mini",
-            "gpt-4.1",
-            "computer-use-preview",
-            "o3",
-            "o3-mini",
-            "o3-pro",
-            "o4-mini",
-            "o1",
-            "o1-mini",
-            "o1-preview",
-            "o1-pro",
-        }
-        return model_lower in responses_api_models
+        return ModelService.requires_responses_api_static(model_id)
     
     def supports_thinking(self, model_id: str) -> bool:
         """Check if model supports Claude-style thinking."""

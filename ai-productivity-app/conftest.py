@@ -29,14 +29,29 @@ def pytest_ignore_collect(path, config):  # noqa: D401
 
     p_str = str(path)
 
-    # Ignore duplicate repository snapshot as well as vendored virtual envs
+
+    # ------------------------------------------------------------------
+    # 1. Ignore duplicate repository snapshot inside *backend/data/uploads*
+    # ------------------------------------------------------------------
     if "backend/data/uploads" in p_str:
         return True
 
-    # Skip bundled *venv* directories to avoid importing third-party test
-    # suites (e.g. SciPy, NetworkX) which pull heavy native dependencies like
-    # NumPy that are not present in the sandbox.
+    # ------------------------------------------------------------------
+    # 2. Skip vendored virtual-env directories to avoid importing heavy
+    #    third-party test-suites (e.g. SciPy) that are not relevant for the
+    #    project and would pull missing native dependencies.
+    # ------------------------------------------------------------------
     if "/backend/venv/" in p_str or "/.venv/" in p_str:
+        return True
+
+    # ------------------------------------------------------------------
+    # 3. Exclude *tree-sitter* upstream tests that ship with the vendored
+    #    grammar sources under ``backend/build/tree-sitter``.  These tests
+    #    require the native *tree_sitter* Python bindings which are **not**
+    #    available inside the CI sandbox and are unrelated to the
+    #    application code under test.
+    # ------------------------------------------------------------------
+    if "backend/build/tree-sitter" in p_str:
         return True
 
     return False

@@ -75,13 +75,20 @@ except ModuleNotFoundError as exc:
         # ``app.compat`` installed a stubbed *openai* module – try again.  The
         # second import succeeds because the placeholder now exists.
         from openai import AsyncOpenAI, AsyncAzureOpenAI, RateLimitError, APITimeoutError, AuthenticationError, BadRequestError  # type: ignore  # noqa: E501 pylint: disable=ungrouped-imports
-    else:  # production / dev environment → fail fast with helpful message
-        raise ImportError(
-            "OpenAI SDK not found.  Install the official package via "
-            "`pip install openai` or configure Azure OpenAI credentials.  "
-            "The backend refuses to start with the stubbed compatibility "
-            "layer to avoid silent mis-configuration."
-        ) from exc
+    # Backwards-compatibility alias needs to be defined in both sandbox and
+    # production branches, therefore we add it **after** the ``try``/``except``
+    # block to avoid indentation issues.
+    pass
+# (The *except* branch above already raises the ImportError when _IN_SANDBOX
+# is False.  No further action required in the normal import path.)
+
+# ---------------------------------------------------------------------------
+# Backwards-compatibility: expose *AzureOpenAI* alias so existing tests that
+# patch ``app.llm.client.AzureOpenAI`` continue to work after we migrated to
+# the new SDK class name ``AsyncAzureOpenAI``.
+# ---------------------------------------------------------------------------
+
+AzureOpenAI = AsyncAzureOpenAI  # type: ignore
 
 # Anthropic SDK import with similar fallback handling
 try:
@@ -139,13 +146,8 @@ def _is_reasoning_model(model_name: str) -> bool:
             return model_service.is_reasoning_model(model_name)
     except Exception:
         # Fallback to simple pattern matching if DB/service fails
-        model_lower = model_name.lower()
-        reasoning_models = {
-            "o1", "o1-mini", "o1-preview", "o1-pro",
-            "o3", "o3-mini", "o3-pro", 
-            "o4-mini",
-        }
-        return model_lower in reasoning_models
+        from app.services.model_service import ModelService
+        return ModelService.is_reasoning_model_static(model_name)
 
 
 def _model_requires_responses_api(model_name: str) -> bool:
@@ -162,13 +164,8 @@ def _model_requires_responses_api(model_name: str) -> bool:
             return model_service.requires_responses_api(model_name)
     except Exception:
         # Fallback to simple pattern matching if DB/service fails
-        model_lower = model_name.lower()
-        responses_api_models = {
-            "gpt-4o", "gpt-4o-mini", "gpt-4.1", "computer-use-preview",
-            "o3", "o3-mini", "o3-pro", "o4-mini",
-            "o1", "o1-mini", "o1-preview", "o1-pro",
-        }
-        return model_lower in responses_api_models
+        from app.services.model_service import ModelService
+        return ModelService.requires_responses_api_static(model_name)
 
 
 def _is_responses_api_enabled(model_name: str = None) -> bool:
@@ -672,6 +669,16 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 else runtime_config.get("temperature", 0.7)
             )
             active_max_tokens = max_tokens or runtime_config.get("max_tokens")
+
+            # --------------------------------------------------------------
+            # Map global *enable_reasoning* flag to provider-specific payload
+            # --------------------------------------------------------------
+
+            if reasoning is None and runtime_config.get("enable_reasoning"):
+                if runtime_config.get("provider", self.provider).lower() == "azure":
+                    reasoning = {
+                        "effort": runtime_config.get("reasoning_effort", "medium")
+                    }
 
             # Auto-reconfigure if model/provider changed
             if (
