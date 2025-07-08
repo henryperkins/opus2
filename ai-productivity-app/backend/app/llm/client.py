@@ -126,83 +126,49 @@ def _handle_rate_limit_error(retry_state):
 
 
 def _is_reasoning_model(model_name: str) -> bool:
-    """Return True if the model is a reasoning model (o1/o3/o4 series).
-
-    Reasoning models use special parameters and don't support temperature, streaming, etc.
-    First checks database for model capabilities, then falls back to pattern matching.
-    """
+    """Return True if the model is a reasoning model (o1/o3/o4 series)."""
     if not model_name:
         return False
 
-    # Try to get model info from database first
     try:
         from app.database import SessionLocal
-        from app.models.config import ModelConfiguration
+        from app.services.model_service import ModelService
         
         with SessionLocal() as db:
-            model_config = db.query(ModelConfiguration).filter_by(model_id=model_name).first()
-            if model_config and model_config.capabilities:
-                return model_config.capabilities.get('supports_reasoning', False)
+            model_service = ModelService(db)
+            return model_service.is_reasoning_model(model_name)
     except Exception:
-        pass  # Fall back to pattern matching
-
-    # Fallback to pattern matching
-    model_lower = model_name.lower()
-    reasoning_models = {
-        "o1",
-        "o1-mini",
-        "o1-preview",
-        "o1-pro",
-        "o3",
-        "o3-mini",
-        "o3-pro",
-        "o4-mini",
-    }
-
-    return model_lower in reasoning_models
+        # Fallback to simple pattern matching if DB/service fails
+        model_lower = model_name.lower()
+        reasoning_models = {
+            "o1", "o1-mini", "o1-preview", "o1-pro",
+            "o3", "o3-mini", "o3-pro", 
+            "o4-mini",
+        }
+        return model_lower in reasoning_models
 
 
 def _model_requires_responses_api(model_name: str) -> bool:
-    """Return True if the model requires the Responses API by default.
-
-    Based on Azure OpenAI documentation, these models are available in the Responses API:
-    - gpt-4o, gpt-4o-mini (regular chat models)
-    - o3, o4-mini, computer-use-preview (advanced models)
-    - All reasoning models (o1 series)
-    """
+    """Return True if the model requires the Responses API by default."""
     if not model_name:
         return False
 
-    # Try to get model info from database first
     try:
         from app.database import SessionLocal
-        from app.models.config import ModelConfiguration
+        from app.services.model_service import ModelService
         
         with SessionLocal() as db:
-            model_config = db.query(ModelConfiguration).filter_by(model_id=model_name).first()
-            if model_config and model_config.model_metadata:
-                return model_config.model_metadata.get('requires_responses_api', False)
+            model_service = ModelService(db)
+            return model_service.requires_responses_api(model_name)
     except Exception:
-        pass  # Fall back to pattern matching
-
-    # Fallback to pattern matching
-    model_lower = model_name.lower()
-    responses_api_models = {
-        "gpt-4o",
-        "gpt-4o-mini",
-        "gpt-4.1",
-        "computer-use-preview",
-        "o3",
-        "o3-mini",
-        "o3-pro",
-        "o4-mini",
-        "o1",
-        "o1-mini",
-        "o1-preview",
-        "o1-pro",
-    }
-
-    return model_lower in responses_api_models
+        # Fallback to simple pattern matching if DB/service fails
+        model_lower = model_name.lower()
+        responses_api_models = {
+            "gpt-4o", "gpt-4o-mini", "gpt-4.1", "computer-use-preview",
+            "o3", "o3-mini", "o3-pro", "o4-mini",
+            "o1", "o1-mini", "o1-preview", "o1-pro",
+        }
+        return model_lower in responses_api_models
 
 
 def _is_responses_api_enabled(model_name: str = None) -> bool:

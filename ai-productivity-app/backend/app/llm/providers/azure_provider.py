@@ -5,7 +5,7 @@ import logging
 from openai import AsyncAzureOpenAI
 
 from .base import LLMProvider
-from .utils import validate_tools, build_openai_chat_params
+from .utils import build_openai_chat_params, validate_tools
 from .openai_provider import OpenAIProvider
 
 logger = logging.getLogger(__name__)
@@ -207,7 +207,7 @@ class AzureOpenAIProvider(LLMProvider):
 
         # Reasoning models don't support tools
         if tools and not is_reasoning:
-            params["tools"] = self.validate_tools(tools)
+            params["tools"] = validate_tools(tools)
             if tool_choice:
                 params["tool_choice"] = tool_choice
 
@@ -245,9 +245,7 @@ class AzureOpenAIProvider(LLMProvider):
                 if chunk.choices and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
 
-    def validate_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Validate tools for Azure."""
-        return validate_tools(tools)
+    
 
     def extract_content(self, response: Any) -> str:
         """Extract content from Azure response."""

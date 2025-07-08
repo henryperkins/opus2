@@ -65,8 +65,18 @@ class ModelService:
             return capabilities.get('supports_reasoning', False)
         
         # Fallback to pattern matching
-        reasoning_patterns = ['o1', 'o3', 'o4-mini']
-        return any(pattern in model_id.lower() for pattern in reasoning_patterns)
+        model_lower = model_id.lower()
+        reasoning_models = {
+            "o1",
+            "o1-mini",
+            "o1-preview",
+            "o1-pro",
+            "o3",
+            "o3-mini",
+            "o3-pro",
+            "o4-mini",
+        }
+        return model_lower in reasoning_models
     
     def supports_streaming(self, model_id: str) -> bool:
         """Check if model supports streaming."""
@@ -117,9 +127,23 @@ class ModelService:
         if metadata:
             return metadata.get('requires_responses_api', False)
         
-        # Fallback patterns
-        responses_patterns = ['gpt-4o', 'o1', 'o3', 'o4-mini']
-        return any(pattern in model_id.lower() for pattern in responses_patterns)
+        # Fallback to pattern matching
+        model_lower = model_id.lower()
+        responses_api_models = {
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4.1",
+            "computer-use-preview",
+            "o3",
+            "o3-mini",
+            "o3-pro",
+            "o4-mini",
+            "o1",
+            "o1-mini",
+            "o1-preview",
+            "o1-pro",
+        }
+        return model_lower in responses_api_models
     
     def supports_thinking(self, model_id: str) -> bool:
         """Check if model supports Claude-style thinking."""

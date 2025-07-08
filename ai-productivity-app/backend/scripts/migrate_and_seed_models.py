@@ -30,12 +30,16 @@ logger = logging.getLogger(__name__)
 def run_migration():
     """Run the model configuration migration."""
     import subprocess
+    import os
+    
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(backend_dir)
     
     try:
         # Run the specific migration
         result = subprocess.run([
             "alembic", "upgrade", "013_populate_model_configurations"
-        ], cwd=backend_dir, capture_output=True, text=True)
+        ], cwd=backend_dir, capture_output=True, text=True, env=env)
         
         if result.returncode == 0:
             logger.info("Migration completed successfully")

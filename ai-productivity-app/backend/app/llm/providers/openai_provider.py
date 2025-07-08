@@ -61,9 +61,7 @@ class OpenAIProvider(LLMProvider):
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
 
-    def validate_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Validate tools are in OpenAI format."""
-        return validate_tools(tools)
+    
 
     def extract_content(self, response: Any) -> str:
         """Extract text content from OpenAI response."""
