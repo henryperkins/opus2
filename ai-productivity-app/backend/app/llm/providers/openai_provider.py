@@ -6,7 +6,13 @@ from openai import AsyncOpenAI
 
 from .base import LLMProvider
 # Helper for parameter construction
-from .utils import build_openai_chat_params
+# Shared helpers for parameter construction **and** response parsing
+from .utils import (
+    build_openai_chat_params,
+    extract_content_openai,
+    extract_tool_calls_openai,
+    format_tool_result_openai,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,40 +68,19 @@ class OpenAIProvider(LLMProvider):
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
 
-    
-
     def extract_content(self, response: Any) -> str:
         """Extract text content from OpenAI response."""
-        if hasattr(response, "choices") and response.choices:
-            return response.choices[0].message.content or ""
-        return ""
+        return extract_content_openai(response)
 
     def extract_tool_calls(self, response: Any) -> List[Dict[str, Any]]:
         """Extract tool calls from OpenAI response."""
-        tool_calls = []
-
-        if hasattr(response, "choices") and response.choices:
-            message = response.choices[0].message
-            if hasattr(message, "tool_calls") and message.tool_calls:
-                for call in message.tool_calls:
-                    tool_calls.append({
-                        "id": call.id,
-                        "name": call.function.name,
-                        "arguments": call.function.arguments
-                    })
-
-        return tool_calls
+        return extract_tool_calls_openai(response)
 
     def format_tool_result(
         self,
         tool_call_id: str,
         tool_name: str,
-        result: str
+        result: str,
     ) -> Dict[str, Any]:
         """Format tool result for OpenAI."""
-        return {
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "name": tool_name,
-            "content": result
-        }
+        return format_tool_result_openai(tool_call_id, tool_name, result)

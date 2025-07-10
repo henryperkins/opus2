@@ -376,9 +376,13 @@ def validate_config_consistency(
                 # This would need to be checked at request time when tools are known
                 
     except Exception:
-        # Fall back to pattern-based validation if database query fails
-        reasoning_patterns = ["o1", "o3", "o4-mini"]
-        if any(pattern in config.model_id.lower() for pattern in reasoning_patterns):
+        # Fall back to pattern-based validation if database query fails – reuse
+        # the *single* authoritative heuristic from ModelService to avoid
+        # scattering hard-coded model lists across the code base.
+
+        from app.services.model_service import ModelService  # local import to prevent circular deps
+
+        if ModelService.is_reasoning_model_static(config.model_id):
             if config.temperature is not None and config.temperature != 1.0:
                 return (
                     False,

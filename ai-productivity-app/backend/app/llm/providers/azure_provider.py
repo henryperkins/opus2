@@ -89,7 +89,14 @@ class AzureOpenAIProvider(LLMProvider):
 
         auto_responses = self._is_reasoning_model(model) or self._requires_responses_api(model)
 
-        if self.use_responses_api or auto_responses:
+        # Auto-enable Responses API mode when the selected *model* mandates it
+        # (e.g. GPT-4o or reasoning family).  Persist the decision so that
+        # subsequent helper methods (*stream*, *extract_content*, …) see the
+        # correct flag.
+        if auto_responses and not self.use_responses_api:
+            self.use_responses_api = True
+
+        if self.use_responses_api:
             return await self._complete_responses_api(
                 messages,
                 model,
