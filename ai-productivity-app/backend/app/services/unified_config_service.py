@@ -65,13 +65,20 @@ class UnifiedConfigService:
                 "topP": "top_p",
                 "frequencyPenalty": "frequency_penalty",
                 "presencePenalty": "presence_penalty",
-                "reasoningEffort": "reasoning_effort",
+                "thinkingEffort": "reasoning_effort",
                 "claudeExtendedThinking": "claude_extended_thinking",
                 "claudeThinkingMode": "claude_thinking_mode",
                 "claudeThinkingBudgetTokens": "claude_thinking_budget_tokens",
                 "claudeShowThinkingProcess": "claude_show_thinking_process",
                 "claudeAdaptiveThinkingBudget": "claude_adaptive_thinking_budget",
                 "enableReasoning": "enable_reasoning",
+                # New mappings
+                "responseFormat": "response_format",
+                "systemPrompt": "system_prompt",
+                "thinkingBudgetTokens": "thinking_budget_tokens",
+                "showThinkingProcess": "show_thinking_process",
+                "adaptiveThinkingBudget": "adaptive_thinking_budget",
+                "parallelToolCalls": "parallel_tool_calls",
             }
             return field_mappings.get(key, key)
 
@@ -412,8 +419,77 @@ class UnifiedConfigService:
         )
 
     # ------------------------------------------------------------------
-    # Defaults helper
+    # Presets / Defaults helpers
     # ------------------------------------------------------------------
+    def get_presets(self) -> List[Dict[str, Any]]:
+        """
+        Return predefined configuration presets optimised for common
+        scenarios (balanced, creative, precise, fast, powerful).
+
+        The router delegates to this method so the presets live in the
+        service layer rather than being duplicated in the API route.
+        """
+        return [
+            {
+                "id": "balanced",
+                "name": "Balanced",
+                "description": "Good balance of quality and speed",
+                "config": {
+                    "temperature": 0.7,
+                    "max_tokens": 2048,
+                    "top_p": 0.95,
+                    "reasoning_effort": "medium",
+                },
+            },
+            {
+                "id": "creative",
+                "name": "Creative",
+                "description": "More creative and varied responses",
+                "config": {
+                    "temperature": 1.2,
+                    "max_tokens": 3000,
+                    "top_p": 0.95,
+                    "frequency_penalty": 0.2,
+                    "presence_penalty": 0.2,
+                    "reasoning_effort": "high",
+                },
+            },
+            {
+                "id": "precise",
+                "name": "Precise",
+                "description": "Focused and deterministic responses",
+                "config": {
+                    "temperature": 0.3,
+                    "max_tokens": 2048,
+                    "top_p": 0.9,
+                    "reasoning_effort": "high",
+                },
+            },
+            {
+                "id": "fast",
+                "name": "Fast",
+                "description": "Optimised for quick responses",
+                "config": {
+                    "model_id": "gpt-4o-mini",
+                    "temperature": 0.7,
+                    "max_tokens": 1024,
+                    "reasoning_effort": "low",
+                },
+            },
+            {
+                "id": "powerful",
+                "name": "Powerful",
+                "description": "Maximum capability for complex tasks",
+                "config": {
+                    "model_id": "gpt-4o",
+                    "temperature": 0.7,
+                    "max_tokens": 4096,
+                    "reasoning_effort": "high",
+                    "enable_reasoning": True,
+                },
+            },
+        ]
+
     def get_defaults(self) -> dict[str, Any]:
         """
         Return the *authoritative* default configuration in camelCase

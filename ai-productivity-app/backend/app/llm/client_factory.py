@@ -23,15 +23,14 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-def _optional(value: Any) -> Dict[str, Any]:
-    """Helper that returns an empty mapping when *value* is falsy.
+def _optional(key: str, value: Any) -> Dict[str, Any]:
+    """Return ``{key: value}`` when *value* is truthy, else an empty dict.
 
-    Reduces repetitive *if value: kwargs[...]* blocks so the factory remains
-    succinct.  Only use for *optional* parameters – **never** for required
-    secrets like API keys.
+    Keeps the factory helpers succinct by avoiding repetitive
+    ``if value: kwargs[<key>] = value`` blocks.
+    NEVER use for required secrets like API keys.
     """
-
-    return value and {"dummy": value} or {}
+    return {key: value} if value else {}
 
 
 def get_openai_client() -> AsyncOpenAI:  # pragma: no cover – trivial
@@ -49,17 +48,9 @@ def get_openai_client() -> AsyncOpenAI:  # pragma: no cover – trivial
     kwargs: Dict[str, Any] = {"api_key": api_key}
 
     # Optional extras
-    base_url = getattr(settings, "openai_base_url", None)
-    if base_url:
-        kwargs["base_url"] = base_url
-
-    org = getattr(settings, "openai_org", None)
-    if org:
-        kwargs["organization"] = org
-
-    timeout = getattr(settings, "openai_timeout", None)
-    if timeout:
-        kwargs["timeout"] = timeout
+    kwargs.update(_optional("base_url", getattr(settings, "openai_base_url", None)))
+    kwargs.update(_optional("organization", getattr(settings, "openai_org", None)))
+    kwargs.update(_optional("timeout", getattr(settings, "openai_timeout", None)))
 
     return AsyncOpenAI(**kwargs)  # type: ignore[arg-type]
 
@@ -82,9 +73,8 @@ def get_azure_client() -> AsyncAzureOpenAI:  # pragma: no cover – trivial
     # explicitly asks for Entra ID.
     auth_method = getattr(settings, "azure_auth_method", "api_key").lower()
     if auth_method == "api_key":
-        if settings.azure_openai_api_key:
-            kwargs["api_key"] = settings.azure_openai_api_key
-        else:
+        kwargs.update(_optional("api_key", settings.azure_openai_api_key))
+        if "api_key" not in kwargs:
             logger.info("AZURE_OPENAI_API_KEY missing – stub client will be used")
     else:
         # The actual Entra ID flow requires *azure-identity* which is not part
@@ -92,8 +82,6 @@ def get_azure_client() -> AsyncAzureOpenAI:  # pragma: no cover – trivial
         # provider that returns a placeholder.
         kwargs["azure_ad_token_provider"] = lambda: "stub-token"
 
-    timeout = getattr(settings, "openai_timeout", None)
-    if timeout:
-        kwargs["timeout"] = timeout
+    kwargs.update(_optional("timeout", getattr(settings, "openai_timeout", None)))
 
     return AsyncAzureOpenAI(**kwargs)  # type: ignore[arg-type]
