@@ -2,7 +2,7 @@
 // components/settings/ModelConfiguration.jsx
 import React, { useState, useEffect } from 'react';
 import { Settings, AlertCircle, Check, RefreshCw } from 'lucide-react';
-import { useAIConfig } from '../contexts/AIConfigContext';
+import { useConfigOptimized } from '../../hooks/useConfigOptimized';
 import { configAPI } from '../../api/config';
 import { toast } from '../common/Toast';
 import client from '../../api/client';
@@ -12,7 +12,7 @@ import { modelPresets, modelInfo } from '../../utils/modelConfigs';
 
 
 export default function ModelConfiguration() {
-  const { config, loading, error, refetch } = useAIConfig();
+  const { config, loading, error, refetch } = useConfigOptimized();
   const [modelConfig, setModelConfig] = useState({
     provider: 'openai',
     model: 'gpt-4o-mini',
@@ -44,8 +44,8 @@ export default function ModelConfiguration() {
     if (config?.current) {
       setModelConfig(prev => ({
         ...prev,
-        provider: config.provider,
-        model: config.model_id,
+        provider: config.current.provider,
+        model: config.current.chat_model,
         useResponsesApi: config.current.useResponsesApi ?? prev.useResponsesApi
       }));
     }
@@ -200,7 +200,7 @@ export default function ModelConfiguration() {
   }
 
   const cost = estimateCost();
-  const config?.model_idInfo = modelInfo[modelConfig.model];
+  const currentModelInfo = modelInfo[modelConfig.model];
 
   return (
     <div className="space-y-6">
@@ -245,19 +245,19 @@ export default function ModelConfiguration() {
         </div>
 
         {/* Model Info */}
-        {config?.model_idInfo && (
+        {currentModelInfo && (
           <div className="bg-gray-50 rounded-lg p-4 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Context Length</span>
               <span className="text-sm font-medium">
-                {config?.model_idInfo.contextLength.toLocaleString()} tokens
+                {currentModelInfo.contextLength.toLocaleString()} tokens
               </span>
             </div>
 
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Capabilities</span>
               <div className="flex gap-1">
-                {config?.model_idInfo.capabilities.map(cap => (
+                {currentModelInfo.capabilities.map(cap => (
                   <span key={cap} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
                     {cap}
                   </span>
@@ -366,7 +366,7 @@ export default function ModelConfiguration() {
             <input
               type="range"
               min="256"
-              max={config?.model_idInfo?.contextLength || 4096}
+              max={currentModelInfo?.contextLength || 4096}
               step="256"
               value={modelConfig.maxTokens}
               onChange={(e) => setModelConfig({ ...modelConfig, maxTokens: parseInt(e.target.value) })}

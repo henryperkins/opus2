@@ -1,11 +1,11 @@
 // frontend/src/components/settings/AIProviderInfo.jsx
 import { useState } from 'react';
-import { useConfigOptimized } from '../../hooks/useConfigOptimized';
+import { useAIConfig } from '../../contexts/AIConfigContext';
 import { configAPI } from '../../api/config';
 import { toast } from '../common/Toast';
 
 const AIProviderInfo = () => {
-  const { config, loading, error, refetch } = useConfigOptimized();
+  const { config, loading, error, refetch } = useAIConfig();
   const [isEditing, setIsEditing] = useState(false);
   const [selectedModel, setSelectedModel] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('');

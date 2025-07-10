@@ -3,10 +3,11 @@
 Unified API router for all AI configuration endpoints.
 Replaces scattered config, models, and provider endpoints.
 """
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from datetime import datetime
+import asyncio
 
 from app.database import get_db
 from app.services.unified_config_service import UnifiedConfigService
@@ -144,7 +145,7 @@ async def update_configuration(
         await _notify_llm_client(updated_config)
 
         # Broadcast update via WebSocket
-        await _broadcast_config_update(updated_config, service)
+        await _broadcast_config_update(updated_config, service, "config_update")
 
         logger.info(f"Configuration updated by {current_user.username}")
 
@@ -159,6 +160,71 @@ async def update_configuration(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update configuration",
+        )
+
+
+@router.put("/batch", response_model=UnifiedModelConfig)
+async def batch_update_configuration(
+    updates: List[Dict[str, Any]],
+    current_user: CurrentUserRequired,
+    service: UnifiedConfigService = Depends(get_config_service),
+) -> UnifiedModelConfig:
+    """
+    Batch update configuration with transaction support.
+    
+    Accepts multiple configuration updates that are applied atomically.
+    If any update fails, all changes are rolled back.
+    
+    Useful for complex configuration changes that need to be consistent.
+    """
+    try:
+        # Get current config for rollback
+        current_config = service.get_current_config()
+        
+        # Apply updates sequentially within transaction
+        final_config = current_config
+        for update in updates:
+            # Validate each update before applying
+            is_valid, error = service.validate_config(update)
+            if not is_valid:
+                raise ValueError(f"Update validation failed: {error}")
+            
+            # Apply update
+            final_config = service.update_config(
+                update, updated_by=current_user.username
+            )
+        
+        # Notify LLM client of final state
+        await _notify_llm_client(final_config)
+        
+        # Broadcast batch update via WebSocket
+        await _broadcast_config_update(final_config, service, "config_batch_update")
+        
+        logger.info(f"Batch configuration updated by {current_user.username}")
+        
+        return final_config
+        
+    except ValueError as e:
+        # Rollback to previous config on validation error
+        service.update_config(
+            current_config.model_dump(), updated_by=f"rollback_{current_user.username}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Failed to batch update configuration: {e}")
+        # Attempt rollback
+        try:
+            service.update_config(
+                current_config.model_dump(), updated_by=f"rollback_{current_user.username}"
+            )
+        except Exception as rollback_error:
+            logger.error(f"Rollback failed: {rollback_error}")
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to batch update configuration",
         )
 
 
@@ -396,6 +462,87 @@ async def get_configuration_presets(
     return presets
 
 
+@router.post("/resolve-conflict")
+async def resolve_configuration_conflict(
+    conflict_data: Dict[str, Any],
+    current_user: CurrentUserRequired,
+    service: UnifiedConfigService = Depends(get_config_service),
+) -> Dict[str, Any]:
+    """
+    Resolve configuration conflicts when multiple users modify settings simultaneously.
+    
+    Accepts conflict data with:
+    - current_config: Current server configuration
+    - proposed_config: User's proposed changes
+    - conflict_strategy: 'merge', 'overwrite', or 'abort'
+    
+    Returns resolved configuration or conflict details.
+    """
+    try:
+        current_config = service.get_current_config()
+        proposed_config = conflict_data.get("proposed_config", {})
+        strategy = conflict_data.get("conflict_strategy", "merge")
+        
+        if strategy == "abort":
+            return {
+                "success": False,
+                "message": "Configuration conflict - changes aborted",
+                "current_config": current_config.model_dump(),
+                "conflicts": _detect_conflicts(current_config.model_dump(), proposed_config)
+            }
+        
+        elif strategy == "overwrite":
+            # Force overwrite - apply proposed changes
+            updated_config = service.update_config(
+                proposed_config, updated_by=current_user.username
+            )
+            
+            await _broadcast_config_update(updated_config, service, "config_conflict_resolved")
+            
+            return {
+                "success": True,
+                "message": "Configuration conflict resolved - changes applied",
+                "resolved_config": updated_config.model_dump()
+            }
+        
+        elif strategy == "merge":
+            # Intelligent merge - combine non-conflicting changes
+            conflicts = _detect_conflicts(current_config.model_dump(), proposed_config)
+            
+            if conflicts:
+                return {
+                    "success": False,
+                    "message": "Configuration conflicts detected - manual resolution required",
+                    "current_config": current_config.model_dump(),
+                    "proposed_config": proposed_config,
+                    "conflicts": conflicts
+                }
+            
+            # No conflicts - apply merge
+            merged_config = _merge_configs(current_config.model_dump(), proposed_config)
+            updated_config = service.update_config(
+                merged_config, updated_by=current_user.username
+            )
+            
+            await _broadcast_config_update(updated_config, service, "config_conflict_resolved")
+            
+            return {
+                "success": True,
+                "message": "Configuration merged successfully",
+                "resolved_config": updated_config.model_dump()
+            }
+        
+        else:
+            raise ValueError(f"Unknown conflict strategy: {strategy}")
+            
+    except Exception as e:
+        logger.error(f"Failed to resolve configuration conflict: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to resolve configuration conflict",
+        )
+
+
 # Helper functions
 
 
@@ -414,13 +561,13 @@ async def _notify_llm_client(config: UnifiedModelConfig):
 
 
 async def _broadcast_config_update(
-    config: UnifiedModelConfig, service: UnifiedConfigService
+    config: UnifiedModelConfig, service: UnifiedConfigService, event_type: str = "config_update"
 ):
     """Broadcast configuration update via WebSocket."""
     try:
         # Build update message
         update_message = {
-            "type": "config_update",
+            "type": event_type,
             "data": {
                 "current": config.model_dump(),
                 "available_models": [
@@ -434,5 +581,63 @@ async def _broadcast_config_update(
 
     except Exception as e:
         logger.warning(f"Failed to broadcast config update: {e}")
+
+
+def _detect_conflicts(current_config: Dict[str, Any], proposed_config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Detect configuration conflicts between current and proposed settings."""
+    conflicts = []
+    
+    # Check for conflicting model selection
+    if "model_id" in proposed_config and "provider" in proposed_config:
+        current_model = current_config.get("model_id")
+        current_provider = current_config.get("provider")
+        proposed_model = proposed_config.get("model_id")
+        proposed_provider = proposed_config.get("provider")
+        
+        if (current_model != proposed_model or current_provider != proposed_provider):
+            conflicts.append({
+                "field": "model_selection",
+                "current": {"model_id": current_model, "provider": current_provider},
+                "proposed": {"model_id": proposed_model, "provider": proposed_provider},
+                "severity": "high"
+            })
+    
+    # Check for conflicting reasoning settings
+    reasoning_fields = ["enable_reasoning", "reasoning_effort", "claude_extended_thinking", "claude_thinking_mode"]
+    for field in reasoning_fields:
+        if field in proposed_config and field in current_config:
+            if current_config[field] != proposed_config[field]:
+                conflicts.append({
+                    "field": field,
+                    "current": current_config[field],
+                    "proposed": proposed_config[field],
+                    "severity": "medium"
+                })
+    
+    # Check for conflicting generation parameters
+    generation_fields = ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"]
+    for field in generation_fields:
+        if field in proposed_config and field in current_config:
+            if abs(current_config[field] - proposed_config[field]) > 0.1:  # Threshold for meaningful difference
+                conflicts.append({
+                    "field": field,
+                    "current": current_config[field],
+                    "proposed": proposed_config[field],
+                    "severity": "low"
+                })
+    
+    return conflicts
+
+
+def _merge_configs(current_config: Dict[str, Any], proposed_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge proposed configuration changes with current configuration."""
+    merged = current_config.copy()
+    
+    # Apply non-conflicting changes
+    for key, value in proposed_config.items():
+        if key not in current_config or current_config[key] == value:
+            merged[key] = value
+    
+    return merged
 
 

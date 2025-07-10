@@ -54,16 +54,28 @@ class UnifiedConfigService:
         current = self.get_current_config()
 
         # Apply updates – accept both snake_case (backend) *and* camelCase
-        # (frontend) field names.  Today only *useResponsesApi* deviates from
-        # the internal attribute ``use_responses_api`` but the helper is
-        # forward-compatible with additional aliases.
+        # (frontend) field names.  Normalize field names for consistency.
 
         def _normalise_key(key: str) -> str:
-            # Simple heuristic – convert camelCase to snake_case for known
-            # fields, otherwise return as-is.
-            if key in {"useResponsesApi", "use_responses_api"}:
-                return "use_responses_api"
-            return key
+            # Convert camelCase to snake_case for known fields
+            field_mappings = {
+                "useResponsesApi": "use_responses_api",
+                "modelId": "model_id",
+                "chatModel": "model_id",
+                "chat_model": "model_id",  # Legacy support
+                "maxTokens": "max_tokens",
+                "topP": "top_p",
+                "frequencyPenalty": "frequency_penalty",
+                "presencePenalty": "presence_penalty",
+                "reasoningEffort": "reasoning_effort",
+                "claudeExtendedThinking": "claude_extended_thinking",
+                "claudeThinkingMode": "claude_thinking_mode",
+                "claudeThinkingBudgetTokens": "claude_thinking_budget_tokens",
+                "claudeShowThinkingProcess": "claude_show_thinking_process",
+                "claudeAdaptiveThinkingBudget": "claude_adaptive_thinking_budget",
+                "enableReasoning": "enable_reasoning",
+            }
+            return field_mappings.get(key, key)
 
         updated_dict = current.model_dump()
         updated_dict.update({_normalise_key(k): v for k, v in updates.items()})

@@ -53,7 +53,12 @@ const ACTIONS = {
   SET_MODELS: 'SET_MODELS',
   SET_LOADING: 'SET_LOADING',
   SET_ERROR: 'SET_ERROR',
-  SET_TEST_RESULT: 'SET_TEST_RESULT'
+  SET_TEST_RESULT: 'SET_TEST_RESULT',
+  ADD_TO_HISTORY: 'ADD_TO_HISTORY',
+  UPDATE_PERFORMANCE: 'UPDATE_PERFORMANCE',
+  RESET_ERROR: 'RESET_ERROR',
+  SET_CONFLICT: 'SET_CONFLICT',
+  RESOLVE_CONFLICT: 'RESOLVE_CONFLICT'
 };
 
 // Initial state
@@ -69,6 +74,13 @@ const initialState = {
   loading: false,
   error: null,
   testResult: null,
+  
+  // Model performance tracking
+  modelStats: new Map(),
+  modelHistory: [],
+  
+  // Conflict resolution
+  conflictState: null,
   
   // Metadata
   lastUpdated: null
@@ -117,6 +129,50 @@ function aiConfigReducer(state, action) {
       return {
         ...state,
         testResult: action.payload
+      };
+      
+    case ACTIONS.ADD_TO_HISTORY:
+      return {
+        ...state,
+        modelHistory: [
+          {
+            modelId: action.payload.modelId,
+            provider: action.payload.provider,
+            timestamp: new Date().toISOString(),
+            context: action.payload.context || 'manual_selection'
+          },
+          ...state.modelHistory.slice(0, 49) // Keep last 50 entries
+        ]
+      };
+      
+    case ACTIONS.UPDATE_PERFORMANCE:
+      const newStats = new Map(state.modelStats);
+      newStats.set(action.payload.modelId, {
+        ...newStats.get(action.payload.modelId),
+        ...action.payload.stats
+      });
+      return {
+        ...state,
+        modelStats: newStats
+      };
+      
+    case ACTIONS.RESET_ERROR:
+      return {
+        ...state,
+        error: null
+      };
+      
+    case ACTIONS.SET_CONFLICT:
+      return {
+        ...state,
+        conflictState: action.payload
+      };
+      
+    case ACTIONS.RESOLVE_CONFLICT:
+      return {
+        ...state,
+        conflictState: null,
+        config: action.payload.resolved_config || state.config
       };
       
     default:
@@ -236,24 +292,144 @@ export function AIConfigProvider({ children }) {
     }
   }, [updateConfig]);
   
-  // Listen for WebSocket updates
+  // Enhanced WebSocket integration
   useEffect(() => {
-    const handleConfigUpdate = (event) => {
-      if (event.data?.type === 'config_update') {
-        dispatch({ type: ACTIONS.SET_CONFIG, payload: event.data.data });
-        queryClient.invalidateQueries(['ai-config']);
+    const handleWebSocketMessage = (event) => {
+      const message = JSON.parse(event.data);
+      
+      switch (message.type) {
+        case 'config_update':
+        case 'config_batch_update':
+          dispatch({ type: ACTIONS.SET_CONFIG, payload: message.data });
+          queryClient.invalidateQueries(['ai-config']);
+          toast.success('Configuration updated');
+          break;
+          
+        case 'config_conflict_detected':
+          dispatch({ type: ACTIONS.SET_CONFLICT, payload: message.data });
+          toast.warning('Configuration conflict detected');
+          break;
+          
+        case 'config_conflict_resolved':
+          dispatch({ type: ACTIONS.RESOLVE_CONFLICT, payload: message.data });
+          toast.success('Configuration conflict resolved');
+          break;
+          
+        default:
+          // Handle other WebSocket messages
+          break;
       }
     };
     
-    // Add WebSocket listener if available
-    if (window.websocketManager) {
-      window.websocketManager.addEventListener('message', handleConfigUpdate);
+    // Create WebSocket connection
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/config`;
+    
+    let ws = null;
+    
+    try {
+      ws = new WebSocket(wsUrl);
+      
+      ws.onmessage = handleWebSocketMessage;
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+      
+      ws.onclose = () => {
+        console.log('WebSocket connection closed');
+      };
       
       return () => {
-        window.websocketManager.removeEventListener('message', handleConfigUpdate);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
       };
+    } catch (error) {
+      console.error('Failed to create WebSocket connection:', error);
     }
   }, [queryClient]);
+  
+  // Enhanced methods
+  const setModel = useCallback(async (modelId, options = {}) => {
+    try {
+      dispatch({ type: ACTIONS.SET_LOADING, payload: true });
+      
+      // Find model info
+      const model = state.models.find(m => m.modelId === modelId);
+      if (!model) {
+        throw new Error(`Model '${modelId}' not found`);
+      }
+      
+      // Add to history
+      dispatch({
+        type: ACTIONS.ADD_TO_HISTORY,
+        payload: {
+          modelId,
+          provider: model.provider,
+          context: options.context || 'manual_selection'
+        }
+      });
+      
+      // Update configuration
+      await updateConfig({
+        model_id: modelId,
+        provider: model.provider,
+        ...options.config
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to set model:', error);
+      dispatch({ type: ACTIONS.SET_ERROR, payload: error.message });
+      return false;
+    } finally {
+      dispatch({ type: ACTIONS.SET_LOADING, payload: false });
+    }
+  }, [state.models, updateConfig]);
+  
+  const trackPerformance = useCallback((modelId, stats) => {
+    dispatch({
+      type: ACTIONS.UPDATE_PERFORMANCE,
+      payload: {
+        modelId,
+        stats: {
+          ...stats,
+          timestamp: new Date().toISOString()
+        }
+      }
+    });
+  }, []);
+  
+  const resetError = useCallback(() => {
+    dispatch({ type: ACTIONS.RESET_ERROR });
+  }, []);
+  
+  const resolveConflict = useCallback(async (strategy, proposedConfig) => {
+    try {
+      const result = await apiClient.post(`${API_BASE}/resolve-conflict`, {
+        proposed_config: proposedConfig,
+        conflict_strategy: strategy
+      });
+      
+      dispatch({ type: ACTIONS.RESOLVE_CONFLICT, payload: result.data });
+      return result.data;
+    } catch (error) {
+      console.error('Failed to resolve conflict:', error);
+      throw error;
+    }
+  }, []);
+  
+  const batchUpdate = useCallback(async (updates) => {
+    try {
+      const result = await apiClient.put(`${API_BASE}/batch`, updates);
+      dispatch({ type: ACTIONS.SET_CONFIG, payload: { current: result.data } });
+      return result.data;
+    } catch (error) {
+      console.error('Failed to batch update:', error);
+      throw error;
+    }
+  }, []);
   
   // Context value
   const contextValue = {
@@ -265,6 +441,9 @@ export function AIConfigProvider({ children }) {
     error: error || state.error,
     testResult: state.testResult,
     lastUpdated: state.lastUpdated,
+    modelStats: state.modelStats,
+    modelHistory: state.modelHistory,
+    conflictState: state.conflictState,
     
     // Actions
     updateConfig,
@@ -272,6 +451,11 @@ export function AIConfigProvider({ children }) {
     getModelInfo,
     applyPreset,
     refetch,
+    setModel,
+    trackPerformance,
+    resetError,
+    resolveConflict,
+    batchUpdate,
     
     // Computed values
     currentModel: state.config?.model_id,

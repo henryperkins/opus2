@@ -9,7 +9,7 @@ import { useCodeExecutor } from '../hooks/useCodeExecutor';
 import { useResponseQualityTracking } from '../hooks/useResponseQualityTracking';
 
 // Context providers
-import { useAIConfig } from '../contexts/AIConfigContext';
+import { useModelContext } from '../contexts/ModelContext';
 import { useKnowledgeContext } from '../contexts/KnowledgeContext';
 
 // UI and utility hooks
@@ -108,13 +108,11 @@ export default function ProjectChatPage() {
 
   // Use unified context providers instead of multiple hooks
   const {
-    config,
+    currentModel,
     setModel,
     autoSelectModel,
     trackPerformance
-  } = useAIConfig();
-  
-  const currentModel = config?.model_id;
+  } = useModelContext();
 
   const {
     addToCitations,

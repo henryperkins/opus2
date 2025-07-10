@@ -35,14 +35,32 @@ class UserLogin(BaseModel):
     # canonical attribute.
     # ------------------------------------------------------------------
 
-    @classmethod
-    def model_validate(cls, value):  # type: ignore[override]
-        if isinstance(value, dict):
-            if "username_or_email" not in value:
-                legacy_val = value.get("username") or value.get("email")
-                if legacy_val:
-                    value["username_or_email"] = legacy_val
-        return super().model_validate(value)
+
+    # FastAPI (and our stubbed test runtime) rely on Pydantic **v2**.  The
+    # recommended way to mutate raw input before field validation is a
+    # *model_validator* with ``mode="before"``.  Our previous override of
+    # ``model_validate`` used the *v1* signature which meant the hook was **not
+    # executed** – ``username_or_email`` stayed *None* when callers only
+    # supplied the legacy *username* or *email* field.  The subsequent
+    # ``payload.username_or_email.lower()`` therefore crashed.
+
+    # ------------------------------------------------------------------
+    # Compatibility shim for sandbox Pydantic stub
+    # ------------------------------------------------------------------
+    # The minimal *pydantic* replacement used by the test-runner only exports
+    # a subset of the real API (``BaseModel``, ``Field``, ``validator`` …)
+    # and does *not* provide advanced helpers like ``root_validator`` /
+    # ``model_validator``.  Relying on those therefore crashes the import
+    # stage.  We fall back to a tiny ``__init__`` override that patches the
+    # legacy keys **before** delegating to the parent constructor – works for
+    # both the stub and the real implementation.
+
+    def __init__(self, **data):  # type: ignore[override]
+        if "username_or_email" not in data:
+            alias_val = data.get("username") or data.get("email")
+            if alias_val is not None:
+                data["username_or_email"] = alias_val
+        super().__init__(**data)
 
     @validator("username_or_email", pre=True)
     def strip_whitespace(cls, v: str) -> str:  # noqa: N805

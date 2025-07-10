@@ -226,7 +226,7 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
     provider: Literal["openai", "azure", "anthropic"] = Field(
         ..., description="AI provider"
     )
-    model_id: str = Field(..., description="Model identifier")
+    model_id: str = Field(..., description="Model identifier", alias="modelId")
 
     # Optional overrides
     system_prompt: Optional[str] = Field(
@@ -248,6 +248,16 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+    @field_validator("model_id", mode="before")
+    @classmethod
+    def validate_model_id_aliases(cls, v, info):
+        """Accept model_id, chat_model, or modelId for backward compatibility."""
+        if isinstance(info.data, dict):
+            # Check for alternative field names
+            model_id = v or info.data.get('chat_model') or info.data.get('modelId')
+            return model_id
+        return v
+
     @field_validator("model_id")
     @classmethod
     def validate_model_id(cls, v, info):
@@ -262,12 +272,14 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
 
     def to_runtime_config(self) -> Dict[str, Any]:
         """Convert to runtime configuration format."""
-        config = self.model_dump(exclude_unset=True, exclude_none=True)
+        config = self.model_dump(exclude_unset=True, exclude_none=True, by_alias=True)
 
-        # Flatten for storage
+        # Flatten for storage - handle both model_id and modelId
+        model_id = config.pop("modelId", config.pop("model_id", None))
+        
         flat_config = {
             "provider": config.pop("provider"),
-            "chat_model": config.pop("model_id"),
+            "model_id": model_id,  # Store as model_id in database
             **config,
         }
 
@@ -277,10 +289,13 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
     def from_runtime_config(cls, config: Dict[str, Any]) -> "UnifiedModelConfig":
         """Create from runtime configuration."""
         # Map flat structure back to nested
+        # Handle legacy chat_model field
+        model_id = config.get("model_id") or config.get("chat_model", "gpt-4o-mini")
+        
         model_config = {
             "provider": config.get("provider", "openai"),
-            "model_id": config.get("chat_model", "gpt-4o-mini"),
-            **{k: v for k, v in config.items() if k not in ["provider", "chat_model"]},
+            "model_id": model_id,
+            **{k: v for k, v in config.items() if k not in ["provider", "chat_model", "model_id"]},
         }
 
         return cls(**model_config)

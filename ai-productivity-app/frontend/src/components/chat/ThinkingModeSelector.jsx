@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Brain, ChevronDown, Zap, ArrowDownUp, GitBranch, RotateCcw, Target, Settings, Search, X } from 'lucide-react';
-import { useConfigOptimized } from '../../hooks/useConfigOptimized';
+import { useAIConfig } from '../../contexts/AIConfigContext';
 
 const THINKING_MODES = [
   {
@@ -71,7 +71,7 @@ export default function ThinkingModeSelector({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showDepthSelector, setShowDepthSelector] = useState(false);
-  const { config } = useConfigOptimized();
+  const { config } = useAIConfig();
 
   const selectedMode = THINKING_MODES.find(mode => mode.id === value) || THINKING_MODES[0];
   const selectedDepth = DEPTH_LEVELS.find(level => level.id === depth) || DEPTH_LEVELS[1];

@@ -182,7 +182,7 @@ export default function UnifiedAISettings() {
               Provider
             </label>
             <select
-              value={config?.provider || ''}
+              value={currentProvider || ''}
               onChange={(e) => selectProvider(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
@@ -198,12 +198,12 @@ export default function UnifiedAISettings() {
               Model
             </label>
             <select
-              value={config?.model_id || ''}
+              value={currentModel || ''}
               onChange={(e) => selectModel(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {availableModels
-                .filter(m => m.provider === config?.provider)
+                .filter(m => m.provider === currentProvider)
                 .map(model => (
                   <option key={model.model_id} value={model.model_id}>
                     {model.display_name}

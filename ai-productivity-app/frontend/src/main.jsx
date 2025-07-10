@@ -3,7 +3,6 @@ import './sentry';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AuthProvider } from './contexts/AuthContext';
-import { ModelProvider } from './contexts/ModelContext';
 import { KnowledgeProvider } from './contexts/KnowledgeContext';
 import { AIConfigProvider } from './contexts/AIConfigContext';
 import AppRouter from './router';
@@ -26,12 +25,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <ThemeProvider>
           <AuthProvider>
             <AIConfigProvider>
-              <ModelProvider>
-                <KnowledgeProvider>
-                  <AppRouter />
-                  <ToastContainer />
-                </KnowledgeProvider>
-              </ModelProvider>
+              <KnowledgeProvider>
+                <AppRouter />
+                <ToastContainer />
+              </KnowledgeProvider>
             </AIConfigProvider>
           </AuthProvider>
           {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}

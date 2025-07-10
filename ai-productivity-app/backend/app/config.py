@@ -176,10 +176,10 @@ class Settings(BaseSettings):
         Path(__file__).resolve().parents[2] / "data" / "app.db"  # …/ai-productivity-app
     )
 
-    # Production database connection (Neon PostgreSQL)
+    # Database connection - must be set via environment variable for production
     database_url: str = Field(
-        default="postgresql://neondb_owner:npg_5odQclNUW6Pj@ep-hidden-salad-a8jlsv5j-pooler.eastus2.azure.neon.tech/neondb?sslmode=require&channel_binding=require",
-        description="Database connection URL",
+        default=None,
+        description="Database connection URL - required via DATABASE_URL environment variable",
     )
     database_echo: bool = False
 
@@ -230,10 +230,8 @@ class Settings(BaseSettings):
     csrf_protection: bool = True
     csrf_secret: Optional[str] = None
 
-    # CORS
-    cors_origins: str = (
-        "http://localhost:5173,http://localhost:3000,https://lakefrontdigital.io"
-    )
+    # CORS - default to localhost for development
+    cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     # API Keys (for future phases)
     openai_api_key: Optional[str] = None
@@ -272,6 +270,48 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------
     # Validators ---------------------------------------------------------
     # -------------------------------------------------------------------
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        """Ensure database URL is properly configured."""
+        if not v:
+            # In test environments, provide a safe default
+            if _IN_TEST:
+                return f"sqlite:///{cls._DEFAULT_DB_PATH}"
+            raise ValueError(
+                "DATABASE_URL environment variable is required for production. "
+                "Please set it to your PostgreSQL connection string."
+            )
+        
+        # Warn about hardcoded production values
+        if "neon.tech" in v or "amazonaws.com" in v:
+            if not os.getenv("DATABASE_URL"):
+                raise ValueError(
+                    "Production database URL detected but DATABASE_URL environment variable not set. "
+                    "For security, production database connections must be configured via environment variables."
+                )
+        
+        return v
+
+    @field_validator("cors_origins")
+    @classmethod
+    def validate_cors_origins(cls, v: str) -> str:
+        """Ensure CORS origins are properly configured for production."""
+        if not _IN_TEST:
+            # Check if production domains are hardcoded
+            production_patterns = ['.io', '.com', '.net', '.org', 'https://']
+            has_production_domain = any(pattern in v for pattern in production_patterns if pattern != 'localhost')
+            
+            if has_production_domain and not os.getenv("CORS_ORIGINS"):
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    "Production CORS origins detected in code. "
+                    "Consider setting CORS_ORIGINS environment variable instead."
+                )
+        
+        return v
 
     @field_validator("azure_auth_method")
     @classmethod
@@ -498,3 +538,19 @@ if not _IN_TEST and settings.effective_secret_key == DEFAULT_SECRET:
     raise RuntimeError(
         "FATAL: Default JWT secret key is in use! Set 'JWT_SECRET_KEY' or 'SECRET_KEY' in your environment."
     )
+
+# Additional production safety checks
+if not _IN_TEST:
+    # Check for required environment variables in production
+    required_for_production = []
+    
+    if not os.getenv("DATABASE_URL"):
+        required_for_production.append("DATABASE_URL")
+    
+    if not os.getenv("JWT_SECRET_KEY") and not os.getenv("SECRET_KEY"):
+        required_for_production.append("JWT_SECRET_KEY or SECRET_KEY")
+    
+    if required_for_production:
+        raise RuntimeError(
+            f"FATAL: Missing required environment variables for production: {', '.join(required_for_production)}"
+        )

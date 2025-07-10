@@ -7,13 +7,13 @@ import client from './client';
 
 export const createModelConfig = (data = {}) => ({
   provider: data.provider || 'openai',
-  modelId: data.modelId || data.model_id || 'gpt-4o-mini',
+  model_id: data.model_id || data.modelId || data.chat_model || 'gpt-4o-mini',
   temperature: data.temperature,
-  maxTokens: data.maxTokens || data.max_tokens,
-  topP: data.topP || data.top_p,
-  frequencyPenalty: data.frequencyPenalty || data.frequency_penalty,
-  presencePenalty: data.presencePenalty || data.presence_penalty,
-  systemPrompt: data.systemPrompt || data.system_prompt,
+  max_tokens: data.max_tokens || data.maxTokens,
+  top_p: data.top_p || data.topP,
+  frequency_penalty: data.frequency_penalty || data.frequencyPenalty,
+  presence_penalty: data.presence_penalty || data.presencePenalty,
+  system_prompt: data.system_prompt || data.systemPrompt,
 });
 
 export const createModelStats = (data = {}) => ({

@@ -1,9 +1,9 @@
 // frontend/src/components/common/AIProviderStatus.jsx
-import { useConfigOptimized } from '../../hooks/useConfigOptimized';
+import { useAIConfig } from '../../contexts/AIConfigContext';
 import PropTypes from 'prop-types';
 
 const AIProviderStatus = ({ className = "" }) => {
-  const { config, loading } = useConfigOptimized();
+  const { config, loading } = useAIConfig();
 
   if (loading || !config) {
     return null;

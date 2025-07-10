@@ -2,7 +2,7 @@
 // components/settings/ThinkingConfiguration.jsx
 import React, { useState, useEffect } from 'react';
 import { Brain, Zap, Target, GitBranch, ArrowDownUp, Search, RotateCcw, Info, CheckCircle, XCircle, Settings, AlertTriangle } from 'lucide-react';
-import { useAIConfig } from '../contexts/AIConfigContext';
+import { useConfigOptimized } from '../../hooks/useConfigOptimized';
 import { toast } from '../common/Toast';
 
 const THINKING_MODES = [
@@ -70,7 +70,7 @@ const CLAUDE_THINKING_MODES = [
 ];
 
 export default function ThinkingConfiguration() {
-  const { config, updateConfig, loading } = useAIConfig();
+  const { config, updateConfig, loading } = useConfigOptimized();
   const [thinkingConfig, setThinkingConfig] = useState({
     // Claude extended thinking settings
     claude_extended_thinking: true,
