@@ -3,9 +3,8 @@
 Unified configuration service for AI model settings.
 Single source of truth using RuntimeConfig table.
 """
-import json
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -14,7 +13,6 @@ from app.schemas.generation import (
     UnifiedModelConfig,
     ModelInfo,
     validate_config_consistency,
-    UnifiedModelConfig,
 )
 from app.config import settings
 
@@ -165,7 +163,7 @@ class UnifiedConfigService:
             # Enhanced capability validation using ModelService
             from app.services.model_service import ModelService
             model_service = ModelService(self.db)
-            
+
             # Validate model-specific capabilities
             model_valid, model_error = model_service.validate_model_config(
                 config.model_id, config_dict
@@ -265,12 +263,9 @@ class UnifiedConfigService:
                     )
                 elif config.value_type == "boolean":
                     result[config.key] = config.value in [True, "true", "True", "1", 1]
-                elif config.value_type == "object":
-                    result[config.key] = (
-                        json.loads(config.value)
-                        if isinstance(config.value, str)
-                        else config.value
-                    )
+                elif config.value_type in ("object", "array"):
+                    # Value stored as native JSONB; return as-is
+                    result[config.key] = config.value
                 else:
                     result[config.key] = config.value
             except Exception as e:
@@ -292,9 +287,10 @@ class UnifiedConfigService:
                 value_type = "boolean"
             elif isinstance(value, (int, float)):
                 value_type = "number"
-            elif isinstance(value, (dict, list)):
+            elif isinstance(value, dict):
                 value_type = "object"
-                value = json.dumps(value)
+            elif isinstance(value, list):
+                value_type = "array"
             else:
                 value_type = "string"
                 value = str(value)
@@ -342,14 +338,14 @@ class UnifiedConfigService:
         # Try to find a valid model from the database
         default_provider = settings.llm_provider
         default_model_id = settings.llm_default_model or settings.llm_model
-        
+
         # Verify the model exists in database
         model_config = self.db.query(ModelConfiguration).filter_by(
             model_id=default_model_id,
             is_available=True,
             is_deprecated=False
         ).first()
-        
+
         # If not found, try to find any available model for the provider
         if not model_config:
             model_config = self.db.query(ModelConfiguration).filter_by(
@@ -357,14 +353,14 @@ class UnifiedConfigService:
                 is_available=True,
                 is_deprecated=False
             ).first()
-        
+
         # If still not found, get any available model
         if not model_config:
             model_config = self.db.query(ModelConfiguration).filter_by(
                 is_available=True,
                 is_deprecated=False
             ).first()
-        
+
         # Use found model or fallback to settings
         if model_config:
             actual_provider = model_config.provider
@@ -375,7 +371,7 @@ class UnifiedConfigService:
             )
             actual_provider = default_provider
             actual_model_id = default_model_id
-        
+
         return UnifiedModelConfig(
             provider=actual_provider,
             model_id=actual_model_id,

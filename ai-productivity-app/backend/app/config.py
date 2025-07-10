@@ -3,6 +3,9 @@
 # Standard library
 import os
 import sys
+
+# Detect test environment early so helpers can reference it
+_IN_TEST = "pytest" in sys.modules or os.getenv("APP_CI_SANDBOX") == "1"
 from pathlib import Path
 from functools import lru_cache
 from typing import Optional, ClassVar
@@ -283,7 +286,7 @@ class Settings(BaseSettings):
                 "DATABASE_URL environment variable is required for production. "
                 "Please set it to your PostgreSQL connection string."
             )
-        
+
         # Warn about hardcoded production values
         if "neon.tech" in v or "amazonaws.com" in v:
             if not os.getenv("DATABASE_URL"):
@@ -291,7 +294,7 @@ class Settings(BaseSettings):
                     "Production database URL detected but DATABASE_URL environment variable not set. "
                     "For security, production database connections must be configured via environment variables."
                 )
-        
+
         return v
 
     @field_validator("cors_origins")
@@ -302,7 +305,7 @@ class Settings(BaseSettings):
             # Check if production domains are hardcoded
             production_patterns = ['.io', '.com', '.net', '.org', 'https://']
             has_production_domain = any(pattern in v for pattern in production_patterns if pattern != 'localhost')
-            
+
             if has_production_domain and not os.getenv("CORS_ORIGINS"):
                 import logging
                 logger = logging.getLogger(__name__)
@@ -310,7 +313,7 @@ class Settings(BaseSettings):
                     "Production CORS origins detected in code. "
                     "Consider setting CORS_ORIGINS environment variable instead."
                 )
-        
+
         return v
 
     @field_validator("azure_auth_method")
@@ -358,7 +361,7 @@ class Settings(BaseSettings):
     # Only applies when llm_provider is "azure" or "openai"
 
     enable_reasoning: bool = False
-    
+
     # Reasoning effort levels for Azure/OpenAI models: "low", "medium", "high"
     reasoning_effort: str = Field(
         default="medium",
@@ -368,25 +371,25 @@ class Settings(BaseSettings):
     # --- Extended Thinking Configuration (Anthropic Claude only) ----------
     # Claude extended thinking settings for transparent reasoning
     # Only applies when llm_provider is "anthropic"
-    
+
     # Enable extended thinking for Claude models (Opus 4, Sonnet 4, Sonnet 3.7)
     claude_extended_thinking: bool = True
-    
+
     # Default thinking token budget (minimum 1024, recommended 16k+ for complex tasks)
     claude_thinking_budget_tokens: int = 16384
-    
+
     # Thinking modes: "off", "enabled", "aggressive"
     claude_thinking_mode: str = Field(
         default="enabled",
         description="Extended thinking mode for Claude models only"
     )
-    
+
     # Enable thinking transparency in responses for Claude
     claude_show_thinking_process: bool = True
-    
+
     # Auto-adjust thinking budget based on task complexity
     claude_adaptive_thinking_budget: bool = True
-    
+
     # Maximum thinking budget for complex tasks
     claude_max_thinking_budget: int = 65536
 
@@ -404,7 +407,7 @@ class Settings(BaseSettings):
     tool_timeout: int = Field(
         default=30, description="Timeout for individual tool execution in seconds"
     )
-    
+
     # LLM retry configuration
     llm_max_retries: int = Field(
         default=3,
@@ -543,13 +546,13 @@ if not _IN_TEST and settings.effective_secret_key == DEFAULT_SECRET:
 if not _IN_TEST:
     # Check for required environment variables in production
     required_for_production = []
-    
+
     if not os.getenv("DATABASE_URL"):
         required_for_production.append("DATABASE_URL")
-    
+
     if not os.getenv("JWT_SECRET_KEY") and not os.getenv("SECRET_KEY"):
         required_for_production.append("JWT_SECRET_KEY or SECRET_KEY")
-    
+
     if required_for_production:
         raise RuntimeError(
             f"FATAL: Missing required environment variables for production: {', '.join(required_for_production)}"

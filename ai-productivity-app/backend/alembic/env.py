@@ -2,6 +2,13 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 import os
+import sys
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Ensure the backend root (containing the *app* package) is on `sys.path`
+backend_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(backend_root))
 
 # --- SQLAlchemy metadata ---------------------------------------------------
 from app.models.base import Base  # type: ignore  # noqa: F401 – imported for side-effects
@@ -37,7 +44,7 @@ target_metadata = Base.metadata   # ← critical line
 def run_migrations_offline():
     # Use DATABASE_URL environment variable if available, otherwise use config
     database_url = os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
-    
+
     context.configure(
         url=database_url,
         target_metadata=target_metadata,
@@ -56,7 +63,7 @@ def run_migrations_online():
         configuration["sqlalchemy.url"] = database_url
     else:
         configuration = config.get_section(config.config_ini_section)
-    
+
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
