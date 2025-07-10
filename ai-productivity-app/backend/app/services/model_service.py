@@ -5,7 +5,10 @@ validation, and metadata from the ModelConfiguration database.
 """
 
 import logging
-from typing import Dict, Any, Optional, List, Set
+from typing import Dict, Any, Optional, List, Set, Tuple
+from datetime import datetime, timedelta
+
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -14,26 +17,78 @@ from app.schemas.generation import ModelInfo, ModelCapabilities
 
 logger = logging.getLogger(__name__)
 
+# ----------------------------------------------------------------------
+# SQLAlchemy event hooks to automatically invalidate the cache when the
+# *model_configurations* table changes.  The hooks are defined at import
+# time so they are active as soon as the service module is loaded.  Using
+# *lambda* keeps the dependency on ModelService lightweight (no circular
+# imports).
+# ----------------------------------------------------------------------
+
+
+def _invalidate_on_change(mapper, connection, target):  # noqa: D401 – SQLA signature
+    """Event handler that clears cache for the affected *model_id*."""
+
+    try:
+        ModelService.invalidate_global(getattr(target, "model_id", None))
+    except Exception as exc:  # pragma: no cover – defensive
+        logger.warning("Failed to invalidate ModelService cache: %s", exc)
+
+
+# Register hooks – they are no-ops if the table gets manipulated outside of
+# the ORM (e.g. raw SQL migrations) but cover the vast majority of runtime
+# operations.
+
+event.listen(ModelConfiguration, "after_insert", _invalidate_on_change)
+event.listen(ModelConfiguration, "after_update", _invalidate_on_change)
+event.listen(ModelConfiguration, "after_delete", _invalidate_on_change)
+
 
 class ModelService:
     """Centralized service for model capabilities and validation."""
     
+    # ------------------------------------------------------------------
+    # Caching strategy ---------------------------------------------------
+    # ------------------------------------------------------------------
+    #
+    # The service keeps a lightweight in-memory cache because model
+    # capabilities are queried **very** frequently during request
+    # validation.  To avoid stale information – especially after models
+    # are added or updated – the entries now include a *timestamp* and are
+    # subject to an expiry time (*CACHE_TTL*).  The cache is shared across
+    # all *ModelService* instances so invalidation works application-wide.
+    # ------------------------------------------------------------------
+
+    # Seconds until a cache entry is considered stale.  Five minutes is a
+    # reasonable balance between database traffic and freshness.
+    CACHE_TTL: int = 300
+
+    # ``{cache_key: (value, timestamp)}``
+    _GLOBAL_CACHE: Dict[str, Tuple[Any, datetime]] = {}
+
     def __init__(self, db: Session):
         self.db = db
-        self._cache: Dict[str, Any] = {}
+        # Instance view of the global cache so existing attribute access
+        # continues to work without changes.
+        self._cache = ModelService._GLOBAL_CACHE
     
     def get_model_capabilities(self, model_id: str) -> Optional[Dict[str, Any]]:
         """Get model capabilities from database."""
         cache_key = f"capabilities_{model_id}"
         
         if cache_key in self._cache:
-            return self._cache[cache_key]
+            value, ts = self._cache[cache_key]
+            if datetime.utcnow() - ts < timedelta(seconds=self.CACHE_TTL):
+                return value
+            # Expired – remove so we fall through to DB lookup
+            del self._cache[cache_key]
         
         try:
             model = self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
             if model and model.capabilities:
                 capabilities = model.capabilities
-                self._cache[cache_key] = capabilities
+                # Store with timestamp
+                self._cache[cache_key] = (capabilities, datetime.utcnow())
                 return capabilities
         except SQLAlchemyError as e:
             logger.error(f"Database error getting capabilities for {model_id}: {e}")
@@ -45,13 +100,16 @@ class ModelService:
         cache_key = f"metadata_{model_id}"
         
         if cache_key in self._cache:
-            return self._cache[cache_key]
+            value, ts = self._cache[cache_key]
+            if datetime.utcnow() - ts < timedelta(seconds=self.CACHE_TTL):
+                return value
+            del self._cache[cache_key]
         
         try:
             model = self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
             if model and model.model_metadata:
                 metadata = model.model_metadata
-                self._cache[cache_key] = metadata
+                self._cache[cache_key] = (metadata, datetime.utcnow())
                 return metadata
         except SQLAlchemyError as e:
             logger.error(f"Database error getting metadata for {model_id}: {e}")
@@ -163,6 +221,25 @@ class ModelService:
         
         # OpenAI models typically support JSON mode
         return 'gpt' in model_id.lower()
+
+    # ------------------------------------------------------------------
+    # Cache invalidation helpers ----------------------------------------
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def invalidate_global(cls, model_id: Optional[str] = None):
+        """Invalidate cached entries.
+
+        If *model_id* is provided, remove only that model's cache entries.
+        Otherwise clear the entire cache.
+        """
+
+        if model_id is None:
+            cls._GLOBAL_CACHE.clear()
+            return
+
+        cls._GLOBAL_CACHE.pop(f"capabilities_{model_id}", None)
+        cls._GLOBAL_CACHE.pop(f"metadata_{model_id}", None)
     
     def requires_responses_api(self, model_id: str) -> bool:
         """Check if model requires Azure Responses API."""
