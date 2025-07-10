@@ -125,6 +125,20 @@ export default function ThinkingConfiguration() {
     }
   };
 
+  const handleBulkConfigUpdate = async (updates) => {
+    const newConfig = { ...thinkingConfig, ...updates };
+    setThinkingConfig(newConfig);
+
+    try {
+      await updateConfig(updates);
+      toast.success('Thinking configuration updated');
+    } catch (error) {
+      toast.error(`Failed to update configuration: ${error.message}`);
+      // Revert on error
+      setThinkingConfig(thinkingConfig);
+    }
+  };
+
   const testThinkingMode = async (mode) => {
     setIsTesting(true);
     setTestResult(null);
@@ -206,7 +220,15 @@ export default function ThinkingConfiguration() {
                 <input
                   type="checkbox"
                   checked={thinkingConfig.claude_extended_thinking}
-                  onChange={(e) => handleConfigChange('claude_extended_thinking', e.target.checked)}
+                  onChange={(e) => handleBulkConfigUpdate({
+                    claude_extended_thinking: e.target.checked,
+                    // Include all Claude thinking settings in bulk update
+                    claude_thinking_mode: thinkingConfig.claude_thinking_mode,
+                    claude_thinking_budget_tokens: thinkingConfig.claude_thinking_budget_tokens,
+                    claude_show_thinking_process: thinkingConfig.claude_show_thinking_process,
+                    claude_adaptive_thinking_budget: thinkingConfig.claude_adaptive_thinking_budget,
+                    claude_max_thinking_budget: thinkingConfig.claude_max_thinking_budget
+                  })}
                   className="sr-only peer"
                 />
                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -220,7 +242,15 @@ export default function ThinkingConfiguration() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Thinking Mode</label>
                   <select
                     value={thinkingConfig.claude_thinking_mode}
-                    onChange={(e) => handleConfigChange('claude_thinking_mode', e.target.value)}
+                    onChange={(e) => handleBulkConfigUpdate({
+                      claude_thinking_mode: e.target.value,
+                      // Include all related Claude thinking settings in bulk update
+                      claude_extended_thinking: thinkingConfig.claude_extended_thinking,
+                      claude_thinking_budget_tokens: thinkingConfig.claude_thinking_budget_tokens,
+                      claude_show_thinking_process: thinkingConfig.claude_show_thinking_process,
+                      claude_adaptive_thinking_budget: thinkingConfig.claude_adaptive_thinking_budget,
+                      claude_max_thinking_budget: thinkingConfig.claude_max_thinking_budget
+                    })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {CLAUDE_THINKING_MODES.map(mode => (

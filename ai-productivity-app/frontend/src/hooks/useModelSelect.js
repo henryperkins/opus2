@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAIConfig } from '../contexts/AIConfigContext';
 import { toast } from '../components/common/Toast';
+import { modelsAPI } from '../api/models';
 
 // Task-based model recommendations
 const taskModelMap = {
@@ -61,18 +62,22 @@ export function useModelSelection() {
 
   const loadModelStats = useCallback(async () => {
     try {
-      // In a real implementation, this would call an API to get model stats
-      // For now, we'll create mock stats
-      const stats = {
+      // Use the unified API to get model usage statistics
+      const stats = await modelsAPI.getUsageStats('current', {
+        model_id: currentModel
+      });
+      setModelStats(stats);
+    } catch (err) {
+      console.error('Failed to load model stats:', err);
+      // Fallback to mock stats if API fails
+      const mockStats = {
         requestsToday: Math.floor(Math.random() * 100),
         estimatedCost: Math.random() * 10,
         averageLatency: Math.random() * 1000,
         errorRate: Math.random() * 5,
         lastUsed: new Date()
       };
-      setModelStats(stats);
-    } catch (err) {
-      console.error('Failed to load model stats:', err);
+      setModelStats(mockStats);
     }
   }, [currentModel]);
 
@@ -158,20 +163,21 @@ export function useModelSelection() {
   }, [currentProvider, testConfig]);
 
   const autoSelectModel = useCallback(async (taskType) => {
-    // Get recommended models for the task
-    const recommendations = taskModelMap[taskType] || taskModelMap['quick-answer'];
-
     try {
-      // Find the first recommended model that's available
-      const availableModels = models.map(m => m.model_id);
-      
-      for (const model of recommendations) {
-        if (availableModels.includes(model)) {
-          const success = await setModel(model);
-          if (success) {
-            toast.info(`Auto-selected ${model} for ${taskType}`);
-            return model;
-          }
+      // Use the unified API to get task-specific model recommendations
+      const matchedModels = await modelsAPI.matchCapabilities(taskType, {
+        default: currentModel,
+        fallbacks: fallbackChainRef.current,
+        autoSwitch: true
+      });
+
+      if (matchedModels.length > 0) {
+        // Select the first recommended model
+        const recommendedModel = matchedModels[0].model_id;
+        const success = await setModel(recommendedModel);
+        if (success) {
+          toast.info(`Auto-selected ${recommendedModel} for ${taskType}`);
+          return recommendedModel;
         }
       }
 
@@ -181,7 +187,7 @@ export function useModelSelection() {
       console.error('Auto-selection failed:', err);
       return currentModel;
     }
-  }, [models, currentModel, setModel]);
+  }, [currentModel, setModel]);
 
   // Detect model capabilities
   useEffect(() => {

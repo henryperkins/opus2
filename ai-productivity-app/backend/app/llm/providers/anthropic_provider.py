@@ -61,7 +61,21 @@ class AnthropicProvider(LLMProvider):
             params["system"] = system_message
 
         if thinking and self._supports_thinking(model):
-            params["thinking"] = thinking
+            # Build comprehensive thinking configuration
+            thinking_params = {
+                "type": thinking.get("type", "enabled"),
+                "budget_tokens": thinking.get("budget_tokens", 16384)
+            }
+            
+            # Add optional thinking parameters if specified
+            if "show_thinking" in thinking:
+                thinking_params["show_thinking"] = thinking["show_thinking"]
+            if "max_budget_tokens" in thinking:
+                thinking_params["max_budget_tokens"] = thinking["max_budget_tokens"]
+            if "adaptive_budget" in thinking:
+                thinking_params["adaptive_budget"] = thinking["adaptive_budget"]
+                
+            params["thinking"] = thinking_params
 
         if tools:
             params["tools"] = self.validate_tools(tools)
@@ -75,16 +89,52 @@ class AnthropicProvider(LLMProvider):
 
     async def stream(self, response: Any) -> AsyncIterator[str]:
         """Stream Anthropic response."""
+        thinking_started = False
+        
         async for chunk in response:
-            if hasattr(chunk, "delta") and hasattr(chunk.delta, "text"):
+            # Handle thinking content in streaming
+            if hasattr(chunk, "thinking") and chunk.thinking:
+                if not thinking_started:
+                    yield "<thinking>\n"
+                    thinking_started = True
+                
+                thinking_text = getattr(chunk.thinking, "delta", "") or getattr(chunk.thinking, "text", "")
+                if thinking_text:
+                    yield thinking_text
+            
+            # Handle main content deltas
+            elif hasattr(chunk, "delta") and hasattr(chunk.delta, "text"):
+                if thinking_started:
+                    yield "\n</thinking>\n"
+                    thinking_started = False
                 yield chunk.delta.text
+                
             elif hasattr(chunk, "content"):
+                if thinking_started:
+                    yield "\n</thinking>\n"
+                    thinking_started = False
+                    
                 for block in chunk.content:
                     if hasattr(block, "text"):
                         yield block.text
+                    elif hasattr(block, "thinking") and block.thinking:
+                        if not thinking_started:
+                            yield "<thinking>\n"
+                            thinking_started = True
+                        thinking_text = getattr(block.thinking, "text", "")
+                        if thinking_text:
+                            yield thinking_text
+                            
             # Older streaming versions populated *chunk.text* directly.
             elif hasattr(chunk, "text"):
+                if thinking_started:
+                    yield "\n</thinking>\n"
+                    thinking_started = False
                 yield chunk.text
+        
+        # Close thinking tag if still open
+        if thinking_started:
+            yield "\n</thinking>"
 
     def validate_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert tools to Anthropic format."""
@@ -112,16 +162,29 @@ class AnthropicProvider(LLMProvider):
 
     def extract_content(self, response: Any) -> str:
         """Extract content from Anthropic response."""
+        content_parts = []
+        
+        # Extract thinking process if present and enabled
+        if hasattr(response, "thinking") and response.thinking:
+            thinking_content = getattr(response.thinking, "content", "") or getattr(response.thinking, "text", "")
+            if thinking_content:
+                content_parts.append(f"<thinking>\n{thinking_content}\n</thinking>")
+        
+        # Extract main response content
         if hasattr(response, "content"):
             if isinstance(response.content, str):
-                return response.content
+                content_parts.append(response.content)
             elif isinstance(response.content, list):
-                text_parts = []
                 for block in response.content:
                     if hasattr(block, "text"):
-                        text_parts.append(block.text)
-                return "\n".join(text_parts)
-        return ""
+                        content_parts.append(block.text)
+                    elif hasattr(block, "thinking") and block.thinking:
+                        # Handle thinking blocks in content
+                        thinking_text = getattr(block.thinking, "content", "") or getattr(block.thinking, "text", "")
+                        if thinking_text:
+                            content_parts.append(f"<thinking>\n{thinking_text}\n</thinking>")
+        
+        return "\n".join(content_parts) if content_parts else ""
 
     def extract_tool_calls(self, response: Any) -> List[Dict[str, Any]]:
         """Extract tool calls from Anthropic response."""

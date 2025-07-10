@@ -295,10 +295,61 @@ class AzureOpenAIProvider(LLMProvider):
                     if getattr(item, "content", None):
                         yield item.content
         else:
-            # Standard Chat API streaming
+            # Standard Chat API streaming with tool call support
+            tool_call_buffer = {}  # Buffer for accumulating tool call deltas
+            
             async for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                if not chunk.choices:
+                    continue
+                    
+                delta = chunk.choices[0].delta
+                
+                # Handle content streaming
+                if delta.content:
+                    yield delta.content
+                
+                # Handle tool call streaming
+                if delta.tool_calls:
+                    for tool_call_delta in delta.tool_calls:
+                        index = tool_call_delta.index
+                        
+                        # Initialize tool call buffer for this index if needed
+                        if index not in tool_call_buffer:
+                            tool_call_buffer[index] = {
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""}
+                            }
+                        
+                        # Accumulate deltas
+                        if tool_call_delta.id:
+                            tool_call_buffer[index]["id"] += tool_call_delta.id
+                        
+                        if tool_call_delta.function:
+                            if tool_call_delta.function.name:
+                                tool_call_buffer[index]["function"]["name"] += tool_call_delta.function.name
+                            if tool_call_delta.function.arguments:
+                                tool_call_buffer[index]["function"]["arguments"] += tool_call_delta.function.arguments
+                        
+                        # Yield tool call updates as formatted text
+                        tool_call = tool_call_buffer[index]
+                        if tool_call["function"]["name"] and tool_call["function"]["arguments"]:
+                            # Only yield when we have complete function info
+                            function_name = tool_call["function"]["name"]
+                            try:
+                                import json
+                                args = json.loads(tool_call["function"]["arguments"])
+                                tool_text = f"\n[Calling {function_name} with {args}]\n"
+                            except json.JSONDecodeError:
+                                # Arguments still being streamed
+                                tool_text = f"\n[Calling {function_name}...]\n"
+                            
+                            yield tool_text
+                            
+                # Handle finish reason for tool calls
+                if hasattr(chunk.choices[0], "finish_reason") and chunk.choices[0].finish_reason == "tool_calls":
+                    if tool_call_buffer:
+                        yield "\n[Tool calls completed]\n"
 
     
 

@@ -1,9 +1,9 @@
 // api/config.js
 import client from './client';
 
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // Factory helpers (keep in sync with backend pydantic models where possible)
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 
 export const createModelConfig = (data = {}) => ({
   provider: data.provider || 'openai',
@@ -41,9 +41,9 @@ class ConfigAPI {
     return response.data;
   }
 
-  // ---------------------------------------------------------------------
+  // --------------------------------------------------------------------
   // Runtime configuration updates
-  // ---------------------------------------------------------------------
+  // --------------------------------------------------------------------
   async updateModelConfig(config) {
     // Strip the special `__noRetry` flag from the JSON payload – keep it only
     // in the Axios request config so the interceptor can honour it.

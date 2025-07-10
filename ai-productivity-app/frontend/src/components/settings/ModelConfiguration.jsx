@@ -44,9 +44,17 @@ export default function ModelConfiguration() {
     if (config?.current) {
       setModelConfig(prev => ({
         ...prev,
-        provider: config.provider,
-        model: config.model_id,
-        useResponsesApi: config.current.useResponsesApi ?? prev.useResponsesApi
+        provider: config.current.provider,
+        model: config.current.model_id,
+        temperature: config.current.temperature ?? prev.temperature,
+        maxTokens: config.current.max_tokens ?? prev.maxTokens,
+        topP: config.current.top_p ?? prev.topP,
+        frequencyPenalty: config.current.frequency_penalty ?? prev.frequencyPenalty,
+        presencePenalty: config.current.presence_penalty ?? prev.presencePenalty,
+        systemPrompt: config.current.system_prompt ?? prev.systemPrompt,
+        responseFormat: config.current.response_format ?? prev.responseFormat,
+        useResponsesApi: config.current.use_responses_api ?? prev.useResponsesApi,
+        reasoningEffort: config.current.reasoning_effort ?? prev.reasoningEffort
       }));
     }
   }, [config]);
@@ -96,16 +104,18 @@ export default function ModelConfiguration() {
 
   const handleSaveConfig = async () => {
     try {
+      // Use proper field names that match backend schema
       await configAPI.updateModelConfig({
         provider: modelConfig.provider,
-        chat_model: modelConfig.model,
+        model_id: modelConfig.model,
         temperature: modelConfig.temperature,
-        maxTokens: modelConfig.maxTokens,
-        topP: modelConfig.topP,
-        frequencyPenalty: modelConfig.frequencyPenalty,
-        presencePenalty: modelConfig.presencePenalty,
-        systemPrompt: modelConfig.systemPrompt,
-        useResponsesApi: modelConfig.useResponsesApi,
+        max_tokens: modelConfig.maxTokens,
+        top_p: modelConfig.topP,
+        frequency_penalty: modelConfig.frequencyPenalty,
+        presence_penalty: modelConfig.presencePenalty,
+        system_prompt: modelConfig.systemPrompt,
+        response_format: modelConfig.responseFormat,
+        use_responses_api: modelConfig.useResponsesApi,
         reasoning_effort: modelConfig.reasoningEffort
       });
       toast.success('Model configuration saved successfully');
@@ -200,7 +210,6 @@ export default function ModelConfiguration() {
   }
 
   const cost = estimateCost();
-  const config?.model_idInfo = modelInfo[modelConfig.model];
 
   return (
     <div className="space-y-6">
@@ -234,10 +243,10 @@ export default function ModelConfiguration() {
               onChange={(e) => handleModelChange(e.target.value)}
               className="w-full border rounded-lg px-3 py-2"
             >
-              {config?.providers[modelConfig.provider]?.chat_models?.map(model => (
-                <option key={model} value={model}>
-                  {modelInfo[model]?.name || model}
-                  {modelInfo[model]?.recommended && ' ⭐'}
+              {config?.providers[modelConfig.provider]?.models?.map(model => (
+                <option key={model.model_id} value={model.model_id}>
+                  {model.display_name || model.model_id}
+                  {model.recommended && ' ⭐'}
                 </option>
               ))}
             </select>
@@ -245,36 +254,41 @@ export default function ModelConfiguration() {
         </div>
 
         {/* Model Info */}
-        {config?.model_idInfo && (
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Context Length</span>
-              <span className="text-sm font-medium">
-                {config?.model_idInfo.contextLength.toLocaleString()} tokens
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Capabilities</span>
-              <div className="flex gap-1">
-                {config?.model_idInfo.capabilities.map(cap => (
-                  <span key={cap} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                    {cap}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {cost && (
+        {(() => {
+          const selectedModel = config?.providers[modelConfig.provider]?.models?.find(m => m.model_id === modelConfig.model);
+          return selectedModel && (
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Estimated Cost</span>
+                <span className="text-sm text-gray-600">Context Length</span>
                 <span className="text-sm font-medium">
-                  ${cost.perRequest.toFixed(4)}/request
+                  {selectedModel.context_window?.toLocaleString() || 'N/A'} tokens
                 </span>
               </div>
-            )}
-          </div>
-        )}
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Capabilities</span>
+                <div className="flex gap-1">
+                  {selectedModel.capabilities && Object.entries(selectedModel.capabilities)
+                    .filter(([_, supported]) => supported)
+                    .map(([cap, _]) => (
+                      <span key={cap} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                        {cap.replace('supports_', '').replace('_', ' ')}
+                      </span>
+                    ))}
+                </div>
+              </div>
+
+              {selectedModel.cost_per_1k_tokens && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Cost per 1K tokens</span>
+                  <span className="text-sm font-medium">
+                    ${(selectedModel.cost_per_1k_tokens.input + selectedModel.cost_per_1k_tokens.output).toFixed(4)}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Presets */}
@@ -366,7 +380,10 @@ export default function ModelConfiguration() {
             <input
               type="range"
               min="256"
-              max={config?.model_idInfo?.contextLength || 4096}
+              max={(() => {
+                const selectedModel = config?.providers[modelConfig.provider]?.models?.find(m => m.model_id === modelConfig.model);
+                return selectedModel?.context_window || 4096;
+              })()}
               step="256"
               value={modelConfig.maxTokens}
               onChange={(e) => setModelConfig({ ...modelConfig, maxTokens: parseInt(e.target.value) })}

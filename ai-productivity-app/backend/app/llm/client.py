@@ -762,6 +762,12 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     thinking_config = {
                         "type": thinking_mode,
                         "budget_tokens": budget_tokens,
+                        # Add visibility control for thinking process
+                        "show_thinking": _cfg("claude_show_thinking_process", True),
+                        # Add maximum budget limit
+                        "max_budget_tokens": _cfg("claude_max_thinking_budget", 65536),
+                        # Add adaptive budget flag
+                        "adaptive_budget": _cfg("claude_adaptive_thinking_budget", True)
                     }
 
                 return await self._handle_anthropic_request(
