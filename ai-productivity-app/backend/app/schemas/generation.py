@@ -133,6 +133,7 @@ class ProviderConfig(CamelModel):
 # Unified model configuration
 # ─────────────────────────────────────────────────────────────────────────────
 class UnifiedModelConfig(GenerationParams, ReasoningParams):
+    model_config = ConfigDict(protected_namespaces=())
     provider: Literal["openai", "azure", "anthropic"]
     model_id: str = Field(..., alias="modelId")
 

@@ -192,20 +192,20 @@ export function AIConfigProvider({ children }) {
         // Ensure camelCase keys for the API
         const configData = cameliseKeys(preset.config);
         console.log("Applying preset:", { presetId, preset, configData });
-        
+
         // The backend now handles provider-specific adaptations
         // Just send the preset config as-is
         await updateConfig(configData);
         toast.success(`Preset '${preset.name || presetId}' applied`);
         return true;
       } catch (e) {
-        console.error("Error applying preset:", { 
-          presetId, 
-          preset, 
-          error: e.message, 
-          response: e.response?.data 
+        console.error("Error applying preset:", {
+          presetId,
+          preset,
+          error: e.message,
+          response: e.response?.data
         });
-        
+
         // Extract detailed error message from response
         const errorMsg = e.response?.data?.detail || e.message || "Failed to apply preset";
         toast.error(errorMsg);
@@ -215,20 +215,20 @@ export function AIConfigProvider({ children }) {
     [updateConfig],
   );
 
-  /* -------------------- websocket sync ----------------------------- */
-  useEffect(() => {
-    const url =
-      (location.protocol === "https:" ? "wss://" : "ws://") +
-      location.host.replace(":5173", ":8000") +
-      "/ws/config";
-    const ws = new WebSocket(url);
+  // /* -------------------- websocket sync ----------------------------- */
+  // useEffect(() => {
+  //   const url =
+  //     (location.protocol === "https:" ? "wss://" : "ws://") +
+  //     location.host.replace(":5173", ":8000") +
+  //     "/ws/config";
+  //   const ws = new WebSocket(url);
 
-    ws.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.type?.startsWith("config_")) qc.invalidateQueries(["ai-config"]);
-    };
-    return () => ws.close();
-  }, [qc]);
+  //   ws.onmessage = (ev) => {
+  //     const msg = JSON.parse(ev.data);
+  //     if (msg.type?.startsWith("config_")) qc.invalidateQueries(["ai-config"]);
+  //   };
+  //   return () => ws.close();
+  // }, [qc]);
 
   /* -------------------- computed ------------------------------ */
   const value = {
@@ -302,4 +302,3 @@ export function useReasoningConfig() {
     updateReasoningConfig: (patch) => updateConfig(patch),
   };
 }
-

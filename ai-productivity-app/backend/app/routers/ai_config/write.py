@@ -34,17 +34,23 @@ async def update_config(
     try:
         # Log the incoming update for debugging
         logger.info(f"Received config update from {user.username}: {update.dict(exclude_unset=True)}")
-        
+
         new_cfg = await service.update_config(update, updated_by=user.username)
         await notify_llm_client(new_cfg)
         await broadcast_config_update(service, new_cfg, event_type="config_update")
         return new_cfg
     except ValueError as e:
         logger.error(f"Validation error during config update: {str(e)}")
-        # Try to provide more detailed error information
+        # Provide detailed error information for frontend
         error_msg = str(e)
+        if hasattr(e, "errors"):
+            # Pydantic v2: include field errors if present
+            field_errors = getattr(e, "errors", lambda: [])()
+            if field_errors:
+                error_msg += " | " + "; ".join(
+                    f"{err.get('loc', [''])[0]}: {err.get('msg', '')}" for err in field_errors
+                )
         if "Field required" in error_msg:
-            # This is likely the Pydantic validation error
             error_msg = "Missing required fields. Please ensure both 'provider' and 'modelId' are included in the configuration."
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error_msg)
     except SQLAlchemyError:
