@@ -323,7 +323,7 @@ class Settings(BaseSettings):
     # (**2024-10-21**) and let callers opt-in to the new *Responses* preview
     # via the dedicated *azure_enable_responses* flag further below.
     #
-    azure_openai_api_version: str = "2024-10-21"
+    azure_openai_api_version: str = "2025-04-01-preview"
 
     # Feature-gate for Azure *Responses* API (preview-only)
     # -------------------------------------------------------------------

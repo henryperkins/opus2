@@ -273,7 +273,7 @@ class TestToolStreaming:
         return AzureOpenAIProvider(
             {
                 "api_key": "test-key",
-                "azure_endpoint": "https://test.openai.azure.com",
+                "endpoint": "https://test.openai.azure.com",  # Use 'endpoint' not 'azure_endpoint'
                 "api_version": "2025-04-01-preview",
                 "timeout": 300,
             }

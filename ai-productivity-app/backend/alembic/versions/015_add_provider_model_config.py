@@ -1,7 +1,7 @@
 """Add provider-specific model configuration support
 
-Revision ID: add_provider_model_config
-Revises: 
+Revision ID: 015_add_provider_model_config
+Revises: 014_fix_capabilities_default
 Create Date: 2025-01-01 12:00:00.000000
 
 """
@@ -10,20 +10,24 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = 'add_provider_model_config'
-down_revision = None
+revision = '015_add_provider_model_config'
+down_revision = '014_fix_capabilities_default'
 branch_labels = None
 depends_on = None
 
 
 def upgrade():
-    # Add index on model_id + provider combination for faster lookups
-    op.create_index(
-        'ix_model_configurations_model_provider',
-        'model_configurations',
-        ['model_id', 'provider'],
-        unique=False
-    )
+    # Add index on model_id + provider combination for faster lookups (if it doesn't exist)
+    try:
+        op.create_index(
+            'ix_model_configurations_model_provider',
+            'model_configurations',
+            ['model_id', 'provider'],
+            unique=False
+        )
+    except Exception:
+        # Index already exists, skip
+        pass
     
     # Insert default model configurations if they don't exist
     # This ensures all providers have proper model entries

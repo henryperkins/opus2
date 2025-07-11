@@ -60,6 +60,7 @@ class SchemaAligner:
         self.differences = defaultdict(list)
         # Track the current SQLAlchemy dialect (e.g. "sqlite", "postgresql")
         self.dialect_name = engine.dialect.name.lower()
+        print(f"🔧 Initializing SchemaAligner for {self.dialect_name}")
 
     def refresh_inspector(self) -> None:
         """Refresh the inspector to get latest schema state."""
@@ -117,7 +118,7 @@ class SchemaAligner:
         if orm_base in ["JSON", "JSONB"] and db_base in ["JSON", "JSONB"]:
             return True
 
-        # Handle numeric types
+        # Handle numeric types - PostgreSQL specific mappings
         numeric_equivalents = {
             "DECIMAL": ["NUMERIC", "DECIMAL"],
             "NUMERIC": ["NUMERIC", "DECIMAL"],
@@ -144,6 +145,18 @@ class SchemaAligner:
         # Handle enum types
         if "ENUM" in orm_base and "ENUM" in db_base:
             return True
+
+        # Handle PostgreSQL-specific type mappings
+        if self.dialect_name == "postgresql":
+            # PostgreSQL UUID type
+            if orm_base == "UUID" and db_base == "UUID":
+                return True
+            # PostgreSQL array types
+            if "ARRAY" in orm_base and "ARRAY" in db_base:
+                return True
+            # PostgreSQL text search types
+            if orm_base in ["TSVECTOR", "TSQUERY"] and db_base in ["TSVECTOR", "TSQUERY"]:
+                return True
 
         # If no special handling applies, they must match exactly
         return orm_base == db_base
@@ -667,9 +680,18 @@ def main():
     print("🔗 Testing database connection...")
     try:
         with engine.connect() as conn:
-            result = conn.execute(text("SELECT version()"))
-            version = result.scalar()
-            print(f"✅ Connected to: {version}")
+            if engine.dialect.name.lower() == "postgresql":
+                result = conn.execute(text("SELECT version()"))
+                version = result.scalar()
+                print(f"✅ Connected to PostgreSQL: {version}")
+            elif engine.dialect.name.lower() == "sqlite":
+                result = conn.execute(text("SELECT sqlite_version()"))
+                version = result.scalar()
+                print(f"✅ Connected to SQLite: {version}")
+            else:
+                result = conn.execute(text("SELECT 1"))
+                result.scalar()
+                print(f"✅ Connected to database ({engine.dialect.name})")
     except Exception as e:
         print(f"❌ Database connection failed: {e}")
         sys.exit(1)

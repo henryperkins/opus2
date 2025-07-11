@@ -17,7 +17,7 @@ sys.path.insert(0, str(backend_path))
 # Set environment variables
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["LLM_PROVIDER"] = "azure"
-os.environ["AZURE_OPENAI_API_KEY"] = "nClGElxn2jB3qTRQ0rxwMZi9ehHM3thZ3uVidNs0M8iXNOlnJ8lGJQQJ99BFACHYHv6XJ3w3AAABACOGY9E6"
+os.environ["AZURE_OPENAI_API_KEY"] = os.getenv("AZURE_OPENAI_API_KEY", "your-azure-api-key-here")
 os.environ["AZURE_OPENAI_ENDPOINT"] = "https://oairesourcehp.openai.azure.com"
 os.environ["AZURE_OPENAI_API_VERSION"] = "2025-04-01-preview"
 

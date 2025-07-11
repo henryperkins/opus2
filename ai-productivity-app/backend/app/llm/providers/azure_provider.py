@@ -64,6 +64,13 @@ class AzureOpenAIProvider(LLMProvider):
         endpoint = self.config.get("endpoint")
         if not endpoint:
             raise ValueError("Azure OpenAI endpoint is required")
+        
+        # Ensure endpoint doesn't end with trailing slash or path
+        endpoint = endpoint.rstrip("/")
+        if not endpoint.startswith("https://"):
+            raise ValueError("Azure OpenAI endpoint must start with https://")
+        if not endpoint.endswith(".openai.azure.com"):
+            raise ValueError("Azure OpenAI endpoint must be in format: https://your-resource.openai.azure.com")
 
         auth_method = self.config.get("auth_method", "api_key")
 
@@ -243,11 +250,8 @@ class AzureOpenAIProvider(LLMProvider):
                 )
 
         # For reasoning models, use simple input format as shown in the docs
-        if (
-            is_reasoning
-            and len(input_messages) == 1
-            and input_messages[0]["role"] == "user"
-        ):
+        if (is_reasoning and len(input_messages) == 1 and
+                input_messages[0]["role"] == "user"):
             # Use simple string input format for single user messages
             params = {"model": model, "input": input_messages[0]["content"]}
         else:
@@ -365,10 +369,8 @@ class AzureOpenAIProvider(LLMProvider):
 
                         # Yield tool call updates as formatted text
                         tool_call = tool_call_buffer[index]
-                        if (
-                            tool_call["function"]["name"]
-                            and tool_call["function"]["arguments"]
-                        ):
+                        if (tool_call["function"]["name"] and
+                                tool_call["function"]["arguments"]):
                             # Only yield when we have complete function info
                             function_name = tool_call["function"]["name"]
                             try:
@@ -383,10 +385,9 @@ class AzureOpenAIProvider(LLMProvider):
                             yield tool_text
 
                 # Handle finish reason for tool calls
-                if (
-                    hasattr(chunk.choices[0], "finish_reason")
-                    and chunk.choices[0].finish_reason == "tool_calls"
-                ):
+                finish_reason_check = (hasattr(chunk.choices[0], "finish_reason") and
+                                      chunk.choices[0].finish_reason == "tool_calls")
+                if finish_reason_check:
                     if tool_call_buffer:
                         yield "\n[Tool calls completed]\n"
 
