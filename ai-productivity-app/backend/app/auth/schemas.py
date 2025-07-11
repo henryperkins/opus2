@@ -8,6 +8,20 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, validator
 
+# --------------------------------------------------------------------------- #
+# Compatibility shim – Pydantic ConfigDict                                    #
+# --------------------------------------------------------------------------- #
+# Pydantic v2 provides *ConfigDict* for model configuration.  Earlier
+# versions (and the lightweight stub used in the test-runner) do **not**
+# export the symbol which breaks `model_config = ConfigDict(...)` assignments.
+# We therefore provide a minimal fallback that behaves like a regular dict.
+try:
+    from pydantic import ConfigDict  # type: ignore
+except ImportError:  # pragma: no cover – pydantic-v1 / stub
+    class ConfigDict(dict):  # pylint: disable=too-few-public-methods
+        """Stand-in replacement so code can reference ConfigDict unconditionally."""
+        pass
+
 
 # --------------------------------------------------------------------------- #
 #                                 INPUT MODELS                                #
