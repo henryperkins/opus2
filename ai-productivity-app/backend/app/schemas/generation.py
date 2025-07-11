@@ -290,7 +290,10 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
         """Create from runtime configuration."""
         # Map flat structure back to nested
         # Handle legacy chat_model field
-        model_id = config.get("model_id") or config.get("chat_model", "gpt-4o-mini")
+        from app.config import settings
+        default_model = settings.llm_default_model or "o3"
+
+        model_id = config.get("model_id") or config.get("chat_model", default_model)
         
         model_config = {
             "provider": config.get("provider", "openai"),

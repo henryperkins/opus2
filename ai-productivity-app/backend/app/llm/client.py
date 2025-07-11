@@ -340,7 +340,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # Fallback to creating a config from static settings
             from app.schemas.generation import UnifiedModelConfig
             # ``settings.llm_model`` is deprecated – rely on *llm_default_model*
-            fallback_model = settings.llm_default_model or "gpt-4o-mini"
+            fallback_model = settings.llm_default_model or "o3"
             return UnifiedModelConfig(
                 provider=settings.llm_provider,
                 model_id=fallback_model,

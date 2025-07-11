@@ -37,6 +37,43 @@
         }
     },
     {
+        "model_id": "o3",
+        "name": "O3 Reasoning",
+        "provider": "azure",
+        "model_family": "o3",
+        "version": "2024-07-18",
+        "capabilities": {
+            "supports_functions": true,
+            "supports_vision": true,
+            "supports_reasoning": true,
+            "supports_streaming": true,
+            "supports_json_mode": true,
+            "supports_parallel_tools": true,
+            "max_context_window": 128000,
+            "max_output_tokens": 16384
+        },
+        "default_params": {
+            "temperature": 0.3,
+            "top_p": 1.0,
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0
+        },
+        "max_tokens": 16384,
+        "context_window": 128000,
+        "cost_input_per_1k": 0.00025,
+        "cost_output_per_1k": 0.001,
+        "avg_response_time_ms": 950,
+        "throughput_tokens_per_sec": 90.0,
+        "is_available": true,
+        "is_deprecated": false,
+        "model_metadata": {
+            "tier": "balanced",
+            "requires_responses_api": true,
+            "recommended_use_cases": ["general", "code", "analysis", "reasoning"],
+            "release_date": "2024-07-18"
+        }
+    },
+    {
         "model_id": "gpt-4o",
         "name": "GPT-4 Omni",
         "provider": "openai",

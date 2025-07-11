@@ -354,16 +354,24 @@ class Settings(BaseSettings):
         return v_lower
 
     # LLM settings
-    llm_provider: str = "openai"
+    # Default Large Language Model (LLM) provider.  We now use *Azure OpenAI*
+    # by default to take advantage of Microsoft-hosted deployments such as the
+    # *o3* reasoning model.  This can still be overridden at runtime via the
+    # ``LLM_PROVIDER`` environment variable.
+    llm_provider: str = "azure"
 
     # Default model used for completion calls.  Can be overridden at runtime
     # via the ``LLM_MODEL`` environment variable.  The old *llm_model* field
     # remains for backwards-compatibility but is deprecated and should not be
     # referenced by new code.
     #
-    # Updated to use gpt-4o which is available in Azure Responses API
+    # Default chat/completion model deployment.  The previous default
+    # (``gpt-4o-mini``) has been replaced with **o3**, an Azure OpenAI
+    # deployment that offers strong reasoning capabilities while maintaining
+    # fast response times.  Override at runtime with the ``LLM_MODEL`` env var
+    # if needed.
 
-    llm_default_model: str = Field("gpt-4o-mini", alias="LLM_MODEL")
+    llm_default_model: str = Field("o3", alias="LLM_MODEL")
     max_context_tokens: int = 200000
 
     # --- Reasoning enrichment (Azure OpenAI / OpenAI only) ---------------
