@@ -23,7 +23,7 @@ import os
 import types
 import json  # Add json import for logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from typing import Any, Dict, List, Sequence, AsyncIterator, Optional
 from app.config import settings
@@ -574,6 +574,13 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 if hasattr(response, "usage"):
                     logger.debug(f"Token Usage: {response.usage}")
 
+            # Record usage for cost tracking (Anthropic)
+            if track_usage and cost_tracking_service and usage_event_data:
+                await self._record_usage_metrics(
+                    cost_tracking_service, usage_event_data, response, 
+                    active_model, self.provider, start_time
+                )
+            
             if stream:
                 return self._stream_anthropic_response(response)
             return response
@@ -637,6 +644,11 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         ) = None,  # Reasoning config: {"effort": "medium", "summary": "detailed"}
         max_tokens: int | None = None,
         model: str | None = None,  # Allow per-request model override
+        # Cost tracking parameters
+        user_id: Optional[int] = None,  # User ID for cost tracking
+        session_id: Optional[str] = None,  # Session ID for cost tracking
+        feature: Optional[str] = None,  # Feature name for cost tracking (e.g., "chat", "search")
+        track_usage: bool = True,  # Whether to track usage metrics
     ) -> Any | AsyncIterator[str]:  # Returns AsyncIterator[str] when stream=True
         """Wrapper around the underlying Chat Completions / Responses API with automatic retry.
 
@@ -660,6 +672,30 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         start_time = time.time()
         request_id = f"req_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{id(self)}"
+        
+        # Initialize cost tracking variables
+        cost_tracking_service = None
+        usage_event_data = None
+        
+        if track_usage:
+            try:
+                from app.services.cost_tracking import CostTrackingService, UsageEvent
+                from app.database import SessionLocal
+                
+                # Get database session for cost tracking
+                db = SessionLocal()
+                cost_tracking_service = CostTrackingService(db)
+                
+                # Prepare usage event data (will be completed after API call)
+                usage_event_data = {
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "feature": feature,
+                    "timestamp": datetime.utcnow().replace(tzinfo=timezone.utc)
+                }
+            except Exception as e:
+                logger.warning(f"Failed to initialize cost tracking: {e}")
+                track_usage = False
 
         try:
             # Log request start
@@ -1070,6 +1106,13 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     elif hasattr(response, "output") and response.output:
                         logger.debug(f"Response Output Items: {len(response.output)}")
 
+                # Record usage for cost tracking (Azure Responses API)
+                if track_usage and cost_tracking_service and usage_event_data:
+                    await self._record_usage_metrics(
+                        cost_tracking_service, usage_event_data, response, 
+                        active_model, self.provider, start_time
+                    )
+                
                 # Handle streaming response - check actual stream value used in request
                 actual_stream = responses_kwargs.get("stream", False)
                 if actual_stream:
@@ -1187,6 +1230,13 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     if hasattr(response, "usage"):
                         logger.debug(f"Token Usage: {response.usage}")
 
+                # Record usage for cost tracking (Chat Completions API)
+                if track_usage and cost_tracking_service and usage_event_data:
+                    await self._record_usage_metrics(
+                        cost_tracking_service, usage_event_data, response, 
+                        active_model, self.provider, start_time
+                    )
+                
                 # Handle streaming response - check actual stream value used in request
                 actual_stream = clean_kwargs.get("stream", False)
                 if actual_stream:
@@ -1276,6 +1326,13 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             raise  # re-raise unchanged
 
         finally:
+            # Clean up database session for cost tracking
+            if track_usage and cost_tracking_service and hasattr(cost_tracking_service, 'db'):
+                try:
+                    cost_tracking_service.db.close()
+                except Exception as e:
+                    logger.warning(f"Error closing cost tracking database session: {e}")
+            
             # Log successful completion if we reach here without exception
             if 'start_time' in locals():
                 duration = time.time() - start_time
@@ -1283,6 +1340,85 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     "LLM request %s completed successfully in %.2fs",
                     request_id, duration
                 )
+
+    # ------------------------------------------------------------------
+    # Cost tracking helpers
+    # ------------------------------------------------------------------
+    
+    async def _record_usage_metrics(
+        self, 
+        cost_tracking_service, 
+        usage_event_data: Dict[str, Any], 
+        response: Any, 
+        model_id: str, 
+        provider: str, 
+        start_time: float
+    ):
+        """Record usage metrics for cost tracking."""
+        try:
+            from app.services.cost_tracking import UsageEvent
+            
+            # Calculate response time
+            response_time_ms = (time.time() - start_time) * 1000
+            
+            # Extract token usage from response
+            input_tokens = 0
+            output_tokens = 0
+            
+            if hasattr(response, 'usage'):
+                usage = response.usage
+                if hasattr(usage, 'input_tokens'):
+                    # Anthropic format
+                    input_tokens = usage.input_tokens
+                    output_tokens = usage.output_tokens
+                elif hasattr(usage, 'prompt_tokens'):
+                    # OpenAI format
+                    input_tokens = usage.prompt_tokens
+                    output_tokens = usage.completion_tokens
+                elif hasattr(usage, 'total_tokens'):
+                    # Fallback - estimate input/output split
+                    total_tokens = usage.total_tokens
+                    input_tokens = int(total_tokens * 0.7)  # Rough estimate
+                    output_tokens = total_tokens - input_tokens
+            
+            # Handle Azure Responses API usage format
+            elif hasattr(response, 'output') and response.output:
+                # Try to extract from output items
+                for output_item in response.output:
+                    if hasattr(output_item, 'usage'):
+                        usage = output_item.usage
+                        if hasattr(usage, 'input_tokens'):
+                            input_tokens += usage.input_tokens
+                            output_tokens += usage.output_tokens
+                        elif hasattr(usage, 'prompt_tokens'):
+                            input_tokens += usage.prompt_tokens
+                            output_tokens += usage.completion_tokens
+            
+            # Skip recording if no token usage found
+            if input_tokens == 0 and output_tokens == 0:
+                logger.debug("No token usage found in response, skipping cost tracking")
+                return
+            
+            # Create usage event
+            usage_event = UsageEvent(
+                model_id=model_id,
+                provider=provider,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                response_time_ms=response_time_ms,
+                success=True,
+                **usage_event_data
+            )
+            
+            # Record the usage
+            cost_calc = await cost_tracking_service.record_usage(usage_event)
+            
+            logger.debug(
+                f"Recorded usage: {model_id} - {input_tokens}/{output_tokens} tokens - ${cost_calc.total_cost}"
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to record usage metrics: {e}", exc_info=True)
 
     # ------------------------------------------------------------------
     # Streaming helpers

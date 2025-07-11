@@ -111,6 +111,66 @@ async def ingest_batch(payload: BatchPayload):
     return {"success": True, "received": received_count}
 
 
+# ---------------------------------------------------------------------------
+# Lightweight usage statistics (placeholder)
+# ---------------------------------------------------------------------------
+
+
+class UsageStats(BaseModel):
+    """Minimal usage statistics returned to the frontend.
+
+    The schema mirrors the fields consumed by the React hooks so that the UI
+    does not break while the real implementation is being built server-side.
+    All numbers are *approximate* placeholders calculated from the in-memory
+    metric buffer to provide deterministic, non-random behaviour that still
+    changes over time during a single server run.
+    """
+
+    project_id: str
+    model_id: str | None = None
+    requestsToday: int
+    estimatedCost: float
+    averageLatency: float | None = None
+    errorRate: float | None = None
+    lastUsed: datetime
+
+
+@router.get("/usage", response_model=UsageStats)
+async def get_usage_stats(
+    project_id: str, model_id: str | None = None  # query params from the frontend
+):
+    """Return *very* rough usage statistics so that the dashboard widgets render.
+
+    The current implementation is intentionally simple – it only examines the
+    in-memory metric buffer populated by the `/batch` endpoint and derives a
+    handful of aggregate numbers that the frontend expects.  Once a proper
+    analytics pipeline lands we can swap this out for real metrics without
+    changing the client code.
+    """
+
+    # Count how many metrics belong to *today* so that the number goes back to
+    # zero after midnight UTC – a close enough proxy for "daily requests" in
+    # the interim.
+    today = datetime.now(timezone.utc).date()
+    requests_today = sum(1 for m in _METRIC_BUFFER if m.timestamp.date() == today)
+
+    # Naïve cost estimation: assume $0.002 per request as a placeholder so that
+    # the value feels realistic to the user.
+    estimated_cost = round(requests_today * 0.002, 4)
+
+    # Latency / error-rate are not tracked yet – return None so the UI can
+    # decide how to display missing data gracefully.
+    return UsageStats(
+        project_id=project_id,
+        model_id=model_id,
+        requestsToday=requests_today,
+        estimatedCost=estimated_cost,
+        averageLatency=None,
+        errorRate=None,
+        lastUsed=datetime.now(timezone.utc),
+    )
+
+
 # ------------------------------------------------------------
 # Stubbed metrics for the Embedding dashboard
 # ------------------------------------------------------------

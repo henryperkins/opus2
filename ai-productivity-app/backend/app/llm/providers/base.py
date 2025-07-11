@@ -15,9 +15,37 @@ logger = logging.getLogger(__name__)
 class LLMProvider(ABC):
     """Base class for all LLM providers."""
 
-    def __init__(self, **kwargs):
-        """Initialize provider with configuration."""
-        self.config = kwargs
+    def __init__(self, *args, **kwargs):
+        """Initialize provider with configuration.
+
+        Historical test-suites sometimes instantiated providers with a single
+        *dict* positional argument instead of keyword parameters, e.g.::
+
+            AnthropicProvider({"api_key": "key"})
+
+        To remain backward-compatible we accept this calling style and merge
+        it with any additional keyword arguments.  When *args* contains more
+        than one positional value we raise *TypeError* – there is no sensible
+        interpretation for that.
+        """
+
+        if len(args) > 1:
+            raise TypeError(
+                "LLMProvider() accepts at most one positional argument (the config dict)"
+            )
+
+        # Merge positional config dict with kwargs – kwargs win on conflict so
+        # callers can conveniently override individual keys while passing a
+        # pre-assembled base config as the first argument.
+        cfg_from_positional = args[0] if args else {}
+        if cfg_from_positional and not isinstance(cfg_from_positional, dict):
+            raise TypeError(
+                "Positional argument to LLMProvider() must be a dict of configuration options"
+            )
+
+        merged_cfg = {**cfg_from_positional, **kwargs}
+
+        self.config = merged_cfg
         self.client = None
         self._initialize_client()
 

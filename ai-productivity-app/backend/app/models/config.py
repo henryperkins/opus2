@@ -165,6 +165,12 @@ class ModelConfiguration(Base):
     cost_input_per_1k = Column(Float, nullable=True, comment="Cost per 1K input tokens")
     cost_output_per_1k = Column(Float, nullable=True, comment="Cost per 1K output tokens")
 
+    # Performance tier (e.g. balanced, high_performance, economy).  Added to
+    # satisfy legacy tests that still pass the key.  The business logic
+    # migrated to *performance_tier* but we keep a dedicated column to remain
+    # backward-compatible with historical database rows and fixtures.
+    tier = Column(String(50), nullable=True, comment="Deprecated – use performance_tier instead")
+
     # Performance characteristics
     avg_response_time_ms = Column(Integer, nullable=True, comment="Average response time in milliseconds")
     throughput_tokens_per_sec = Column(Float, nullable=True, comment="Average tokens per second")

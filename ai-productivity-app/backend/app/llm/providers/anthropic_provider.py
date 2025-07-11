@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 class AnthropicProvider(LLMProvider):
     """Anthropic Claude provider implementation."""
 
+    def __init__(self, *args, **kwargs):  # noqa: D401 – keep signature flexible
+        """Accept config dict as positional argument for backward compatibility."""
+        super().__init__(*args, **kwargs)
+
     def _initialize_client(self) -> None:
         """Initialize Anthropic client."""
         api_key = self.config.get("api_key")

@@ -14,9 +14,32 @@ logger = logging.getLogger(__name__)
 class AzureOpenAIProvider(LLMProvider):
     """Azure OpenAI provider implementation."""
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.use_responses_api = kwargs.get("use_responses_api", False)
+    def __init__(self, *args, **kwargs):  # noqa: D401 – preserve legacy call style
+        """Accept optional positional config dict for backward compatibility."""
+
+        # Merge positional dict with explicit kwargs similar to the logic in
+        # :pyclass:`app.llm.providers.base.LLMProvider`.  We cannot simply rely
+        # on *super()* because we need to access `use_responses_api` **before**
+        # `_initialize_client()` is invoked.  Therefore we must calculate the
+        # final config mapping upfront.
+
+        if len(args) > 1:
+            raise TypeError(
+                "AzureOpenAIProvider() accepts at most one positional argument (the config dict)"
+            )
+
+        cfg_from_positional = args[0] if args else {}
+        if cfg_from_positional and not isinstance(cfg_from_positional, dict):
+            raise TypeError(
+                "Positional argument to AzureOpenAIProvider() must be a dict of configuration options"
+            )
+
+        merged_cfg = {**cfg_from_positional, **kwargs}
+
+        # Store convenience flag before initialisation logic
+        self.use_responses_api = merged_cfg.get("use_responses_api", False)
+
+        super().__init__(**merged_cfg)
         from app.config import settings
         self.api_version = kwargs.get(
             "api_version",
