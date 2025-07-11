@@ -15,32 +15,32 @@ const aiConfigAPI = {
   getConfig: async () => {
     return await apiClient.get(API_BASE);
   },
-  
+
   // Use HTTP PATCH so we only update the provided keys instead of replacing
   // the entire configuration object.  This prevents un-sent values from
   // being overwritten with defaults on the server side.
   updateConfig: async (updates) => {
     return await apiClient.patch(API_BASE, updates);
   },
-  
+
   testConfig: async (config = null) => {
     return await apiClient.post(`${API_BASE}/test`, config);
   },
-  
+
   getModels: async (params = {}) => {
     const queryString = new URLSearchParams(params).toString();
     const url = queryString ? `${API_BASE}/models?${queryString}` : `${API_BASE}/models`;
     return await apiClient.get(url);
   },
-  
+
   getModelInfo: async (modelId) => {
     return await apiClient.get(`${API_BASE}/models/${modelId}`);
   },
-  
+
   validateConfig: async (config) => {
     return await apiClient.post(`${API_BASE}/validate`, config);
   },
-  
+
   getPresets: async () => {
     return await apiClient.get(`${API_BASE}/presets`);
   }
@@ -68,23 +68,23 @@ const ACTIONS = {
 const initialState = {
   // Current configuration
   config: null,
-  
+
   // Available models and providers
   models: [],
   providers: {},
-  
+
   // UI state
   loading: false,
   error: null,
   testResult: null,
-  
+
   // Model performance tracking
   modelStats: new Map(),
   modelHistory: [],
-  
+
   // Conflict resolution
   conflictState: null,
-  
+
   // Metadata
   lastUpdated: null
 };
@@ -101,39 +101,39 @@ function aiConfigReducer(state, action) {
         lastUpdated: action.payload.last_updated,
         error: null
       };
-      
+
     case ACTIONS.UPDATE_CONFIG:
       return {
         ...state,
         config: { ...state.config, ...action.payload },
         error: null
       };
-      
+
     case ACTIONS.SET_MODELS:
       return {
         ...state,
         models: action.payload
       };
-      
+
     case ACTIONS.SET_LOADING:
       return {
         ...state,
         loading: action.payload
       };
-      
+
     case ACTIONS.SET_ERROR:
       return {
         ...state,
         error: action.payload,
         loading: false
       };
-      
+
     case ACTIONS.SET_TEST_RESULT:
       return {
         ...state,
         testResult: action.payload
       };
-      
+
     case ACTIONS.ADD_TO_HISTORY:
       return {
         ...state,
@@ -147,7 +147,7 @@ function aiConfigReducer(state, action) {
           ...state.modelHistory.slice(0, 49) // Keep last 50 entries
         ]
       };
-      
+
     case ACTIONS.UPDATE_PERFORMANCE: {
       const newStats = new Map(state.modelStats);
       newStats.set(action.payload.modelId, {
@@ -159,26 +159,26 @@ function aiConfigReducer(state, action) {
         modelStats: newStats
       };
     }
-      
+
     case ACTIONS.RESET_ERROR:
       return {
         ...state,
         error: null
       };
-      
+
     case ACTIONS.SET_CONFLICT:
       return {
         ...state,
         conflictState: action.payload
       };
-      
+
     case ACTIONS.RESOLVE_CONFLICT:
       return {
         ...state,
         conflictState: null,
         config: action.payload.resolved_config || state.config
       };
-      
+
     default:
       return state;
   }
@@ -188,7 +188,7 @@ function aiConfigReducer(state, action) {
 export function AIConfigProvider({ children }) {
   const [state, dispatch] = useReducer(aiConfigReducer, initialState);
   const queryClient = useQueryClient();
-  
+
   // Query for fetching configuration
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['ai-config'],
@@ -203,26 +203,26 @@ export function AIConfigProvider({ children }) {
       console.error('Failed to load AI configuration:', error);
     }
   });
-  
+
   // Mutation for updating configuration
   const updateMutation = useMutation({
     mutationFn: aiConfigAPI.updateConfig,
     onMutate: async (updates) => {
       // Cancel outgoing queries
       await queryClient.cancelQueries(['ai-config']);
-      
+
       // Optimistic update
       dispatch({ type: ACTIONS.UPDATE_CONFIG, payload: updates });
-      
+
       // Return context for rollback
       return { previousConfig: state.config };
     },
     onError: (error, updates, context) => {
       // Rollback on error
       if (context?.previousConfig) {
-        dispatch({ 
-          type: ACTIONS.SET_CONFIG, 
-          payload: { current: context.previousConfig } 
+        dispatch({
+          type: ACTIONS.SET_CONFIG,
+          payload: { current: context.previousConfig }
         });
       }
       dispatch({ type: ACTIONS.SET_ERROR, payload: error.message });
@@ -234,26 +234,26 @@ export function AIConfigProvider({ children }) {
       toast.success('Configuration updated successfully');
     }
   });
-  
+
   // Update configuration
   const updateConfig = useCallback(async (updates) => {
     return updateMutation.mutateAsync(updates);
   }, [updateMutation]);
-  
+
   // Test configuration
   const testConfig = useCallback(async (config = null) => {
     dispatch({ type: ACTIONS.SET_TEST_RESULT, payload: null });
-    
+
     try {
       const result = await aiConfigAPI.testConfig(config);
       dispatch({ type: ACTIONS.SET_TEST_RESULT, payload: result });
-      
+
       if (result.success) {
         toast.success('Configuration test successful');
       } else {
         toast.error(result.message || 'Configuration test failed');
       }
-      
+
       return result;
     } catch (error) {
       const errorResult = {
@@ -266,7 +266,7 @@ export function AIConfigProvider({ children }) {
       return errorResult;
     }
   }, []);
-  
+
   // Get model info
   const getModelInfo = useCallback(async (modelId) => {
     try {
@@ -276,31 +276,31 @@ export function AIConfigProvider({ children }) {
       return null;
     }
   }, []);
-  
+
   // Apply preset
   const applyPreset = useCallback(async (presetId) => {
     try {
       const presets = await aiConfigAPI.getPresets();
       const preset = presets.find(p => p.id === presetId);
-      
+
       if (!preset) {
         throw new Error(`Preset '${presetId}' not found`);
       }
-      
+
       await updateConfig(preset.config);
       toast.success(`Applied '${preset.name}' preset`);
-      
+
     } catch (error) {
       console.error('Failed to apply preset:', error);
       toast.error('Failed to apply preset');
     }
   }, [updateConfig]);
-  
+
   // Enhanced WebSocket integration
   useEffect(() => {
     const handleWebSocketMessage = (event) => {
       const message = JSON.parse(event.data);
-      
+
       switch (message.type) {
         case 'config_update':
         case 'config_batch_update':
@@ -308,42 +308,42 @@ export function AIConfigProvider({ children }) {
           queryClient.invalidateQueries(['ai-config']);
           toast.success('Configuration updated');
           break;
-          
+
         case 'config_conflict_detected':
           dispatch({ type: ACTIONS.SET_CONFLICT, payload: message.data });
           toast.warning('Configuration conflict detected');
           break;
-          
+
         case 'config_conflict_resolved':
           dispatch({ type: ACTIONS.RESOLVE_CONFLICT, payload: message.data });
           toast.success('Configuration conflict resolved');
           break;
-          
+
         default:
           // Handle other WebSocket messages
           break;
       }
     };
-    
+
     // Create WebSocket connection
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/config`;
-    
+
     let ws = null;
-    
+
     try {
       ws = new WebSocket(wsUrl);
-      
+
       ws.onmessage = handleWebSocketMessage;
-      
+
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
       };
-      
+
       ws.onclose = () => {
         console.log('WebSocket connection closed');
       };
-      
+
       return () => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.close();
@@ -353,18 +353,18 @@ export function AIConfigProvider({ children }) {
       console.error('Failed to create WebSocket connection:', error);
     }
   }, [queryClient]);
-  
+
   // Enhanced methods
   const setModel = useCallback(async (modelId, options = {}) => {
     try {
       dispatch({ type: ACTIONS.SET_LOADING, payload: true });
-      
+
       // Find model info
       const model = state.models.find(m => m.modelId === modelId);
       if (!model) {
         throw new Error(`Model '${modelId}' not found`);
       }
-      
+
       // Add to history
       dispatch({
         type: ACTIONS.ADD_TO_HISTORY,
@@ -374,14 +374,14 @@ export function AIConfigProvider({ children }) {
           context: options.context || 'manual_selection'
         }
       });
-      
+
       // Update configuration
       await updateConfig({
         model_id: modelId,
         provider: model.provider,
         ...options.config
       });
-      
+
       return true;
     } catch (error) {
       console.error('Failed to set model:', error);
@@ -391,7 +391,7 @@ export function AIConfigProvider({ children }) {
       dispatch({ type: ACTIONS.SET_LOADING, payload: false });
     }
   }, [state.models, updateConfig]);
-  
+
   const trackPerformance = useCallback((modelId, stats) => {
     dispatch({
       type: ACTIONS.UPDATE_PERFORMANCE,
@@ -404,18 +404,18 @@ export function AIConfigProvider({ children }) {
       }
     });
   }, []);
-  
+
   const resetError = useCallback(() => {
     dispatch({ type: ACTIONS.RESET_ERROR });
   }, []);
-  
+
   const resolveConflict = useCallback(async (strategy, proposedConfig) => {
     try {
       const result = await apiClient.post(`${API_BASE}/resolve-conflict`, {
         proposed_config: proposedConfig,
         conflict_strategy: strategy
       });
-      
+
       dispatch({ type: ACTIONS.RESOLVE_CONFLICT, payload: result.data });
       return result.data;
     } catch (error) {
@@ -423,7 +423,7 @@ export function AIConfigProvider({ children }) {
       throw error;
     }
   }, []);
-  
+
   const batchUpdate = useCallback(async (updates) => {
     try {
       const result = await apiClient.put(`${API_BASE}/batch`, updates);
@@ -434,7 +434,7 @@ export function AIConfigProvider({ children }) {
       throw error;
     }
   }, []);
-  
+
   // Context value
   const contextValue = {
     // State
@@ -448,7 +448,7 @@ export function AIConfigProvider({ children }) {
     modelStats: state.modelStats,
     modelHistory: state.modelHistory,
     conflictState: state.conflictState,
-    
+
     // Actions
     updateConfig,
     testConfig,
@@ -460,14 +460,14 @@ export function AIConfigProvider({ children }) {
     resetError,
     resolveConflict,
     batchUpdate,
-    
+
     // Computed values
     currentModel: state.config?.model_id,
     currentProvider: state.config?.provider,
     isReasoningEnabled: state.config?.enable_reasoning || false,
     isThinkingEnabled: state.config?.claude_extended_thinking || false
   };
-  
+
   return (
     <AIConfigContext.Provider value={contextValue}>
       {children}
@@ -478,46 +478,35 @@ export function AIConfigProvider({ children }) {
 // Hook to use AI configuration
 export function useAIConfig() {
   const context = useContext(AIConfigContext);
-  
+
   if (!context) {
     throw new Error('useAIConfig must be used within AIConfigProvider');
   }
-  
+
   return context;
 }
 
 // Convenience hooks for specific features
 
 export function useModelSelection() {
-  const { config, models, updateConfig, currentModel, currentProvider } = useAIConfig();
-  
+  // Leverage the higher-level `setModel` helper so that model changes
+  // are always recorded in *modelHistory* via ADD_TO_HISTORY.
+  const { config, models, currentModel, currentProvider, setModel } = useAIConfig();
+
   const selectModel = useCallback(async (modelId) => {
-    // Find model info
-    const model = models.find(m => m.model_id === modelId);
-    if (!model) {
-      throw new Error(`Model '${modelId}' not found`);
-    }
-    
-    // Update configuration
-    await updateConfig({
-      model_id: modelId,
-      provider: model.provider
-    });
-  }, [models, updateConfig]);
-  
+    // `setModel` handles validation, history tracking, and updateConfig internally
+    await setModel(modelId);
+  }, [setModel]);
+
   const selectProvider = useCallback(async (provider) => {
-    // Find first available model for provider
+    // Choose the first available model for the requested provider
     const model = models.find(m => m.provider === provider);
     if (!model) {
       throw new Error(`No models available for provider '${provider}'`);
     }
-    
-    await updateConfig({
-      provider: provider,
-      model_id: model.model_id
-    });
-  }, [models, updateConfig]);
-  
+    await setModel(model.model_id);
+  }, [models, setModel]);
+
   return {
     currentModel,
     currentProvider,
@@ -529,14 +518,14 @@ export function useModelSelection() {
 
 export function useGenerationParams() {
   const { config, updateConfig } = useAIConfig();
-  
+
   const updateParams = useCallback(async (params) => {
     const allowedParams = [
-      'temperature', 'max_tokens', 'top_p', 
+      'temperature', 'max_tokens', 'top_p',
       'frequency_penalty', 'presence_penalty',
       'stop_sequences', 'seed'
     ];
-    
+
     // Filter to allowed parameters
     const filtered = Object.keys(params)
       .filter(key => allowedParams.includes(key))
@@ -544,12 +533,12 @@ export function useGenerationParams() {
         obj[key] = params[key];
         return obj;
       }, {});
-    
+
     if (Object.keys(filtered).length > 0) {
       await updateConfig(filtered);
     }
   }, [updateConfig]);
-  
+
   return {
     temperature: config?.temperature,
     maxTokens: config?.max_tokens,
@@ -562,10 +551,10 @@ export function useGenerationParams() {
 
 export function useReasoningConfig() {
   const { config, updateConfig, currentProvider } = useAIConfig();
-  
+
   const isClaudeProvider = currentProvider === 'anthropic';
   const isAzureOrOpenAI = ['azure', 'openai'].includes(currentProvider);
-  
+
   const updateReasoningConfig = useCallback(async (updates) => {
     const reasoningParams = [
       'enable_reasoning', 'reasoning_effort',
@@ -574,7 +563,7 @@ export function useReasoningConfig() {
       'claude_adaptive_thinking_budget', 'default_thinking_mode',
       'default_thinking_depth'
     ];
-    
+
     // Filter to reasoning parameters
     const filtered = Object.keys(updates)
       .filter(key => reasoningParams.includes(key))
@@ -582,28 +571,28 @@ export function useReasoningConfig() {
         obj[key] = updates[key];
         return obj;
       }, {});
-    
+
     if (Object.keys(filtered).length > 0) {
       await updateConfig(filtered);
     }
   }, [updateConfig]);
-  
+
   return {
     // General reasoning
     enableReasoning: config?.enable_reasoning,
     reasoningEffort: config?.reasoning_effort,
-    
+
     // Claude thinking
     claudeExtendedThinking: config?.claude_extended_thinking,
     claudeThinkingMode: config?.claude_thinking_mode,
     claudeThinkingBudget: config?.claude_thinking_budget_tokens,
-    
+
     // Provider flags
     isClaudeProvider,
     isAzureOrOpenAI,
     supportsReasoning: isAzureOrOpenAI && config?.use_responses_api,
     supportsThinking: isClaudeProvider,
-    
+
     // Update function
     updateReasoningConfig
   };

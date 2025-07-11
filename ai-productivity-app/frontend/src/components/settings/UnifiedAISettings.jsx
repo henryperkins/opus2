@@ -138,8 +138,8 @@ export default function UnifiedAISettings() {
       {/* Test Result */}
       {testResult && (
         <div className={`p-4 rounded-lg border ${
-          testResult.success 
-            ? 'bg-green-50 border-green-200' 
+          testResult.success
+            ? 'bg-green-50 border-green-200'
             : 'bg-red-50 border-red-200'
         }`}>
           <div className="flex items-start">
@@ -207,7 +207,7 @@ export default function UnifiedAISettings() {
                 // Some older backend payloads don’t include the *provider* field
                 // on each model entry.  Treat those models as belonging to the
                 // currently selected provider so the list doesn’t render empty.
-                .filter(m => !m.provider || m.provider === config?.provider)
+                .filter(m => m.provider === config?.provider)
                 .map(model => (
                   <option key={model.model_id} value={model.model_id}>
                     {/* Fallback to model_id when no display_name provided */}
