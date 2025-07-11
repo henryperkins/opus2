@@ -256,6 +256,8 @@ class Settings(BaseSettings):
 
     azure_openai_api_key: Optional[str] = None
     azure_openai_endpoint: Optional[str] = None
+    azure_openai_chat_deployment: Optional[str] = None
+    azure_openai_embeddings_deployment: Optional[str] = None
 
     # Anthropic API credentials – required when ``llm_provider`` is set to
     # "anthropic".  Similar to Azure OpenAI, we keep this optional for

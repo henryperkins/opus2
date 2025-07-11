@@ -75,11 +75,30 @@ check: ## Run pre-commit checks
 db-reset: ## Reset the database
 	@echo "$(GREEN)Resetting database...$(NC)"
 	rm -f data/app.db
-	docker compose exec backend python -c "from app.database import init_db; init_db()"
+	docker compose exec backend python3 -c "from app.database import init_db; init_db()"
 
 db-shell: ## Open database shell
 	@echo "$(GREEN)Opening database shell...$(NC)"
 	sqlite3 data/app.db
+
+# Model management commands
+models-update: ## Update AI models with latest offerings
+	@echo "$(GREEN)Updating AI models...$(NC)"
+	@if docker compose ps | grep -q backend; then \
+		docker compose exec backend python3 -m app.cli.update_models; \
+	else \
+		echo "$(YELLOW)Docker not running, trying local environment...$(NC)"; \
+		cd backend && python3 -m app.cli.update_models; \
+	fi
+
+models-seed: ## Seed database with AI models (one-time setup)
+	@echo "$(GREEN)Seeding AI models...$(NC)"
+	@if docker compose ps | grep -q backend; then \
+		docker compose exec backend python3 -m app.cli.seed_models; \
+	else \
+		echo "$(YELLOW)Docker not running, trying local environment...$(NC)"; \
+		cd backend && python3 -m app.cli.seed_models; \
+	fi
 
 # Docker commands
 build: ## Build Docker images

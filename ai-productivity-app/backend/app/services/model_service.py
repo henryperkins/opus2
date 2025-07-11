@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any, Optional, List, Set, Tuple
 from datetime import datetime, timedelta
 
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -84,7 +84,8 @@ class ModelService:
             del self._cache[cache_key]
         
         try:
-            model = self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
+            stmt = select(ModelConfiguration).filter_by(model_id=model_id)
+            model = self.db.execute(stmt).scalar_one_or_none()
             if model and model.capabilities:
                 capabilities = model.capabilities
                 # Store with timestamp
@@ -106,7 +107,8 @@ class ModelService:
             del self._cache[cache_key]
         
         try:
-            model = self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
+            stmt = select(ModelConfiguration).filter_by(model_id=model_id)
+            model = self.db.execute(stmt).scalar_one_or_none()
             if model and model.model_metadata:
                 metadata = model.model_metadata
                 self._cache[cache_key] = (metadata, datetime.utcnow())
@@ -154,6 +156,9 @@ class ModelService:
         "gpt-4o",
         "gpt-4o-mini",
         "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4.1-nano",
+        "gpt-4.5",
         "computer-use-preview",
         "o3",
         "o3-mini",
@@ -210,7 +215,7 @@ class ModelService:
             return capabilities.get('supports_vision', False)
         
         # Pattern-based fallback
-        vision_patterns = ['gpt-4o', 'claude']
+        vision_patterns = ['gpt-4o', 'gpt-4.1', 'gpt-4.5', 'claude', 'o3', 'o4']
         return any(pattern in model_id.lower() for pattern in vision_patterns)
     
     def supports_json_mode(self, model_id: str) -> bool:
@@ -279,7 +284,10 @@ class ModelService:
             return capabilities.get('max_context_window', 8192)
         
         # Modern models typically have larger context windows
-        if any(pattern in model_id.lower() for pattern in ['gpt-4', 'claude', 'o1', 'o3']):
+        if any(pattern in model_id.lower() for pattern in ['gpt-4', 'claude', 'o1', 'o3', 'o4']):
+            # GPT-4.1 series and newer have 1M+ context
+            if any(pattern in model_id.lower() for pattern in ['gpt-4.1', 'gpt-4.5', 'o3', 'o4']):
+                return 1000000 if 'gpt-4.1' in model_id.lower() else 200000
             return 128000
         
         return 8192  # Conservative default
@@ -287,7 +295,8 @@ class ModelService:
     def get_default_parameters(self, model_id: str) -> Dict[str, Any]:
         """Get default parameters for model."""
         try:
-            model = self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
+            stmt = select(ModelConfiguration).filter_by(model_id=model_id)
+            model = self.db.execute(stmt).scalar_one_or_none()
             if model and model.default_params:
                 return model.default_params
         except SQLAlchemyError as e:
@@ -333,15 +342,15 @@ class ModelService:
     def get_models_by_capability(self, capability: str, provider: Optional[str] = None) -> List[str]:
         """Get list of model IDs that support a specific capability."""
         try:
-            query = self.db.query(ModelConfiguration).filter(
+            stmt = select(ModelConfiguration).filter(
                 ModelConfiguration.is_available == True,
                 ModelConfiguration.is_deprecated == False
             )
             
             if provider:
-                query = query.filter(ModelConfiguration.provider == provider)
+                stmt = stmt.filter(ModelConfiguration.provider == provider)
             
-            models = query.all()
+            models = self.db.execute(stmt).scalars().all()
             
             matching_models = []
             for model in models:
@@ -357,7 +366,8 @@ class ModelService:
     def get_cost_info(self, model_id: str) -> Optional[Dict[str, float]]:
         """Get cost information for model."""
         try:
-            model = self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
+            stmt = select(ModelConfiguration).filter_by(model_id=model_id)
+            model = self.db.execute(stmt).scalar_one_or_none()
             if model:
                 return {
                     'input_cost_per_1k': model.cost_input_per_1k,

@@ -177,7 +177,7 @@ def _prepare_tools_for_responses(tools: List[Dict[str, Any]]) -> List[Dict[str, 
 
     into the preview format used by Azure Responses API (2025-04-01):
 
-        {"name": "…", "description": "…", "parameters": …}
+        {"type": "function", "function": {"name": "…", "description": "…", "parameters": …}}
 
     Built-in tools (e.g. ``{"type": "code_interpreter"}``) are already
     compatible and therefore copied verbatim – except that the obsolete
@@ -193,12 +193,16 @@ def _prepare_tools_for_responses(tools: List[Dict[str, Any]]) -> List[Dict[str, 
             flat.append({k: v for k, v in tool.items() if k != "strict"})
             continue
 
+        # Keep the type field as required by Azure Responses API
         fn = tool["function"]
         flat.append(
             {
-                "name": fn["name"],
-                "description": fn.get("description", ""),
-                "parameters": fn.get("parameters", {}),
+                "type": "function",
+                "function": {
+                    "name": fn["name"],
+                    "description": fn.get("description", ""),
+                    "parameters": fn.get("parameters", {}),
+                }
             }
         )
 

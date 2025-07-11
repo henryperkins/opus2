@@ -718,9 +718,9 @@ async def _process_knowledge_file(
     
     session = SessionLocal()
     try:
-        doc: KnowledgeDocument | None = (
-            session.query(KnowledgeDocument).filter_by(id=doc_id).first()
-        )
+        from sqlalchemy import select
+        stmt = select(KnowledgeDocument).filter_by(id=doc_id)
+        doc: KnowledgeDocument | None = (await session.execute(stmt)).scalar_one_or_none()
         if not doc:
             logger.warning("KnowledgeDocument %s vanished before processing", doc_id)
             return
@@ -784,7 +784,9 @@ async def upload_knowledge_files(
     """Upload knowledge documents for RAG access."""
     
     # Check project exists and user has access
-    project = db.query(Project).filter_by(id=project_id).first()
+    from sqlalchemy import select
+    stmt = select(Project).filter_by(id=project_id)
+    project = db.execute(stmt).scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
@@ -829,10 +831,12 @@ async def upload_knowledge_files(
                 content_hash_hex = content_hash.hexdigest()
                 
                 # Check for duplicates in knowledge documents
-                existing = db.query(KnowledgeDocument).filter_by(
+                from sqlalchemy import select
+                stmt = select(KnowledgeDocument).filter_by(
                     project_id=project_id,
                     title=upload.filename or f"upload_{content_hash_hex[:8]}"
-                ).first()
+                )
+                existing = db.execute(stmt).scalar_one_or_none()
                 
                 if existing:
                     results.append({

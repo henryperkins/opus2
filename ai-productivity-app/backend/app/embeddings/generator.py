@@ -219,7 +219,15 @@ class EmbeddingGenerator:
         if ":" in model:
             self.deployment_name, self.model_family = model.split(":", 1)
         else:
-            self.deployment_name = self.model_family = model
+            # For Azure, prefer deployment name from config if available
+            from app.config import settings
+            if (self._get_current_provider() == "azure" and 
+                hasattr(settings, 'azure_openai_embeddings_deployment') and
+                settings.azure_openai_embeddings_deployment):
+                self.deployment_name = settings.azure_openai_embeddings_deployment
+                self.model_family = model
+            else:
+                self.deployment_name = self.model_family = model
 
         self.dimensions = dimensions
         self.encoding_format: Literal["float", "base64"] = encoding_format
