@@ -33,16 +33,34 @@ class ConfigurationErrorMiddleware(BaseHTTPMiddleware):
                 try:
                     error_data = json.loads(body.decode())
                     
+                    # Log the original error for debugging
+                    logger.debug(f"Original error data: {error_data}")
+                    
                     # Enhance error messages for common configuration issues
                     if response.status_code == 422:
-                        enhanced_detail = self._enhance_validation_error(error_data.get("detail", ""))
-                        error_data["detail"] = enhanced_detail
-                        error_data["error_type"] = "validation_error"
-                        error_data["suggestions"] = self._get_error_suggestions(enhanced_detail)
+                        original_detail = error_data.get("detail", "")
+                        enhanced_detail = self._enhance_validation_error(original_detail)
+                        suggestions = self._get_error_suggestions(enhanced_detail)
+                        
+                        # If we have meaningful suggestions, use them
+                        if suggestions:
+                            error_data["detail"] = enhanced_detail
+                            error_data["error_type"] = "validation_error"
+                            error_data["suggestions"] = suggestions
+                        else:
+                            # Fallback for generic errors
+                            error_data["detail"] = "Configuration validation failed. Please check that all required fields are provided and valid."
+                            error_data["error_type"] = "validation_error"
+                            error_data["suggestions"] = [
+                                "Ensure the selected preset is compatible with your provider",
+                                "Check that all required environment variables are configured",
+                                "Try using a different preset or manually configuring settings"
+                            ]
                         
                         return JSONResponse(
                             status_code=422,
-                            content=error_data
+                            content=error_data,
+                            headers=response.headers
                         )
                     
                     elif response.status_code == 400:
@@ -56,12 +74,16 @@ class ConfigurationErrorMiddleware(BaseHTTPMiddleware):
                         
                         return JSONResponse(
                             status_code=400,
-                            content=error_data
+                            content=error_data,
+                            headers=response.headers
                         )
+                    
+                    # For other error codes, just pass through with the original body
+                    return Response(content=body, status_code=response.status_code, headers=response.headers)
                     
                 except json.JSONDecodeError:
                     # If we can't parse the error, return original response
-                    return Response(content=body, status_code=response.status_code)
+                    return Response(content=body, status_code=response.status_code, headers=response.headers)
             
             return response
             

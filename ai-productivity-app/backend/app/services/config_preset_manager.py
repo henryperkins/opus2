@@ -26,12 +26,14 @@ class ConfigPresetManager:
             "description": "Good balance of quality and speed",
             "provider_configs": {
                 "openai": {
+                    "provider": "openai",
                     "model_id": "gpt-4o-mini",
                     "temperature": 0.7,
                     "max_tokens": 2048,
                     "top_p": 0.95,
                 },
                 "azure": {
+                    "provider": "azure",
                     "model_id": "gpt-4.1",
                     "temperature": 0.7,
                     "max_tokens": 2048,
@@ -39,6 +41,7 @@ class ConfigPresetManager:
                     "use_responses_api": True,
                 },
                 "anthropic": {
+                    "provider": "anthropic",
                     "model_id": "claude-3-5-sonnet-20241022",
                     "temperature": 0.7,
                     "max_tokens": 2048,
@@ -54,6 +57,7 @@ class ConfigPresetManager:
             "description": "More creative and varied responses",
             "provider_configs": {
                 "openai": {
+                    "provider": "openai",
                     "model_id": "gpt-4o",
                     "temperature": 1.2,
                     "max_tokens": 3000,
@@ -62,6 +66,7 @@ class ConfigPresetManager:
                     "presence_penalty": 0.2,
                 },
                 "azure": {
+                    "provider": "azure",
                     "model_id": "gpt-4.1",
                     "temperature": 1.2,
                     "max_tokens": 3000,
@@ -71,6 +76,7 @@ class ConfigPresetManager:
                     "use_responses_api": True,
                 },
                 "anthropic": {
+                    "provider": "anthropic",
                     "model_id": "claude-opus-4-20250514",
                     "temperature": 1.2,
                     "max_tokens": 3000,
@@ -87,12 +93,14 @@ class ConfigPresetManager:
             "description": "Deterministic responses",
             "provider_configs": {
                 "openai": {
+                    "provider": "openai",
                     "model_id": "gpt-4o",
                     "temperature": 0.3,
                     "max_tokens": 2048,
                     "top_p": 0.9,
                 },
                 "azure": {
+                    "provider": "azure",
                     "model_id": "gpt-4.1",
                     "temperature": 0.3,
                     "max_tokens": 2048,
@@ -100,6 +108,7 @@ class ConfigPresetManager:
                     "use_responses_api": True,
                 },
                 "anthropic": {
+                    "provider": "anthropic",
                     "model_id": "claude-3-5-sonnet-20241022",
                     "temperature": 0.3,
                     "max_tokens": 2048,
@@ -115,16 +124,19 @@ class ConfigPresetManager:
             "description": "Optimized for quick responses",
             "provider_configs": {
                 "openai": {
+                    "provider": "openai",
                     "model_id": "gpt-4o-mini",
                     "temperature": 0.7,
                     "max_tokens": 1024,
                 },
                 "azure": {
+                    "provider": "azure",
                     "model_id": "gpt-4.1-mini",
                     "temperature": 0.7,
                     "max_tokens": 1024,
                 },
                 "anthropic": {
+                    "provider": "anthropic",
                     "model_id": "claude-3-5-sonnet-20241022",
                     "temperature": 0.7,
                     "max_tokens": 1024,
@@ -138,6 +150,7 @@ class ConfigPresetManager:
             "description": "Maximum capability for complex tasks",
             "provider_configs": {
                 "openai": {
+                    "provider": "openai",
                     "model_id": "gpt-4o",
                     "temperature": 0.7,
                     "max_tokens": 4096,
@@ -145,6 +158,7 @@ class ConfigPresetManager:
                     "reasoning_effort": "high",
                 },
                 "azure": {
+                    "provider": "azure",
                     "model_id": "o3",
                     "temperature": 1.0,  # Reasoning models require temperature=1.0
                     "max_tokens": 4096,
@@ -153,6 +167,7 @@ class ConfigPresetManager:
                     "use_responses_api": True,
                 },
                 "anthropic": {
+                    "provider": "anthropic",
                     "model_id": "claude-opus-4-20250514",
                     "temperature": 0.7,
                     "max_tokens": 4096,
@@ -178,12 +193,19 @@ class ConfigPresetManager:
         for preset in self.DEFAULT_PRESETS:
             # Return a simplified version for the frontend
             # The actual provider-specific config will be applied when the preset is selected
-            config = preset["provider_configs"].get("openai", {})
+            config = preset["provider_configs"].get("openai", {}).copy()
+            
+            # The provider should already be in the config now
+            # But double-check just in case
+            if "provider" not in config:
+                logger.warning(f"Provider missing in preset {preset['id']}, adding default")
+                config["provider"] = "openai"
+            
             presets.append({
                 "id": preset["id"],
                 "name": preset["name"],
                 "description": preset["description"],
-                "config": config  # Generic config for display
+                "config": config  # Config with provider included
             })
         return presets
     
@@ -245,7 +267,7 @@ class ConfigPresetManager:
                     # Remove model_id to avoid validation errors
                     provider_config.pop("model_id", None)
         
-        # Add provider to the config
+        # Ensure provider is in the config
         provider_config["provider"] = provider
         
         return provider_config

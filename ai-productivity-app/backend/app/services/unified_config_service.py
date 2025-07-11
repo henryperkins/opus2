@@ -155,6 +155,23 @@ class UnifiedConfigService:
         """
         current = self.get_current_config()
         
+        # Log the incoming update for debugging
+        logger.info(f"Updating config with: {updates}")
+        
+        # Ensure provider is included if model_id is being updated
+        if "model_id" in updates or "modelId" in updates:
+            model_id = updates.get("model_id") or updates.get("modelId")
+            if model_id and "provider" not in updates:
+                # Try to determine provider from model_id
+                model_info = self.get_model_info(model_id)
+                if model_info:
+                    updates["provider"] = model_info.provider
+                    logger.info(f"Auto-detected provider {model_info.provider} for model {model_id}")
+                else:
+                    # If we can't determine provider, keep current one
+                    updates["provider"] = current.provider
+                    logger.warning(f"Could not detect provider for model {model_id}, keeping current: {current.provider}")
+        
         # Use validation service to normalize and validate the update
         from app.schemas.generation import ConfigUpdate
         
