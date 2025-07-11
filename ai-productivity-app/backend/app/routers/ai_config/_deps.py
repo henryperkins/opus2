@@ -6,12 +6,19 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_async_db
+from app.database import AsyncSessionLocal
 from app.services.unified_config_service_async import UnifiedConfigServiceAsync
 from app.dependencies import CurrentUserRequired, AdminRequired
 from app.models.user import User
 
+
 # async DB session ---------------------------------------------------------- #
+async def get_async_db():
+    """Provide async database session."""
+    async with AsyncSessionLocal() as session:
+        yield session
+
+
 DBSession = Annotated[AsyncSession, Depends(get_async_db)]
 
 
