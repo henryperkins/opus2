@@ -5,7 +5,33 @@ import os
 import sys
 
 # Detect test environment early so helpers can reference it
+#
+# Detect whether we are running inside the test-suite early because several
+# configuration branches depend on it.  When we are *not* under ``pytest``
+# and no dedicated DATABASE_URL has been supplied we assume a *local
+# development* context and transparently fall back to an **SQLite** database
+# stored inside the project’s *data/* directory.  This removes the need to
+# export DATABASE_URL when experimenting locally while still allowing
+# production deployments to provide their explicit (PostgreSQL) connection
+# string via the environment variable.  The fallback is never activated
+# during automated tests so that the existing in-memory database mechanisms
+# remain untouched.
+#
 _IN_TEST = "pytest" in sys.modules or os.getenv("APP_CI_SANDBOX") == "1"
+
+# ---------------------------------------------------------------------------
+# Local development – automatic SQLite fallback
+# ---------------------------------------------------------------------------
+if os.getenv("DATABASE_URL") is None and not _IN_TEST:
+    from pathlib import Path
+
+    _repo_root = Path(__file__).resolve().parents[2]  # …/ai-productivity-app
+    _default_db_path = _repo_root / "data" / "app.db"
+    # Ensure the parent directory exists to avoid *OperationalError: unable to
+    # open database file* on first run.
+    _default_db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    os.environ["DATABASE_URL"] = f"sqlite:///{_default_db_path}"
 from pathlib import Path
 from functools import lru_cache
 from typing import Optional, ClassVar
