@@ -142,7 +142,7 @@ function aiConfigReducer(state, action) {
       // -----------------------------------------------------------------
       if (!providerDict || Object.keys(providerDict).length === 0) {
         const fallbackProvider = currentCfg.provider || 'openai';
-        const fallbackModelId = currentCfg.model_id || 'gpt-4o';
+        const fallbackModelId = currentCfg.model_id || 'gpt-4o-mini';
 
         // Re-use the (possibly empty) model list if it already contains the
         // current model, otherwise add a minimal stub so that the select has
