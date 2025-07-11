@@ -87,6 +87,7 @@ def get_azure_client() -> AsyncAzureOpenAI:  # pragma: no cover – trivial
     api_version = getattr(settings, "azure_openai_api_version", None) or "latest"
 
     kwargs: Dict[str, Any] = {
+        "api_version": api_version,
         "base_url": base_url,
         "default_query": {"api-version": api_version},
     }
