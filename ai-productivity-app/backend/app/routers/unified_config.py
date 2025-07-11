@@ -79,6 +79,25 @@ async def get_configuration(
             ]:
                 if getattr(caps, cap_field, False):
                     providers[provider_key]["capabilities"][cap_field] = True
+        
+        # If no models are in the database, providers will be empty.
+        # Fallback to the default provider from settings.
+        if not providers:
+            default_provider = current_config.provider.lower()
+            default_model = {
+                "model_id": current_config.model_id,
+                "display_name": current_config.model_id,
+                "provider": default_provider,
+                "capabilities": {},
+            }
+            providers[default_provider] = {
+                "display_name": default_provider.capitalize(),
+                "models": [default_model],
+                "capabilities": {},
+            }
+            if not available_models:
+                from app.schemas.generation import ModelInfo
+                available_models = [ModelInfo(**default_model)]
 
         return ConfigResponse(
             current=current_config,
