@@ -95,17 +95,21 @@ class UnifiedConfigService:
         self, provider: Optional[str] = None, include_deprecated: bool = False
     ) -> List[ModelInfo]:
         """Get all available models from database."""
-        # Load from database only
-        query = self.db.query(ModelConfiguration)
-        if provider:
-            query = query.filter_by(provider=provider)
-        if not include_deprecated:
-            query = query.filter_by(is_deprecated=False)
+        try:
+            query = self.db.query(ModelConfiguration)
+            if provider:
+                query = query.filter_by(provider=provider)
+            if not include_deprecated:
+                query = query.filter_by(is_deprecated=False)
 
-        db_models = query.all()
-        models = [self._model_config_to_info(m) for m in db_models]
+            db_models = query.all()
+            models = [self._model_config_to_info(m) for m in db_models]
 
-        return sorted(models, key=lambda m: (m.provider, m.display_name))
+            return sorted(models, key=lambda m: (m.provider, m.display_name))
+
+        except Exception as e:  # pragma: no cover – DB might be unavailable
+            logger.warning("Failed to fetch available models, returning empty list: %s", e)
+            return []
 
     def initialize_defaults(self):
         """Initialize default configuration if none exists."""
@@ -282,7 +286,21 @@ class UnifiedConfigService:
             if datetime.utcnow() - self._cache_timestamp < timedelta(seconds=self.CACHE_TTL_SECONDS):
                 return self._config_cache
 
-        configs = self.db.query(RuntimeConfig).all()
+        # Attempt to load all runtime-config rows.  In development (or certain
+        # server-less preview) environments the database might be unavailable
+        # which would raise an exception here and – without extra handling –
+        # bubble up as **HTTP 500**.  Because the *ai-config* endpoint should
+        # gracefully degrade to built-in defaults when persistence is not
+        # reachable we guard the query with *try/except* and fall back to an
+        # **empty configuration**.  Any error details are logged for later
+        # inspection but will no longer break the public API.
+        try:
+            configs = self.db.query(RuntimeConfig).all()
+        except Exception as e:  # pragma: no cover – broad on purpose for DB issues
+            logger.warning(
+                "RuntimeConfig query failed – falling back to defaults: %s", e
+            )
+            configs = []
         result = {}
 
         for config in configs:
@@ -381,31 +399,50 @@ class UnifiedConfigService:
     def _get_default_config(self) -> UnifiedModelConfig:
         """Get default configuration from settings."""
         # Try to find a valid model from the database
+
         default_provider = settings.llm_provider
-        # Deprecated ``settings.llm_model`` removed; rely solely on *llm_default_model*
         default_model_id = settings.llm_default_model
 
-        # Verify the model exists in database
-        model_config = self.db.query(ModelConfiguration).filter_by(
-            model_id=default_model_id,
-            is_available=True,
-            is_deprecated=False
-        ).first()
+        # In normal operation we inspect the database to pick a sensible
+        # default model.  When the database connection is not available (for
+        # instance inside stateless preview deployments or when the initial
+        # migration did not run yet) we simply return a *static* fallback that
+        # matches the configured provider/model settings.
 
-        # If not found, try to find any available model for the provider
-        if not model_config:
-            model_config = self.db.query(ModelConfiguration).filter_by(
-                provider=default_provider,
-                is_available=True,
-                is_deprecated=False
-            ).first()
+        try:
+            model_config = (
+                self.db.query(ModelConfiguration)
+                .filter_by(
+                    model_id=default_model_id,
+                    is_available=True,
+                    is_deprecated=False,
+                )
+                .first()
+            )
 
-        # If still not found, get any available model
-        if not model_config:
-            model_config = self.db.query(ModelConfiguration).filter_by(
-                is_available=True,
-                is_deprecated=False
-            ).first()
+            # If not found, try to find any available model for the provider
+            if not model_config:
+                model_config = (
+                    self.db.query(ModelConfiguration)
+                    .filter_by(
+                        provider=default_provider,
+                        is_available=True,
+                        is_deprecated=False,
+                    )
+                    .first()
+                )
+
+            # If still not found, get any available model
+            if not model_config:
+                model_config = (
+                    self.db.query(ModelConfiguration)
+                    .filter_by(is_available=True, is_deprecated=False)
+                    .first()
+                )
+
+        except Exception as e:  # pragma: no cover – DB might be down
+            logger.warning("Could not inspect ModelConfiguration table: %s", e)
+            model_config = None
 
         # Use found model or fallback to settings
         if model_config:

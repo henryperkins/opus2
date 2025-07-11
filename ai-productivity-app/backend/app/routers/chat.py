@@ -318,8 +318,17 @@ async def delete_message(
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    # ‑- enforce ownership (only the author may delete for now)
-    if message.user_id != current_user.id:
+    # ------------------------------------------------------------------
+    # Authorisation rules
+    # ------------------------------------------------------------------
+    # 1. The *author* of the message may always delete their own content.
+    # 2. Users flagged as *admin* may delete **any** message.
+    # Any other request is rejected with HTTP 403.
+
+    is_author = message.user_id == current_user.id
+    is_admin = getattr(current_user, "is_admin", False)
+
+    if not (is_author or is_admin):
         raise HTTPException(
             status_code=403, detail="Not authorised to delete this message"
         )

@@ -1039,9 +1039,15 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     # ---------------------
                     _is_missing_deployment = isinstance(exc, NotFoundError)
 
-                    _is_tool_schema_error = isinstance(
-                        exc, BadRequestError
-                    ) and "tools[0].type" in str(exc)
+                    # Azure may complain about various missing *tools* fields.
+                    # Historically we checked only for "tools[0].type" but more
+                    # recent API versions tightened validation and also return
+                    # errors like "tools[0].name".  We treat both as schema
+                    # issues that trigger a transparent fallback.
+                    _is_tool_schema_error = (
+                        isinstance(exc, BadRequestError)
+                        and ("tools[0].type" in str(exc) or "tools[0].name" in str(exc))
+                    )
 
                     # Detect 400 responses complaining about unsupported
                     # sampling parameters (e.g. "Unsupported parameter:

@@ -165,11 +165,22 @@ class ModelConfiguration(Base):
     cost_input_per_1k = Column(Float, nullable=True, comment="Cost per 1K input tokens")
     cost_output_per_1k = Column(Float, nullable=True, comment="Cost per 1K output tokens")
 
-    # Performance tier (e.g. balanced, high_performance, economy).  Added to
-    # satisfy legacy tests that still pass the key.  The business logic
-    # migrated to *performance_tier* but we keep a dedicated column to remain
-    # backward-compatible with historical database rows and fixtures.
-    tier = Column(String(50), nullable=True, comment="Deprecated – use performance_tier instead")
+    # ------------------------------------------------------------------
+    # Compatibility shim for legacy **tier** column
+    # ------------------------------------------------------------------
+    # Some historical database migrations added a *tier* column to the
+    # ``model_configurations`` table while more recent revisions removed it
+    # (the information is now part of the JSON metadata).  To remain
+    # compatible with either state we expose a *computed* column property that
+    # always yields the string "balanced".  SQLAlchemy will embed the literal
+    # directly in SELECT statements, therefore it never references a physical
+    # column and cannot trigger *UndefinedColumn* errors.
+    # ------------------------------------------------------------------
+
+    from sqlalchemy import literal  # local import to avoid polluting module
+    from sqlalchemy.orm import column_property
+
+    tier = column_property(literal("balanced"))  # type: ignore  # noqa: A001
 
     # Performance characteristics
     avg_response_time_ms = Column(Integer, nullable=True, comment="Average response time in milliseconds")
