@@ -119,11 +119,13 @@ class ConfigValidationService:
             if is_reasoning:
                 # Reasoning models have specific constraints
                 if config.get("temperature") not in [None, 1.0]:
-                    errors.append(f"Reasoning model {model_id} does not support temperature control (must be 1.0)")
+                    errors.append(
+                        f"Model {model_id} does not support temperature control (must be 1.0)"
+                    )
                 if config.get("stream", False):
-                    errors.append(f"Reasoning model {model_id} does not support streaming")
+                    errors.append(f"Model {model_id} does not support streaming")
                 if config.get("tools"):
-                    errors.append(f"Reasoning model {model_id} does not support function calling")
+                    errors.append(f"Model {model_id} does not support function calling")
         else:
             # Use database capabilities
             capabilities = model_info.capabilities
@@ -240,13 +242,23 @@ class ConfigValidationService:
         """
         details = []
         
-        if hasattr(exception, '__cause__') and hasattr(exception.__cause__, 'errors'):
-            for error in exception.__cause__.errors():
+        # Pydantic v2 exposes `errors()` on the ValidationError instance
+        # itself.  Older patterns used *__cause__* which may be *None* now.
+        validation_error = None
+        if hasattr(exception, 'errors'):
+            validation_error = exception  # type: ignore[assignment]
+        elif hasattr(exception, '__cause__') and hasattr(exception.__cause__, 'errors'):
+            validation_error = exception.__cause__  # type: ignore[assignment]
+
+        if validation_error is not None:
+            for error in validation_error.errors():  # type: ignore[attr-defined]
                 field_path = ' -> '.join(str(loc) for loc in error['loc'])
-                details.append({
-                    'field': field_path,
-                    'type': error['type'],
-                    'message': error['msg']
-                })
+                details.append(
+                    {
+                        'field': field_path,
+                        'type': error['type'],
+                        'message': error['msg'],
+                    }
+                )
         
         return details

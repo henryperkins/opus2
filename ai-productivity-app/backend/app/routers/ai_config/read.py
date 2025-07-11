@@ -31,12 +31,26 @@ async def test_endpoint() -> dict:
     """Simple test endpoint without dependencies."""
     return {"status": "ok", "message": "test endpoint working"}
 
-@router.get("", summary="Current configuration")
-async def get_configuration() -> dict:
+@router.get("", response_model=ConfigResponse, summary="Current configuration")
+async def get_configuration(
+    current_user: CurrentUser,
+    service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
+) -> ConfigResponse:
+    """Return the current configuration snapshot.
+
+    The snapshot bundles:
+    • `current` – active UnifiedModelConfig (camelCase fields)
+    • `available_models` – full model catalogue
+    • `providers` – provider catalogue incl. aggregated capabilities
+    • `last_updated` – timestamp string
     """
-    Returns the active configuration plus provider/model catalogue.
-    """
-    return {"status": "temporary", "message": "endpoint temporarily simplified"}
+    cfg, models, providers = await service.get_configuration_snapshot()
+    return ConfigResponse(
+        current=cfg,
+        available_models=models,
+        providers=providers,
+        last_updated=datetime.utcnow(),
+    )
 
 
 @router.get("/defaults", response_model=dict, summary="Built-in defaults")
@@ -152,9 +166,14 @@ async def test_configuration(
     response_class=JSONResponse,
 )
 async def list_presets(
+    current_user: CurrentUser,
     service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
-):
-    """Return predefined configuration presets without Pydantic validation."""
+) -> JSONResponse:
+    """Return predefined configuration presets.
+
+    Authentication level mirrors the other catalogue endpoints (e.g. /models)
+    so only logged-in users can access the list.
+    """
     presets = await service.get_presets()
     return JSONResponse(content=presets)
 

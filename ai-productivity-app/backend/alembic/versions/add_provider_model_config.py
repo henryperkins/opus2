@@ -11,6 +11,12 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'add_provider_model_config'
+# Ensure this branch merges into the new unified head so future migrations
+# remain linear.
+# This seed migration started as an independent branch (no parent).  It is
+# merged into the main lineage by *015_merge_heads.py* which lists this
+# revision in its ``down_revision`` tuple.  Therefore **do not** declare a
+# parent here – otherwise Alembic detects a cyclic dependency.
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -28,40 +34,70 @@ def upgrade():
     # Insert default model configurations if they don't exist
     # This ensures all providers have proper model entries
     op.execute("""
-        INSERT INTO model_configurations (model_id, name, provider, model_family, is_available, capabilities, default_params)
+        INSERT INTO model_configurations (
+            model_id,
+            name,
+            provider,
+            model_family,
+            is_available,
+            is_deprecated,
+            capabilities,
+            default_params,
+            max_tokens,
+            context_window,
+            model_metadata
+        )
         VALUES 
         -- OpenAI models
-        ('gpt-4o', 'GPT-4 Omni', 'openai', 'gpt-4', true, 
+        ('gpt-4o', 'GPT-4 Omni', 'openai', 'gpt-4', true, false,
          '{"supports_functions": true, "supports_streaming": true, "supports_vision": true, "supports_json_mode": true, "max_context_window": 128000, "max_output_tokens": 4096}',
-         '{"temperature": 0.7, "top_p": 1.0}'),
-        ('gpt-4o-mini', 'GPT-4 Omni Mini', 'openai', 'gpt-4', true,
+         '{"temperature": 0.7, "top_p": 1.0}',
+         4096,
+         128000, '{}'),
+        ('gpt-4o-mini', 'GPT-4 Omni Mini', 'openai', 'gpt-4', true, false,
          '{"supports_functions": true, "supports_streaming": true, "supports_vision": true, "supports_json_mode": true, "max_context_window": 128000, "max_output_tokens": 4096}',
-         '{"temperature": 0.7, "top_p": 1.0}'),
+         '{"temperature": 0.7, "top_p": 1.0}',
+         4096,
+         128000, '{}'),
         
         -- Azure models
-        ('gpt-4.1', 'GPT-4.1 (Azure)', 'azure', 'gpt-4', true,
+        ('gpt-4.1', 'GPT-4.1 (Azure)', 'azure', 'gpt-4', true, false,
          '{"supports_functions": true, "supports_streaming": true, "supports_vision": true, "supports_responses_api": true, "max_context_window": 128000, "max_output_tokens": 4096}',
-         '{"temperature": 0.7, "top_p": 1.0}'),
-        ('gpt-4.1-mini', 'GPT-4.1 Mini (Azure)', 'azure', 'gpt-4', true,
+         '{"temperature": 0.7, "top_p": 1.0}',
+         4096,
+         128000, '{}'),
+        ('gpt-4.1-mini', 'GPT-4.1 Mini (Azure)', 'azure', 'gpt-4', true, false,
          '{"supports_functions": true, "supports_streaming": true, "supports_vision": true, "supports_responses_api": true, "max_context_window": 128000, "max_output_tokens": 4096}',
-         '{"temperature": 0.7, "top_p": 1.0}'),
-        ('o3', 'O3 Reasoning (Azure)', 'azure', 'reasoning', true,
+         '{"temperature": 0.7, "top_p": 1.0}',
+         4096,
+         128000, '{}'),
+        ('o3', 'O3 Reasoning (Azure)', 'azure', 'reasoning', true, false,
          '{"supports_functions": false, "supports_streaming": false, "supports_reasoning": true, "supports_responses_api": true, "max_context_window": 200000, "max_output_tokens": 65536}',
-         '{}'),
-        ('o3-mini', 'O3 Mini Reasoning (Azure)', 'azure', 'reasoning', true,
+         '{}',
+         65536,
+         200000, '{}'),
+        ('o3-mini', 'O3 Mini Reasoning (Azure)', 'azure', 'reasoning', true, false,
          '{"supports_functions": false, "supports_streaming": false, "supports_reasoning": true, "supports_responses_api": true, "max_context_window": 200000, "max_output_tokens": 65536}',
-         '{}'),
+         '{}',
+         65536,
+         200000, '{}'),
         
         -- Anthropic models
-        ('claude-3-5-sonnet-20241022', 'Claude 3.5 Sonnet', 'anthropic', 'claude', true,
+        ('claude-3-5-sonnet-20241022', 'Claude 3.5 Sonnet', 'anthropic', 'claude', true, false,
          '{"supports_functions": true, "supports_streaming": true, "supports_thinking": true, "max_context_window": 200000, "max_output_tokens": 4096}',
-         '{"temperature": 0.7, "top_p": 1.0}'),
-        ('claude-opus-4-20250514', 'Claude Opus 4', 'anthropic', 'claude', true,
+         '{"temperature": 0.7, "top_p": 1.0}',
+         4096,
+         200000, '{}'),
+        ('claude-opus-4-20250514', 'Claude Opus 4', 'anthropic', 'claude', true, false,
          '{"supports_functions": true, "supports_streaming": true, "supports_thinking": true, "max_context_window": 200000, "max_output_tokens": 4096}',
-         '{"temperature": 0.7, "top_p": 1.0}'),
-        ('claude-sonnet-4-20250514', 'Claude Sonnet 4', 'anthropic', 'claude', true,
+         '{"temperature": 0.7, "top_p": 1.0}',
+         4096,
+         200000, '{}'),
+        ('claude-sonnet-4-20250514', 'Claude Sonnet 4', 'anthropic', 'claude', true, false,
          '{"supports_functions": true, "supports_streaming": true, "supports_thinking": true, "max_context_window": 200000, "max_output_tokens": 4096}',
-         '{"temperature": 0.7, "top_p": 1.0}')
+         '{"temperature": 0.7, "top_p": 1.0}',
+         4096,
+         200000, '{}')
         ON CONFLICT (model_id) DO UPDATE SET
             capabilities = EXCLUDED.capabilities,
             default_params = EXCLUDED.default_params,

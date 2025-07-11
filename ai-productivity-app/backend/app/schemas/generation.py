@@ -238,6 +238,17 @@ class ConfigUpdate(BaseModel):
     use_responses_api: Optional[bool] = None
     stream: Optional[bool] = None
 
+    # Claude extended thinking parameters (provider = "anthropic")
+    claude_extended_thinking: Optional[bool] = None
+    claude_thinking_mode: Optional[Literal["off", "enabled", "aggressive"]] = None
+    claude_thinking_budget_tokens: Optional[int] = Field(
+        None, ge=1024, le=65536
+    )
+
+    # Misc optional fields that can be part of a configuration patch
+    system_prompt: Optional[str] = None
+    response_format: Optional[Dict[str, Any]] = None
+
     model_config = ConfigDict(
         alias_generator=_to_camel,
         populate_by_name=True,
