@@ -283,8 +283,8 @@ class Settings(BaseSettings):
 
     azure_openai_api_key: Optional[str] = None
     azure_openai_endpoint: Optional[str] = None
-    azure_openai_chat_deployment: Optional[str] = None
-    azure_openai_embeddings_deployment: Optional[str] = None
+
+    # NOTE: deployment-specific settings removed - v1 API uses model IDs directly
 
     # Anthropic API credentials – required when ``llm_provider`` is set to
     # "anthropic".  Similar to Azure OpenAI, we keep this optional for
@@ -312,18 +312,16 @@ class Settings(BaseSettings):
     # rely on this setting (e.g. legacy health-check routes) stay functional
     # without manual overrides.
     #
-    # Azure OpenAI – default to the **GA** Chat Completions surface.
+    # Azure OpenAI – use v1 API surface with "preview" version
     # -------------------------------------------------------------------
-    # Older revisions of the codebase used the *preview* version string
-    # ("preview" / "2025-04-01-preview") which was retired when the Chat
-    # Completions + Assistants features went GA.  Calling the deprecated
-    # version today returns **400 – API version not supported**.
+    # The v1 API surface (/openai/v1/) supports the new Responses API and
+    # uses model IDs directly instead of deployment names. This surface
+    # requires the literal "preview" API version string.
     #
-    # We therefore switch the default to the current GA release
-    # (**2024-10-21**) and let callers opt-in to the new *Responses* preview
-    # via the dedicated *azure_enable_responses* flag further below.
+    # The old deployment-based API is deprecated. We use the v1 surface
+    # exclusively to support both Chat Completions and Responses API.
     #
-    azure_openai_api_version: str = "2025-04-01-preview"
+    azure_openai_api_version: str = "preview"
 
     # Feature-gate for Azure *Responses* API (preview-only)
     # -------------------------------------------------------------------

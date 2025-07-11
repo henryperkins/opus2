@@ -64,7 +64,7 @@ class AzureOpenAIProvider(LLMProvider):
         endpoint = self.config.get("endpoint")
         if not endpoint:
             raise ValueError("Azure OpenAI endpoint is required")
-        
+
         # Ensure endpoint doesn't end with trailing slash or path
         endpoint = endpoint.rstrip("/")
         if not endpoint.startswith("https://"):

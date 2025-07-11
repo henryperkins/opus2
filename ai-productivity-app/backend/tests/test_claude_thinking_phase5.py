@@ -3,7 +3,7 @@ Tests for Phase 5: Complete Claude Thinking Implementation
 
 Tests all 7 Claude thinking settings and tool streaming functionality:
 1. claude_extended_thinking - Enable/disable flag
-2. claude_thinking_mode - Mode selection 
+2. claude_thinking_mode - Mode selection
 3. claude_thinking_budget_tokens - Token budget
 4. claude_show_thinking_process - Visibility control
 5. claude_adaptive_thinking_budget - Adaptive adjustment

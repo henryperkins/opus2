@@ -371,14 +371,8 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
             # ``settings.llm_model`` is deprecated – rely on *llm_default_model*
             if settings.llm_provider.lower() == "azure":
-                # For Azure, the deployment name is the critical piece of information.
-                # The `llm_default_model` is a generic setting, but `azure_openai_chat_deployment`
-                # is specific and should be preferred.
-                fallback_model = (
-                    settings.azure_openai_chat_deployment
-                    or settings.llm_default_model
-                    or "o3"
-                )
+                # For Azure v1 API, use model IDs directly (no deployment names)
+                fallback_model = settings.llm_default_model or "o3"
             else:
                 fallback_model = settings.llm_default_model or "o3"
 
