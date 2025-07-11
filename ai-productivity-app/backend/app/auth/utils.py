@@ -283,20 +283,20 @@ def get_current_user(
                 detail="Invalid credentials",
             )
 
-    user: User | None = db.get(User, user_id)
-    if not user or not user.is_active:
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-            )
+        user: User | None = db.get(User, user_id)
+        if not user or not user.is_active:
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid credentials",
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid credentials",
+                )
 
-    return user
+        return user
 
 
 async def get_current_user_ws(
