@@ -78,8 +78,8 @@ class EditorErrorBoundary extends React.Component {
                   Technical Details
                 </summary>
                 <pre className="text-xs bg-gray-100 dark:bg-gray-900 p-3 rounded border overflow-auto max-h-32">
-                  {this.state.error.toString()}
-                  {this.state.errorInfo.componentStack}
+                  {this.state.error && JSON.stringify(this.state.error, null, 2)}
+                  {this.state.errorInfo && this.state.errorInfo.componentStack}
                 </pre>
               </details>
             )}

@@ -55,7 +55,7 @@ function PageErrorBoundary({ children, pageName, onError, fallback }) {
                 Error Details (Development Only)
               </summary>
               <pre className="mt-2 p-4 bg-gray-100 dark:bg-gray-800 text-xs overflow-auto rounded text-left max-h-40">
-                {error.toString()}
+                {error && JSON.stringify(error, null, 2)}
                 {errorInfo && (
                   <>
                     <br />

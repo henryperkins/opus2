@@ -293,9 +293,9 @@ class ErrorBoundary extends Component {
                   Error Details (Development Only)
                 </summary>
                 <pre className="mt-2 p-4 bg-gray-100 text-xs overflow-auto rounded text-left max-h-40">
-                  {this.state.error && this.state.error.toString()}
+                  {this.state.error && JSON.stringify(this.state.error, null, 2)}
                   <br />
-                  {this.state.errorInfo.componentStack}
+                  {this.state.errorInfo && this.state.errorInfo.componentStack}
                 </pre>
               </details>
             )}

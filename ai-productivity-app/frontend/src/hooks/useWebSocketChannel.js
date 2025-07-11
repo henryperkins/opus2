@@ -10,7 +10,8 @@
  *   • optional custom onMessage handler
  */
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+/* eslint-env browser */
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import debounce from 'lodash.debounce';
 
 function buildWsUrl(path) {

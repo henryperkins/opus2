@@ -53,8 +53,8 @@ class ChatErrorBoundary extends React.Component {
                 Error Details (Development)
               </summary>
               <pre className="mt-2 whitespace-pre-wrap text-xs text-gray-600">
-                {this.state.error && this.state.error.toString()}
-                {this.state.errorInfo.componentStack}
+                {this.state.error && JSON.stringify(this.state.error, null, 2)}
+                {this.state.errorInfo && this.state.errorInfo.componentStack}
               </pre>
             </details>
           )}

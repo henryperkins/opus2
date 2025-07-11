@@ -1,3 +1,4 @@
+/* eslint-env browser */
 import React, { Suspense, lazy, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import PropTypes from 'prop-types';
 import LoadingSpinner from '../common/LoadingSpinner';

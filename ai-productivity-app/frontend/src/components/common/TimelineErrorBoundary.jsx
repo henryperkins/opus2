@@ -43,8 +43,8 @@ class TimelineErrorBoundary extends React.Component {
                       Technical Details
                     </summary>
                     <pre className="mt-2 text-xs bg-red-100 p-2 rounded overflow-auto">
-                      {this.state.error && this.state.error.toString()}
-                      {this.state.errorInfo.componentStack}
+                      {this.state.error && JSON.stringify(this.state.error, null, 2)}
+                      {this.state.errorInfo && this.state.errorInfo.componentStack}
                     </pre>
                   </details>
                 )}

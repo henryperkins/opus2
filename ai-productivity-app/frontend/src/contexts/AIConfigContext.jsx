@@ -145,7 +145,7 @@ function aiConfigReducer(state, action) {
         ]
       };
       
-    case ACTIONS.UPDATE_PERFORMANCE:
+    case ACTIONS.UPDATE_PERFORMANCE: {
       const newStats = new Map(state.modelStats);
       newStats.set(action.payload.modelId, {
         ...newStats.get(action.payload.modelId),
@@ -155,6 +155,7 @@ function aiConfigReducer(state, action) {
         ...state,
         modelStats: newStats
       };
+    }
       
     case ACTIONS.RESET_ERROR:
       return {

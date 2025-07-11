@@ -215,19 +215,14 @@ class SearchAPI {
    * @returns {Promise<Array<string>>}
    */
   async getPopularQueries(projectId) {
-    try {
-      // Return mock popular queries for now since backend endpoint doesn't exist
-      return [
-        { query: 'function definitions', count: 15 },
-        { query: 'API endpoints', count: 12 },
-        { query: 'error handling', count: 8 },
-        { query: 'database models', count: 6 },
-        { query: 'authentication', count: 4 }
-      ];
-    } catch (error) {
-      console.warn('Popular queries not available:', error);
-      return [];
-    }
+    // Return mock popular queries for now since backend endpoint doesn't exist
+    return [
+      { query: 'function definitions', count: 15 },
+      { query: 'API endpoints', count: 12 },
+      { query: 'error handling', count: 8 },
+      { query: 'database models', count: 6 },
+      { query: 'authentication', count: 4 }
+    ];
   }
 
   // -----------------------------------------------------------------------
