@@ -49,44 +49,36 @@ async def get_configuration(
         available_models = service.get_available_models()
 
         # Build provider catalog with capabilities
-        providers = {
-            "openai": {
-                "display_name": "OpenAI",
-                "models": [
-                    m.model_dump() for m in available_models if m.provider == "openai"
-                ],
-                "capabilities": {
-                    "supports_functions": True,
-                    "supports_streaming": True,
-                    "supports_vision": True,
+        # Build provider catalogue dynamically to avoid hard-coded drift
+        providers: Dict[str, Dict[str, Any]] = {}
+
+        for model in available_models:
+            provider_key = str(model.provider).lower()
+
+            # Ensure entry exists
+            providers.setdefault(
+                provider_key,
+                {
+                    "display_name": provider_key.capitalize(),
+                    "models": [],
+                    "capabilities": {},
                 },
-            },
-            "azure": {
-                "display_name": "Azure OpenAI",
-                "models": [
-                    m.model_dump() for m in available_models if m.provider == "azure"
-                ],
-                "capabilities": {
-                    "supports_functions": True,
-                    "supports_streaming": True,
-                    "supports_responses_api": True,
-                    "supports_reasoning": True,
-                },
-            },
-            "anthropic": {
-                "display_name": "Anthropic",
-                "models": [
-                    m.model_dump()
-                    for m in available_models
-                    if m.provider == "anthropic"
-                ],
-                "capabilities": {
-                    "supports_functions": True,
-                    "supports_streaming": True,
-                    "supports_thinking": True,
-                },
-            },
-        }
+            )
+
+            providers[provider_key]["models"].append(model.model_dump(by_alias=True))
+
+            # Merge provider-level capability flags – *True* if any model
+            caps = model.capabilities or {}
+            for cap_field in [
+                "supports_functions",
+                "supports_streaming",
+                "supports_vision",
+                "supports_responses_api",
+                "supports_reasoning",
+                "supports_thinking",
+            ]:
+                if getattr(caps, cap_field, False):
+                    providers[provider_key]["capabilities"][cap_field] = True
 
         return ConfigResponse(
             current=current_config,
@@ -103,7 +95,7 @@ async def get_configuration(
         )
 
 
-from app.dependencies import CurrentUserRequired, get_current_user
+from app.dependencies import CurrentUserRequired, get_current_user, AdminRequired
 from app.models.user import User
 
 ...
@@ -122,7 +114,7 @@ async def get_defaults(
 @router.put("", response_model=UnifiedModelConfig)
 async def update_configuration(
     updates: Dict[str, Any],
-    current_user: CurrentUserRequired,
+    current_user: AdminRequired,
     service: UnifiedConfigService = Depends(get_config_service),
 ) -> UnifiedModelConfig:
     """
@@ -166,7 +158,7 @@ async def update_configuration(
 @router.put("/batch", response_model=UnifiedModelConfig)
 async def batch_update_configuration(
     updates: List[Dict[str, Any]],
-    current_user: CurrentUserRequired,
+    current_user: AdminRequired,
     service: UnifiedConfigService = Depends(get_config_service),
 ) -> UnifiedModelConfig:
     """
@@ -502,9 +494,9 @@ async def _broadcast_config_update(
         update_message = {
             "type": event_type,
             "data": {
-                "current": config.model_dump(),
+                "current": config.model_dump(by_alias=True),
                 "available_models": [
-                    m.model_dump() for m in service.get_available_models()
+                    m.model_dump(by_alias=True) for m in service.get_available_models()
                 ],
                 "timestamp": datetime.utcnow().isoformat(),
             },

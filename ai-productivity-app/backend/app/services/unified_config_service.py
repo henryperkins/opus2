@@ -263,11 +263,19 @@ class UnifiedConfigService:
                 if config.value_type == "string":
                     result[config.key] = config.value
                 elif config.value_type == "number":
-                    result[config.key] = (
-                        float(config.value)
-                        if "." in str(config.value)
-                        else int(config.value)
-                    )
+                    # Preserve numeric types returned by PostgreSQL JSONB
+                    if isinstance(config.value, (int, float)):
+                        result[config.key] = config.value
+                    else:
+                        # Fallback to safe parsing for legacy string rows
+                        try:
+                            result[config.key] = int(config.value)
+                        except (ValueError, TypeError):
+                            try:
+                                result[config.key] = float(config.value)
+                            except (ValueError, TypeError):
+                                # Leave as-is to avoid raising during load
+                                result[config.key] = config.value
                 elif config.value_type == "boolean":
                     result[config.key] = config.value in [True, "true", "True", "1", 1]
                 elif config.value_type in ("object", "array"):

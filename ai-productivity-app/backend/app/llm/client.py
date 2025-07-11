@@ -425,13 +425,16 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
     # Convenience for temporary reconfiguration
     # --------------------------------------------------------------
     def snapshot(self) -> dict[str, Any]:
+        """Return minimal state required to restore the client later."""
         return {
             "provider": self.provider,
-            "active_model": self.active_model,
+            # `reconfigure()` expects *model* parameter, not *active_model*
+            "model": self.active_model,
             "use_responses_api": self.use_responses_api,
         }
 
     async def restore(self, state: dict[str, Any]) -> None:
+        """Restore previously taken snapshot."""
         await self.reconfigure(**state)
 
     # ---------------------------------------------------------------------

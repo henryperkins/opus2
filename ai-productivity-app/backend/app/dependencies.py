@@ -63,6 +63,35 @@ def _current_user_required(
 CurrentUserOptional = Annotated[User | None, Depends(_current_user_optional)]
 CurrentUserRequired = Annotated[User, Depends(_current_user_required)]
 
+# ---------------------------------------------------------------------------
+# Admin enforcement helper
+# ---------------------------------------------------------------------------
+
+
+def _admin_required(
+    current_user: CurrentUserRequired,
+) -> User:  # pragma: no cover – simple guard
+    """Ensure that the authenticated *current_user* has administrator rights.
+
+    The project does not yet define a fully-fledged RBAC system – several
+    routers merely rely on the presence of an ``is_admin`` boolean that is
+    attached to the :pyclass:`~app.models.user.User` instance at creation
+    time.  To avoid AttributeErrors we use :pyfunc:`getattr` with a *default*
+    of ``False`` and raise *HTTP 403* when the flag is absent or *False*.
+    """
+
+    if not getattr(current_user, "is_admin", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator privileges required",
+        )
+
+    return current_user
+
+
+# Alias that can be imported by routers
+AdminRequired = Annotated[User, Depends(_admin_required)]
+
 ###############################################################################
 # Vector Service Dependency
 ###############################################################################
