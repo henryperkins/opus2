@@ -275,6 +275,15 @@ class ModelService:
         if self.is_reasoning_model(model_id):
             return 65536
 
+        # High-context non-reasoning models (e.g. GPT-4o, GPT-4.1 family)
+        high_ctx_patterns = [
+            "gpt-4o", "gpt-4o-mini", "gpt-4o-max",
+            "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+            "gpt-4-turbo", "gpt-4-turbo-preview",
+        ]
+        if any(p in model_id.lower() for p in high_ctx_patterns):
+            return 128_000   # align with official context window
+
         return 4096  # Conservative default
 
     def get_context_window(self, model_id: str) -> int:

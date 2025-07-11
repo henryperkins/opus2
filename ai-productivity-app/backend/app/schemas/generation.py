@@ -92,7 +92,7 @@ class ModelInfo(CamelModel):
 # ─────────────────────────────────────────────────────────────────────────────
 class GenerationParams(CamelModel):
     temperature: confloat(ge=0.0, le=2.0) = 1.0  # type: ignore[arg-type]
-    max_tokens: conint(ge=64, le=16000) | None = 1024  # type: ignore[arg-type]
+    max_tokens: conint(ge=16, le=200_000) | None = 1024    # type: ignore[arg-type]
     top_p: confloat(ge=0.0, le=1.0) = 1.0  # type: ignore[arg-type]
     frequency_penalty: confloat(ge=-2.0, le=2.0) = 0.0  # type: ignore[arg-type]
     presence_penalty: confloat(ge=-2.0, le=2.0) = 0.0  # type: ignore[arg-type]
