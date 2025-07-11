@@ -151,45 +151,47 @@ class UnifiedConfigService:
     ) -> UnifiedModelConfig:
         """
         Apply a single update dict to the current configuration.
-        Handles field name normalization and provider-aware validation.
+
+        This implementation ensures:
+        - Field merging uses alias (camelCase) names for compatibility with the frontend.
+        - Resolves potential snake_case/camelCase conflicts by always favoring the frontend alias.
+        - All validation for required fields and provider-aware business rules is enforced after normalization.
+        - Provides clear error messages mapping to specific fields.
+
+        Args:
+            updates (Dict[str, Any]): Dictionary of updates (camelCase, as sent by frontend).
+            updated_by (str): Identifier for who/what triggered the update.
+
+        Returns:
+            UnifiedModelConfig: The updated and validated configuration.
+
+        Raises:
+            ValueError: If required fields are missing or validation fails.
         """
         current = self.get_current_config()
-        
-        # Use validation service to normalize and validate the update
-        from app.schemas.generation import ConfigUpdate
-        
-        # Create ConfigUpdate from raw dict to ensure proper field handling
+
+        # Always use by_alias=True for frontend compatibility
+        merged = current.model_dump(by_alias=True)
+        merged.update(updates or {})  # Frontend PATCH fields (camelCase) take priority
+
+        # Defensive cleanup: if any snake_case fields exist redundantly, drop them
+        # (e.g., both model_id and modelId present—use modelId).
+        for snake_name, alias in [("model_id", "modelId"), ("provider", "provider")]:
+            if alias in merged and snake_name in merged:
+                merged.pop(snake_name)
+
         try:
-            # The updates dict might have camelCase keys from frontend
-            update_obj = ConfigUpdate(**updates)
+            new_cfg = UnifiedModelConfig(**merged)
         except ValueError as e:
-            # Extract detailed field information
-            details = self._validation_service.get_missing_fields_details(e)
-            if details:
-                field_msgs = [f"{d['field']}: {d['message']}" for d in details]
-                raise ValueError(f"Invalid update: {'; '.join(field_msgs)}") from None
-            raise ValueError(f"Invalid update: {e}") from None
-        
-        # Validate the update and get normalized config
-        valid, errors, merged_config = self._validation_service.validate_config_update(
-            current, update_obj
-        )
-        
-        if not valid:
-            raise ValueError(f"Configuration validation failed: {'; '.join(errors)}")
-        
-        try:
-            new_cfg = UnifiedModelConfig(**merged_config)
-        except ValueError as e:
-            # Extract detailed field information for better error messages
+            # Try to extract clear field-level errors using the validation service
             details = self._validation_service.get_missing_fields_details(e)
             if details:
                 field_msgs = [f"{d['field']}: {d['message']}" for d in details]
                 raise ValueError(f"Invalid configuration: {'; '.join(field_msgs)}") from None
             raise ValueError(f"Invalid configuration: {e}") from None
 
-        # Additional validation with model service
-        ok, err = self.validate_config(new_cfg.model_dump())
+        # Additional provider/model business validation
+        ok, err = self.validate_config(new_cfg.model_dump(by_alias=True))
         if not ok:
             raise ValueError(err or "Invalid configuration")
 
@@ -450,10 +452,17 @@ class UnifiedConfigService:
     # --------------------------------------------------------------------- #
     def _get_default_config(self) -> UnifiedModelConfig:
         """
-        Build a fallback config when the DB is empty/unavailable.
+        Build a robust fallback config when the DB is empty/unavailable.
+
+        Ensures the config always satisfies UnifiedModelConfig/Pydantic requirements
+        and prevents 422 errors due to missing provider/model_id/fields.
         """
         default_provider = settings.llm_provider
         default_model = settings.llm_default_model
+
+        allowed_providers = {"openai", "azure", "anthropic"}
+        fallback_provider = "openai"
+        fallback_model = "gpt-3.5-turbo"
 
         try:
             mc = (
@@ -471,22 +480,38 @@ class UnifiedConfigService:
             logger.warning("ModelConfiguration lookup failed: %s", e)
             mc = None
 
-        provider = mc.provider if mc else default_provider
-        model_id = mc.model_id if mc else default_model
+        provider = None
+        model_id = None
+
+        if mc:
+            provider = mc.provider
+            model_id = mc.model_id
+        else:
+            # Defensive fallback logic
+            provider = default_provider if default_provider in allowed_providers else fallback_provider
+            model_id = default_model or fallback_model
+
+        # If still missing or invalid, force valid fields and log a clear warning
+        if provider not in allowed_providers:
+            logger.error(f"Configured LLM provider '{provider}' is invalid/missing, using '{fallback_provider}' fallback.")
+            provider = fallback_provider
+        if not isinstance(model_id, str) or not model_id:
+            logger.error("Configured default model_id is empty or missing, using '%s'.", fallback_model)
+            model_id = fallback_model
 
         return UnifiedModelConfig(
             provider=provider,
             model_id=model_id,
             temperature=0.7,
-            max_tokens=None,
+            max_tokens=1024,
             top_p=1.0,
             frequency_penalty=0.0,
             presence_penalty=0.0,
-            enable_reasoning=settings.enable_reasoning,
-            reasoning_effort=settings.reasoning_effort,
-            claude_extended_thinking=settings.claude_extended_thinking,
-            claude_thinking_mode=settings.claude_thinking_mode,
-            claude_thinking_budget_tokens=settings.claude_thinking_budget_tokens,
+            enable_reasoning=getattr(settings, "enable_reasoning", False),
+            reasoning_effort=getattr(settings, "reasoning_effort", "medium"),
+            claude_extended_thinking=getattr(settings, "claude_extended_thinking", True),
+            claude_thinking_mode=getattr(settings, "claude_thinking_mode", "enabled"),
+            claude_thinking_budget_tokens=getattr(settings, "claude_thinking_budget_tokens", 16384),
         )
 
     def _model_config_to_info(self, mc: ModelConfiguration) -> ModelInfo:
@@ -517,14 +542,14 @@ class UnifiedConfigService:
     def get_presets(self) -> List[Dict[str, Any]]:
         """Return predefined configuration presets with provider awareness."""
         return self._preset_manager.get_presets()
-    
+
     def apply_preset(self, preset_id: str, target_provider: Optional[str] = None) -> UnifiedModelConfig:
         """Apply a preset configuration, adapting it to the current or target provider."""
         current = self.get_current_config()
-        
+
         # Get the preset configuration adapted for the provider
         preset_config = self._preset_manager.apply_preset(preset_id, current, target_provider)
-        
+
         # Apply the preset configuration
         return self.update_config(preset_config, updated_by="preset")
 
