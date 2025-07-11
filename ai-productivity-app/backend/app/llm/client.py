@@ -267,6 +267,14 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         # TTL Cache for runtime config
         self._config_cache: Dict[str, tuple[Any, datetime]] = {}
         self._cache_ttl = timedelta(seconds=5)
+        
+        # Default generation parameters
+        self.default_temperature: float | None = None
+        self.default_max_tokens: int | None = None
+        self.default_top_p: float | None = None
+        self.default_frequency_penalty: float | None = None
+        self.default_presence_penalty: float | None = None
+        self.generation_params: Dict[str, Any] = {}
 
         # Provider-specific initialisation.
         try:
@@ -375,8 +383,14 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         provider: str | None = None,
         model: str | None = None,
         use_responses_api: bool | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+        frequency_penalty: float | None = None,
+        presence_penalty: float | None = None,
+        **kwargs: Any,  # Accept additional generation parameters
     ) -> None:
-        """Dynamically reconfigure the client with new provider/model settings."""
+        """Dynamically reconfigure the client with new provider/model/generation settings."""
         runtime_config = self._get_runtime_config()
 
         # Use runtime config values or provided parameters
@@ -414,11 +428,30 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 _is_responses_api_enabled(new_model) and new_provider == "azure"
             )
 
+        # Store generation parameters if provided
+        if temperature is not None:
+            self.default_temperature = temperature
+        if max_tokens is not None:
+            self.default_max_tokens = max_tokens
+        if top_p is not None:
+            self.default_top_p = top_p
+        if frequency_penalty is not None:
+            self.default_frequency_penalty = frequency_penalty
+        if presence_penalty is not None:
+            self.default_presence_penalty = presence_penalty
+            
+        # Store any additional generation parameters
+        self.generation_params = kwargs
+        
+        # Clear config cache to force reload on next request
+        self._config_cache.clear()
+
         logger.info(
-            "LLM client reconfigured - Provider: %s, Model: %s, ResponsesAPI: %s",
+            "LLM client reconfigured - Provider: %s, Model: %s, ResponsesAPI: %s, Generation params updated: %s",
             self.provider,
             self.active_model,
             self.use_responses_api,
+            bool(temperature or max_tokens or top_p or frequency_penalty or presence_penalty or kwargs)
         )
 
     # --------------------------------------------------------------

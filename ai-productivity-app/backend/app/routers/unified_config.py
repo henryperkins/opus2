@@ -155,6 +155,29 @@ async def update_configuration(
         )
 
 
+@router.patch("", response_model=UnifiedModelConfig)
+async def patch_configuration(
+    updates: Dict[str, Any],
+    current_user: AdminRequired,
+    service: UnifiedConfigService = Depends(get_config_service),
+) -> UnifiedModelConfig:
+    """
+    Update AI configuration with validation (PATCH variant).
+    
+    This endpoint provides the same functionality as PUT but uses PATCH method
+    for compatibility with frontend code that expects partial updates.
+    
+    Accepts partial updates to any configuration fields:
+    - Model selection (provider, model_id)
+    - Generation parameters (temperature, max_tokens, etc.)
+    - Reasoning settings (reasoning_effort, thinking modes)
+    
+    All updates are validated for consistency before applying.
+    """
+    # Delegate to the PUT handler logic
+    return await update_configuration(updates, current_user, service)
+
+
 @router.put("/batch", response_model=UnifiedModelConfig)
 async def batch_update_configuration(
     updates: List[Dict[str, Any]],
@@ -225,6 +248,7 @@ async def test_configuration(
     current_user: CurrentUserRequired,
     service: UnifiedConfigService = Depends(get_config_service),
     config: Optional[UnifiedModelConfig] = None,
+    dry_run: bool = False,
 ) -> Dict[str, Any]:
     """
     Test AI configuration with actual API call.
@@ -240,8 +264,8 @@ async def test_configuration(
         # Use provided config or current
         test_config = config or service.get_current_config()
 
-        # Run test
-        result = await service.test_config(test_config)
+        # Run test with dry_run flag
+        result = await service.test_config(test_config, dry_run=dry_run)
 
         logger.info(
             f"Configuration test by {current_user.username}: "
@@ -480,6 +504,11 @@ async def _notify_llm_client(config: UnifiedModelConfig):
             provider=config.provider,
             model=config.model_id,
             use_responses_api=config.use_responses_api,
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+            top_p=config.top_p,
+            frequency_penalty=config.frequency_penalty,
+            presence_penalty=config.presence_penalty,
         )
     except Exception as e:
         logger.warning(f"Failed to reconfigure LLM client: {e}")
@@ -502,7 +531,7 @@ async def _broadcast_config_update(
             },
         }
 
-        await connection_manager.broadcast_json(update_message)
+        await connection_manager.broadcast_config_update(update_message)
 
     except Exception as e:
         logger.warning(f"Failed to broadcast config update: {e}")

@@ -121,28 +121,8 @@ class Settings(BaseSettings):
         default=1, description="Maximum concurrent embedding requests"
     )
 
-    # Deprecated settings - kept for backward compatibility during migration
-    qdrant_url: str = Field(
-        default="http://localhost:6333", description="Qdrant server URL (deprecated)"
-    )
-    qdrant_host: str = Field(
-        default="localhost", description="Qdrant server host (deprecated)"
-    )
-    qdrant_port: int = Field(
-        default=6333, description="Qdrant server port (deprecated)"
-    )
-    qdrant_api_key: Optional[str] = Field(
-        default=None, description="Qdrant API key (deprecated)"
-    )
-    qdrant_vector_size: int = Field(
-        default=1536, description="Vector size for embeddings (deprecated)"
-    )
-    qdrant_timeout: int = Field(
-        default=30, description="Qdrant client timeout in seconds (deprecated)"
-    )
-    qdrant_max_workers: int = Field(
-        default=16, description="Threadpool size for Qdrant operations (deprecated)"
-    )
+    # Note: Deprecated qdrant_* settings have been removed.
+    # Only pgvector is supported as the vector store backend.
 
     # -------------------------------------------------------------------
     # Database
@@ -347,10 +327,6 @@ class Settings(BaseSettings):
     # Updated to use gpt-4o which is available in Azure Responses API
 
     llm_default_model: str = Field("gpt-4o-mini", alias="LLM_MODEL")
-
-    # Deprecated – kept to avoid breaking existing environment variables /
-    # database fixtures.  New code should rely on *llm_default_model*.
-    llm_model: str | None = None
     max_context_tokens: int = 200000
 
     # --- Reasoning enrichment (Azure OpenAI / OpenAI only) ---------------

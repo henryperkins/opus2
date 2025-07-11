@@ -12,7 +12,6 @@ from app.models.config import RuntimeConfig, ConfigHistory, ModelConfiguration
 from app.schemas.generation import (
     UnifiedModelConfig,
     ModelInfo,
-    validate_config_consistency,
 )
 from app.config import settings
 
@@ -27,10 +26,14 @@ class UnifiedConfigService:
     PREFIX_REASONING = "reason_"
     PREFIX_PROVIDER = "provider_"
     PREFIX_MODEL = "model_"
+    
+    # Cache TTL in seconds (5 minutes)
+    CACHE_TTL_SECONDS = 300
 
     def __init__(self, db: Session):
         self.db = db
         self._config_cache = {}
+        self._cache_timestamp = None
 
     def get_current_config(self) -> UnifiedModelConfig:
         """Get current unified configuration."""
@@ -51,39 +54,9 @@ class UnifiedConfigService:
         # Get current config
         current = self.get_current_config()
 
-        # Apply updates – accept both snake_case (backend) *and* camelCase
-        # (frontend) field names.  Normalize field names for consistency.
-
-        def _normalise_key(key: str) -> str:
-            # Convert camelCase to snake_case for known fields
-            field_mappings = {
-                "useResponsesApi": "use_responses_api",
-                "modelId": "model_id",
-                "chatModel": "model_id",
-                "chat_model": "model_id",  # Legacy support
-                "maxTokens": "max_tokens",
-                "topP": "top_p",
-                "frequencyPenalty": "frequency_penalty",
-                "presencePenalty": "presence_penalty",
-                "thinkingEffort": "reasoning_effort",
-                "claudeExtendedThinking": "claude_extended_thinking",
-                "claudeThinkingMode": "claude_thinking_mode",
-                "claudeThinkingBudgetTokens": "claude_thinking_budget_tokens",
-                "claudeShowThinkingProcess": "claude_show_thinking_process",
-                "claudeAdaptiveThinkingBudget": "claude_adaptive_thinking_budget",
-                "enableReasoning": "enable_reasoning",
-                # New mappings
-                "responseFormat": "response_format",
-                "systemPrompt": "system_prompt",
-                "thinkingBudgetTokens": "thinking_budget_tokens",
-                "showThinkingProcess": "show_thinking_process",
-                "adaptiveThinkingBudget": "adaptive_thinking_budget",
-                "parallelToolCalls": "parallel_tool_calls",
-            }
-            return field_mappings.get(key, key)
-
+        # Apply updates directly - Pydantic model handles camelCase aliases
         updated_dict = current.model_dump()
-        updated_dict.update({_normalise_key(k): v for k, v in updates.items()})
+        updated_dict.update(updates)
 
         # Create new config instance for validation
         try:
@@ -91,8 +64,8 @@ class UnifiedConfigService:
         except ValueError as e:
             raise ValueError(f"Invalid configuration: {e}")
 
-        # Validate consistency
-        is_valid, error = validate_config_consistency(new_config)
+        # Validate using enhanced validation
+        is_valid, error = self.validate_config(new_config.model_dump())
         if not is_valid:
             raise ValueError(error)
 
@@ -186,11 +159,55 @@ class UnifiedConfigService:
             logger.error(f"Validation error: {e}")
             return False, "Invalid configuration format"
 
-    async def test_config(self, config: UnifiedModelConfig) -> Dict[str, Any]:
-        """Test configuration with actual API call."""
+    async def test_config(self, config: UnifiedModelConfig, dry_run: bool = False) -> Dict[str, Any]:
+        """Test configuration with actual API call or dry-run validation."""
+        import time
+        
+        # For dry-run, only validate without making actual API calls
+        if dry_run:
+            start_time = time.time()
+            
+            # Validate configuration
+            is_valid, error = self.validate_config(config.model_dump())
+            
+            # Check if model exists in database
+            model_info = self.get_model_info(config.model_id)
+            if not model_info:
+                return {
+                    "success": False,
+                    "message": f"Model '{config.model_id}' not found",
+                    "error": "model_not_found",
+                    "dry_run": True
+                }
+                
+            if not is_valid:
+                return {
+                    "success": False,
+                    "message": "Configuration validation failed",
+                    "error": error,
+                    "dry_run": True
+                }
+                
+            elapsed = time.time() - start_time
+            
+            return {
+                "success": True,
+                "message": "Configuration validation successful (dry-run)",
+                "response_time": round(elapsed, 3),
+                "model": config.model_id,
+                "provider": config.provider,
+                "dry_run": True,
+                "model_info": {
+                    "display_name": model_info.display_name,
+                    "capabilities": model_info.capabilities.model_dump() if model_info.capabilities else {},
+                    "cost_per_1k_input": model_info.cost_per_1k_input_tokens,
+                    "cost_per_1k_output": model_info.cost_per_1k_output_tokens,
+                }
+            }
+        
+        # Actual API test (non dry-run)
         from app.llm.client import llm_client as client
         import asyncio
-        import time
 
         start_time = time.time()
         snapshot = client.snapshot()
@@ -201,6 +218,11 @@ class UnifiedConfigService:
                 provider=config.provider,
                 model=config.model_id,
                 use_responses_api=config.use_responses_api,
+                temperature=config.temperature,
+                max_tokens=config.max_tokens,
+                top_p=config.top_p,
+                frequency_penalty=config.frequency_penalty,
+                presence_penalty=config.presence_penalty,
             )
 
             # Simple test message
@@ -229,6 +251,7 @@ class UnifiedConfigService:
                 "response_time": round(elapsed, 2),
                 "model": config.model_id,
                 "provider": config.provider,
+                "dry_run": False
             }
 
         except asyncio.TimeoutError:
@@ -236,6 +259,7 @@ class UnifiedConfigService:
                 "success": False,
                 "message": "Test timed out after 30 seconds",
                 "error": "timeout",
+                "dry_run": False
             }
         except Exception as e:
             logger.error(f"Configuration test failed: {e}")
@@ -243,6 +267,7 @@ class UnifiedConfigService:
                 "success": False,
                 "message": "Configuration test failed",
                 "error": str(e),
+                "dry_run": False
             }
         finally:
             await client.restore(snapshot)
@@ -250,9 +275,12 @@ class UnifiedConfigService:
     # Private methods
 
     def _load_all_config(self) -> Dict[str, Any]:
-        """Load all configuration from RuntimeConfig."""
-        if self._config_cache:
-            return self._config_cache
+        """Load all configuration from RuntimeConfig with TTL-based cache."""
+        # Check if cache is still valid
+        if self._config_cache and self._cache_timestamp:
+            from datetime import datetime, timedelta
+            if datetime.utcnow() - self._cache_timestamp < timedelta(seconds=self.CACHE_TTL_SECONDS):
+                return self._config_cache
 
         configs = self.db.query(RuntimeConfig).all()
         result = {}
@@ -288,6 +316,8 @@ class UnifiedConfigService:
                 result[config.key] = config.value
 
         self._config_cache = result
+        from datetime import datetime
+        self._cache_timestamp = datetime.utcnow()
         return result
 
     def _save_config(self, config_dict: Dict[str, Any], updated_by: str):
