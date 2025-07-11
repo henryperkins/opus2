@@ -181,6 +181,15 @@ class UnifiedConfigService:
         if isinstance(merged.get("response_format"), str):
             merged["response_format"] = {"type": merged["response_format"]}
 
+        # ------------------------------------------------------------------
+        # Guard-rail: *use_responses_api* is valid **only** for provider "azure".
+        # When the provider switches to anything else we automatically clear
+        # the stale flag so validation does not fail with
+        # “Responses API is only available for Azure provider”.
+        # ------------------------------------------------------------------
+        if merged.get("provider") != "azure" and merged.get("use_responses_api"):
+            merged["use_responses_api"] = False
+
         # Defensive cleanup: if any snake_case fields exist redundantly, drop them
         # (e.g., both model_id and modelId present—use modelId).
         for snake_name, alias in [("model_id", "modelId"), ("provider", "provider")]:
