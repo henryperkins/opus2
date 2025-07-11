@@ -81,6 +81,68 @@ async def validate_configuration(
 
 
 # --------------------------------------------------------------------------- #
+# Test helper (legacy alias)
+# --------------------------------------------------------------------------- #
+
+from fastapi import Request
+
+
+@router.post("/test", summary="Validate configuration (simple response)")
+async def test_configuration(
+    request: Request,
+    service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
+):
+    """Legacy helper expected by older front-end code (POST /test).
+
+    Accepts *both* ``application/json`` and
+    ``application/x-www-form-urlencoded`` bodies because the original React
+    client occasionally falls back to URL-encoded payloads when Axios is
+    handed a plain object without an explicit ``headers`` override.
+    """
+
+    # -------------------------------------------------------------------
+    # Robust payload extraction – support JSON **and** form-urlencoded.
+    # -------------------------------------------------------------------
+    ctype = request.headers.get("content-type", "").split(";")[0]
+
+    if ctype == "application/json":
+        payload: Dict[str, Any] = await request.json()
+    elif ctype == "application/x-www-form-urlencoded":
+        form = await request.form()
+        payload = dict(form)  # ImmutableMultiDict → plain dict
+    else:  # pragma: no cover – should not happen
+        payload = {}
+
+    # Parse simple numeric fields that arrive as strings via form-urlenc
+    numeric_fields = (
+        "temperature",
+        "max_tokens",
+        "top_p",
+        "frequency_penalty",
+        "presence_penalty",
+    )
+    for fld in numeric_fields:
+        if fld in payload and isinstance(payload[fld], str):
+            try:
+                payload[fld] = float(payload[fld]) if "." in payload[fld] else int(payload[fld])
+            except ValueError:
+                pass
+
+    import time
+
+    start = time.monotonic()
+    res = await service.validate_verbose(payload)
+    latency_ms = int((time.monotonic() - start) * 1000)
+
+    return {
+        "success": res.get("valid", False),
+        "message": None if res.get("valid") else res.get("error"),
+        "latency": latency_ms,
+        "error": None if res.get("valid") else res.get("error"),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Presets
 # --------------------------------------------------------------------------- #
 

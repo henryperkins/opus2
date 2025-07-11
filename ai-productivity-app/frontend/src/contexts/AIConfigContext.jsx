@@ -30,6 +30,18 @@ const normaliseKeys = (obj) =>
       ? Object.fromEntries(Object.entries(obj).map(([k, v]) => [toSnake(k), v]))
       : obj;
 
+// Convert snake_case keys (from backend presets) into camelCase so the PATCH
+// payload matches the API contract (ConfigUpdate expects camelCase).
+const toCamel = (s) => s.replace(/_([a-z])/g, (m, p1) => p1.toUpperCase());
+const cameliseKeys = (obj) =>
+  Array.isArray(obj)
+    ? obj.map(cameliseKeys)
+    : obj && typeof obj === "object"
+      ? Object.fromEntries(
+          Object.entries(obj).map(([k, v]) => [toCamel(k), cameliseKeys(v)]),
+        )
+      : obj;
+
 /* --------------------------------------------------------------------- */
 /* Context / reducer                                                     */
 /* --------------------------------------------------------------------- */
@@ -128,7 +140,7 @@ export function AIConfigProvider({ children }) {
         return false;
       }
       try {
-        await updateConfig({ model_id: modelId, provider: mdl.provider });
+        await updateConfig({ modelId: modelId, provider: mdl.provider });
         // history (max 10)
         const hist = [
           modelId,
@@ -164,6 +176,29 @@ export function AIConfigProvider({ children }) {
     [],
   );
 
+  /* -------------------- apply preset ------------------------------ */
+  const applyPreset = useCallback(
+    async (presetId) => {
+      try {
+        const presets = await aiConfigAPI.presets();
+        const preset = presets.find((p) => p.id === presetId);
+        if (!preset) {
+          toast.error(`Preset '${presetId}' not found`);
+          return false;
+        }
+
+        // Ensure camelCase keys for the API
+        await updateConfig(cameliseKeys(preset.config));
+        toast.success(`Preset '${preset.name || presetId}' applied`);
+        return true;
+      } catch (e) {
+        toast.error(e.message || "Failed to apply preset");
+        return false;
+      }
+    },
+    [updateConfig],
+  );
+
   /* -------------------- websocket sync ----------------------------- */
   useEffect(() => {
     const url =
@@ -187,6 +222,7 @@ export function AIConfigProvider({ children }) {
     testConfig,
     setModel,
     resolveConflict,
+    applyPreset,
     /* helpers */
     currentModel: state.config?.model_id,
     currentProvider: state.config?.provider,

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.schemas.generation import UnifiedModelConfig, ConfigUpdate
-from ._deps import get_config_service, CurrentAdmin, UnifiedConfigServiceAsync
+from ._deps import get_config_service, CurrentUser, UnifiedConfigServiceAsync
 from ._helpers import notify_llm_client, broadcast_config_update
 
 logger = logging.getLogger(__name__)
@@ -25,14 +25,14 @@ router = APIRouter(
 @router.patch("", response_model=UnifiedModelConfig, summary="Partial update")
 async def update_config(
     update: ConfigUpdate,
-    admin: CurrentAdmin,
+    user: CurrentUser,
     service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> UnifiedModelConfig:
     """
-    Partially updates the configuration.  Requires Admin privileges.
+    Partially updates the configuration.  Requires authentication.
     """
     try:
-        new_cfg = await service.update_config(update, updated_by=admin.username)
+        new_cfg = await service.update_config(update, updated_by=user.username)
         await notify_llm_client(new_cfg)
         await broadcast_config_update(service, new_cfg, event_type="config_update")
         return new_cfg
@@ -49,7 +49,7 @@ async def update_config(
 @router.put("/batch", response_model=UnifiedModelConfig, summary="Batch update (atomic)")
 async def batch_update(
     updates: List[ConfigUpdate],
-    admin: CurrentAdmin,
+    user: CurrentUser,
     service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> UnifiedModelConfig:
     """
@@ -57,7 +57,7 @@ async def batch_update(
     Rolls back automatically if any update fails.
     """
     try:
-        new_cfg = await service.batch_update(updates, updated_by=admin.username)
+        new_cfg = await service.batch_update(updates, updated_by=user.username)
         await notify_llm_client(new_cfg)
         await broadcast_config_update(service, new_cfg, event_type="config_batch_update")
         return new_cfg

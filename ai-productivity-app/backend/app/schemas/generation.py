@@ -20,7 +20,7 @@ Key points
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import (
     BaseModel,
@@ -166,9 +166,9 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
 
     # ------- conversions -----------------------------------------------
     def to_runtime_config(self) -> Dict[str, Any]:
-        data = self.model_dump(exclude_none=True, by_alias=True)
-        model_id = data.pop("modelId")
-        return {"model_id": model_id, **data}
+        # Use snake_case for database storage by NOT using by_alias
+        data = self.model_dump(exclude_none=True, by_alias=False)
+        return data
 
     @classmethod
     def from_runtime_config(cls, cfg: Dict[str, Any]) -> "UnifiedModelConfig":
@@ -231,7 +231,10 @@ class ConfigUpdate(BaseModel):
     frequency_penalty: Optional[confloat(ge=-2.0, le=2.0)] = None  # type: ignore[arg-type]
     presence_penalty: Optional[confloat(ge=-2.0, le=2.0)] = None  # type: ignore[arg-type]
     enable_reasoning: Optional[bool] = None
-    reasoning_effort: Optional[int] = None
+    # Accept both numeric and string representations to maintain backwards
+    # compatibility with earlier frontend versions that used human-readable
+    # strings ("low", "medium", "high").
+    reasoning_effort: Optional[Union[int, Literal["low", "medium", "high"]]] = None
     use_responses_api: Optional[bool] = None
     stream: Optional[bool] = None
 

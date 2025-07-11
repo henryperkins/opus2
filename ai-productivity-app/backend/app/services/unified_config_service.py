@@ -526,6 +526,7 @@ class UnifiedConfigService:
                 "description": "Optimised for quick responses",
                 "config": {
                     "model_id": "gpt-4o-mini",
+                    "provider": "openai",
                     "temperature": 0.7,
                     "max_tokens": 1024,
                     "reasoning_effort": "low",
@@ -537,6 +538,7 @@ class UnifiedConfigService:
                 "description": "Maximum capability for complex tasks",
                 "config": {
                     "model_id": "gpt-4o",
+                    "provider": "openai",
                     "temperature": 0.7,
                     "max_tokens": 4096,
                     "reasoning_effort": "high",

@@ -17,7 +17,7 @@ export default function PresetSelector({ className = "" }) {
   // Helper fetcher – colocated to avoid tight coupling with the context
   const fetchPresets = React.useCallback(async () => {
     const res = await apiClient.get("/api/v1/ai-config/presets");
-    return res;
+    return res.data;
   }, []);
 
   // Fetch presets once; they rarely change.
