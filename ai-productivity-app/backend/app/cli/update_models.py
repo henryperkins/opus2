@@ -60,44 +60,62 @@ async def update_models():
         updated = 0
         deprecated = 0
 
-        # Process each model from fixture
-        for model_data in fixture_models:
-            model_id = model_data["model_id"]
 
-            if model_id in existing_models_dict:
-                # Update existing model
-                existing_model = existing_models_dict[model_id]
+        # ------------------------------------------------------------------
+        # Helper to *insert or update* a single model payload                #
+        # ------------------------------------------------------------------
 
-                # Update all fields
-                for field, value in model_data.items():
+        def _upsert(model_payload: Dict[str, Any]) -> None:  # noqa: D401 – local util
+            """Insert new row or update existing one with *all* fields."""
+
+            nonlocal added, updated  # mutate outer counters
+
+            mid = model_payload["model_id"]
+
+            # Update existing entry ------------------------------------------------
+            if mid in existing_models_dict:
+                existing_model = existing_models_dict[mid]
+
+                for field, value in model_payload.items():
                     if hasattr(existing_model, field):
-                        # Handle datetime fields
                         if field == "deprecated_at" and isinstance(value, str):
                             value = parse_datetime(value) if value else None
                         setattr(existing_model, field, value)
 
                 existing_model.updated_at = datetime.utcnow()
                 updated += 1
-                print(f"Updated: {model_id}")
-            else:
-                # Add new model
-                # Handle deprecated_at field
-                if "deprecated_at" in model_data and isinstance(
-                    model_data["deprecated_at"], str
-                ):
-                    model_data["deprecated_at"] = parse_datetime(
-                        model_data["deprecated_at"]
-                    )
-                elif (
-                    model_data.get("is_deprecated", False)
-                    and "deprecated_at" not in model_data
-                ):
-                    model_data["deprecated_at"] = datetime.utcnow()
+                print(f"Updated: {mid}")
+                return
 
-                new_model = ModelConfiguration(**model_data)
-                session.add(new_model)
-                added += 1
-                print(f"Added: {model_id}")
+            # Insert new row -------------------------------------------------------
+            if "deprecated_at" in model_payload and isinstance(
+                model_payload["deprecated_at"], str
+            ):
+                model_payload["deprecated_at"] = parse_datetime(
+                    model_payload["deprecated_at"]
+                )
+            elif model_payload.get("is_deprecated", False) and "deprecated_at" not in model_payload:
+                model_payload["deprecated_at"] = datetime.utcnow()
+
+            session.add(ModelConfiguration(**model_payload))
+            added += 1
+            print(f"Added: {mid}")
+
+        # ------------------------------------------------------------------
+        # 1. Process fixture models as-is                                      #
+        # ------------------------------------------------------------------
+
+        for model_data in fixture_models:
+            _upsert(model_data)
+
+            # --------------------------------------------------------------
+
+            # NOTE: ``ModelConfiguration`` uses *model_id* as **primary key** so
+            # multiple provider variants cannot coexist.  The provider field is
+            # retained for informational purposes only.  Consumers such as the
+            # CostTrackingService therefore *fall back* to a provider-agnostic
+            # lookup when the exact (provider, model_id) match is missing.  No
+            # automatic duplication of rows is performed here.
 
         # Mark models not in fixture as deprecated (optional)
         fixture_model_ids = {model["model_id"] for model in fixture_models}

@@ -1,17 +1,14 @@
-// frontend/src/components/settings/UnifiedAISettings.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Brain,
   Settings,
   Zap,
-  DollarSign,
-  AlertCircle,
-  Check,
   RefreshCw,
-  ChevronDown,
-  ChevronRight,
-  Info,
+  Check,
+  AlertCircle,
 } from "lucide-react";
+import { debounce } from "lodash-es";
+
 import {
   useAIConfig,
   useModelSelection,
@@ -19,26 +16,27 @@ import {
   useReasoningConfig,
 } from "../../contexts/AIConfigContext";
 
-// Lazy import to break potential circular deps when this file is SSR-ed.
+import Section from "../common/CollapsibleSection";
 import PresetSelector from "./PresetSelector";
 
 export default function UnifiedAISettings() {
+  // --------------------------------------------------------------------- //
+  // Context hooks
+  // --------------------------------------------------------------------- //
   const {
-    config,
     loading,
     error,
     testResult,
     testConfig,
-    applyPreset,
     providers,
+    isAdmin,
   } = useAIConfig();
 
   const {
-    currentModel,
+    selectProvider,
+    selectModel,
     currentProvider,
     availableModels,
-    selectModel,
-    selectProvider,
   } = useModelSelection();
 
   const {
@@ -63,103 +61,102 @@ export default function UnifiedAISettings() {
     updateReasoningConfig,
   } = useReasoningConfig();
 
-  const [expandedSections, setExpandedSections] = useState({
+  // --------------------------------------------------------------------- //
+  // Local UI state
+  // --------------------------------------------------------------------- //
+  const [expanded, setExpanded] = useState({
+    presets: false,
     model: true,
     generation: true,
     reasoning: true,
-    presets: false,
   });
+  const toggle = (k) => setExpanded((p) => ({ ...p, [k]: !p[k] }));
 
-  const [isTesting, setIsTesting] = useState(false);
+  const [testing, setTesting] = useState(false);
 
-  const toggleSection = (section) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
-  };
+  // --------------------------------------------------------------------- //
+  // Debounced setters – prevents spamming PATCH /ai-config on every key-press
+  // --------------------------------------------------------------------- //
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const debouncedUpdate = useCallback(debounce(updateParams, 250), []);
 
-  const handleTestConfig = async () => {
-    setIsTesting(true);
+  // --------------------------------------------------------------------- //
+  // Event handlers
+  // --------------------------------------------------------------------- //
+  const handleTest = async () => {
+    setTesting(true);
     try {
       await testConfig();
     } finally {
-      setIsTesting(false);
+      setTesting(false);
     }
   };
 
+  // --------------------------------------------------------------------- //
+  // Early returns
+  // --------------------------------------------------------------------- //
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+      <div className="flex items-center justify-center h-60">
+        <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
       </div>
     );
   }
 
   if (error) {
-    /*
-     * React cannot directly render complex objects (e.g. AxiosError instances).
-     * Convert anything that is not a plain string into a readable string first.
-     */
-    const errorMessage =
+    const msg =
       typeof error === "string"
         ? error
-        : (error?.message ?? JSON.stringify(error, null, 2));
+        : error?.message ?? JSON.stringify(error, null, 2);
 
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <div className="flex items-start">
-          <AlertCircle className="h-5 w-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-medium text-red-800">
-              Configuration Error
-            </h3>
-            <p className="mt-1 text-sm text-red-600 whitespace-pre-wrap">
-              {errorMessage}
-            </p>
-          </div>
+          <AlertCircle className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
+          <p className="text-sm text-red-700 whitespace-pre-wrap">{msg}</p>
         </div>
       </div>
     );
   }
 
-  // -------------------------------------------------------------------------
-  // JSX
-  // -------------------------------------------------------------------------
-
+  // --------------------------------------------------------------------- //
+  // Render
+  // --------------------------------------------------------------------- //
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* ------------------------------------------------ Header ---------- */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Brain className="h-6 w-6 text-blue-500" />
-          <h2 className="text-xl font-semibold text-gray-900">
-            AI Configuration
-          </h2>
+          <h2 className="text-xl font-semibold">AI Configuration</h2>
         </div>
+
         <button
-          onClick={handleTestConfig}
-          disabled={isTesting}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          onClick={handleTest}
+          disabled={testing || !isAdmin}
+          title={!isAdmin ? "Admin role required" : "Run live test"}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-md
+                     bg-blue-600 text-white hover:bg-blue-700
+                     disabled:opacity-50"
         >
-          {isTesting ? (
+          {testing ? (
             <>
               <RefreshCw className="h-4 w-4 animate-spin" />
-              Testing...
+              Testing…
             </>
           ) : (
             <>
               <Zap className="h-4 w-4" />
-              Test Configuration
+              Test configuration
             </>
           )}
         </button>
       </div>
 
-      {/* Test Result */}
+      {/* ------------------------------------------------ Test result ---- */}
       {testResult && (
         <div
-          className={`p-4 rounded-lg border ${
+          className={`p-4 rounded-md border ${
             testResult.success
               ? "bg-green-50 border-green-200"
               : "bg-red-50 border-red-200"
@@ -167,88 +164,80 @@ export default function UnifiedAISettings() {
         >
           <div className="flex items-start">
             {testResult.success ? (
-              <Check className="h-5 w-5 text-green-600 mr-2 flex-shrink-0 mt-0.5" />
+              <Check className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
             ) : (
-              <AlertCircle className="h-5 w-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-red-600 mr-2 mt-0.5" />
             )}
-            <div className="flex-1">
+            <div>
               <p
-                className={`text-sm font-medium ${
+                className={`font-medium ${
                   testResult.success ? "text-green-800" : "text-red-800"
                 }`}
               >
                 {testResult.message}
               </p>
               {testResult.response_time && (
-                <p className="mt-1 text-sm text-gray-600">
+                <p className="text-gray-600">
                   Response time: {testResult.response_time}s
                 </p>
               )}
               {testResult.error && (
-                <p className="mt-1 text-sm text-red-600">
-                  Error: {testResult.error}
-                </p>
+                <p className="text-red-600">Error: {testResult.error}</p>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Presets Section ---------------------------------------------------- */}
+      {/* ------------------------------------------------ Presets -------- */}
       <Section
         title="Presets"
         icon={Settings}
-        expanded={expandedSections.presets}
-        onToggle={() => toggleSection("presets")}
+        expanded={expanded.presets}
+        onToggle={() => toggle("presets")}
       >
-        <PresetSelector className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        <PresetSelector />
       </Section>
 
-      {/* Model Selection Section */}
+      {/* ------------------------------------------------ Model ---------- */}
       <Section
-        title="Model Selection"
+        title="Model selection"
         icon={Settings}
-        expanded={expandedSections.model}
-        onToggle={() => toggleSection("model")}
+        expanded={expanded.model}
+        onToggle={() => toggle("model")}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Provider select */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Provider
-            </label>
+            <label className="block text-sm font-medium mb-1">Provider</label>
             <select
-              value={config?.provider || ""}
+              value={currentProvider}
               onChange={(e) => selectProvider(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full input"
             >
-              {Object.entries(providers).map(([providerId, providerData]) => (
-                <option key={providerId} value={providerId}>
-                  {/* Fallback to the provider id when no display_name is supplied by the backend */}
-                  {providerData?.display_name || providerId}
+              {Object.entries(providers).map(([id, p]) => (
+                <option key={id} value={id}>
+                  {p?.display_name ?? id}
                 </option>
               ))}
             </select>
           </div>
+
+          {/* Model select */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Model
-            </label>
+            <label className="block text-sm font-medium mb-1">Model</label>
             <select
-              value={config?.model_id || ""}
+              value={availableModels.find((m) => m.selected)?.model_id ?? ""}
               onChange={(e) => selectModel(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full input"
             >
               {availableModels
-                // Some older backend payloads don’t include the *provider* field
-                // on each model entry.  Treat those models as belonging to the
-                // currently selected provider so the list doesn’t render empty.
                 .filter(
-                  (m) => (m.provider ?? config?.provider) === config?.provider,
+                  (m) => (m.provider ?? currentProvider) === currentProvider,
                 )
-                .map((model) => (
-                  <option key={model.model_id} value={model.model_id}>
-                    {/* Fallback to model_id when no display_name provided */}
-                    {model.display_name || model.model_id}
+                .map((m) => (
+                  <option key={m.model_id} value={m.model_id}>
+                    {m.display_name ?? m.model_id}
                   </option>
                 ))}
             </select>
@@ -256,237 +245,186 @@ export default function UnifiedAISettings() {
         </div>
       </Section>
 
-      {/* Generation Parameters Section */}
+      {/* ------------------------------------------------ Generation ----- */}
       <Section
-        title="Generation Parameters"
+        title="Generation parameters"
         icon={Settings}
-        expanded={expandedSections.generation}
-        onToggle={() => toggleSection("generation")}
+        expanded={expanded.generation}
+        onToggle={() => toggle("generation")}
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Temperature */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Temperature
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max="2"
-              value={temperature ?? 0}
-              onChange={(e) =>
-                updateParams({ temperature: parseFloat(e.target.value) })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            {
+              id: "temperature",
+              label: "Temperature",
+              value: temperature ?? 0,
+              min: 0,
+              max: 2,
+              step: 0.01,
+            },
+            {
+              id: "max_tokens",
+              label: "Max tokens",
+              value: maxTokens ?? "",
+              min: 16,
+              max: 200000,
+              step: 1,
+            },
+            {
+              id: "top_p",
+              label: "Top-p",
+              value: topP ?? 1,
+              min: 0,
+              max: 1,
+              step: 0.01,
+            },
+            {
+              id: "frequency_penalty",
+              label: "Frequency penalty",
+              value: frequencyPenalty ?? 0,
+              min: -2,
+              max: 2,
+              step: 0.1,
+            },
+            {
+              id: "presence_penalty",
+              label: "Presence penalty",
+              value: presencePenalty ?? 0,
+              min: -2,
+              max: 2,
+              step: 0.1,
+            },
+          ].map((fld) => (
+            <NumberInput
+              key={fld.id}
+              {...fld}
+              onChange={(num) => debouncedUpdate({ [fld.id]: num })}
             />
-          </div>
-          {/* Max tokens */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Max tokens
-            </label>
-            <input
-              type="number"
-              min="16"
-              max="200000"
-              value={maxTokens ?? ""}
-              onChange={(e) =>
-                updateParams({
-                  max_tokens: parseInt(e.target.value || "0", 10),
-                })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          {/* Top-p */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Top-p
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max="1"
-              value={topP ?? 1}
-              onChange={(e) =>
-                updateParams({ top_p: parseFloat(e.target.value) })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          {/* Frequency penalty */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Frequency penalty
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              min="-2"
-              max="2"
-              value={frequencyPenalty ?? 0}
-              onChange={(e) =>
-                updateParams({ frequency_penalty: parseFloat(e.target.value) })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          {/* Presence penalty */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Presence penalty
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              min="-2"
-              max="2"
-              value={presencePenalty ?? 0}
-              onChange={(e) =>
-                updateParams({ presence_penalty: parseFloat(e.target.value) })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+          ))}
         </div>
       </Section>
 
-      {/* Reasoning / Thinking Section */}
+      {/* ------------------------------------------------ Reasoning ------ */}
       {(supportsReasoning || supportsThinking) && (
         <Section
-          title="Reasoning / Thinking"
+          title="Reasoning / thinking"
           icon={Brain}
-          expanded={expandedSections.reasoning}
-          onToggle={() => toggleSection("reasoning")}
+          expanded={expanded.reasoning}
+          onToggle={() => toggle("reasoning")}
         >
-          <div className="space-y-4">
-            {isAzureOrOpenAI && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    id="enableReasoning"
-                    type="checkbox"
-                    checked={enableReasoning || false}
-                    onChange={(e) =>
-                      updateReasoningConfig({
-                        enable_reasoning: e.target.checked,
-                      })
-                    }
-                  />
-                  <label htmlFor="enableReasoning" className="text-sm">
-                    Enable Reasoning (Responses API)
-                  </label>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Reasoning effort
-                  </label>
-                  <select
-                    value={reasoningEffort || "medium"}
-                    onChange={(e) =>
-                      updateReasoningConfig({
-                        reasoning_effort: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {["low", "medium", "high"].map((level) => (
-                      <option key={level} value={level}>
-                        {level}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
+          {/* Azure / OpenAI (Responses API) ------------------------------ */}
+          {isAzureOrOpenAI && (
+            <div className="grid md:grid-cols-2 gap-4">
+              <Checkbox
+                id="enableReasoning"
+                label="Enable reasoning (Responses API)"
+                checked={enableReasoning}
+                onChange={(v) => updateReasoningConfig({ enable_reasoning: v })}
+              />
 
-            {isClaudeProvider && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    id="extendedThinking"
-                    type="checkbox"
-                    checked={claudeExtendedThinking || false}
-                    onChange={(e) =>
-                      updateReasoningConfig({
-                        claude_extended_thinking: e.target.checked,
-                      })
-                    }
-                  />
-                  <label htmlFor="extendedThinking" className="text-sm">
-                    Claude extended thinking
-                  </label>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Thinking mode
-                  </label>
-                  <select
-                    value={claudeThinkingMode || "enabled"}
-                    onChange={(e) =>
-                      updateReasoningConfig({
-                        claude_thinking_mode: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {["off", "enabled", "aggressive"].map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Thinking token budget
-                  </label>
-                  <input
-                    type="number"
-                    min="1024"
-                    max="65536"
-                    step="1024"
-                    value={claudeThinkingBudget || 16384}
-                    onChange={(e) =>
-                      updateReasoningConfig({
-                        claude_thinking_budget_tokens: parseInt(
-                          e.target.value || "0",
-                          10,
-                        ),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+              <Select
+                label="Reasoning effort"
+                value={reasoningEffort ?? "medium"}
+                options={["low", "medium", "high"]}
+                onChange={(v) =>
+                  updateReasoningConfig({ reasoning_effort: v })
+                }
+              />
+            </div>
+          )}
+
+          {/* Claude specific ------------------------------------------- */}
+          {isClaudeProvider && (
+            <div className="grid md:grid-cols-2 gap-4">
+              <Checkbox
+                id="extendedThinking"
+                label="Claude extended thinking"
+                checked={claudeExtendedThinking}
+                onChange={(v) =>
+                  updateReasoningConfig({ claude_extended_thinking: v })
+                }
+              />
+
+              <Select
+                label="Thinking mode"
+                value={claudeThinkingMode ?? "enabled"}
+                options={["off", "enabled", "aggressive"]}
+                onChange={(v) =>
+                  updateReasoningConfig({ claude_thinking_mode: v })
+                }
+              />
+
+              <NumberInput
+                id="claudeThinkingBudget"
+                label="Thinking token budget"
+                value={claudeThinkingBudget ?? 16384}
+                min={1024}
+                max={65536}
+                step={1024}
+                onChange={(n) =>
+                  updateReasoningConfig({
+                    claude_thinking_budget_tokens: n,
+                  })
+                }
+              />
+            </div>
+          )}
         </Section>
       )}
     </div>
   );
 }
 
-function Section({ title, icon: Icon, expanded, onToggle, children }) {
+/* ----------------------------------------------------------------------- */
+/* Helper UI controls                                                      */
+/* ----------------------------------------------------------------------- */
+function NumberInput({ id, label, value, onChange, ...rest }) {
   return (
-    <div className="border border-gray-200 rounded-lg">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-t-lg"
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium mb-1">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full input"
+        {...rest}
+      />
+    </div>
+  );
+}
+
+function Checkbox({ id, label, checked, onChange }) {
+  return (
+    <label htmlFor={id} className="flex items-center gap-2">
+      <input
+        id={id}
+        type="checkbox"
+        checked={!!checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="text-sm">{label}</span>
+    </label>
+  );
+}
+
+function Select({ label, value, options, onChange }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full input"
       >
-        <div className="flex items-center gap-3">
-          <Icon className="h-5 w-5 text-gray-600" />
-          <h3 className="text-lg font-medium text-gray-800">{title}</h3>
-        </div>
-        {expanded ? (
-          <ChevronDown className="h-5 w-5 text-gray-500" />
-        ) : (
-          <ChevronRight className="h-5 w-5 text-gray-500" />
-        )}
-      </button>
-      {expanded && <div className="p-4 bg-white rounded-b-lg">{children}</div>}
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

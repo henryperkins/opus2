@@ -119,11 +119,29 @@ class CostTrackingService:
             .first()
         )
 
+        # ------------------------------------------------------------------
+        # Fallback – provider-agnostic lookup
+        # ------------------------------------------------------------------
+        # The *model_configurations* table uses the **model_id** as the sole
+        # primary key which means only a *single* entry can exist for, say,
+        # ``gpt-4o``.  Yet cost-tracking events often carry provider-specific
+        # identifiers ("azure", "openai", …).  Instead of duplicating the full
+        # catalogue for every provider we gracefully fall back to a
+        # *provider-agnostic* lookup when the initial query misses so that
+        # accurate pricing data is still applied.
+        if not model_config:
+            model_config = (
+                self.db.query(ModelConfiguration)
+                .filter(ModelConfiguration.model_id == event.model_id)
+                .first()
+            )
+
         if not model_config:
             logger.warning(
-                f"Model configuration not found for {event.model_id} ({event.provider})"
+                "Model configuration not found for %s (%s) – using default pricing",
+                event.model_id,
+                event.provider,
             )
-            # Use default rates as fallback
             input_rate = Decimal("0.001")  # $0.001 per 1K tokens
             output_rate = Decimal("0.002")  # $0.002 per 1K tokens
         else:

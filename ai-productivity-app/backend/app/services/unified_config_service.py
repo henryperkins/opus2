@@ -1,250 +1,302 @@
 # app/services/unified_config_service.py
 """
 Unified configuration service for AI model settings.
-Single source of truth using RuntimeConfig table.
-"""
-import logging
-from typing import Any, Dict, List, Optional
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+Acts as **single source of truth** (RuntimeConfig table) and is consumed by
+both sync code and the async façade (`UnifiedConfigServiceAsync`).
 
-from app.models.config import RuntimeConfig, ConfigHistory, ModelConfiguration
+This module is intentionally synchronous – the async façade pushes every call
+into a thread-pool so that FastAPI endpoints never block the event-loop.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.models.config import ConfigHistory, ModelConfiguration, RuntimeConfig
 from app.schemas.generation import (
     UnifiedModelConfig,
     ModelInfo,
+    ConfigUpdate,  # only used for type-hints, not required at runtime
 )
-from app.config import settings
+# The consistency validator now lives in app.schemas.generation to keep all
+# configuration-related helpers co-located with their Pydantic models.
+from app.schemas.generation import validate_config_consistency  # type: ignore
 
 logger = logging.getLogger(__name__)
 
 
 class UnifiedConfigService:
-    """Centralized service for all AI configuration management."""
+    """Centralised service that owns all AI runtime-configuration data."""
 
-    # Configuration key prefixes
-    PREFIX_GENERATION = "gen_"
-    PREFIX_REASONING = "reason_"
-    PREFIX_PROVIDER = "provider_"
-    PREFIX_MODEL = "model_"
+    # --------------------------------------------------------------------- #
+    # Constants / settings
+    # --------------------------------------------------------------------- #
+    CACHE_TTL_SECONDS = 300  # 5 min
 
-    # Cache TTL in seconds (5 minutes)
-    CACHE_TTL_SECONDS = 300
-
+    # --------------------------------------------------------------------- #
+    # Construction
+    # --------------------------------------------------------------------- #
     def __init__(self, db: Session):
-        self.db = db
-        self._config_cache = {}
-        self._cache_timestamp = None
+        self.db: Session = db
+        self._config_cache: Dict[str, Any] = {}
+        self._cache_ts: Optional[datetime] = None
 
+    # --------------------------------------------------------------------- #
+    # Public – READ
+    # --------------------------------------------------------------------- #
     def get_current_config(self) -> UnifiedModelConfig:
-        """Get current unified configuration."""
-        # Load all config from RuntimeConfig
-        all_config = self._load_all_config()
-
-        # Convert to UnifiedModelConfig
+        """Return the current, validated, unified configuration."""
+        run_cfg = self._load_all_config()
         try:
-            return UnifiedModelConfig.from_runtime_config(all_config)
-        except Exception as e:
-            logger.warning(f"Failed to load config, using defaults: {e}")
+            return UnifiedModelConfig.from_runtime_config(run_cfg)
+        except Exception as e:  # pragma: no cover
+            logger.warning("Falling back to built-in defaults: %s", e)
             return self._get_default_config()
 
-    def update_config(
-        self, updates: Dict[str, Any], updated_by: str = "api"
-    ) -> UnifiedModelConfig:
-        """Update configuration with validation."""
-        # Get current config
-        current = self.get_current_config()
+    def get_configuration_snapshot(
+        self,
+    ) -> Tuple[UnifiedModelConfig, List[ModelInfo], Dict[str, Dict[str, Any]]]:
+        """
+        Convenience helper used by the router: returns the current config,
+        the list of models and a provider→info catalogue.
+        """
+        current_cfg = self.get_current_config()
+        available_models = self.get_available_models()
 
-        # Apply updates directly - Pydantic model handles camelCase aliases
-        updated_dict = current.model_dump()
-        updated_dict.update(updates)
+        # Build provider catalogue ------------------------------------------------
+        providers: Dict[str, Dict[str, Any]] = {}
 
-        # Create new config instance for validation
-        try:
-            new_config = UnifiedModelConfig(**updated_dict)
-        except ValueError as e:
-            raise ValueError(f"Invalid configuration: {e}")
+        for mdl in available_models:
+            p_key = mdl.provider.lower()
+            providers.setdefault(
+                p_key,
+                {"display_name": p_key.capitalize(), "models": [], "capabilities": {}},
+            )
+            providers[p_key]["models"].append(mdl.model_dump(by_alias=True))
 
-        # Validate using enhanced validation
-        is_valid, error = self.validate_config(new_config.model_dump())
-        if not is_valid:
-            raise ValueError(error)
+            # Merge capability flags: TRUE if any model supports it
+            caps = mdl.capabilities or {}
+            cap_fields = (
+                "supports_functions",
+                "supports_streaming",
+                "supports_vision",
+                "supports_responses_api",
+                "supports_reasoning",
+                "supports_thinking",
+            )
+            for field in cap_fields:
+                if getattr(caps, field, False):
+                    providers[p_key]["capabilities"][field] = True
 
-        # Convert to runtime format
-        runtime_config = new_config.to_runtime_config()
+        if not providers:
+            # No DB? – at least expose the default provider
+            def_provider = current_cfg.provider.lower()
+            providers[def_provider] = {
+                "display_name": def_provider.capitalize(),
+                "models": [
+                    {
+                        "model_id": current_cfg.model_id,
+                        "display_name": current_cfg.model_id,
+                        "provider": def_provider,
+                        "capabilities": {},
+                    }
+                ],
+                "capabilities": {},
+            }
 
-        # Save to database
-        self._save_config(runtime_config, updated_by)
-
-        # Clear cache
-        self._config_cache.clear()
-
-        return new_config
+        return current_cfg, available_models, providers
 
     def get_model_info(self, model_id: str) -> Optional[ModelInfo]:
-        """Get detailed model information."""
-        model_config = (
+        """Return `ModelInfo` for a specific `model_id` (or `None`)."""
+        cfg: ModelConfiguration | None = (
             self.db.query(ModelConfiguration).filter_by(model_id=model_id).first()
         )
-
-        if model_config:
-            return self._model_config_to_info(model_config)
-
-        return None
+        return self._model_config_to_info(cfg) if cfg else None
 
     def get_available_models(
         self, provider: Optional[str] = None, include_deprecated: bool = False
     ) -> List[ModelInfo]:
-        """Get all available models from database."""
+        """Return all models, optionally filtered."""
         try:
-            query = self.db.query(ModelConfiguration)
+            q = self.db.query(ModelConfiguration)
             if provider:
-                query = query.filter_by(provider=provider)
+                q = q.filter_by(provider=provider)
             if not include_deprecated:
-                query = query.filter_by(is_deprecated=False)
-
-            db_models = query.all()
-            models = [self._model_config_to_info(m) for m in db_models]
-
-            return sorted(models, key=lambda m: (m.provider, m.display_name))
-
-        except Exception as e:  # pragma: no cover – DB might be unavailable
-            logger.warning(
-                "Failed to fetch available models, returning empty list: %s", e
+                q = q.filter_by(is_deprecated=False)
+            rows = q.all()
+            return sorted(
+                (self._model_config_to_info(r) for r in rows),
+                key=lambda m: (m.provider, m.display_name),
             )
+        except Exception as e:  # pragma: no cover
+            logger.warning("Could not fetch ModelConfiguration: %s", e)
             return []
 
-    def initialize_defaults(self):
-        """Initialize default configuration if none exists."""
+    # --------------------------------------------------------------------- #
+    # Public – WRITE
+    # --------------------------------------------------------------------- #
+    def update_config(
+        self, updates: Dict[str, Any], *, updated_by: str = "api"
+    ) -> UnifiedModelConfig:
+        """
+        Apply a single update dict to the current configuration.
+        """
+        current = self.get_current_config()
+        merged = current.model_dump()
+        merged.update(updates or {})
+
         try:
-            existing = self.db.query(RuntimeConfig).first()
-            if existing:
-                return  # Already initialized
+            new_cfg = UnifiedModelConfig(**merged)
+        except ValueError as e:
+            raise ValueError(f"Invalid configuration: {e}") from None
 
-            # Get defaults from settings
-            default_config = self._get_default_config()
-            runtime_config = default_config.to_runtime_config()
+        ok, err = self.validate_config(new_cfg.model_dump())
+        if not ok:
+            raise ValueError(err or "Invalid configuration")
 
-            # Save to database
-            self._save_config(runtime_config, "system_init")
+        self._save_config(new_cfg.to_runtime_config(), updated_by)
+        self._invalidate_cache()
+        return new_cfg
 
-            logger.info("Initialized default AI configuration")
+    def batch_update(
+        self, updates: List[Dict[str, Any]], *, updated_by: str
+    ) -> UnifiedModelConfig:
+        """
+        Atomically apply a list of updates.  Rolls back if any update fails.
+        """
+        # Snapshot before we begin
+        original = self.get_current_config()
 
-        except Exception as e:
-            logger.error(f"Failed to initialize defaults: {e}")
-            self.db.rollback()
+        try:
+            final_cfg = original
+            for upd in updates:
+                final_cfg = self.update_config(upd, updated_by=updated_by)
+            return final_cfg
+        except Exception:
+            # Roll back to original if anything went wrong
+            logger.warning("Batch update failed – rolling back")
+            self._save_config(original.to_runtime_config(), f"rollback_{updated_by}")
+            self._invalidate_cache()
+            raise
 
+    # --------------------------------------------------------------------- #
+    # Public – VALIDATION / TEST
+    # --------------------------------------------------------------------- #
     def validate_config(
         self, config_dict: Dict[str, Any]
-    ) -> tuple[bool, Optional[str]]:
-        """Validate configuration dictionary with enhanced capability checking."""
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Lightweight validation – used internally by `update_config`.
+        """
         try:
-            # Try to create UnifiedModelConfig
-            config = UnifiedModelConfig(**config_dict)
+            cfg = UnifiedModelConfig(**config_dict)
+            ok, err = validate_config_consistency(cfg)
+            if not ok:
+                return False, err
 
-            # Basic consistency validation
-            is_valid, error = validate_config_consistency(config)
-            if not is_valid:
-                return False, error
-
-            # Enhanced capability validation using ModelService
+            # Additional model-specific validation
             from app.services.model_service import ModelService
 
-            model_service = ModelService(self.db)
-
-            # Validate model-specific capabilities
-            model_valid, model_error = model_service.validate_model_config(
-                config.model_id, config_dict
-            )
-            if not model_valid:
-                return False, model_error
-
-            return True, None
-
+            msvc = ModelService(self.db)
+            ok, err = msvc.validate_model_config(cfg.model_id, config_dict)
+            return ok, err
         except ValueError as e:
             return False, str(e)
         except Exception as e:
-            logger.error(f"Validation error: {e}")
-            return False, "Invalid configuration format"
+            logger.error("Validation failed: %s", e)
+            return False, "Validation internal error"
+
+    # Verbose helper used by `/validate` route -----------------------------
+    def validate_verbose(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        ok, err = self.validate_config(payload)
+        capabilities: Dict[str, Any] = {}
+        warnings: List[str] = []
+
+        if "model_id" in payload:
+            try:
+                from app.services.model_service import ModelService
+
+                ms = ModelService(self.db)
+                mid = payload["model_id"]
+                capabilities = {
+                    "supports_streaming": ms.supports_streaming(mid),
+                    "supports_functions": ms.supports_functions(mid),
+                    "supports_vision": ms.supports_vision(mid),
+                    "supports_reasoning": ms.is_reasoning_model(mid),
+                    "max_tokens": ms.get_max_tokens(mid),
+                    "context_window": ms.get_context_window(mid),
+                }
+
+                # some simple rule-based warnings
+                if payload.get("stream") and not capabilities["supports_streaming"]:
+                    warnings.append(f"Model {mid} does not support streaming")
+
+                if payload.get("tools") and not capabilities["supports_functions"]:
+                    warnings.append(f"Model {mid} does not support function calling")
+
+                if (
+                    payload.get("max_tokens")
+                    and payload["max_tokens"] > capabilities["max_tokens"]
+                ):
+                    warnings.append(
+                        f"Requested max_tokens exceeds limit ({capabilities['max_tokens']})"
+                    )
+            except Exception as e:  # pragma: no cover
+                logger.warning("Capability extraction failed: %s", e)
+
+        return {
+            "valid": ok,
+            "error": err,
+            "capabilities": capabilities,
+            "warnings": warnings,
+            "validated_at": datetime.utcnow(),
+        }
 
     async def test_config(
         self, config: UnifiedModelConfig, dry_run: bool = False
     ) -> Dict[str, Any]:
-        """Test configuration with actual API call or dry-run validation."""
-        import time
-
-        # For dry-run, only validate without making actual API calls
+        """
+        Live test against the LLM provider (or dry-run validation).
+        """
+        # dry-run ----------------------------------------------------------
         if dry_run:
-            start_time = time.time()
-
-            # Validate configuration
-            is_valid, error = self.validate_config(config.model_dump())
-
-            # Check if model exists in database
+            t0 = time.perf_counter()
+            ok, err = self.validate_config(config.model_dump())
             model_info = self.get_model_info(config.model_id)
-            if not model_info:
-                return {
-                    "success": False,
-                    "message": f"Model '{config.model_id}' not found",
-                    "error": "model_not_found",
-                    "dry_run": True,
-                }
 
-            if not is_valid:
-                return {
-                    "success": False,
-                    "message": "Configuration validation failed",
-                    "error": error,
-                    "dry_run": True,
-                }
-
-            elapsed = time.time() - start_time
-
+            elapsed = time.perf_counter() - t0
             return {
-                "success": True,
-                "message": "Configuration validation successful (dry-run)",
+                "success": ok,
+                "message": "Validation passed" if ok else "Validation failed",
+                "error": err,
                 "response_time": round(elapsed, 3),
-                "model": config.model_id,
-                "provider": config.provider,
                 "dry_run": True,
-                "model_info": {
-                    "display_name": model_info.display_name,
-                    "capabilities": (
-                        model_info.capabilities.model_dump()
-                        if model_info.capabilities
-                        else {}
-                    ),
-                    "cost_per_1k_input": model_info.cost_per_1k_input_tokens,
-                    "cost_per_1k_output": model_info.cost_per_1k_output_tokens,
-                },
+                "model_info": model_info.model_dump(by_alias=True) if model_info else {},
             }
 
-        # Actual API test (non dry-run)
-        from app.llm.client import llm_client as client
+        # live invocation --------------------------------------------------
         import asyncio
+        from app.llm.client import llm_client as client
 
-        start_time = time.time()
         snapshot = client.snapshot()
+        t0 = time.perf_counter()
 
         try:
-            # Create temporary client with test config
-            await client.reconfigure(
-                provider=config.provider,
-                model=config.model_id,
-                use_responses_api=config.use_responses_api,
-                temperature=config.temperature,
-                max_tokens=config.max_tokens,
-                top_p=config.top_p,
-                frequency_penalty=config.frequency_penalty,
-                presence_penalty=config.presence_penalty,
-            )
-
-            # Simple test message
+            await client.reconfigure(**config.model_dump())
             test_messages = [
                 {"role": "system", "content": "You are a test assistant."},
-                {"role": "user", "content": "Say 'test successful' and nothing else."},
+                {
+                    "role": "user",
+                    "content": "Reply with exactly: test successful",
+                },
             ]
-
-            # Test with timeout
             await asyncio.wait_for(
                 client.complete(
                     messages=test_messages,
@@ -253,226 +305,146 @@ class UnifiedConfigService:
                     max_tokens=10,
                     stream=False,
                 ),
-                timeout=30.0,
+                timeout=30,
             )
-
-            elapsed = time.time() - start_time
-
             return {
                 "success": True,
                 "message": "Configuration test successful",
-                "response_time": round(elapsed, 2),
-                "model": config.model_id,
-                "provider": config.provider,
+                "response_time": round(time.perf_counter() - t0, 2),
                 "dry_run": False,
             }
-
         except asyncio.TimeoutError:
+            return {"success": False, "message": "Timeout", "error": "timeout", "dry_run": False}
+        except Exception as e:  # pragma: no cover
+            logger.error("Live configuration test failed: %s", e)
             return {
                 "success": False,
-                "message": "Test timed out after 30 seconds",
-                "error": "timeout",
-                "dry_run": False,
-            }
-        except Exception as e:
-            logger.error(f"Configuration test failed: {e}")
-            return {
-                "success": False,
-                "message": "Configuration test failed",
+                "message": "Live test failed",
                 "error": str(e),
                 "dry_run": False,
             }
         finally:
             await client.restore(snapshot)
 
-    # Private methods
-
+    # --------------------------------------------------------------------- #
+    # Private helpers – persistence
+    # --------------------------------------------------------------------- #
     def _load_all_config(self) -> Dict[str, Any]:
-        """Load all configuration from RuntimeConfig with TTL-based cache."""
-        # Check if cache is still valid
-        if self._config_cache and self._cache_timestamp:
-            from datetime import datetime, timedelta
-
-            if datetime.utcnow() - self._cache_timestamp < timedelta(
-                seconds=self.CACHE_TTL_SECONDS
-            ):
+        if self._config_cache and self._cache_ts:
+            if datetime.utcnow() - self._cache_ts < timedelta(seconds=self.CACHE_TTL_SECONDS):
                 return self._config_cache
 
-        # Attempt to load all runtime-config rows.  In development (or certain
-        # server-less preview) environments the database might be unavailable
-        # which would raise an exception here and – without extra handling –
-        # bubble up as **HTTP 500**.  Because the *ai-config* endpoint should
-        # gracefully degrade to built-in defaults when persistence is not
-        # reachable we guard the query with *try/except* and fall back to an
-        # **empty configuration**.  Any error details are logged for later
-        # inspection but will no longer break the public API.
         try:
-            configs = self.db.query(RuntimeConfig).all()
-        except Exception as e:  # pragma: no cover – broad on purpose for DB issues
-            logger.warning(
-                "RuntimeConfig query failed – falling back to defaults: %s", e
-            )
-            configs = []
-        result = {}
+            rows = self.db.query(RuntimeConfig).all()
+        except Exception as e:  # pragma: no cover
+            logger.warning("RuntimeConfig query failed – using empty config: %s", e)
+            rows = []
 
-        for config in configs:
+        cfg: Dict[str, Any] = {}
+        for row in rows:
             try:
-                # Handle different value types
-                if config.value_type == "string":
-                    result[config.key] = config.value
-                elif config.value_type == "number":
-                    # Preserve numeric types returned by PostgreSQL JSONB
-                    if isinstance(config.value, (int, float)):
-                        result[config.key] = config.value
-                    else:
-                        # Fallback to safe parsing for legacy string rows
-                        try:
-                            result[config.key] = int(config.value)
-                        except (ValueError, TypeError):
-                            try:
-                                result[config.key] = float(config.value)
-                            except (ValueError, TypeError):
-                                # Leave as-is to avoid raising during load
-                                result[config.key] = config.value
-                elif config.value_type == "boolean":
-                    result[config.key] = config.value in [True, "true", "True", "1", 1]
-                elif config.value_type in ("object", "array"):
-                    # Value stored as native JSONB; return as-is
-                    result[config.key] = config.value
+                if row.value_type == "boolean":
+                    cfg[row.key] = row.value in (True, "true", "True", "1", 1)
+                elif row.value_type == "number":
+                    cfg[row.key] = row.value
                 else:
-                    result[config.key] = config.value
-            except Exception as e:
-                logger.warning(f"Failed to parse config {config.key}: {e}")
-                result[config.key] = config.value
+                    cfg[row.key] = row.value
+            except Exception as e:  # pragma: no cover
+                logger.warning("Could not parse RuntimeConfig[%s]: %s", row.key, e)
 
-        self._config_cache = result
-        from datetime import datetime
+        self._config_cache = cfg
+        self._cache_ts = datetime.utcnow()
+        return cfg
 
-        self._cache_timestamp = datetime.utcnow()
-        return result
-
-    def _save_config(self, config_dict: Dict[str, Any], updated_by: str):
-        """Save configuration to RuntimeConfig."""
-        for key, value in config_dict.items():
-            # Skip None values
-            if value is None:
+    def _save_config(self, config: Dict[str, Any], updated_by: str) -> None:
+        """Persist the runtime configuration dictionary."""
+        for key, val in config.items():
+            if val is None:
                 continue
 
-            # Determine value type
-            if isinstance(value, bool):
-                value_type = "boolean"
-            elif isinstance(value, (int, float)):
-                value_type = "number"
-            elif isinstance(value, dict):
-                value_type = "object"
-            elif isinstance(value, list):
-                value_type = "array"
+            if isinstance(val, bool):
+                vtype = "boolean"
+            elif isinstance(val, (int, float)):
+                vtype = "number"
+            elif isinstance(val, dict):
+                vtype = "object"
+            elif isinstance(val, list):
+                vtype = "array"
             else:
-                value_type = "string"
-                value = str(value)
+                vtype = "string"
+                val = str(val)
 
-            # Get existing config
             existing = self.db.query(RuntimeConfig).filter_by(key=key).first()
-
             if existing:
-                # Record history
-                old_value = existing.value
-                if old_value != value:
-                    history = ConfigHistory(
-                        config_key=key,
-                        old_value=old_value,
-                        new_value=value,
-                        changed_by=updated_by,
+                if existing.value != val:
+                    self.db.add(
+                        ConfigHistory(
+                            config_key=key,
+                            old_value=existing.value,
+                            new_value=val,
+                            changed_by=updated_by,
+                        )
                     )
-                    self.db.add(history)
-
-                # Update value
-                existing.value = value
-                existing.value_type = value_type
-                existing.updated_by = updated_by
+                    existing.value = val
+                    existing.value_type = vtype
+                    existing.updated_by = updated_by
             else:
-                # Create new
-                new_config = RuntimeConfig(
-                    key=key, value=value, value_type=value_type, updated_by=updated_by
+                self.db.add(
+                    RuntimeConfig(
+                        key=key,
+                        value=val,
+                        value_type=vtype,
+                        updated_by=updated_by,
+                    )
                 )
-                self.db.add(new_config)
-
         try:
             self.db.commit()
-            self.db.expire_all()  # ensure subsequent reads hit DB
+            self.db.expire_all()
         except IntegrityError as e:
             self.db.rollback()
-            logger.error(
-                f"Configuration update failed due to integrity constraint: {e}"
-            )
-            raise ValueError(f"Configuration update failed: {e}")
-        except Exception as e:
+            logger.error("Integrity error while saving config: %s", e)
+            raise ValueError(f"Configuration update failed: {e}") from None
+        except Exception as e:  # pragma: no cover
             self.db.rollback()
-            logger.error(f"Unexpected error during configuration save: {e}")
-            raise RuntimeError(f"Configuration save failed: {e}")
+            logger.error("Unexpected DB error: %s", e)
+            raise RuntimeError("Database error while saving configuration") from e
 
+    def _invalidate_cache(self) -> None:
+        self._config_cache.clear()
+        self._cache_ts = None
+
+    # --------------------------------------------------------------------- #
+    # Private helpers – defaults / mapping
+    # --------------------------------------------------------------------- #
     def _get_default_config(self) -> UnifiedModelConfig:
-        """Get default configuration from settings."""
-        # Try to find a valid model from the database
-
+        """
+        Build a fallback config when the DB is empty/unavailable.
+        """
         default_provider = settings.llm_provider
-        default_model_id = settings.llm_default_model
-
-        # In normal operation we inspect the database to pick a sensible
-        # default model.  When the database connection is not available (for
-        # instance inside stateless preview deployments or when the initial
-        # migration did not run yet) we simply return a *static* fallback that
-        # matches the configured provider/model settings.
+        default_model = settings.llm_default_model
 
         try:
-            model_config = (
+            mc = (
                 self.db.query(ModelConfiguration)
-                .filter_by(
-                    model_id=default_model_id,
-                    is_available=True,
-                    is_deprecated=False,
-                )
+                .filter_by(model_id=default_model, is_available=True, is_deprecated=False)
                 .first()
             )
-
-            # If not found, try to find any available model for the provider
-            if not model_config:
-                model_config = (
+            if not mc:
+                mc = (
                     self.db.query(ModelConfiguration)
-                    .filter_by(
-                        provider=default_provider,
-                        is_available=True,
-                        is_deprecated=False,
-                    )
+                    .filter_by(provider=default_provider, is_available=True, is_deprecated=False)
                     .first()
                 )
+        except Exception as e:  # pragma: no cover
+            logger.warning("ModelConfiguration lookup failed: %s", e)
+            mc = None
 
-            # If still not found, get any available model
-            if not model_config:
-                model_config = (
-                    self.db.query(ModelConfiguration)
-                    .filter_by(is_available=True, is_deprecated=False)
-                    .first()
-                )
-
-        except Exception as e:  # pragma: no cover – DB might be down
-            logger.warning("Could not inspect ModelConfiguration table: %s", e)
-            model_config = None
-
-        # Use found model or fallback to settings
-        if model_config:
-            actual_provider = model_config.provider
-            actual_model_id = model_config.model_id
-        else:
-            logger.warning(
-                f"No valid model found in database, using settings: {default_provider}/{default_model_id}"
-            )
-            actual_provider = default_provider
-            actual_model_id = default_model_id
+        provider = mc.provider if mc else default_provider
+        model_id = mc.model_id if mc else default_model
 
         return UnifiedModelConfig(
-            provider=actual_provider,
-            model_id=actual_model_id,
+            provider=provider,
+            model_id=model_id,
             temperature=0.7,
             max_tokens=None,
             top_p=1.0,
@@ -485,44 +457,33 @@ class UnifiedConfigService:
             claude_thinking_budget_tokens=settings.claude_thinking_budget_tokens,
         )
 
-    def _model_config_to_info(self, model: ModelConfiguration) -> ModelInfo:
-        """Convert ModelConfiguration to ModelInfo."""
+    def _model_config_to_info(self, mc: ModelConfiguration) -> ModelInfo:
         from app.schemas.generation import ModelCapabilities
 
-        capabilities = ModelCapabilities()
-        if model.capabilities:
-            capabilities = ModelCapabilities(**model.capabilities)
-
+        caps = ModelCapabilities(**(mc.capabilities or {}))
         return ModelInfo(
-            model_id=model.model_id,
-            display_name=model.name,
-            provider=model.provider,
-            model_family=model.model_family,
-            capabilities=capabilities,
-            cost_per_1k_input_tokens=model.cost_input_per_1k,
-            cost_per_1k_output_tokens=model.cost_output_per_1k,
-            performance_tier="balanced",  # Default tier since not in model table
-            average_latency_ms=model.avg_response_time_ms,
-            is_available=model.is_available,
-            is_deprecated=model.is_deprecated,
-            deprecation_date=getattr(model, "deprecated_at", None),
-            recommended_use_cases=getattr(model, "model_metadata", {}).get(
+            model_id=mc.model_id,
+            display_name=mc.name,
+            provider=mc.provider,
+            model_family=mc.model_family,
+            capabilities=caps,
+            cost_per_1k_input_tokens=mc.cost_input_per_1k,
+            cost_per_1k_output_tokens=mc.cost_output_per_1k,
+            performance_tier="balanced",
+            average_latency_ms=mc.avg_response_time_ms,
+            is_available=mc.is_available,
+            is_deprecated=mc.is_deprecated,
+            deprecation_date=getattr(mc, "deprecated_at", None),
+            recommended_use_cases=getattr(mc, "model_metadata", {}).get(
                 "recommended_use_cases", []
-            )
-            or [],
+            ),
         )
 
-    # ------------------------------------------------------------------
-    # Presets / Defaults helpers
-    # ------------------------------------------------------------------
+    # --------------------------------------------------------------------- #
+    # Presets & defaults API
+    # --------------------------------------------------------------------- #
     def get_presets(self) -> List[Dict[str, Any]]:
-        """
-        Return predefined configuration presets optimised for common
-        scenarios (balanced, creative, precise, fast, powerful).
-
-        The router delegates to this method so the presets live in the
-        service layer rather than being duplicated in the API route.
-        """
+        """Return predefined configuration presets."""
         return [
             {
                 "id": "balanced",
@@ -551,7 +512,7 @@ class UnifiedConfigService:
             {
                 "id": "precise",
                 "name": "Precise",
-                "description": "Focused and deterministic responses",
+                "description": "Deterministic responses",
                 "config": {
                     "temperature": 0.3,
                     "max_tokens": 2048,
@@ -584,9 +545,6 @@ class UnifiedConfigService:
             },
         ]
 
-    def get_defaults(self) -> dict[str, Any]:
-        """
-        Return the *authoritative* default configuration in camelCase
-        so the frontend never hard-codes fallback values.
-        """
+    def get_defaults(self) -> Dict[str, Any]:
+        """Expose built-in defaults (camel-case) for the API."""
         return self._get_default_config().model_dump(by_alias=True)

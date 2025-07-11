@@ -1140,10 +1140,11 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     # ------------------------------------------------------------------ #
 
                     try:
-                        from openai import NotFoundError, BadRequestError  # type: ignore
+                        from openai import NotFoundError, BadRequestError, InternalServerError  # type: ignore
                     except Exception:  # pragma: no cover – stubbed in CI
                         NotFoundError = type("NotFoundError", (Exception,), {})
                         BadRequestError = type("BadRequestError", (Exception,), {})
+                        InternalServerError = type("InternalServerError", (Exception,), {})
 
                     # ---------------------
                     # Deployment missing → 404
@@ -1203,6 +1204,8 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                             _is_missing_deployment
                             or _is_tool_schema_error
                             or _is_parameter_unsupported_error
+                            # Fallback on transient 5xx failures
+                            or isinstance(exc, InternalServerError)
                         )
                     ):
                         logger.warning(

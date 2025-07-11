@@ -1,428 +1,266 @@
-# app/schemas/generation.py
 """
-Unified schema definitions for AI model configuration.
-Single source of truth for all generation parameters, reasoning settings, and provider options.
+app/schemas/generation.py
+=========================
 
-Pydantic schemas for the *Unified AI Configuration* system.
+Pydantic models shared by the AI-configuration API, service layer and
+frontend.
 
-This file is the **single source of truth** for all runtime-configurable
-parameters related to language-model selection and inference.  It purposefully
-groups the previously scattered *generation*, *reasoning* and *chat* settings
-into a composable hierarchy of mixins that can be re-used across API layers.
+The module uses *camelCase* aliases in every public schema so the JSON
+payloads match the naming style used in the React code-base.
+
+Key points
+----------
+•  CamelModel  – base class with automatic snake→camel alias generator
+•  GenerationParams / ReasoningParams  – main parameter groups
+•  UnifiedModelConfig  – combines selection + generation + reasoning
+•  ConfigUpdate        – strict PATCH contract (extra = forbid)
+•  ModelInfo           – full catalogue entry incl. capabilities / cost
 """
 
-from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional
 
-# ``to_camel`` is used for automatic alias generation such that **all** outward
-# JSON payloads adhere to the camelCase naming convention expected by the
-# existing frontend, while our Python code continues to use snake_case.
-from app.utils.naming import to_camel
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    conint,
+    confloat,
+    field_validator,
+)
 
-# ---------------------------------------------------------------------------
-# Base model with camelCase alias generation
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+def _to_camel(s: str) -> str:
+    """snake_case → camelCase (simple, two-pass)."""
+    parts = s.split("_")
+    return parts[0] + "".join(p.title() for p in parts[1:])
 
 
 class CamelModel(BaseModel):
-    """Base model that **automatically** exposes camelCase aliases.
-
-    By using this base-class all inheriting schemas will *serialize* to JSON in
-    camelCase (``by_alias=True`` is FastAPI's default) while still allowing
-    snake_case access in Python code and accepting both key styles during
-    deserialization.
-    """
-
+    """Base model that exports camelCase keys by default."""
     model_config = ConfigDict(
-        populate_by_name=True,  # accept field aliases on input as well
-        alias_generator=to_camel,
-        protected_namespaces=(),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Generation-level parameters
-# ---------------------------------------------------------------------------
-
-
-class GenerationParams(CamelModel):
-    """Core generation parameters supported by all providers."""
-
-    temperature: Optional[float] = Field(
-        default=0.7, ge=0.0, le=2.0, description="Controls randomness in generation"
-    )
-    max_tokens: Optional[int] = Field(
-        default=None, ge=1, le=128000, description="Maximum tokens to generate"
-    )
-    top_p: Optional[float] = Field(
-        default=1.0, ge=0.0, le=1.0, description="Nucleus sampling parameter"
-    )
-    frequency_penalty: Optional[float] = Field(
-        default=0.0, ge=-2.0, le=2.0, description="Penalty for token frequency"
-    )
-    presence_penalty: Optional[float] = Field(
-        default=0.0, ge=-2.0, le=2.0, description="Penalty for token presence"
-    )
-    stop_sequences: Optional[List[str]] = Field(
-        default=None, description="Sequences where generation stops"
-    )
-    seed: Optional[int] = Field(
-        default=None, description="Random seed for reproducibility"
-    )
-
-    # Whether to stream partial results back (supported models/providers only)
-    stream: bool = Field(
-        default=False, description="Stream partial token deltas in real-time"
-    )
-
-    model_config = ConfigDict(
+        alias_generator=_to_camel,
         populate_by_name=True,
-        alias_generator=to_camel,
         protected_namespaces=(),
+        extra="forbid",
     )
 
 
-# ---------------------------------------------------------------------------
-# Reasoning / thinking parameters
-# ---------------------------------------------------------------------------
-
-
-class ReasoningParams(CamelModel):
-    """Reasoning and thinking parameters for advanced models."""
-
-    # General reasoning settings
-    enable_reasoning: bool = Field(
-        default=False, description="Enable reasoning for supported models"
-    )
-    reasoning_effort: Literal["low", "medium", "high"] = Field(
-        default="medium", description="Reasoning effort level (Azure/OpenAI)"
-    )
-
-    # Claude-specific thinking settings
-    claude_extended_thinking: Optional[bool] = Field(
-        default=True, description="Enable Claude's extended thinking"
-    )
-    claude_thinking_mode: Optional[Literal["off", "enabled", "aggressive"]] = Field(
-        default="enabled", description="Claude thinking mode"
-    )
-    claude_thinking_budget_tokens: Optional[int] = Field(
-        default=16384, ge=1024, le=65536, description="Token budget for Claude thinking"
-    )
-    claude_show_thinking_process: Optional[bool] = Field(
-        default=True, description="Show Claude's thinking process"
-    )
-    claude_adaptive_thinking_budget: Optional[bool] = Field(
-        default=True, description="Auto-adjust thinking budget based on complexity"
-    )
-
-    # Thinking mode selection
-    default_thinking_mode: Optional[str] = Field(
-        default="chain_of_thought", description="Default thinking approach"
-    )
-    default_thinking_depth: Optional[
-        Literal["surface", "detailed", "comprehensive", "exhaustive"]
-    ] = Field(default="detailed", description="Default thinking depth")
-
-    model_config = ConfigDict(protected_namespaces=())
-
-
-# ---------------------------------------------------------------------------
-# Provider configuration
-# ---------------------------------------------------------------------------
-
-
-class ProviderConfig(CamelModel):
-    """Provider-specific configuration."""
-
-    provider: Literal["openai", "azure", "anthropic"] = Field(
-        ..., description="AI provider"
-    )
-    api_key: Optional[str] = Field(
-        default=None, description="API key (stored encrypted)"
-    )
-    endpoint: Optional[str] = Field(default=None, description="API endpoint URL")
-    api_version: Optional[str] = Field(default=None, description="API version (Azure)")
-    organization_id: Optional[str] = Field(
-        default=None, description="Organization ID (OpenAI)"
-    )
-    use_responses_api: Optional[bool] = Field(
-        default=False, description="Use Azure Responses API"
-    )
-
-    model_config = ConfigDict(protected_namespaces=())
-
-
-# ---------------------------------------------------------------------------
-# Model capability descriptor
-# ---------------------------------------------------------------------------
-
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Capabilities & catalogue
+# ─────────────────────────────────────────────────────────────────────────────
 class ModelCapabilities(CamelModel):
-    """Model capabilities and limits."""
-
     supports_functions: bool = True
-    supports_vision: bool = False
-    supports_reasoning: bool = False
     supports_streaming: bool = True
-    supports_json_mode: bool = True
+    supports_vision: bool = False
+    supports_responses_api: bool = False
+    supports_reasoning: bool = False
+    supports_thinking: bool = False
     max_context_window: int = 4096
     max_output_tokens: int = 4096
     supports_parallel_tools: bool = True
 
-    model_config = ConfigDict(protected_namespaces=())
-
-
-# ---------------------------------------------------------------------------
-# Model catalogue entry
-# ---------------------------------------------------------------------------
-
 
 class ModelInfo(CamelModel):
-    """Complete model information."""
-
-    model_id: str = Field(..., description="Unique model identifier")
-    display_name: str = Field(..., description="User-friendly name")
-    provider: Literal["openai", "azure", "anthropic"] = Field(
-        ..., description="Provider"
-    )
-    model_family: Optional[str] = Field(
-        None, description="Model family (gpt-4, claude-3, etc)"
-    )
-
-    # Capabilities
+    model_id: str = Field(..., description="Unique identifier used in API calls")
+    display_name: str = Field(..., description="Human readable name")
+    provider: Literal["openai", "azure", "anthropic"]
+    model_family: Optional[str] = None
     capabilities: ModelCapabilities = Field(
-        default_factory=ModelCapabilities, description="Model capabilities"
+        default_factory=ModelCapabilities, description="Capability flags & limits"
     )
-
-    # Cost information
+    # Cost
     cost_per_1k_input_tokens: Optional[float] = Field(None, ge=0)
     cost_per_1k_output_tokens: Optional[float] = Field(None, ge=0)
-
-    # Performance characteristics
-    performance_tier: Optional[Literal["fast", "balanced", "powerful"]] = Field(
-        default="balanced", description="Performance tier"
-    )
-    average_latency_ms: Optional[int] = Field(None, description="Average response time")
-
-    # Metadata
+    # Performance
+    performance_tier: Optional[Literal["fast", "balanced", "powerful"]] = "balanced"
+    average_latency_ms: Optional[int] = None
+    # Life-cycle
     is_available: bool = True
     is_deprecated: bool = False
     deprecation_date: Optional[datetime] = None
     recommended_use_cases: List[str] = Field(default_factory=list)
 
-    model_config = ConfigDict(protected_namespaces=())
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Parameter groups
+# ─────────────────────────────────────────────────────────────────────────────
+class GenerationParams(CamelModel):
+    temperature: confloat(ge=0.0, le=2.0) = 1.0  # type: ignore[arg-type]
+    max_tokens: conint(ge=64, le=16000) | None = 1024  # type: ignore[arg-type]
+    top_p: confloat(ge=0.0, le=1.0) = 1.0  # type: ignore[arg-type]
+    frequency_penalty: confloat(ge=-2.0, le=2.0) = 0.0  # type: ignore[arg-type]
+    presence_penalty: confloat(ge=-2.0, le=2.0) = 0.0  # type: ignore[arg-type]
+    # Streaming toggle (client side)
+    stream: bool = False
 
 
-# ---------------------------------------------------------------------------
-# Combined model configuration (generation + reasoning + selection)
-# ---------------------------------------------------------------------------
+class ReasoningParams(CamelModel):
+    enable_reasoning: bool = False
+    reasoning_effort: Literal["low", "medium", "high"] | None = "medium"
+
+    # Claude
+    claude_extended_thinking: Optional[bool] = True
+    claude_thinking_mode: Optional[Literal["off", "enabled", "aggressive"]] = "enabled"
+    claude_thinking_budget_tokens: Optional[int] = Field(16384, ge=1024, le=65536)
+    claude_show_thinking_process: Optional[bool] = True
+    claude_adaptive_thinking_budget: Optional[bool] = True
+
+    default_thinking_mode: Optional[str] = "chain_of_thought"
+    default_thinking_depth: Optional[
+        Literal["surface", "detailed", "comprehensive", "exhaustive"]
+    ] = "detailed"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Provider configuration (stored separately, but kept for completeness)
+# ─────────────────────────────────────────────────────────────────────────────
+class ProviderConfig(CamelModel):
+    provider: Literal["openai", "azure", "anthropic"]
+    api_key: Optional[str] = Field(default=None, description="Encrypted")
+    endpoint: Optional[str] = None
+    api_version: Optional[str] = None
+    organization_id: Optional[str] = None
+    use_responses_api: Optional[bool] = False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Unified model configuration
+# ─────────────────────────────────────────────────────────────────────────────
 class UnifiedModelConfig(GenerationParams, ReasoningParams):
-    """Complete model configuration combining all parameters."""
-
-    # Model selection
-    provider: Literal["openai", "azure", "anthropic"] = Field(
-        ..., description="AI provider"
-    )
-    model_id: str = Field(..., description="Model identifier", alias="modelId")
+    provider: Literal["openai", "azure", "anthropic"]
+    model_id: str = Field(..., alias="modelId")
 
     # Optional overrides
-    system_prompt: Optional[str] = Field(
-        default=None, description="System prompt override"
-    )
-    response_format: Optional[Dict[str, Any]] = Field(
-        default=None, description="Response format (e.g., JSON mode)"
-    )
+    use_responses_api: bool = False
+    system_prompt: Optional[str] = None
+    response_format: Optional[Dict[str, Any]] = None
 
-    # Provider-specific settings
-    use_responses_api: bool = Field(
-        default=False, description="Use Azure Responses API"
-    )
-
-    # Metadata
-    config_name: Optional[str] = Field(
-        default=None, description="Configuration preset name"
-    )
+    # Meta
+    version: int = Field(0, description="Auto-incremented on every update")
+    config_name: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+    # ------- validators -------------------------------------------------
     @field_validator("model_id", mode="before")
     @classmethod
-    def validate_model_id_aliases(cls, v, info):
-        """Accept model_id, chat_model, or modelId for backward compatibility."""
-        if isinstance(info.data, dict):
-            # Check for alternative field names
-            model_id = v or info.data.get("chat_model") or info.data.get("modelId")
-            return model_id
-        return v
+    def _alias_accepts_legacy(cls, v, info):
+        if v:
+            return v
+        # accept chat_model / modelId in payloads coming from old code
+        return (info.data or {}).get("chat_model") or (info.data or {}).get("modelId") or v
 
     @field_validator("model_id")
     @classmethod
-    def validate_model_id(cls, v, info):
-        """Validate model_id based on provider."""
+    def _basic_check(cls, v, info):
         provider = info.data.get("provider")
-
-        # Basic validation - could be extended with actual model lists
         if provider == "azure" and not v:
-            raise ValueError("Model ID required for Azure provider")
-
+            raise ValueError("Azure provider requires an explicit model_id")
         return v
 
+    # ------- conversions -----------------------------------------------
     def to_runtime_config(self) -> Dict[str, Any]:
-        """Convert to runtime configuration format."""
-        config = self.model_dump(exclude_unset=True, exclude_none=True, by_alias=True)
-
-        # Flatten for storage - handle both model_id and modelId
-        model_id = config.pop("modelId", config.pop("model_id", None))
-
-        flat_config = {
-            "provider": config.pop("provider"),
-            "model_id": model_id,  # Store as model_id in database
-            **config,
-        }
-
-        return flat_config
+        data = self.model_dump(exclude_none=True, by_alias=True)
+        model_id = data.pop("modelId")
+        return {"model_id": model_id, **data}
 
     @classmethod
-    def from_runtime_config(cls, config: Dict[str, Any]) -> "UnifiedModelConfig":
-        """Create from runtime configuration."""
-        # Map flat structure back to nested
-        # Handle legacy chat_model field
-        from app.config import settings
-
-        default_model = settings.llm_default_model or "o3"
-
-        model_id = config.get("model_id") or config.get("chat_model", default_model)
-
-        model_config = {
-            "provider": config.get("provider", "openai"),
-            "model_id": model_id,
-            **{
-                k: v
-                for k, v in config.items()
-                if k not in ["provider", "chat_model", "model_id"]
-            },
-        }
-
-        return cls(**model_config)
-
-    model_config = ConfigDict(protected_namespaces=())
+    def from_runtime_config(cls, cfg: Dict[str, Any]) -> "UnifiedModelConfig":
+        mapped = cfg.copy()
+        mapped["modelId"] = mapped.pop("model_id", mapped.pop("chat_model", None))
+        return cls(**mapped)
 
 
-# Request/Response schemas for API
-class ConfigUpdateRequest(CamelModel):
-    """Request schema for configuration updates."""
-
-    config: Optional[UnifiedModelConfig] = None
-    provider_config: Optional[ProviderConfig] = None
-    update_type: Literal["full", "partial"] = "partial"
-
-    model_config = ConfigDict(protected_namespaces=())
-
-
+# ─────────────────────────────────────────────────────────────────────────────
+# API request / response wrappers
+# ─────────────────────────────────────────────────────────────────────────────
 class ConfigResponse(CamelModel):
-    """Response schema for configuration endpoints."""
-
     current: UnifiedModelConfig
     available_models: List[ModelInfo]
     providers: Dict[str, Dict[str, Any]]
     last_updated: datetime
 
-    model_config = ConfigDict(protected_namespaces=())
 
-
-class GenerationParamsResponse(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-        alias_generator=to_camel,
-        json_schema_extra={
-            "example": {"temperature": 0.7, "maxTokens": 1000, "topP": 0.9}
-        },
-    )
-
+class GenerationParamsResponse(CamelModel):
     temperature: float
     max_tokens: int
     top_p: float
-    # ... other fields
+    json_schema_extra = {
+        "example": {"temperature": 0.7, "maxTokens": 1000, "topP": 0.9}
+    }
 
 
-# Validation helpers
+# ─────────────────────────────────────────────────────────────────────────────
+# Strict PATCH contract
+# ─────────────────────────────────────────────────────────────────────────────
+class ConfigUpdate(BaseModel):
+    """
+    Body schema for PATCH / PUT endpoints – every field optional,
+    additional keys rejected (`extra="forbid"` defaults to BaseModel).
+    """
+
+    provider: Optional[str] = Field(None)
+    model_id: Optional[str] = Field(None, alias="modelId")
+    temperature: Optional[confloat(ge=0.0, le=2.0)] = None  # type: ignore[arg-type]
+    max_tokens: Optional[conint(ge=64, le=16000)] = None  # type: ignore[arg-type]
+    top_p: Optional[confloat(ge=0.0, le=1.0)] = None  # type: ignore[arg-type]
+    frequency_penalty: Optional[confloat(ge=-2.0, le=2.0)] = None  # type: ignore[arg-type]
+    presence_penalty: Optional[confloat(ge=-2.0, le=2.0)] = None  # type: ignore[arg-type]
+    enable_reasoning: Optional[bool] = None
+    reasoning_effort: Optional[int] = None
+    use_responses_api: Optional[bool] = None
+    stream: Optional[bool] = None
+
+    model_config = ConfigDict(
+        alias_generator=_to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Consistency validator used by service layer
+# ─────────────────────────────────────────────────────────────────────────────
 def validate_config_consistency(
     config: UnifiedModelConfig,
 ) -> tuple[bool, Optional[str]]:
-    """Validate configuration consistency across parameters."""
+    """
+    Basic cross-field validation without hitting external services.
+    Service layer adds model-specific checks afterwards.
+    """
+    # Claude quirk -------------------------------------------------------
+    if config.provider == "anthropic" and config.enable_reasoning:
+        return (
+            False,
+            "Claude models use extended thinking, not standard reasoning",
+        )
 
-    # Try to get model capabilities from database
-    try:
-        from app.database import SessionLocal
-        from app.models.config import ModelConfiguration
-
-        with SessionLocal() as db:
-            model_config = (
-                db.query(ModelConfiguration).filter_by(model_id=config.model_id).first()
-            )
-            if model_config and model_config.capabilities:
-                capabilities = model_config.capabilities
-
-                # Check if reasoning model supports temperature
-                if capabilities.get("supports_reasoning", False):
-                    if config.temperature is not None and config.temperature != 1.0:
-                        return (
-                            False,
-                            f"Reasoning model {config.model_id} does not support temperature control",
-                        )
-
-                # Check if model supports streaming when requested
-                if hasattr(config, "stream") and config.stream:
-                    if not capabilities.get("supports_streaming", True):
-                        return (
-                            False,
-                            f"Model {config.model_id} does not support streaming",
-                        )
-
-                # Check if model supports functions when tools are provided
-                # This would need to be checked at request time when tools are known
-
-    except Exception:
-        # Fall back to pattern-based validation if database query fails – reuse
-        # the *single* authoritative heuristic from ModelService to avoid
-        # scattering hard-coded model lists across the code base.
-
-        from app.services.model_service import (
-            ModelService,
-        )  # local import to prevent circular deps
-
-        if ModelService.is_reasoning_model_static(config.model_id):
-            if config.temperature is not None and config.temperature != 1.0:
-                return (
-                    False,
-                    f"Reasoning model {config.model_id} does not support temperature control",
-                )
-
-    # Claude models require specific thinking parameters
-    if config.provider == "anthropic":
-        if config.enable_reasoning and not config.claude_extended_thinking:
-            return False, "Claude models use extended thinking, not standard reasoning"
-
-    # Azure Responses API requirements
+    # Responses API only for Azure --------------------------------------
     if config.use_responses_api and config.provider != "azure":
         return False, "Responses API is only available for Azure provider"
 
+    # All good -----------------------------------------------------------
     return True, None
 
 
-# Export all schemas
+# ─────────────────────────────────────────────────────────────────────────────
+# Export list
+# ─────────────────────────────────────────────────────────────────────────────
 __all__ = [
+    "CamelModel",
     "GenerationParams",
     "ReasoningParams",
     "ProviderConfig",
     "ModelCapabilities",
     "ModelInfo",
     "UnifiedModelConfig",
-    "ConfigUpdateRequest",
     "ConfigResponse",
     "GenerationParamsResponse",
+    "ConfigUpdate",
     "validate_config_consistency",
 ]

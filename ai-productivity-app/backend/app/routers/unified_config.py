@@ -15,6 +15,7 @@ from app.schemas.generation import (
     UnifiedModelConfig,
     ConfigResponse,
     ModelInfo,
+    ConfigUpdate,
 )
 from app.dependencies import CurrentUserRequired
 from app.websocket.manager import connection_manager
@@ -131,34 +132,37 @@ async def get_defaults(
     """
     return service.get_defaults()
 
-
 @router.put("", response_model=UnifiedModelConfig)
 async def update_configuration(
-    updates: Dict[str, Any],
-    current_user: AdminRequired,
+    updates: ConfigUpdate,
+    current_user: CurrentUserRequired,
     service: UnifiedConfigService = Depends(get_config_service),
 ) -> UnifiedModelConfig:
     """
-    Update AI configuration with validation.
+    Update AI configuration with strict schema validation.
 
-    Accepts partial updates to any configuration fields:
+    All update attributes are optional; any unknown keys are rejected (extra=forbid).
+
+    Accepts partial updates to configuration fields:
     - Model selection (provider, model_id)
     - Generation parameters (temperature, max_tokens, etc.)
     - Reasoning settings (reasoning_effort, thinking modes)
 
     All updates are validated for consistency before applying.
     """
+    # Convert Pydantic model to dict, including only provided fields
+    update_dict = updates.model_dump(exclude_unset=True)
     try:
-        # Add use_responses_api to the updates if it's not already there
-        if "use_responses_api" not in updates and "model_id" in updates:
-            model_info = service.get_model_info(updates.get("model_id"))
+        # Auto-add use_responses_api based on capabilities, if omitted and model_id is present
+        if "use_responses_api" not in update_dict and "model_id" in update_dict:
+            model_info = service.get_model_info(update_dict.get("model_id"))
             if model_info and model_info.capabilities:
-                updates["use_responses_api"] = (
+                update_dict["use_responses_api"] = (
                     model_info.capabilities.supports_responses_api
                 )
         # Validate and update configuration
         updated_config = service.update_config(
-            updates, updated_by=current_user.username
+            update_dict, updated_by=current_user.username
         )
 
         # Notify LLM client of changes
@@ -181,26 +185,22 @@ async def update_configuration(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update configuration",
         )
+        )
 
 
 @router.patch("", response_model=UnifiedModelConfig)
 async def patch_configuration(
-    updates: Dict[str, Any],
-    current_user: AdminRequired,
+    updates: ConfigUpdate,
+    current_user: CurrentUserRequired,
     service: UnifiedConfigService = Depends(get_config_service),
 ) -> UnifiedModelConfig:
     """
-    Update AI configuration with validation (PATCH variant).
+    Update AI configuration with strict schema validation (PATCH variant).
 
-    This endpoint provides the same functionality as PUT but uses PATCH method
+    This endpoint provides identical schema/contract as PUT but uses PATCH method
     for compatibility with frontend code that expects partial updates.
 
-    Accepts partial updates to any configuration fields:
-    - Model selection (provider, model_id)
-    - Generation parameters (temperature, max_tokens, etc.)
-    - Reasoning settings (reasoning_effort, thinking modes)
-
-    All updates are validated for consistency before applying.
+    All update attributes are optional; any unknown keys are rejected (extra=forbid).
     """
     # Delegate to the PUT handler logic
     return await update_configuration(updates, current_user, service)
@@ -209,7 +209,7 @@ async def patch_configuration(
 @router.put("/batch", response_model=UnifiedModelConfig)
 async def batch_update_configuration(
     updates: List[Dict[str, Any]],
-    current_user: AdminRequired,
+    current_user: CurrentUserRequired,
     service: UnifiedConfigService = Depends(get_config_service),
 ) -> UnifiedModelConfig:
     """

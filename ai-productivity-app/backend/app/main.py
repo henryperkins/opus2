@@ -104,7 +104,26 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
         # during application start-up so that the `/models` endpoint returns
         # the available catalogue.
 
+        # First ensure at least the *initial* catalogue entries exist so that
+        # follow-up update routines have rows to work with.  The helper is
+        # idempotent – it inserts fixture rows only when the table is empty.
         seed_models()  # noqa: SLF001 – util helper
+
+        # -----------------------------------------------------------------
+        # Keep catalogue in sync with the *latest* fixture
+        # -----------------------------------------------------------------
+        # The dedicated *update_models* routine merges new additions, updates
+        # changed cost information (such as updated Azure pricing) and marks
+        # legacy entries as deprecated.  Running it during application start-
+        # up guarantees that the **model_configurations** table always
+        # reflects the repository’s current fixture without requiring manual
+        # intervention or separate cron jobs.
+
+        from app.cli.update_models import update_models  # type: ignore
+
+        # ``update_models`` is *async* – invoke it with ``await`` inside the
+        # lifespan coroutine so it executes in the existing event-loop.
+        await update_models()  # noqa: SLF001 – util helper
     except Exception as exc:  # pragma: no cover – non-critical
         logger.warning("Model seeding skipped: %s", exc)
 
