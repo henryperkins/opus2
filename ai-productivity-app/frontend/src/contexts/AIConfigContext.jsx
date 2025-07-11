@@ -1,23 +1,13 @@
-
 import { createContext, useContext, useReducer, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
-import apiClient from "../api/client";
+import { useAIConfigAPI } from "../hooks/useAIConfigAPI";
 
 /* --------------------------------------------------------------------- */
 /* REST helpers                                                          */
 /* --------------------------------------------------------------------- */
-const API = "/api/v1/ai-config";
-
-const aiConfigAPI = {
-  getConfig: async () => (await apiClient.get(API)).data,
-  patch: async (body) => (await apiClient.patch(API, body)).data,
-  test: async (cfg) => (await apiClient.post(`${API}/test`, cfg)).data,
-  presets: async () => (await apiClient.get(`${API}/presets`)).data,
-  resolveConflict: async (payload) =>
-    (await apiClient.post(`${API}/resolve-conflict`, payload)).data,
-};
+// Removed API constant and aiConfigAPI object - now using hook
 
 /* --------------------------------------------------------------------- */
 /* Utils                                                                 */
@@ -41,6 +31,13 @@ const cameliseKeys = (obj) =>
           Object.entries(obj).map(([k, v]) => [toCamel(k), cameliseKeys(v)]),
         )
       : obj;
+
+const normaliseAvailableModels = (models) => {
+  if (!models || typeof models !== "object") return [];
+  return Object.entries(models).flatMap(([provider, providerModels]) =>
+    providerModels.map((model) => ({ ...model, provider })),
+  );
+};
 
 /* --------------------------------------------------------------------- */
 /* Context / reducer                                                     */
@@ -89,6 +86,7 @@ function reducer(state, { type, payload }) {
 export function AIConfigProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initial);
   const qc = useQueryClient();
+  const aiConfigAPI = useAIConfigAPI();
 
   /* -------------------- fetch --------------------------------------- */
   useQuery({
@@ -102,7 +100,7 @@ export function AIConfigProvider({ children }) {
         type: ACTION.SET,
         payload: {
           config: normaliseKeys(current),
-          models: normaliseKeys(available_models),
+          models: normaliseAvailableModels(available_models),
           providers: providers ?? {},
           lastUpdated: last_updated,
           loading: false,
@@ -164,7 +162,7 @@ export function AIConfigProvider({ children }) {
       dispatch({ type: ACTION.TEST_RES, payload: res });
       return res;
     },
-    [],
+    [aiConfigAPI],
   );
 
   /* -------------------- conflict resolve --------------------------- */
@@ -174,7 +172,7 @@ export function AIConfigProvider({ children }) {
         conflict_strategy: strategy,
         proposed_config: proposed,
       }),
-    [],
+    [aiConfigAPI],
   );
 
   /* -------------------- apply preset ------------------------------ */
@@ -195,7 +193,7 @@ export function AIConfigProvider({ children }) {
 
         // The backend now handles provider-specific adaptations
         // Just send the preset config as-is
-        await updateConfig(configData);
+        await updateConfig({ ...configData, provider: preset.config.provider });
         toast.success(`Preset '${preset.name || presetId}' applied`);
         return true;
       } catch (e) {
@@ -212,7 +210,7 @@ export function AIConfigProvider({ children }) {
         return false;
       }
     },
-    [updateConfig],
+    [updateConfig, aiConfigAPI],
   );
 
   // /* -------------------- websocket sync ----------------------------- */
@@ -302,3 +300,4 @@ export function useReasoningConfig() {
     updateReasoningConfig: (patch) => updateConfig(patch),
   };
 }
+
