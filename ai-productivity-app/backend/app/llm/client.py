@@ -1056,23 +1056,45 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     # ---------------------
                     _is_missing_deployment = isinstance(exc, NotFoundError)
 
-                    # Azure may complain about various missing *tools* fields.
-                    # Historically we checked only for "tools[0].type" but more
-                    # recent API versions tightened validation and also return
-                    # errors like "tools[0].name".  We treat both as schema
-                    # issues that trigger a transparent fallback.
-                    _is_tool_schema_error = (
-                        isinstance(exc, BadRequestError)
-                        and ("tools[0].type" in str(exc) or "tools[0].name" in str(exc))
-                    )
+                    # ------------------------------------------------------------------
+                    # Tool schema validation errors (Azure preview 2024-05 and later)
+                    # ------------------------------------------------------------------
+                    # Earlier service versions surfaced schema problems via
+                    # plain-text messages (e.g. "tools[0].type is required").
+                    # The **v1 preview** APIs now return structured errors with
+                    # ``error.code == \"InvalidToolSchema\"``.
+                    # We therefore treat *both* presentation styles as
+                    # indicators of a schema problem that warrants a seamless
+                    # fallback to the legacy Chat-Completions surface.
+                    #
+                    # Because the concrete SDK *BadRequestError* type exposes
+                    # vendor-specific content only via ``str(exc)``, we keep a
+                    # tolerant substring check while also inspecting the
+                    # *code* attribute when present.
+                    # ------------------------------------------------------------------
+
+                    _error_text = str(exc)
+
+                    _is_tool_schema_error = False
+                    if isinstance(exc, BadRequestError):
+                        # New structured error shape
+                        if getattr(exc, "code", "") == "InvalidToolSchema":
+                            _is_tool_schema_error = True
+                        else:
+                            # Legacy message heuristics
+                            if (
+                                "tools[0].type" in _error_text
+                                or "tools[0].name" in _error_text
+                                or "invalid tool schema" in _error_text.lower()
+                            ):
+                                _is_tool_schema_error = True
 
                     # Detect 400 responses complaining about unsupported
-                    # sampling parameters (e.g. "Unsupported parameter:
-                    # 'temperature' is not supported with this model.").
+                    # sampling parameters ("Unsupported parameter" style)
                     _is_parameter_unsupported_error = False
 
                     if isinstance(exc, BadRequestError):
-                        msg_lc = str(exc).lower()
+                        msg_lc = _error_text.lower()
                         if (
                             "unsupported parameter" in msg_lc
                             and "is not supported with this model" in msg_lc

@@ -79,13 +79,16 @@ def get_azure_client() -> AsyncAzureOpenAI:  # pragma: no cover – trivial
 
     base_url = f"{resource_endpoint}/openai/v1/"
 
-    # ``api-version=preview`` is the canonical version string for the v1
-    # preview surface (Microsoft Learn, 2024-05-01).  We set it via
-    # *default_query* to allow callers to override per-request if needed.
+    # Users can override the API version via environment or runtime config.
+    # When not specified we follow the official guidance and default to
+    # **latest** which will automatically resolve to the most recent
+    # non-breaking version.
+
+    api_version = getattr(settings, "azure_openai_api_version", None) or "latest"
 
     kwargs: Dict[str, Any] = {
         "base_url": base_url,
-        "default_query": {"api-version": "preview"},
+        "default_query": {"api-version": api_version},
     }
 
     # Authentication strategy – default to API key unless *azure_auth_method*
