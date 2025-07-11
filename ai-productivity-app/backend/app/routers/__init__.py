@@ -8,7 +8,8 @@ from .auth import router as auth_router
 
 # Unified AI configuration router (replaces legacy config/models routers)
 from .projects import router as projects_router
-from .unified_config import router as config_router  # Unified configuration endpoints
+# Combined AI configuration router (read & write endpoints)
+from .ai_config import ai_config_router as config_router
 
 # Analytics router (MVP)
 # Keep import optional to avoid breaking deployments that do not yet require

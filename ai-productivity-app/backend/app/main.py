@@ -52,7 +52,9 @@ from .chat import admin_routes as admin_router
 from .chat import confidence_routes as confidence_router
 
 # Import unified config router
-from .routers import unified_config as ai_config_router
+# Unified AI configuration router (new path)
+# Unified AI configuration router
+from .routers.ai_config import ai_config_router as config_router
 
 
 @asynccontextmanager
@@ -199,7 +201,7 @@ app.include_router(config_ws_router.router)
 app.include_router(admin_router.router, prefix="/admin", tags=["Admin"])
 app.include_router(confidence_router.router, prefix="/confidence", tags=["Confidence"])
 
-app.include_router(ai_config_router.router)
+app.include_router(config_router)
 
 
 @app.get("/health")

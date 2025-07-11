@@ -23,7 +23,7 @@ from app.models.config import ConfigHistory, ModelConfiguration, RuntimeConfig
 from app.schemas.generation import (
     UnifiedModelConfig,
     ModelInfo,
-    ConfigUpdate,  # only used for type-hints, not required at runtime
+    # ConfigUpdate only used for type-hints, not required at runtime
 )
 # The consistency validator now lives in app.schemas.generation to keep all
 # configuration-related helpers co-located with their Pydantic models.
@@ -548,3 +548,18 @@ class UnifiedConfigService:
     def get_defaults(self) -> Dict[str, Any]:
         """Expose built-in defaults (camel-case) for the API."""
         return self._get_default_config().model_dump(by_alias=True)
+
+    def initialize_defaults(self):
+        """Initialize default configurations. Called during app startup."""
+        # This method is called synchronously during app startup
+        # For now, we'll just log that initialization is happening
+        logger.info("UnifiedConfigService initialized")
+
+        # Any default configuration setup can be added here
+        # For example, setting up default AI provider configs, etc.
+        pass
+
+    def cleanup(self):
+        """Cleanup resources."""
+        if hasattr(self, 'db') and self.db:
+            self.db.close()

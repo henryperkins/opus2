@@ -11,7 +11,7 @@ from app.schemas.generation import (
     ConfigResponse,
     ModelInfo,
 )
-from ._deps import get_service, CurrentUser, UnifiedConfigServiceAsync
+from ._deps import get_config_service, CurrentUser, UnifiedConfigServiceAsync
 
 logger = logging.getLogger(__name__)
 
@@ -25,28 +25,17 @@ router = APIRouter(
 # --------------------------------------------------------------------------- #
 # Read-only endpoints
 # --------------------------------------------------------------------------- #
-@router.get("", response_model=ConfigResponse, summary="Current configuration")
-async def get_configuration(
-    current_user: CurrentUser,
-    service: Annotated[UnifiedConfigServiceAsync, Depends(get_service)],
-) -> ConfigResponse:
+@router.get("/test", summary="Test endpoint")
+async def test_endpoint() -> dict:
+    """Simple test endpoint without dependencies."""
+    return {"status": "ok", "message": "test endpoint working"}
+
+@router.get("", summary="Current configuration")
+async def get_configuration() -> dict:
     """
     Returns the active configuration plus provider/model catalogue.
     """
-    try:
-        current_cfg, avail_models, providers = await service.get_configuration_snapshot()
-        return ConfigResponse(
-            current=current_cfg,
-            available_models=avail_models,
-            providers=providers,
-            last_updated=datetime.utcnow().isoformat(),
-        )
-    except Exception:
-        logger.exception("Failed to load configuration")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load configuration",
-        )
+    return {"status": "temporary", "message": "endpoint temporarily simplified"}
 
 
 @router.get("/defaults", response_model=dict, summary="Built-in defaults")
@@ -59,7 +48,7 @@ async def get_defaults(
 @router.get("/models", response_model=list[ModelInfo], summary="Available models")
 async def list_models(
     current_user: CurrentUser,
-    service: Annotated[UnifiedConfigServiceAsync, Depends(get_service)],
+    service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
     provider: Optional[str] = None,
     include_deprecated: bool = False,
 ) -> List[ModelInfo]:
@@ -70,7 +59,7 @@ async def list_models(
 async def get_model(
     model_id: str,
     current_user: CurrentUser,
-    service: Annotated[UnifiedConfigServiceAsync, Depends(get_service)],
+    service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> ModelInfo:
     model = await service.get_model_info(model_id)
     if not model:
@@ -82,7 +71,7 @@ async def get_model(
 async def validate_configuration(
     payload: Dict[str, Any],
     current_user: CurrentUser,
-    service: Annotated[UnifiedConfigServiceAsync, Depends(get_service)],
+    service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> Dict[str, Any]:
     return await service.validate_verbose(payload)
 

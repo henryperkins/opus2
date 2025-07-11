@@ -1,10 +1,5 @@
-import React, {
-  createContext,
-  useContext,
-  useReducer,
-  useCallback,
-  useEffect,
-} from "react";
+
+import { createContext, useContext, useReducer, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
@@ -202,10 +197,57 @@ export function AIConfigProvider({ children }) {
 }
 
 /* --------------------------------------------------------------------- */
-/* Hook                                                                  */
+/* Hooks – public API                                                    */
 /* --------------------------------------------------------------------- */
-export const useAIConfig = () => {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error("useAIConfig must be used inside Provider");
-  return ctx;
-};
+
+/* Main context accessor ------------------------------------------------ */
+export function useAIConfig() {
+  return useContext(Ctx);
+}
+
+/* Keep external hook import path unchanged ---------------------------- */
+export { useModelSelection } from "../hooks/useModelSelect";
+
+/* Generation-parameter helper ----------------------------------------- */
+export function useGenerationParams() {
+  const { config, updateConfig } = useAIConfig();
+
+  return {
+    /* current values */
+    temperature:      config?.temperature,
+    maxTokens:        config?.max_tokens,
+    topP:             config?.top_p,
+    frequencyPenalty: config?.frequency_penalty,
+    presencePenalty:  config?.presence_penalty,
+    /* mutator */
+    updateParams: (patch) => updateConfig(patch),
+  };
+}
+
+/* Reasoning / thinking helper ----------------------------------------- */
+export function useReasoningConfig() {
+  const { config, updateConfig } = useAIConfig();
+
+  const provider         = config?.provider;
+  const isClaudeProvider = provider === "anthropic";
+  const isAzureOrOpenAI  = provider === "azure" || provider === "openai";
+
+  return {
+    /* current values */
+    enableReasoning:        config?.enable_reasoning,
+    reasoningEffort:        config?.reasoning_effort,
+    claudeExtendedThinking: config?.claude_extended_thinking,
+    claudeThinkingMode:     config?.claude_thinking_mode,
+    claudeThinkingBudget:   config?.claude_thinking_budget_tokens,
+
+    /* derived feature flags */
+    isClaudeProvider,
+    isAzureOrOpenAI,
+    supportsReasoning: !!config?.enable_reasoning || isAzureOrOpenAI,
+    supportsThinking:  isClaudeProvider,
+
+    /* mutator */
+    updateReasoningConfig: (patch) => updateConfig(patch),
+  };
+}
+

@@ -60,6 +60,7 @@ class ModelCapabilities(CamelModel):
     supports_responses_api: bool = False
     supports_reasoning: bool = False
     supports_thinking: bool = False
+    supports_json_mode: bool = False
     max_context_window: int = 4096
     max_output_tokens: int = 4096
     supports_parallel_tools: bool = True
@@ -186,13 +187,31 @@ class ConfigResponse(CamelModel):
     last_updated: datetime
 
 
+# NOTE:
+# Pydantic v2 treats any unannotated class-level attribute as a potential
+# model field and therefore raises `PydanticUserError` if a plain attribute is
+# added without a type annotation.  The `json_schema_extra` helper attribute
+# is *not* meant to be a field – it should be passed to the model configuration
+# instead.  Defining it directly on the class (as was common in Pydantic v1)
+# breaks under v2.  We fix this by moving the value into `model_config`, the
+# recommended way of customising schema generation in Pydantic v2.
+
+
 class GenerationParamsResponse(CamelModel):
     temperature: float
     max_tokens: int
     top_p: float
-    json_schema_extra = {
-        "example": {"temperature": 0.7, "maxTokens": 1000, "topP": 0.9}
-    }
+
+    # Extra OpenAPI / JSON-schema metadata ------------------------------
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"temperature": 0.7, "maxTokens": 1000, "topP": 0.9}
+        },
+        alias_generator=_to_camel,
+        populate_by_name=True,
+        protected_namespaces=(),
+        extra="forbid",
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -16,7 +16,8 @@ DBSession = Annotated[AsyncSession, Depends(get_async_db)]
 
 
 # services ------------------------------------------------------------------ #
-async def get_service(db: DBSession) -> UnifiedConfigServiceAsync:
+async def get_config_service(db: DBSession) -> UnifiedConfigServiceAsync:
+    """Get the unified config service instance."""
     return UnifiedConfigServiceAsync(db)
 
 

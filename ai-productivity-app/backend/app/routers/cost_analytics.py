@@ -10,7 +10,6 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
-from app.database import get_db
 from app.models.user import User
 from app.services.cost_tracking import CostTrackingService, UsageAggregates
 from app.dependencies import get_current_user, get_current_user_optional

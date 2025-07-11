@@ -387,9 +387,34 @@ def start_background_loop() -> None:
     # ``sslmode``).
     # -------------------------------------------------------------------
 
-    from app.database import _build_async_db_url  # local import to avoid cycle
+    # Ensure the async driver is used: convert postgresql:// to postgresql+asyncpg:// if necessary.
+    db_url = settings.database_url
+    if db_url and db_url.startswith("postgresql://"):
+        async_db_url = "postgresql+asyncpg://" + db_url[len("postgresql://") :]
+    else:
+        async_db_url = db_url
 
-    async_db_url = _build_async_db_url(settings.database_url)
+    # Remove asyncpg-incompatible parameters from URL
+    if async_db_url and "?" in async_db_url:
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+        parsed = urlparse(async_db_url)
+        query_params = parse_qs(parsed.query)
+        
+        # Remove asyncpg-incompatible parameters
+        incompatible_params = ['sslmode', 'channel_binding']
+        for param in incompatible_params:
+            query_params.pop(param, None)
+        
+        # Reconstruct URL with cleaned parameters
+        new_query = urlencode(query_params, doseq=True)
+        async_db_url = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment
+        ))
 
     connect_args: dict[str, object] = {}
     if async_db_url.startswith("postgresql+asyncpg"):

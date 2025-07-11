@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.schemas.generation import UnifiedModelConfig, ConfigUpdate
-from ._deps import get_service, CurrentAdmin, UnifiedConfigServiceAsync
+from ._deps import get_config_service, CurrentAdmin, UnifiedConfigServiceAsync
 from ._helpers import notify_llm_client, broadcast_config_update
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ router = APIRouter(
 async def update_config(
     update: ConfigUpdate,
     admin: CurrentAdmin,
-    service: Annotated[UnifiedConfigServiceAsync, Depends(get_service)],
+    service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> UnifiedModelConfig:
     """
     Partially updates the configuration.  Requires Admin privileges.
@@ -50,7 +50,7 @@ async def update_config(
 async def batch_update(
     updates: List[ConfigUpdate],
     admin: CurrentAdmin,
-    service: Annotated[UnifiedConfigServiceAsync, Depends(get_service)],
+    service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> UnifiedModelConfig:
     """
     Applies a list of updates in a single DB transaction.
