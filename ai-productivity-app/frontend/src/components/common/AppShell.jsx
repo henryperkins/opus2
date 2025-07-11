@@ -9,6 +9,8 @@ import ThemeToggle from './ThemeToggle';
 import { Link } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore';
 import { NavigationProvider } from '../../contexts/NavigationContext';
+// Global dialog for config conflicts
+import ConfigConflictDialog from '../settings/ConfigConflictDialog';
 
 export default function AppShell({ sidebar, children }) {
   const { user, loading: authLoading } = useAuth();
@@ -74,6 +76,7 @@ export default function AppShell({ sidebar, children }) {
         </header>
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
+      <ConfigConflictDialog />
     );
   }
 
@@ -146,6 +149,8 @@ export default function AppShell({ sidebar, children }) {
           )}
         </div>
       </div>
+      {/* Global dialogs */}
+      <ConfigConflictDialog />
     </NavigationProvider>
   );
 }

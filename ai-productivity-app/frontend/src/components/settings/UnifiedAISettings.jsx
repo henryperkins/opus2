@@ -20,6 +20,9 @@ import {
   useReasoningConfig
 } from '../../contexts/AIConfigContext';
 
+// Lazy import to break potential circular deps when this file is SSR-ed.
+import PresetSelector from './PresetSelector';
+
 export default function UnifiedAISettings() {
   const {
     config,
@@ -119,6 +122,10 @@ export default function UnifiedAISettings() {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // JSX
+  // -------------------------------------------------------------------------
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -179,6 +186,16 @@ export default function UnifiedAISettings() {
           </div>
         </div>
       )}
+
+      {/* Presets Section ---------------------------------------------------- */}
+      <Section
+        title="Presets"
+        icon={Settings}
+        expanded={expandedSections.presets}
+        onToggle={() => toggleSection('presets')}
+      >
+        <PresetSelector className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+      </Section>
 
       {/* Model Selection Section */}
       <Section

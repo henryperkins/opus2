@@ -61,7 +61,8 @@ const ACTIONS = {
   UPDATE_PERFORMANCE: 'UPDATE_PERFORMANCE',
   RESET_ERROR: 'RESET_ERROR',
   SET_CONFLICT: 'SET_CONFLICT',
-  RESOLVE_CONFLICT: 'RESOLVE_CONFLICT'
+  RESOLVE_CONFLICT: 'RESOLVE_CONFLICT',
+  CLEAR_CONFLICT: 'CLEAR_CONFLICT'
 };
 
 // Initial state
@@ -177,6 +178,12 @@ function aiConfigReducer(state, action) {
         ...state,
         conflictState: null,
         config: action.payload.resolved_config || state.config
+      };
+
+    case ACTIONS.CLEAR_CONFLICT:
+      return {
+        ...state,
+        conflictState: null
       };
 
     default:
@@ -330,28 +337,53 @@ export function AIConfigProvider({ children }) {
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/config`;
 
     let ws = null;
+    let reconnectAttempts = 0;
+    let reconnectTimeout = null;
 
-    try {
-      ws = new WebSocket(wsUrl);
+    const connect = () => {
+      try {
+        ws = new WebSocket(wsUrl);
 
-      ws.onmessage = handleWebSocketMessage;
+        ws.onopen = () => {
+          reconnectAttempts = 0; // reset back-off
+        };
 
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
+        ws.onmessage = handleWebSocketMessage;
 
-      ws.onclose = () => {
-        console.log('WebSocket connection closed');
-      };
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
 
-      return () => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.close();
-        }
-      };
-    } catch (error) {
-      console.error('Failed to create WebSocket connection:', error);
-    }
+        ws.onclose = () => {
+          console.log('WebSocket connection closed');
+          scheduleReconnect();
+        };
+      } catch (err) {
+        console.error('Failed to create WebSocket connection:', err);
+        scheduleReconnect();
+      }
+    };
+
+    const scheduleReconnect = () => {
+      // Avoid stacking multiple timeouts
+      if (reconnectTimeout) return;
+
+      const delay = Math.min(1000 * 2 ** reconnectAttempts, 30000); // max 30s
+      reconnectAttempts += 1;
+      reconnectTimeout = setTimeout(() => {
+        reconnectTimeout = null;
+        connect();
+      }, delay);
+    };
+
+    connect();
+
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
   }, [queryClient]);
 
   // Enhanced methods
@@ -407,6 +439,7 @@ export function AIConfigProvider({ children }) {
 
   const resetError = useCallback(() => {
     dispatch({ type: ACTIONS.RESET_ERROR });
+    dispatch({ type: ACTIONS.CLEAR_CONFLICT });
   }, []);
 
   const resolveConflict = useCallback(async (strategy, proposedConfig) => {
