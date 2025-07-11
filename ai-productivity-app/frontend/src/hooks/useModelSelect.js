@@ -31,17 +31,21 @@ export function useModelSelection() {
   const availableModels = useMemo(() => models ?? [], [models]);
 
   const providerList = useMemo(
-    () =>
-      Object.keys(providers).length
-        ? providers
-        : {
-            [currentProvider]: {
-              display_name:
-                currentProvider.charAt(0).toUpperCase() +
-                currentProvider.slice(1),
-              models: availableModels,
-            },
-          },
+    () => {
+      if (providers && Object.keys(providers).length) return providers;
+
+      const key = currentProvider ?? "unknown";
+      const displayName = currentProvider
+        ? currentProvider.charAt(0).toUpperCase() + currentProvider.slice(1)
+        : "Unknown";
+
+      return {
+        [key]: {
+          display_name: displayName,
+          models: availableModels,
+        },
+      };
+    },
     [providers, currentProvider, availableModels],
   );
 

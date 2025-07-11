@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Annotated, Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 
 from app.schemas.generation import (
     UnifiedModelConfig,
@@ -40,8 +41,11 @@ async def get_configuration() -> dict:
 
 @router.get("/defaults", response_model=dict, summary="Built-in defaults")
 async def get_defaults(
-    service: Annotated[UnifiedConfigServiceAsync, Depends(get_service)]
+    service: Annotated[
+        UnifiedConfigServiceAsync, Depends(get_config_service)
+    ],
 ) -> Dict[str, Any]:
+    """Return the built-in default configuration values."""
     return await service.get_defaults()
 
 
@@ -74,6 +78,23 @@ async def validate_configuration(
     service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> Dict[str, Any]:
     return await service.validate_verbose(payload)
+
+
+# --------------------------------------------------------------------------- #
+# Presets
+# --------------------------------------------------------------------------- #
+
+@router.get(
+    "/presets",
+    summary="Configuration presets",
+    response_class=JSONResponse,
+)
+async def list_presets(
+    service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
+):
+    """Return predefined configuration presets without Pydantic validation."""
+    presets = await service.get_presets()
+    return JSONResponse(content=presets)
 
 # Additional read-only endpoints (presets, test-run, etc.) can be migrated
 # here following the same pattern.

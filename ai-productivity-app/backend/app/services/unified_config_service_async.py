@@ -64,6 +64,15 @@ class UnifiedConfigServiceAsync:
         
         return await loop.run_in_executor(_executor, _get_defaults)
 
+    async def get_presets(self) -> List[Dict[str, Any]]:
+        """Return the static list of configuration presets."""
+        loop = asyncio.get_running_loop()
+
+        def _get_presets():
+            return self._svc.get_presets()
+
+        return await loop.run_in_executor(_executor, _get_presets)
+
     async def get_available_models(
         self, provider: str | None = None, include_deprecated: bool = False
     ) -> List[ModelInfo]:
@@ -99,7 +108,9 @@ class UnifiedConfigServiceAsync:
         loop = asyncio.get_running_loop()
         
         def _update_config():
-            return self._svc.update_config(update.dict(exclude_unset=True), updated_by)
+            return self._svc.update_config(
+                update.dict(exclude_unset=True), updated_by=updated_by
+            )
         
         return await loop.run_in_executor(_executor, _update_config)
 
@@ -111,6 +122,6 @@ class UnifiedConfigServiceAsync:
         loop = asyncio.get_running_loop()
         
         def _batch_update():
-            return self._svc.batch_update(dict_updates, updated_by)
+            return self._svc.batch_update(dict_updates, updated_by=updated_by)
         
         return await loop.run_in_executor(_executor, _batch_update)
