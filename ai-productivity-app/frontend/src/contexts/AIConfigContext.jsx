@@ -97,6 +97,7 @@ export function AIConfigProvider({ children }) {
     staleTime: 30_000,
     onSuccess: (data) => {
       const { current, available_models, providers, last_updated } = data;
+      console.log("Current config from backend:", current);
       dispatch({
         type: ACTION.SET,
         payload: {
@@ -179,19 +180,38 @@ export function AIConfigProvider({ children }) {
   /* -------------------- apply preset ------------------------------ */
   const applyPreset = useCallback(
     async (presetId) => {
+      let preset = null;
       try {
         const presets = await aiConfigAPI.presets();
-        const preset = presets.find((p) => p.id === presetId);
+        preset = presets.find((p) => p.id === presetId);
         if (!preset) {
           toast.error(`Preset '${presetId}' not found`);
           return false;
         }
 
         // Ensure camelCase keys for the API
-        await updateConfig(cameliseKeys(preset.config));
+        const configData = cameliseKeys(preset.config);
+        console.log("Applying preset:", { presetId, preset, configData });
+        console.log("Raw preset config:", preset.config);
+        console.log("Camelized config data:", configData);
+        
+        // Try with minimal fields first to debug
+        const minimalConfig = {
+          temperature: configData.temperature,
+          maxTokens: configData.maxTokens
+        };
+        console.log("Trying minimal config first:", minimalConfig);
+        
+        await updateConfig(minimalConfig);
         toast.success(`Preset '${preset.name || presetId}' applied`);
         return true;
       } catch (e) {
+        console.error("Error applying preset:", { 
+          presetId, 
+          preset, 
+          error: e.message, 
+          response: e.response?.data 
+        });
         toast.error(e.message || "Failed to apply preset");
         return false;
       }
