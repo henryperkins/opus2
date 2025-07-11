@@ -176,9 +176,38 @@ class ConfigPresetManager:
         """
         presets = []
         for preset in self.DEFAULT_PRESETS:
-            # Return a simplified version for the frontend
-            # The actual provider-specific config will be applied when the preset is selected
-            config = preset["provider_configs"].get("openai", {})
+            # ------------------------------------------------------------------
+            # The original implementation always returned the **OpenAI** variant
+            # *without* its associated provider field.  That caused 422 errors
+            # whenever the active configuration used a different provider – the
+            # frontend patched a model like "gpt-4o" while the server kept the
+            # previous provider (e.g. "azure"), triggering a validation
+            # mismatch (model does not belong to provider).
+            #
+            # To keep the payload compact *and* unambiguous we still expose a
+            # single representative configuration **but** we now embed the
+            # corresponding `provider` so the backend can switch both fields in
+            # one PATCH request.
+            # ------------------------------------------------------------------
+
+            # Pick the OpenAI variant as the generic example (unchanged)
+            # Grab the OpenAI variant and emit **camelCase** keys so the
+            # frontend can PATCH the object verbatim (ConfigUpdate expects
+            # camelCase – `modelId`, `maxTokens` …).  We also embed the
+            # corresponding provider so that both fields are switched in one
+            # round-trip.
+
+            raw_cfg = preset["provider_configs"].get("openai", {})
+
+            # Convert snake_case → camelCase to comply with the API contract
+            def _to_camel(s: str) -> str:
+                parts = s.split("_")
+                return parts[0] + "".join(p.title() for p in parts[1:])
+
+            config = {(_to_camel(k) if "_" in k else k): v for k, v in raw_cfg.items()}
+
+            # Ensure provider travels with the patch payload
+            config.setdefault("provider", "openai")
             presets.append({
                 "id": preset["id"],
                 "name": preset["name"],

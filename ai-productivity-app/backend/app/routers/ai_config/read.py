@@ -12,7 +12,7 @@ from app.schemas.generation import (
     ConfigResponse,
     ModelInfo,
 )
-from ._deps import get_config_service, CurrentUser, UnifiedConfigServiceAsync
+from ._deps import get_config_service, UnifiedConfigServiceAsync
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,9 @@ async def test_endpoint() -> dict:
 
 @router.get("", response_model=ConfigResponse, summary="Current configuration")
 async def get_configuration(
-    current_user: CurrentUser,
+    # Authentication is optional – endpoints should be accessible for both
+    # authenticated *and* anonymous users so that the frontend can fetch the
+    # initial configuration before a user logs in.
     service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> ConfigResponse:
     """Return the current configuration snapshot.
@@ -65,7 +67,6 @@ async def get_defaults(
 
 @router.get("/models", response_model=list[ModelInfo], summary="Available models")
 async def list_models(
-    current_user: CurrentUser,
     service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
     provider: Optional[str] = None,
     include_deprecated: bool = False,
@@ -76,7 +77,6 @@ async def list_models(
 @router.get("/models/{model_id}", response_model=ModelInfo, summary="Model details")
 async def get_model(
     model_id: str,
-    current_user: CurrentUser,
     service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> ModelInfo:
     model = await service.get_model_info(model_id)
@@ -88,7 +88,6 @@ async def get_model(
 @router.post("/validate", summary="Validate configuration (dry-run)")
 async def validate_configuration(
     payload: Dict[str, Any],
-    current_user: CurrentUser,
     service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> Dict[str, Any]:
     return await service.validate_verbose(payload)
@@ -166,7 +165,6 @@ async def test_configuration(
     response_class=JSONResponse,
 )
 async def list_presets(
-    current_user: CurrentUser,
     service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
 ) -> JSONResponse:
     """Return predefined configuration presets.

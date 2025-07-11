@@ -432,13 +432,31 @@ def update_preferences(
     current_user: CurrentUserRequired,
 ) -> UserResponse:
     """Update user preferences (e.g., quality settings)."""
-    if payload.quality_settings is not None:
-        # Merge with existing preferences to avoid overwriting other settings
+    # ------------------------------------------------------------------
+    # Merge **all** provided settings into the existing preferences JSONB
+    # ------------------------------------------------------------------
+    if payload and payload.model_dump(exclude_none=True):
         existing_prefs = current_user.preferences or {}
-        existing_prefs.update({"quality_settings": payload.quality_settings})
+
+        # Bring in every field supplied by the client, handling
+        # ``quality_settings`` as a nested dict that needs a *deep* merge so
+        # other keys (added in the future) are preserved.
+        incoming = payload.model_dump(exclude_none=True)
+
+        for key, value in incoming.items():
+            if key == "quality_settings" and isinstance(value, dict):
+                # Deep merge for the quality_settings block – works even when
+                # the field was previously *undefined* (None) in the DB.
+                existing_qs = existing_prefs.get("quality_settings", {}) or {}
+                existing_qs.update(value)
+                existing_prefs[key] = existing_qs
+            else:
+                existing_prefs[key] = value
+
         current_user.preferences = existing_prefs
 
-        # Mark as modified for SQLAlchemy to pick up the change in JSONB
+        # Signal to SQLAlchemy that the mutable JSONB column has changed so
+        # the UPDATE statement is emitted.
         from sqlalchemy.orm.attributes import flag_modified
 
         flag_modified(current_user, "preferences")
