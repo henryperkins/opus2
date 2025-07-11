@@ -233,11 +233,40 @@ class UserUpdate(BaseModel):
 
 
 class PreferencesUpdate(BaseModel):
-    """Partial update for user preferences."""
+    """Partial update for user preferences.
+
+    The payload supports an open set of keys.  At the moment the UI needs to
+    persist two *AI related* settings in addition to the existing
+    ``quality_settings`` block so that every user can override the **default
+    provider/model** used by the application when a new chat session is
+    created:
+
+    • ``default_provider`` – ``"openai" | "azure" | "anthropic"`` (optional)
+    • ``default_model``    – deployment / model identifier                (optional)
+
+    Additional keys can be added in the future without having to update the
+    backend because *extra* fields are allowed and will be merged verbatim
+    into the ``preferences`` JSON column.
+    """
 
     quality_settings: dict | None = Field(
-        None, description="Quality settings for model responses"
+        None, description="Quality settings for model responses",
     )
+
+    # AI runtime defaults – both are **optional** so that clients can PATCH
+    # either field independently without having to send the whole object.
+    default_provider: str | None = Field(
+        None, description="Preferred LLM provider (openai / azure / anthropic)",
+    )
+    default_model: str | None = Field(
+        None, description="Preferred default model (e.g. 'gpt-4o-mini')",
+    )
+
+    # Allow arbitrary additional keys so the preferences object stays forward
+    # compatible with new UI features.  The router merges everything blindly
+    # into ``User.preferences``.
+
+    model_config = ConfigDict(extra="allow")
 
 
 # --------------------------------------------------------------------------- #
