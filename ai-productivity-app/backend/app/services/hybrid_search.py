@@ -37,16 +37,16 @@ class HybridSearch:
 
         # Default search weights
         self.default_weights = {"semantic": 0.5, "keyword": 0.3, "structural": 0.2}
-        
+
         # Query type specific weights
         self.query_type_weights = {
             "error_debug": {"semantic": 0.3, "keyword": 0.6, "structural": 0.1},
-            "api_usage": {"semantic": 0.6, "keyword": 0.2, "structural": 0.2}, 
+            "api_usage": {"semantic": 0.6, "keyword": 0.2, "structural": 0.2},
             "implementation": {"semantic": 0.7, "keyword": 0.2, "structural": 0.1},
             "conceptual": {"semantic": 0.8, "keyword": 0.1, "structural": 0.1},
             "specific_code": {"semantic": 0.2, "keyword": 0.3, "structural": 0.5},
             "performance": {"semantic": 0.4, "keyword": 0.4, "structural": 0.2},
-            "testing": {"semantic": 0.4, "keyword": 0.5, "structural": 0.1}
+            "testing": {"semantic": 0.4, "keyword": 0.5, "structural": 0.1},
         }
 
     async def search(
@@ -79,23 +79,24 @@ class HybridSearch:
                 filters = {
                     k: v
                     for k, v in getattr(filters, "__dict__", {}).items()
-                    if (not k.startswith("_")) and k not in {"model_config", "model_fields"}
+                    if (not k.startswith("_"))
+                    and k not in {"model_config", "model_fields"}
                 }
 
         if not search_types:
             search_types = ["semantic", "keyword", "structural"]
-            
+
         # Detect query type and adjust weights
         query_type = self._detect_query_type(query)
         weights = self.query_type_weights.get(query_type, self.default_weights)
-        
+
         logger.info(f"Query type detected: {query_type}, using weights: {weights}")
 
         # Check if structural search applies
         structural_parsed = self.structural_search._parse_query(query)
         if structural_parsed:
             search_type = structural_parsed.get("type")
-            
+
             # Handle Git History searches
             if search_type in ["commit", "blame"]:
                 # For Git searches, we need to determine the repository path
@@ -105,12 +106,16 @@ class HybridSearch:
                     # to get the actual repository path
                     project_repo_path = f"repos/project_{project_ids[0]}"
                     git_searcher = GitHistorySearcher(project_repo_path)
-                    
+
                     if search_type == "commit":
-                        return git_searcher.search_commits(structural_parsed["term"], limit)
+                        return git_searcher.search_commits(
+                            structural_parsed["term"], limit
+                        )
                     elif search_type == "blame":
-                        return git_searcher.get_blame(structural_parsed["file"], structural_parsed["line"])
-            
+                        return git_searcher.get_blame(
+                            structural_parsed["file"], structural_parsed["line"]
+                        )
+
             # Handle documentation searches
             elif search_type == "doc":
                 # If it's a doc search, modify the query and add a filter
@@ -121,14 +126,14 @@ class HybridSearch:
                 filters["file_path_pattern"] = "**/*.md"
                 # Force only semantic and keyword search for docs
                 search_types = ["semantic", "keyword"]
-            
+
             # Handle static analysis/linting
             elif search_type == "lint":
                 if project_ids:
                     project_repo_path = f"repos/project_{project_ids[0]}"
                     analysis_searcher = StaticAnalysisSearcher(project_repo_path)
                     return analysis_searcher.run_pylint(structural_parsed["term"])
-            
+
             else:
                 # Prioritize structural search for other specific queries
                 search_types = ["structural"]
@@ -136,11 +141,23 @@ class HybridSearch:
         # Execute searches in parallel
         tasks = []
         if "semantic" in search_types and self.embedding_generator:
-            tasks.append(self._semantic_search(query, project_ids, filters, limit, weights["semantic"]))
+            tasks.append(
+                self._semantic_search(
+                    query, project_ids, filters, limit, weights["semantic"]
+                )
+            )
         if "keyword" in search_types:
-            tasks.append(self._keyword_search_with_weight(query, project_ids, filters, limit, weights["keyword"]))
+            tasks.append(
+                self._keyword_search_with_weight(
+                    query, project_ids, filters, limit, weights["keyword"]
+                )
+            )
         if "structural" in search_types:
-            tasks.append(self._structural_search_with_weight(query, project_ids, filters, limit, weights["structural"]))
+            tasks.append(
+                self._structural_search_with_weight(
+                    query, project_ids, filters, limit, weights["structural"]
+                )
+            )
 
         if not tasks:
             return []
@@ -162,7 +179,12 @@ class HybridSearch:
         return ranked_results
 
     async def _semantic_search(
-        self, query: str, project_ids: List[int], filters: Optional[Dict], limit: int, weight: float
+        self,
+        query: str,
+        project_ids: List[int],
+        filters: Optional[Dict],
+        limit: int,
+        weight: float,
     ) -> List[Dict]:
         """Execute semantic vector search."""
         if not self.embedding_generator:
@@ -218,80 +240,162 @@ class HybridSearch:
         except Exception as e:
             logger.error(f"Semantic search failed: {e}")
             return []
-    
+
     async def _keyword_search_with_weight(
-        self, query: str, project_ids: List[int], filters: Optional[Dict], limit: int, weight: float
+        self,
+        query: str,
+        project_ids: List[int],
+        filters: Optional[Dict],
+        limit: int,
+        weight: float,
     ) -> List[Dict]:
         """Execute keyword search with weight applied."""
         results = await self.keyword_search.search(query, project_ids, filters, limit)
-        
+
         # Apply weight to scores
         for result in results:
             if "score" in result:
                 result["score"] *= weight
-                
+
         return results
-    
+
     async def _structural_search_with_weight(
-        self, query: str, project_ids: List[int], filters: Optional[Dict], limit: int, weight: float
+        self,
+        query: str,
+        project_ids: List[int],
+        filters: Optional[Dict],
+        limit: int,
+        weight: float,
     ) -> List[Dict]:
         """Execute structural search with weight applied."""
-        results = await self.structural_search.search(query, project_ids, filters, limit)
-        
-        # Apply weight to scores  
+        results = await self.structural_search.search(
+            query, project_ids, filters, limit
+        )
+
+        # Apply weight to scores
         for result in results:
             if "score" in result:
                 result["score"] *= weight
-                
+
         return results
-    
+
     def _detect_query_type(self, query: str) -> str:
         """Detect the type of query to apply appropriate weights."""
         query_lower = query.lower()
-        
+
         # Error/debugging patterns
         error_patterns = [
-            "error", "exception", "traceback", "bug", "issue", "problem", 
-            "failed", "broken", "crash", "debug", "stacktrace", "TypeError",
-            "ValueError", "AttributeError", "fix", "wrong", "not working"
+            "error",
+            "exception",
+            "traceback",
+            "bug",
+            "issue",
+            "problem",
+            "failed",
+            "broken",
+            "crash",
+            "debug",
+            "stacktrace",
+            "TypeError",
+            "ValueError",
+            "AttributeError",
+            "fix",
+            "wrong",
+            "not working",
         ]
-        
+
         # API usage patterns
         api_patterns = [
-            "api", "endpoint", "request", "response", "http", "rest", 
-            "get", "post", "put", "delete", "route", "handler"
+            "api",
+            "endpoint",
+            "request",
+            "response",
+            "http",
+            "rest",
+            "get",
+            "post",
+            "put",
+            "delete",
+            "route",
+            "handler",
         ]
-        
+
         # Implementation patterns
         impl_patterns = [
-            "implement", "create", "build", "make", "add", "develop",
-            "design", "architecture", "pattern", "approach", "solution"
+            "implement",
+            "create",
+            "build",
+            "make",
+            "add",
+            "develop",
+            "design",
+            "architecture",
+            "pattern",
+            "approach",
+            "solution",
         ]
-        
+
         # Conceptual patterns
         conceptual_patterns = [
-            "how", "what", "why", "when", "explain", "understand", 
-            "concept", "principle", "theory", "overview", "summary"
+            "how",
+            "what",
+            "why",
+            "when",
+            "explain",
+            "understand",
+            "concept",
+            "principle",
+            "theory",
+            "overview",
+            "summary",
         ]
-        
+
         # Specific code patterns
         specific_patterns = [
-            "function", "class", "method", "variable", "constant",
-            "import", "module", "package", "file:", "line", "@"
+            "function",
+            "class",
+            "method",
+            "variable",
+            "constant",
+            "import",
+            "module",
+            "package",
+            "file:",
+            "line",
+            "@",
         ]
-        
+
         # Performance patterns
         performance_patterns = [
-            "performance", "optimize", "speed", "fast", "slow", "efficient",
-            "memory", "cpu", "benchmark", "profil", "cache", "scale"
+            "performance",
+            "optimize",
+            "speed",
+            "fast",
+            "slow",
+            "efficient",
+            "memory",
+            "cpu",
+            "benchmark",
+            "profil",
+            "cache",
+            "scale",
         ]
-        
+
         # Testing patterns
         testing_patterns = [
-            "test", "testing", "unit test", "integration", "mock", "assert",
-            "coverage", "pytest", "unittest", "spec", "tdd"
+            "test",
+            "testing",
+            "unit test",
+            "integration",
+            "mock",
+            "assert",
+            "coverage",
+            "pytest",
+            "unittest",
+            "spec",
+            "tdd",
         ]
-        
+
         # Count matches for each pattern type
         pattern_counts = {
             "error_debug": sum(1 for p in error_patterns if p in query_lower),
@@ -300,29 +404,34 @@ class HybridSearch:
             "conceptual": sum(1 for p in conceptual_patterns if p in query_lower),
             "specific_code": sum(1 for p in specific_patterns if p in query_lower),
             "performance": sum(1 for p in performance_patterns if p in query_lower),
-            "testing": sum(1 for p in testing_patterns if p in query_lower)
+            "testing": sum(1 for p in testing_patterns if p in query_lower),
         }
-        
+
         # Additional heuristics
         # Queries with specific symbols or file references are likely specific_code
-        if any(char in query for char in ["(", ")", ".", "::"]) or "def " in query_lower:
+        if (
+            any(char in query for char in ["(", ")", ".", "::"])
+            or "def " in query_lower
+        ):
             pattern_counts["specific_code"] += 2
-            
+
         # Questions starting with "how" are often conceptual unless they contain implementation words
         if query_lower.startswith("how"):
             if any(p in query_lower for p in impl_patterns):
                 pattern_counts["implementation"] += 1
             else:
                 pattern_counts["conceptual"] += 1
-                
+
         # Queries with stack traces or error messages
-        if any(term in query_lower for term in ["traceback", "at line", "line ", "error:"]):
+        if any(
+            term in query_lower for term in ["traceback", "at line", "line ", "error:"]
+        ):
             pattern_counts["error_debug"] += 2
-        
+
         # Return the type with highest count, default to conceptual
         if not any(pattern_counts.values()):
             return "conceptual"
-            
+
         return max(pattern_counts.keys(), key=lambda k: pattern_counts[k])
 
     def _rank_and_dedupe(self, results: List[Dict], limit: int) -> List[Dict]:
@@ -356,19 +465,21 @@ class HybridSearch:
     ) -> str:
         """Get relevant context for LLM prompts with intelligent summarization."""
         results = await self.search(query, project_ids, limit=15)  # Get more candidates
-        
+
         if not results:
             return ""
 
         # Reserve tokens for summary if needed
         main_context_tokens = int(max_tokens * 0.7)  # 70% for main content
         summary_tokens = max_tokens - main_context_tokens  # 30% for summary
-        
+
         # Determine which chunks to keep vs summarize
-        kept_chunks, overflow_chunks = self.summarization_service.should_summarize_chunks(
-            results, main_context_tokens, keep_top_n=6
+        kept_chunks, overflow_chunks = (
+            self.summarization_service.should_summarize_chunks(
+                results, main_context_tokens, keep_top_n=6
+            )
         )
-        
+
         # Format main context
         context_parts = []
         for result in kept_chunks:
@@ -384,26 +495,24 @@ class HybridSearch:
             context_parts.append(context)
 
         main_context = "\n---\n".join(context_parts)
-        
+
         # Add summary if there are overflow chunks
         if overflow_chunks:
             try:
                 # Extract focus areas from query for better summarization
                 focus_areas = self._extract_focus_areas(query)
-                
+
                 summary = await self.summarization_service.summarize_overflow_chunks(
-                    overflow_chunks, 
-                    query_context=query,
-                    focus_areas=focus_areas
+                    overflow_chunks, query_context=query, focus_areas=focus_areas
                 )
-                
+
                 if summary:
                     return f"{main_context}\n\n---\n\n{summary}"
             except Exception as e:
                 logger.warning(f"Failed to summarize overflow chunks: {e}")
-        
+
         return main_context
-    
+
     def _extract_focus_areas(self, query: str) -> List[str]:
         """Extract potential focus areas from the user query."""
         focus_keywords = {
@@ -414,14 +523,14 @@ class HybridSearch:
             "api": ["endpoints", "routes", "requests"],
             "database": ["models", "queries", "migrations"],
             "config": ["configuration", "settings", "environment"],
-            "deploy": ["deployment", "production", "scaling"]
+            "deploy": ["deployment", "production", "scaling"],
         }
-        
+
         query_lower = query.lower()
         focus_areas = []
-        
+
         for keyword, areas in focus_keywords.items():
             if keyword in query_lower:
                 focus_areas.extend(areas)
-        
+
         return focus_areas[:3]  # Limit to top 3 focus areas

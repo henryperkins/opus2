@@ -1,20 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 
 // Hook for tracking response quality over time
 export function useResponseQualityTracking(projectId) {
   const [qualityHistory, setQualityHistory] = useState([]);
 
   const trackResponseQuality = (messageId, metrics) => {
-    const score = (
+    const score =
       metrics.relevance * 0.3 +
       metrics.accuracy * 0.25 +
       metrics.helpfulness * 0.2 +
       metrics.clarity * 0.15 +
-      metrics.completeness * 0.1
-    );
+      metrics.completeness * 0.1;
 
     // Store in localStorage for persistence
-    const key = `quality_${projectId}_${new Date().toISOString().split('T')[0]}`;
+    const key = `quality_${projectId}_${new Date().toISOString().split("T")[0]}`;
     const existing = localStorage.getItem(key);
     const data = existing ? JSON.parse(existing) : { totalScore: 0, count: 0 };
 
@@ -32,7 +31,7 @@ export function useResponseQualityTracking(projectId) {
     for (let i = 0; i < 30; i++) {
       const date = new Date();
       date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = date.toISOString().split("T")[0];
       const key = `${prefix}${dateStr}`;
 
       const data = localStorage.getItem(key);
@@ -41,7 +40,7 @@ export function useResponseQualityTracking(projectId) {
         history.unshift({
           date: dateStr,
           averageScore: totalScore / count,
-          responseCount: count
+          responseCount: count,
         });
       }
     }
@@ -56,6 +55,6 @@ export function useResponseQualityTracking(projectId) {
   return {
     qualityHistory,
     trackResponseQuality,
-    refresh: loadQualityHistory
+    refresh: loadQualityHistory,
   };
 }

@@ -1,27 +1,33 @@
 // contexts/KnowledgeContext.jsx
-import { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
-import PropTypes from 'prop-types';
+import {
+  createContext,
+  useContext,
+  useReducer,
+  useCallback,
+  useEffect,
+} from "react";
+import PropTypes from "prop-types";
 
 // Knowledge context for unified state management
 const KnowledgeContext = createContext();
 
 // Action types for knowledge state reducer
 const KNOWLEDGE_ACTIONS = {
-  SET_CITATIONS: 'SET_CITATIONS',
-  ADD_CITATION: 'ADD_CITATION',
-  REMOVE_CITATION: 'REMOVE_CITATION',
-  CLEAR_CITATIONS: 'CLEAR_CITATIONS',
-  SET_ACTIVE_QUERY: 'SET_ACTIVE_QUERY',
-  SET_SEARCH_RESULTS: 'SET_SEARCH_RESULTS',
-  SET_CONTEXT: 'SET_CONTEXT',
-  SET_SELECTED_ITEMS: 'SET_SELECTED_ITEMS',
-  ADD_SELECTED_ITEM: 'ADD_SELECTED_ITEM',
-  REMOVE_SELECTED_ITEM: 'REMOVE_SELECTED_ITEM',
-  SET_LOADING: 'SET_LOADING',
-  SET_ERROR: 'SET_ERROR',
-  SET_SUGGESTIONS: 'SET_SUGGESTIONS',
-  CLEAR_SUGGESTIONS: 'CLEAR_SUGGESTIONS',
-  RESET_ERROR: 'RESET_ERROR'
+  SET_CITATIONS: "SET_CITATIONS",
+  ADD_CITATION: "ADD_CITATION",
+  REMOVE_CITATION: "REMOVE_CITATION",
+  CLEAR_CITATIONS: "CLEAR_CITATIONS",
+  SET_ACTIVE_QUERY: "SET_ACTIVE_QUERY",
+  SET_SEARCH_RESULTS: "SET_SEARCH_RESULTS",
+  SET_CONTEXT: "SET_CONTEXT",
+  SET_SELECTED_ITEMS: "SET_SELECTED_ITEMS",
+  ADD_SELECTED_ITEM: "ADD_SELECTED_ITEM",
+  REMOVE_SELECTED_ITEM: "REMOVE_SELECTED_ITEM",
+  SET_LOADING: "SET_LOADING",
+  SET_ERROR: "SET_ERROR",
+  SET_SUGGESTIONS: "SET_SUGGESTIONS",
+  CLEAR_SUGGESTIONS: "CLEAR_SUGGESTIONS",
+  RESET_ERROR: "RESET_ERROR",
 };
 
 // Initial state for knowledge context
@@ -31,7 +37,7 @@ const initialState = {
   currentContext: [],
 
   // Search state
-  activeQuery: '',
+  activeQuery: "",
   searchResults: [],
   searchHistory: [],
 
@@ -48,7 +54,7 @@ const initialState = {
 
   // Panel state
   isVisible: true,
-  isMinimized: false
+  isMinimized: false,
 };
 
 // Reducer for knowledge state management
@@ -58,12 +64,14 @@ function knowledgeReducer(state, action) {
       return {
         ...state,
         citations: action.payload,
-        error: null
+        error: null,
       };
 
     case KNOWLEDGE_ACTIONS.ADD_CITATION: {
       const newCitations = [...state.citations];
-      const existingIndex = newCitations.findIndex(c => c.id === action.payload.id);
+      const existingIndex = newCitations.findIndex(
+        (c) => c.id === action.payload.id,
+      );
       if (existingIndex >= 0) {
         newCitations[existingIndex] = action.payload;
       } else {
@@ -72,15 +80,15 @@ function knowledgeReducer(state, action) {
       return {
         ...state,
         citations: newCitations,
-        error: null
+        error: null,
       };
     }
 
     case KNOWLEDGE_ACTIONS.REMOVE_CITATION:
       return {
         ...state,
-        citations: state.citations.filter(c => c.id !== action.payload),
-        error: null
+        citations: state.citations.filter((c) => c.id !== action.payload),
+        error: null,
       };
 
     case KNOWLEDGE_ACTIONS.CLEAR_CITATIONS:
@@ -89,38 +97,39 @@ function knowledgeReducer(state, action) {
         citations: [],
         currentContext: [],
         selectedItems: new Set(),
-        error: null
+        error: null,
       };
 
     case KNOWLEDGE_ACTIONS.SET_ACTIVE_QUERY:
       return {
         ...state,
         activeQuery: action.payload,
-        searchHistory: action.payload && !state.searchHistory.includes(action.payload)
-          ? [action.payload, ...state.searchHistory.slice(0, 9)] // Keep last 10
-          : state.searchHistory,
-        error: null
+        searchHistory:
+          action.payload && !state.searchHistory.includes(action.payload)
+            ? [action.payload, ...state.searchHistory.slice(0, 9)] // Keep last 10
+            : state.searchHistory,
+        error: null,
       };
 
     case KNOWLEDGE_ACTIONS.SET_SEARCH_RESULTS:
       return {
         ...state,
         searchResults: action.payload,
-        error: null
+        error: null,
       };
 
     case KNOWLEDGE_ACTIONS.SET_CONTEXT:
       return {
         ...state,
         currentContext: action.payload,
-        error: null
+        error: null,
       };
 
     case KNOWLEDGE_ACTIONS.SET_SELECTED_ITEMS:
       return {
         ...state,
         selectedItems: new Set(action.payload),
-        error: null
+        error: null,
       };
 
     case KNOWLEDGE_ACTIONS.ADD_SELECTED_ITEM: {
@@ -129,7 +138,7 @@ function knowledgeReducer(state, action) {
       return {
         ...state,
         selectedItems: newSelected,
-        error: null
+        error: null,
       };
     }
 
@@ -139,21 +148,21 @@ function knowledgeReducer(state, action) {
       return {
         ...state,
         selectedItems: filteredSelected,
-        error: null
+        error: null,
       };
     }
 
     case KNOWLEDGE_ACTIONS.SET_LOADING:
       return {
         ...state,
-        loading: action.payload
+        loading: action.payload,
       };
 
     case KNOWLEDGE_ACTIONS.SET_ERROR:
       return {
         ...state,
         error: action.payload,
-        loading: false
+        loading: false,
       };
 
     case KNOWLEDGE_ACTIONS.SET_SUGGESTIONS:
@@ -161,20 +170,20 @@ function knowledgeReducer(state, action) {
         ...state,
         suggestions: action.payload.suggestions || [],
         suggestionContext: action.payload.context || null,
-        error: null
+        error: null,
       };
 
     case KNOWLEDGE_ACTIONS.CLEAR_SUGGESTIONS:
       return {
         ...state,
         suggestions: [],
-        suggestionContext: null
+        suggestionContext: null,
       };
 
     case KNOWLEDGE_ACTIONS.RESET_ERROR:
       return {
         ...state,
-        error: null
+        error: null,
       };
 
     default:
@@ -190,16 +199,19 @@ export function KnowledgeProvider({ children }) {
   const addToCitations = useCallback((citations) => {
     try {
       if (Array.isArray(citations)) {
-        citations.forEach(citation => {
+        citations.forEach((citation) => {
           if (citation && citation.id) {
-            dispatch({ type: KNOWLEDGE_ACTIONS.ADD_CITATION, payload: citation });
+            dispatch({
+              type: KNOWLEDGE_ACTIONS.ADD_CITATION,
+              payload: citation,
+            });
           }
         });
       } else if (citations && citations.id) {
         dispatch({ type: KNOWLEDGE_ACTIONS.ADD_CITATION, payload: citations });
       }
     } catch (error) {
-      console.error('Failed to add citations:', error);
+      console.error("Failed to add citations:", error);
       dispatch({ type: KNOWLEDGE_ACTIONS.SET_ERROR, payload: error.message });
     }
   }, []);
@@ -207,9 +219,12 @@ export function KnowledgeProvider({ children }) {
   // Remove citation from knowledge context
   const removeCitation = useCallback((citationId) => {
     try {
-      dispatch({ type: KNOWLEDGE_ACTIONS.REMOVE_CITATION, payload: citationId });
+      dispatch({
+        type: KNOWLEDGE_ACTIONS.REMOVE_CITATION,
+        payload: citationId,
+      });
     } catch (error) {
-      console.error('Failed to remove citation:', error);
+      console.error("Failed to remove citation:", error);
       dispatch({ type: KNOWLEDGE_ACTIONS.SET_ERROR, payload: error.message });
     }
   }, []);
@@ -243,7 +258,7 @@ export function KnowledgeProvider({ children }) {
 
         const ctxItem = {
           id: c.id,
-          type: c.type || 'document',
+          type: c.type || "document",
           content: c.content || c.excerpt || c.code,
           source: c.source || c.file_path || c.filename,
           language: c.language,
@@ -263,7 +278,7 @@ export function KnowledgeProvider({ children }) {
 
         const ctxItem = {
           id: item.id,
-          type: item.type || 'document',
+          type: item.type || "document",
           content: item.content || item.excerpt,
           source: item.source || item.filename,
           language: item.language,
@@ -280,7 +295,7 @@ export function KnowledgeProvider({ children }) {
       dispatch({ type: KNOWLEDGE_ACTIONS.SET_CONTEXT, payload: context });
       return context;
     } catch (error) {
-      console.error('Failed to build context:', error);
+      console.error("Failed to build context:", error);
       dispatch({ type: KNOWLEDGE_ACTIONS.SET_ERROR, payload: error.message });
       return [];
     }
@@ -295,26 +310,31 @@ export function KnowledgeProvider({ children }) {
       // For now, we'll simulate the analysis
       const mockSuggestions = [];
 
-      if (message.toLowerCase().includes('error') || message.toLowerCase().includes('bug')) {
-        mockSuggestions.push('Check error logs and stack traces');
-        mockSuggestions.push('Review recent code changes');
+      if (
+        message.toLowerCase().includes("error") ||
+        message.toLowerCase().includes("bug")
+      ) {
+        mockSuggestions.push("Check error logs and stack traces");
+        mockSuggestions.push("Review recent code changes");
       }
 
-      if (message.toLowerCase().includes('implement') || message.toLowerCase().includes('add')) {
-        mockSuggestions.push('Search for similar implementations');
-        mockSuggestions.push('Review architectural patterns');
+      if (
+        message.toLowerCase().includes("implement") ||
+        message.toLowerCase().includes("add")
+      ) {
+        mockSuggestions.push("Search for similar implementations");
+        mockSuggestions.push("Review architectural patterns");
       }
 
       dispatch({
         type: KNOWLEDGE_ACTIONS.SET_SUGGESTIONS,
         payload: {
           suggestions: mockSuggestions,
-          context: { message, projectId, timestamp: new Date().toISOString() }
-        }
+          context: { message, projectId, timestamp: new Date().toISOString() },
+        },
       });
-
     } catch (error) {
-      console.error('Failed to analyze message:', error);
+      console.error("Failed to analyze message:", error);
       dispatch({ type: KNOWLEDGE_ACTIONS.SET_ERROR, payload: error.message });
     } finally {
       dispatch({ type: KNOWLEDGE_ACTIONS.SET_LOADING, payload: false });
@@ -327,13 +347,22 @@ export function KnowledgeProvider({ children }) {
   }, []);
 
   // Select/deselect items
-  const toggleSelectedItem = useCallback((itemId) => {
-    if (state.selectedItems.has(itemId)) {
-      dispatch({ type: KNOWLEDGE_ACTIONS.REMOVE_SELECTED_ITEM, payload: itemId });
-    } else {
-      dispatch({ type: KNOWLEDGE_ACTIONS.ADD_SELECTED_ITEM, payload: itemId });
-    }
-  }, [state.selectedItems]);
+  const toggleSelectedItem = useCallback(
+    (itemId) => {
+      if (state.selectedItems.has(itemId)) {
+        dispatch({
+          type: KNOWLEDGE_ACTIONS.REMOVE_SELECTED_ITEM,
+          payload: itemId,
+        });
+      } else {
+        dispatch({
+          type: KNOWLEDGE_ACTIONS.ADD_SELECTED_ITEM,
+          payload: itemId,
+        });
+      }
+    },
+    [state.selectedItems],
+  );
 
   // Clear selected items
   const clearSelectedItems = useCallback(() => {
@@ -379,7 +408,7 @@ export function KnowledgeProvider({ children }) {
     clearSuggestions,
     toggleSelectedItem,
     clearSelectedItems,
-    resetError
+    resetError,
   };
 
   return (
@@ -391,7 +420,7 @@ export function KnowledgeProvider({ children }) {
 
 // PropTypes validation
 KnowledgeProvider.propTypes = {
-  children: PropTypes.node.isRequired
+  children: PropTypes.node.isRequired,
 };
 
 // Hook to use knowledge context
@@ -399,7 +428,9 @@ KnowledgeProvider.propTypes = {
 export function useKnowledgeContext() {
   const context = useContext(KnowledgeContext);
   if (!context) {
-    throw new Error('useKnowledgeContext must be used within a KnowledgeProvider');
+    throw new Error(
+      "useKnowledgeContext must be used within a KnowledgeProvider",
+    );
   }
   return context;
 }

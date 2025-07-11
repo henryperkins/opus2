@@ -37,19 +37,19 @@
  *   />
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import * as monaco from 'monaco-editor';
-import { registerCompletion } from 'monacopilot';
+import { useCallback, useEffect, useRef, useState } from "react";
+import * as monaco from "monaco-editor";
+import { registerCompletion } from "monacopilot";
 
-export function useCodeEditor({ 
-  initialCode = '', 
-  language = 'plaintext',
+export function useCodeEditor({
+  initialCode = "",
+  language = "plaintext",
   enableCopilot = true,
-  copilotEndpoint = '/api/v1/code/copilot',
+  copilotEndpoint = "/api/v1/code/copilot",
   maxContextLines = 60,
   filename = null,
   relatedFiles = [],
-  technologies = []
+  technologies = [],
 } = {}) {
   const editorInstanceRef = useRef(null);
   const copilotRef = useRef(null);
@@ -57,61 +57,72 @@ export function useCodeEditor({
   const [copilotEnabled, setCopilotEnabled] = useState(enableCopilot);
 
   // Keep code state in sync with external edits (e.g. setCode())
-  const setCode = useCallback(
-    (newCode) => {
-      setCodeState(newCode);
-      if (editorInstanceRef.current && newCode !== editorInstanceRef.current.getValue()) {
-        editorInstanceRef.current.setValue(newCode);
-      }
-    },
-    []
-  );
+  const setCode = useCallback((newCode) => {
+    setCodeState(newCode);
+    if (
+      editorInstanceRef.current &&
+      newCode !== editorInstanceRef.current.getValue()
+    ) {
+      editorInstanceRef.current.setValue(newCode);
+    }
+  }, []);
 
   // Editor onMount callback – passed to MonacoEditor
-  const handleEditorMount = useCallback((editor) => {
-    editorInstanceRef.current = editor;
+  const handleEditorMount = useCallback(
+    (editor) => {
+      editorInstanceRef.current = editor;
 
-    // Sync initial language
-    const currentModel = editor.getModel();
-    if (currentModel) {
-      monaco.editor.setModelLanguage(currentModel, language);
-    }
-
-    // Keep internal state up-to-date with user edits
-    const disposable = editor.onDidChangeModelContent(() => {
-      const value = editor.getValue();
-      setCodeState(value);
-    });
-
-    // Initialize Monacopilot if enabled
-    if (copilotEnabled) {
-      try {
-        copilotRef.current = registerCompletion(monaco, editor, {
-          endpoint: copilotEndpoint,
-          language,
-          trigger: 'onIdle',
-          maxContextLines,
-          filename,
-          relatedFiles,
-          technologies,
-          onError: (error) => {
-            console.warn('Monacopilot error:', error);
-          }
-        });
-      } catch (error) {
-        console.error('Failed to initialize Monacopilot:', error);
+      // Sync initial language
+      const currentModel = editor.getModel();
+      if (currentModel) {
+        monaco.editor.setModelLanguage(currentModel, language);
       }
-    }
 
-    // Cleanup listeners and copilot on unmount
-    return () => {
-      disposable.dispose();
-      if (copilotRef.current) {
-        copilotRef.current.deregister();
-        copilotRef.current = null;
+      // Keep internal state up-to-date with user edits
+      const disposable = editor.onDidChangeModelContent(() => {
+        const value = editor.getValue();
+        setCodeState(value);
+      });
+
+      // Initialize Monacopilot if enabled
+      if (copilotEnabled) {
+        try {
+          copilotRef.current = registerCompletion(monaco, editor, {
+            endpoint: copilotEndpoint,
+            language,
+            trigger: "onIdle",
+            maxContextLines,
+            filename,
+            relatedFiles,
+            technologies,
+            onError: (error) => {
+              console.warn("Monacopilot error:", error);
+            },
+          });
+        } catch (error) {
+          console.error("Failed to initialize Monacopilot:", error);
+        }
       }
-    };
-  }, [language, copilotEnabled, copilotEndpoint, maxContextLines, filename, relatedFiles, technologies]);
+
+      // Cleanup listeners and copilot on unmount
+      return () => {
+        disposable.dispose();
+        if (copilotRef.current) {
+          copilotRef.current.deregister();
+          copilotRef.current = null;
+        }
+      };
+    },
+    [
+      language,
+      copilotEnabled,
+      copilotEndpoint,
+      maxContextLines,
+      filename,
+      relatedFiles,
+      technologies,
+    ],
+  );
 
   // Cleanup effect to prevent memory leaks
   useEffect(() => {
@@ -140,7 +151,7 @@ export function useCodeEditor({
     (val) => {
       setCode(val);
     },
-    [setCode]
+    [setCode],
   );
 
   const getDiff = useCallback(
@@ -150,7 +161,10 @@ export function useCodeEditor({
       if (editorInstanceRef.current) {
         const currentModel = editorInstanceRef.current.getModel();
         const originalModel = monaco.editor.createModel(original, language);
-        const diff = monaco.editor.computeLinesDiff(originalModel, currentModel);
+        const diff = monaco.editor.computeLinesDiff(
+          originalModel,
+          currentModel,
+        );
         originalModel.dispose();
 
         return diff.changes;
@@ -158,17 +172,21 @@ export function useCodeEditor({
 
       // Fallback: naive line-by-line diff
       const diff = [];
-      const a = original.split('\n');
-      const b = code.split('\n');
+      const a = original.split("\n");
+      const b = code.split("\n");
       const len = Math.max(a.length, b.length);
       for (let i = 0; i < len; i += 1) {
         if (a[i] !== b[i]) {
-          diff.push({ lineNumber: i + 1, original: a[i] || '', modified: b[i] || '' });
+          diff.push({
+            lineNumber: i + 1,
+            original: a[i] || "",
+            modified: b[i] || "",
+          });
         }
       }
       return diff;
     },
-    [code, initialCode, language]
+    [code, initialCode, language],
   );
 
   // Update model language when `language` param changes
@@ -183,7 +201,7 @@ export function useCodeEditor({
 
   // Toggle Copilot on/off
   const toggleCopilot = useCallback(() => {
-    setCopilotEnabled(prev => !prev);
+    setCopilotEnabled((prev) => !prev);
   }, []);
 
   // Trigger completion manually
@@ -215,7 +233,7 @@ export function useCodeEditor({
     copilotEnabled,
     toggleCopilot,
     triggerCompletion,
-    
+
     // Access to editor instance for advanced usage
     editorInstance: editorInstanceRef.current,
   };

@@ -17,7 +17,10 @@ export default function ProjectFilters({ filters, onChange }) {
     onChange({ ...filters, search: e.target.value });
   };
   const handleTags = (e) => {
-    const tags = e.target.value.split(",").map(s => s.trim()).filter(Boolean);
+    const tags = e.target.value
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     onChange({ ...filters, tags });
   };
   const handleReset = () => {
@@ -27,7 +30,7 @@ export default function ProjectFilters({ filters, onChange }) {
   return (
     <form
       className="flex flex-wrap gap-4 items-end mb-8"
-      onSubmit={e => e.preventDefault()}
+      onSubmit={(e) => e.preventDefault()}
     >
       <div>
         <label className="block font-medium mb-1">Status</label>
@@ -36,8 +39,10 @@ export default function ProjectFilters({ filters, onChange }) {
           onChange={handleStatus}
           className="form-select"
         >
-          {STATUS_OPTIONS.map(opt => (
-            <option key={opt.label} value={opt.value || ""}>{opt.label}</option>
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.label} value={opt.value || ""}>
+              {opt.label}
+            </option>
           ))}
         </select>
       </div>

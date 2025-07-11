@@ -1,7 +1,7 @@
 // DEPRECATED: This file has been consolidated into AIConfigContext.jsx
 // // DEPRECATED: This file has been consolidated into AIConfigContext.jsx
 // // Use useAIConfig() instead of useModelContext()
-// // 
+// //
 // // contexts/ModelContext.jsx
 // // import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 // import { useQueryClient } from '@tanstack/react-query';
@@ -14,10 +14,10 @@
 //   DEFAULT_MODEL_HISTORY,
 //   DEFAULT_UI_STATE
 // } from '../constants/modelDefaults';
-// 
+//
 // // Model context for unified state management
 // const ModelContext = createContext();
-// 
+//
 // // Action types for model state reducer
 // const MODEL_ACTIONS = {
 //   SET_MODEL: 'SET_MODEL',
@@ -29,26 +29,26 @@
 //   ADD_TO_HISTORY: 'ADD_TO_HISTORY',
 //   RESET_ERROR: 'RESET_ERROR'
 // };
-// 
+//
 // // Initial state for model context
 // const initialState = {
 //   // Current model configuration
 //   currentModel: DEFAULT_MODEL,
 //   currentProvider: DEFAULT_PROVIDER,
 //   modelConfig: DEFAULT_GENERATION_PARAMS,
-// 
+//
 //   // Model performance tracking
 //   modelStats: DEFAULT_MODEL_STATS,
 //   modelHistory: DEFAULT_MODEL_HISTORY,
-// 
+//
 //   // UI state
 //   ...DEFAULT_UI_STATE,
-// 
+//
 //   // Available models and providers
 //   availableModels: [],
 //   availableProviders: []
 // };
-// 
+//
 // // Reducer for model state management
 // function modelReducer(state, action) {
 //   switch (action.type) {
@@ -58,14 +58,14 @@
 //         currentModel: action.payload,
 //         error: null
 //       };
-// 
+//
 //     case MODEL_ACTIONS.SET_PROVIDER:
 //       return {
 //         ...state,
 //         currentProvider: action.payload,
 //         error: null
 //       };
-// 
+//
 //     case MODEL_ACTIONS.SET_CONFIG:
 //       return {
 //         ...state,
@@ -79,20 +79,20 @@
 //         availableProviders: action.payload.available_providers || state.availableProviders,
 //         error: null
 //       };
-// 
+//
 //     case MODEL_ACTIONS.SET_LOADING:
 //       return {
 //         ...state,
 //         loading: action.payload
 //       };
-// 
+//
 //     case MODEL_ACTIONS.SET_ERROR:
 //       return {
 //         ...state,
 //         error: action.payload,
 //         loading: false
 //       };
-// 
+//
 //     case MODEL_ACTIONS.UPDATE_PERFORMANCE: {
 //       const newStats = new Map(state.modelStats);
 //       newStats.set(action.payload.model, {
@@ -104,7 +104,7 @@
 //         modelStats: newStats
 //       };
 //     }
-// 
+//
 //     case MODEL_ACTIONS.ADD_TO_HISTORY:
 //       return {
 //         ...state,
@@ -118,47 +118,47 @@
 //           ...state.modelHistory.slice(0, 49) // Keep last 50 entries
 //         ]
 //       };
-// 
+//
 //     case MODEL_ACTIONS.RESET_ERROR:
 //       return {
 //         ...state,
 //         error: null
 //       };
-// 
+//
 //     default:
 //       return state;
 //   }
 // }
-// 
+//
 // // ModelProvider component
 // export function ModelProvider({ children }) {
 //   const { data: defaults } = useDefaults();
 //   const defaultModel    = defaults?.model || 'gpt-4o-mini';   // fallback
 //   const defaultProvider = defaults?.provider || 'openai';
-// 
+//
 //   // Initial state for model context
 //   const initialState = {
 //     // Current model configuration
 //     currentModel: defaultModel,
 //     currentProvider: defaultProvider,
 //     modelConfig: DEFAULT_GENERATION_PARAMS,
-// 
+//
 //     // Model performance tracking
 //     modelStats: DEFAULT_MODEL_STATS,
 //     modelHistory: DEFAULT_MODEL_HISTORY,
-// 
+//
 //     // UI state
 //     ...DEFAULT_UI_STATE,
-// 
+//
 //     // Available models and providers
 //     availableModels: [],
 //     availableProviders: []
 //   };
-// 
+//
 //   const [state, dispatch] = useReducer(modelReducer, initialState);
 //   const queryClient = useQueryClient();
 //   const { config, updateConfig } = useConfigOptimized();
-// 
+//
 //   // Sync with global config on mount and config changes
 //   useEffect(() => {
 //     if (config && config.current) {
@@ -175,15 +175,15 @@
 //       });
 //     }
 //   }, [config]);
-// 
+//
 //   // Update model selection
 //   const setModel = useCallback(async (model, options = {}) => {
 //     try {
 //       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: true });
-// 
+//
 //       // Update local state immediately for UI responsiveness
 //       dispatch({ type: MODEL_ACTIONS.SET_MODEL, payload: model });
-// 
+//
 //       // Add to history
 //       dispatch({
 //         type: MODEL_ACTIONS.ADD_TO_HISTORY,
@@ -193,7 +193,7 @@
 //           context: options.context || 'manual_selection'
 //         }
 //       });
-// 
+//
 //       // Update global config with guard against retry
 //       const configPayload = {
 //         chat_model: model,
@@ -201,36 +201,36 @@
 //         ...options.config,
 //         __noRetry: true // Prevent infinite retry loops
 //       };
-// 
+//
 //       await updateConfig(configPayload);
-// 
+//
 //       // Invalidate relevant queries
 //       queryClient.invalidateQueries(['config']);
-// 
+//
 //     } catch (error) {
 //       console.error('Failed to update model:', error);
 //       dispatch({ type: MODEL_ACTIONS.SET_ERROR, payload: error.message });
-// 
+//
 //       // Revert optimistic update on error
 //       if (config?.current?.chat_model) {
 //         dispatch({ type: MODEL_ACTIONS.SET_MODEL, payload: config.current.chat_model });
 //       }
-// 
+//
 //       // Don't re-throw error to prevent auto-resubmission
 //       return false;
 //     } finally {
 //       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: false });
 //     }
 //   }, [state.currentProvider, updateConfig, queryClient, config]);
-// 
+//
 //   // Update provider selection
 //   const setProvider = useCallback(async (provider, options = {}) => {
 //     try {
 //       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: true });
-// 
+//
 //       // Update local state immediately
 //       dispatch({ type: MODEL_ACTIONS.SET_PROVIDER, payload: provider });
-// 
+//
 //       // Update global config with guard against retry
 //       const configPayload = {
 //         provider,
@@ -238,39 +238,39 @@
 //         ...options.config,
 //         __noRetry: true // Prevent infinite retry loops
 //       };
-// 
+//
 //       await updateConfig(configPayload);
-// 
+//
 //       // Invalidate relevant queries
 //       queryClient.invalidateQueries(['config']);
-// 
+//
 //     } catch (error) {
 //       console.error('Failed to update provider:', error);
 //       dispatch({ type: MODEL_ACTIONS.SET_ERROR, payload: error.message });
-// 
+//
 //       // Revert optimistic update on error
 //       if (config?.current?.provider) {
 //         dispatch({ type: MODEL_ACTIONS.SET_PROVIDER, payload: config.current.provider });
 //       }
-// 
+//
 //       // Don't re-throw error to prevent auto-resubmission
 //       return false;
 //     } finally {
 //       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: false });
 //     }
 //   }, [state.currentModel, updateConfig, queryClient, config]);
-// 
+//
 //   // Update model configuration
 //   const updateModelConfig = useCallback(async (configUpdates) => {
 //     try {
 //       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: true });
-// 
+//
 //       // Update global config with new model configuration
 //       await updateConfig(configUpdates);
-// 
+//
 //       // Invalidate relevant queries
 //       queryClient.invalidateQueries(['config']);
-// 
+//
 //     } catch (error) {
 //       console.error('Failed to update model config:', error);
 //       dispatch({ type: MODEL_ACTIONS.SET_ERROR, payload: error.message });
@@ -278,13 +278,13 @@
 //       dispatch({ type: MODEL_ACTIONS.SET_LOADING, payload: false });
 //     }
 //   }, [updateConfig, queryClient]);
-// 
+//
 //   // Auto-select model based on task type
 //   const autoSelectModel = useCallback(async (taskType, context = {}) => {
 //     try {
 //       // Simple auto-selection logic (can be enhanced)
 //       let recommendedModel = state.currentModel;
-// 
+//
 //       if (taskType === 'code_generation' || taskType === 'code_analysis') {
 //         recommendedModel = 'claude-sonnet-4-20250514'; // Excellent for code tasks
 //       } else if (taskType === 'chat' || taskType === 'general') {
@@ -292,7 +292,7 @@
 //       } else if (taskType === 'complex_reasoning') {
 //         recommendedModel = 'claude-opus-4-20250514'; // Best for complex reasoning tasks
 //       }
-// 
+//
 //       // Only switch if different from current model
 //       if (recommendedModel !== state.currentModel) {
 //         await setModel(recommendedModel, {
@@ -301,14 +301,14 @@
 //         });
 //         return recommendedModel;
 //       }
-// 
+//
 //       return state.currentModel;
 //     } catch (error) {
 //       console.error('Auto-selection failed:', error);
 //       return state.currentModel;
 //     }
 //   }, [state.currentModel, setModel]);
-// 
+//
 //   // Track model performance
 //   const trackPerformance = useCallback((model, stats, error = null) => {
 //     dispatch({
@@ -323,12 +323,12 @@
 //       }
 //     });
 //   }, []);
-// 
+//
 //   // Reset error state
 //   const resetError = useCallback(() => {
 //     dispatch({ type: MODEL_ACTIONS.RESET_ERROR });
 //   }, []);
-// 
+//
 //   // Context value
 //   const value = {
 //     // State
@@ -341,7 +341,7 @@
 //     error: state.error,
 //     availableModels: state.availableModels,
 //     availableProviders: state.availableProviders,
-// 
+//
 //     // Actions
 //     setModel,
 //     setProvider,
@@ -350,19 +350,19 @@
 //     trackPerformance,
 //     resetError
 //   };
-// 
+//
 //   return (
 //     <ModelContext.Provider value={value}>
 //       {children}
 //     </ModelContext.Provider>
 //   );
 // }
-// 
+//
 // // PropTypes validation
 // ModelProvider.propTypes = {
 //   children: PropTypes.node.isRequired
 // };
-// 
+//
 // // Hook to use model context
 // // eslint-disable-next-line react-refresh/only-export-components
 // export function useModelContext() {
@@ -372,8 +372,8 @@
 //   }
 //   return context;
 // }
-// 
+//
 // // Export for easier imports
 // // eslint-disable-next-line react-refresh/only-export-components
 // export { ModelContext, MODEL_ACTIONS };
-// 
+//

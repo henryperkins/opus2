@@ -1,4 +1,5 @@
 """Test configuration and fixtures."""
+
 import os
 import pytest
 from fastapi.testclient import TestClient
@@ -36,6 +37,7 @@ def setup_test_db():
     yield
     Base.metadata.drop_all(bind=engine)
 
+
 @pytest.fixture(scope="function")
 def db():
     """Create a test database session."""
@@ -59,6 +61,7 @@ def db():
 @pytest.fixture(scope="function")
 def client(db):
     """Create a test client with database dependency override."""
+
     def override_get_db():
         try:
             yield db
@@ -69,6 +72,7 @@ def client(db):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -81,7 +85,9 @@ def client(db):
 # definitions into *conftest.py* makes them available globally without having
 # to touch every individual test.
 
-from app.models.user import User  # noqa: E402 – imported late to avoid heavy deps at import time
+from app.models.user import (
+    User,
+)  # noqa: E402 – imported late to avoid heavy deps at import time
 from app.models.project import Project  # noqa: E402
 
 
@@ -113,6 +119,7 @@ def test_project(db, test_user):  # type: ignore
     db.commit()
     db.refresh(project)
     return project
+
 
 # ---------------------------------------------------------------------------
 # Async variants required by *test_feedback_integration.py* and others
@@ -171,5 +178,3 @@ async def async_client(test_session):  # noqa: D401 – pytest fixture
     # Clean-up so other tests that rely on the synchronous `client` fixture do
     # not accidentally receive the async override.
     app.dependency_overrides.pop(_sync_get_db, None)
-
-

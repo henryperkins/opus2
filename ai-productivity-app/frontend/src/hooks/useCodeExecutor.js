@@ -15,26 +15,26 @@
  *  • optionally cache previous identical invocations (simple hash).
  */
 
-import { useCallback, useRef, useSyncExternalStore } from 'react';
-import { nanoid } from 'nanoid';
-import client from '../api/client';
+import { useCallback, useRef, useSyncExternalStore } from "react";
+import { nanoid } from "nanoid";
+import client from "../api/client";
 
 // Polyfill AbortController for older environments
-if (typeof globalThis.AbortController === 'undefined') {
+if (typeof globalThis.AbortController === "undefined") {
   globalThis.AbortController = class AbortController {
     constructor() {
       this.signal = {
         aborted: false,
         addEventListener: (type, listener) => {
-          if (type === 'abort' && !this._abortListener) {
+          if (type === "abort" && !this._abortListener) {
             this._abortListener = listener;
           }
         },
         removeEventListener: (type, listener) => {
-          if (type === 'abort' && this._abortListener === listener) {
+          if (type === "abort" && this._abortListener === listener) {
             this._abortListener = null;
           }
-        }
+        },
       };
     }
     abort() {
@@ -80,7 +80,7 @@ export function useCodeExecutor(defaultProjectId = null) {
       return () => subscribers.delete(callback);
     },
     getSnapshot,
-    getSnapshot
+    getSnapshot,
   );
 
   // ------------------------------------------------------------------
@@ -88,14 +88,19 @@ export function useCodeExecutor(defaultProjectId = null) {
   // ------------------------------------------------------------------
 
   const executeCode = useCallback(
-    async (code, language, projectId = defaultProjectId, correlationId = nanoid()) => {
+    async (
+      code,
+      language,
+      projectId = defaultProjectId,
+      correlationId = nanoid(),
+    ) => {
       if (!code || !language) {
-        throw new Error('executeCode: code and language are required');
+        throw new Error("executeCode: code and language are required");
       }
 
       // Deduplicate identical request that is already running
       const existing = resultsMap.get(correlationId);
-      if (existing && existing.status === 'pending') {
+      if (existing && existing.status === "pending") {
         return existing.promise; // return the in-flight promise
       }
 
@@ -103,30 +108,31 @@ export function useCodeExecutor(defaultProjectId = null) {
       abortControllers.set(correlationId, controller);
 
       const payload = { code, language };
-      if (projectId !== undefined && projectId !== null) payload.project_id = projectId;
+      if (projectId !== undefined && projectId !== null)
+        payload.project_id = projectId;
 
       const executionPromise = (async () => {
         try {
-          resultsMap.set(correlationId, { status: 'running' });
+          resultsMap.set(correlationId, { status: "running" });
           emitChange();
 
-          const { data } = await client.post('/api/code/execute', payload, {
+          const { data } = await client.post("/api/code/execute", payload, {
             signal: controller.signal,
           });
 
-          resultsMap.set(correlationId, { status: 'success', result: data });
+          resultsMap.set(correlationId, { status: "success", result: data });
           abortControllers.delete(correlationId);
           emitChange();
           return data;
         } catch (error) {
           if (controller.signal.aborted) {
-            const err = new Error('Execution aborted');
-            resultsMap.set(correlationId, { status: 'error', error: err });
+            const err = new Error("Execution aborted");
+            resultsMap.set(correlationId, { status: "error", error: err });
             emitChange();
             throw err;
           }
 
-          resultsMap.set(correlationId, { status: 'error', error });
+          resultsMap.set(correlationId, { status: "error", error });
           abortControllers.delete(correlationId);
           emitChange();
           throw error;
@@ -134,12 +140,15 @@ export function useCodeExecutor(defaultProjectId = null) {
       })();
 
       // store a placeholder with pending promise so duplicate calls can await
-      resultsMap.set(correlationId, { status: 'pending', promise: executionPromise });
+      resultsMap.set(correlationId, {
+        status: "pending",
+        promise: executionPromise,
+      });
       emitChange();
 
       return executionPromise;
     },
-    [defaultProjectId]
+    [defaultProjectId],
   );
 
   const abortExecution = useCallback((correlationId) => {

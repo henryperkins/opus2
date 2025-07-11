@@ -1,6 +1,7 @@
 """
 Knowledge base API schemas for search and context building.
 """
+
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
@@ -8,6 +9,7 @@ from pydantic import BaseModel, Field
 
 class KnowledgeSearchRequest(BaseModel):
     """Knowledge base search request."""
+
     query: str = Field(..., min_length=1)
     project_ids: Optional[List[int]] = None  # Support multiple projects
     filters: Optional[Dict[str, Any]] = None
@@ -18,6 +20,7 @@ class KnowledgeSearchRequest(BaseModel):
 
 class KnowledgeEntry(BaseModel):
     """Knowledge base entry result."""
+
     id: str
     content: str
     title: Optional[str] = None
@@ -32,6 +35,7 @@ class KnowledgeEntry(BaseModel):
 
 class ContextBuildRequest(BaseModel):
     """Context building request."""
+
     knowledge_entries: List[str]  # List of knowledge entry IDs
     query: str
     project_id: str
@@ -41,6 +45,7 @@ class ContextBuildRequest(BaseModel):
 
 class ContextResult(BaseModel):
     """Built context result."""
+
     context: str
     sources: List[KnowledgeEntry]
     context_length: int
@@ -50,6 +55,7 @@ class ContextResult(BaseModel):
 
 class KnowledgeStats(BaseModel):
     """Knowledge base statistics."""
+
     total_entries: int
     categories: Dict[str, int]
     recent_additions: int
@@ -61,6 +67,7 @@ class KnowledgeStats(BaseModel):
 
 class KnowledgeSearchResponse(BaseModel):
     """Knowledge search response."""
+
     results: List[KnowledgeEntry]
     total_count: int
     query_time: float
@@ -70,15 +77,24 @@ class KnowledgeSearchResponse(BaseModel):
 
 class QueryAnalysisRequest(BaseModel):
     """Query analysis request."""
+
     query: str = Field(..., min_length=1)
     project_id: str
 
 
 class QueryAnalysisResponse(BaseModel):
     """Query analysis response."""
-    intent: str = Field(..., description="Detected intent (search, implement, debug, explain, etc.)")
-    task_type: str = Field(..., description="Type of task (code_review, documentation, troubleshooting, etc.)")
-    complexity: str = Field(..., description="Complexity level (simple, moderate, complex)")
+
+    intent: str = Field(
+        ..., description="Detected intent (search, implement, debug, explain, etc.)"
+    )
+    task_type: str = Field(
+        ...,
+        description="Type of task (code_review, documentation, troubleshooting, etc.)",
+    )
+    complexity: str = Field(
+        ..., description="Complexity level (simple, moderate, complex)"
+    )
     keywords: List[str] = Field(..., description="Extracted keywords")
     confidence: float = Field(..., ge=0, le=1, description="Analysis confidence score")
     suggested_filters: Optional[Dict[str, Any]] = None
@@ -86,6 +102,7 @@ class QueryAnalysisResponse(BaseModel):
 
 class KnowledgeRetrievalRequest(BaseModel):
     """Knowledge retrieval request."""
+
     analysis: QueryAnalysisResponse
     project_id: str
     max_docs: Optional[int] = Field(5, ge=1, le=20)
@@ -95,6 +112,7 @@ class KnowledgeRetrievalRequest(BaseModel):
 
 class ContextInjectionRequest(BaseModel):
     """Context injection request."""
+
     query: str = Field(..., min_length=1)
     knowledge: List[KnowledgeEntry]
     citation_style: Optional[str] = Field("inline", pattern="^(inline|footnote)$")
@@ -103,6 +121,7 @@ class ContextInjectionRequest(BaseModel):
 
 class ContextInjectionResponse(BaseModel):
     """Context injection response."""
+
     contextualized_query: str
     context_length: int
     citations_added: int
@@ -110,6 +129,7 @@ class ContextInjectionResponse(BaseModel):
 
 class CitationRequest(BaseModel):
     """Citation addition request."""
+
     response: str
     knowledge: List[KnowledgeEntry]
     citation_style: Optional[str] = Field("inline", pattern="^(inline|footnote)$")
@@ -117,6 +137,7 @@ class CitationRequest(BaseModel):
 
 class CitationResponse(BaseModel):
     """Citation addition response."""
+
     response_with_citations: str
     citations: Dict[str, Any]
     citation_count: int
@@ -124,6 +145,7 @@ class CitationResponse(BaseModel):
 
 class KnowledgeResponse(BaseModel):
     """Standard knowledge API response."""
+
     success: bool
     message: Optional[str] = None
     data: Optional[Any] = None

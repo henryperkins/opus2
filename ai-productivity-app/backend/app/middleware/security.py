@@ -7,11 +7,13 @@ Features
 • Adds secure HTTP headers (HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy).
 • Performs CSRF validation on state-changing requests (POST, PUT, PATCH, DELETE).
 """
+
 from __future__ import annotations
 
 from typing import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response, status
+
 # ---------------------------------------------------------------------------
 # Optional dependencies – Starlette (via FastAPI) & SlowAPI rate-limiter
 # ---------------------------------------------------------------------------
@@ -100,7 +102,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         if method in {"POST", "PUT", "PATCH", "DELETE"}:
             # Exempt auth endpoints from CSRF (they use rate limiting instead)
-            exempt_paths = ["/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/chat/", "/code/"]
+            exempt_paths = [
+                "/api/auth/register",
+                "/api/auth/login",
+                "/api/auth/logout",
+                "/api/chat/",
+                "/code/",
+            ]
             if not any(request.url.path.startswith(path) for path in exempt_paths):
                 security.validate_csrf(request)
 
@@ -135,9 +143,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
 
         response.headers["Content-Security-Policy"] = csp_policy
-        response.headers[
-            "Strict-Transport-Security"
-        ] = "max-age=63072000; includeSubDomains; preload"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=63072000; includeSubDomains; preload"
+        )
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "same-origin"

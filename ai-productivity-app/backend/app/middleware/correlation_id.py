@@ -1,4 +1,5 @@
 """Correlation ID middleware for request tracing."""
+
 import uuid
 from contextvars import ContextVar
 from typing import Optional
@@ -34,9 +35,7 @@ except ModuleNotFoundError:  # pragma: no cover – stub fallback for CI
 
 
 # Context variable to store request ID across async boundaries
-request_id_var: ContextVar[Optional[str]] = ContextVar(
-    'request_id', default=None
-)
+request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
 
 # Header name for correlation ID
 REQUEST_ID_HEADER = "X-Request-ID"

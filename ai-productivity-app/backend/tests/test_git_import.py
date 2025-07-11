@@ -68,7 +68,7 @@ def test_import_job_creation(db, mock_clone):
     assert job.status.name == "QUEUED"
 
     # Run background coroutine synchronously so we can assert completed state
-# Execute async job synchronously for test
+    # Execute async job synchronously for test
     asyncio.run(import_router._run_import_job(job_id))
 
     db.refresh(job)

@@ -45,11 +45,15 @@ def list_timeline_events(
             title=event.title,
             description=event.description,
             metadata=event.event_metadata or {},
-            user=UserInfo(
-                id=event.user.id,
-                username=event.user.username,
-                email=event.user.email,
-            ) if event.user else None,
+            user=(
+                UserInfo(
+                    id=event.user.id,
+                    username=event.user.username,
+                    email=event.user.email,
+                )
+                if event.user
+                else None
+            ),
             created_at=event.created_at,
         )
 

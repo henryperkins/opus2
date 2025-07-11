@@ -3,10 +3,10 @@
 // Provides debounced, cached search results with support for query + filter
 // parameters.  Replaces the previous SWR/axios implementation.
 
-import { useState, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useDebounce } from './useDebounce';
-import { searchAPI } from '../api/search';
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDebounce } from "./useDebounce";
+import { searchAPI } from "../api/search";
 
 const MIN_QUERY_LENGTH = 2;
 
@@ -26,10 +26,10 @@ function searchFn({ queryKey }) {
   });
 }
 
-export function useSearch(initialQuery = '', initialFilters = {}) {
+export function useSearch(initialQuery = "", initialFilters = {}) {
   const [query, setQuery] = useState(initialQuery);
   const [filters, setFilters] = useState(initialFilters);
-  const [searchTypes, setSearchTypes] = useState(['hybrid']);
+  const [searchTypes, setSearchTypes] = useState(["hybrid"]);
 
   const debouncedQuery = useDebounce(query, 500);
 
@@ -52,7 +52,7 @@ export function useSearch(initialQuery = '', initialFilters = {}) {
     isFetching: loading,
     error,
   } = useQuery({
-    queryKey: ['search', { q: debouncedQuery, filters, types: searchTypes }],
+    queryKey: ["search", { q: debouncedQuery, filters, types: searchTypes }],
     queryFn: searchFn,
     enabled,
     keepPreviousData: true,
@@ -68,9 +68,9 @@ export function useSearch(initialQuery = '', initialFilters = {}) {
   const updateSearchTypes = (types) => setSearchTypes(types);
 
   const clearSearch = () => {
-    setQuery('');
+    setQuery("");
     setFilters({});
-    queryClient.removeQueries({ queryKey: ['search'] });
+    queryClient.removeQueries({ queryKey: ["search"] });
   };
 
   const indexDocument = async (documentId, options) => {
@@ -103,6 +103,6 @@ export function useSearch(initialQuery = '', initialFilters = {}) {
       totalResults,
       searchTypes,
       clearSearch,
-    ]
+    ],
   );
 }

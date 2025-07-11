@@ -1,7 +1,9 @@
 """Health check and monitoring endpoints with comprehensive checks."""
+
 from typing import Dict, Any
 from datetime import datetime, timedelta
 import asyncio
+
 # ---------------------------------------------------------------------------
 # Optional dependency: httpx (async HTTP client)
 # ---------------------------------------------------------------------------
@@ -13,6 +15,7 @@ import asyncio
 
 try:
     import httpx  # type: ignore
+
     _HAS_HTTPX = True
 except ModuleNotFoundError:  # pragma: no cover – stub
     _HAS_HTTPX = False
@@ -53,6 +56,7 @@ import logging
 # Optional Prometheus metrics endpoint
 try:
     from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+
     HAS_PROMETHEUS = True
 except ImportError:
     HAS_PROMETHEUS = False
@@ -64,6 +68,7 @@ router = APIRouter(prefix="/health", tags=["monitoring"])
 # ---------------------------------------------------------------------------
 # WebSocket connection statistics
 # ---------------------------------------------------------------------------
+
 
 @router.get("/connections", name="connections-status")
 async def connection_stats():  # noqa: D401 – simple diagnostic endpoint
@@ -84,14 +89,18 @@ async def connection_stats():  # noqa: D401 – simple diagnostic endpoint
     you need per-user diagnostics call ``/connections?details=true``.
     """
 
-    from app.websocket.manager import connection_manager  # local import → avoid circular
+    from app.websocket.manager import (
+        connection_manager,
+    )  # local import → avoid circular
 
     sessions = connection_manager.active_connections
 
     result = {
         "total_sessions": len(sessions),
         "total_connections": sum(len(ws_list) for ws_list in sessions.values()),
-        "sessions": {sid: {"connections": len(ws_list)} for sid, ws_list in sessions.items()},
+        "sessions": {
+            sid: {"connections": len(ws_list)} for sid, ws_list in sessions.items()
+        },
     }
 
     return result
@@ -118,9 +127,7 @@ def check_database(db) -> Dict[str, Any]:
 
         # Check active connections (skip for SQLite)
         if "postgresql" in str(db.bind.url):
-            query = text(
-                "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"
-            )
+            query = text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
             conn_result = db.execute(query)
             active_connections = conn_result.scalar()
         else:
@@ -129,14 +136,14 @@ def check_database(db) -> Dict[str, Any]:
         return {
             "status": HealthStatus.HEALTHY,
             "response_time_ms": round(duration_ms, 2),
-            "active_connections": active_connections
+            "active_connections": active_connections,
         }
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
         return {
             "status": HealthStatus.UNHEALTHY,
             "error": str(e),
-            "response_time_ms": None
+            "response_time_ms": None,
         }
 
 
@@ -145,7 +152,7 @@ async def check_redis() -> Dict[str, Any]:
     if settings.disable_rate_limiter:
         return {
             "status": HealthStatus.HEALTHY,
-            "message": "Redis check skipped (rate limiter disabled)"
+            "message": "Redis check skipped (rate limiter disabled)",
         }
 
     start_time = datetime.utcnow()
@@ -165,24 +172,21 @@ async def check_redis() -> Dict[str, Any]:
         return {
             "status": HealthStatus.HEALTHY,
             "response_time_ms": round(duration_ms, 2),
-            "memory_used_mb": round(memory_used_mb, 2)
+            "memory_used_mb": round(memory_used_mb, 2),
         }
     except Exception as e:
         logger.error(f"Redis health check failed: {e}")
         return {
             "status": HealthStatus.UNHEALTHY,
             "error": str(e),
-            "response_time_ms": None
+            "response_time_ms": None,
         }
 
 
 async def check_openai() -> Dict[str, Any]:
     """Check OpenAI API connectivity."""
     if settings.skip_openai_health or settings.debug:
-        return {
-            "status": HealthStatus.HEALTHY,
-            "message": "OpenAI check skipped"
-        }
+        return {"status": HealthStatus.HEALTHY, "message": "OpenAI check skipped"}
 
     start_time = datetime.utcnow()
     try:
@@ -191,7 +195,7 @@ async def check_openai() -> Dict[str, Any]:
                 if not (key := settings.azure_openai_api_key):
                     return {
                         "status": HealthStatus.DEGRADED,
-                        "message": "Azure key missing"
+                        "message": "Azure key missing",
                     }
                 # Use *v1 preview* surface for model listing so that the health
                 # check works consistently across Chat Completions **and**
@@ -205,7 +209,7 @@ async def check_openai() -> Dict[str, Any]:
                 if not (key := settings.openai_api_key):
                     return {
                         "status": HealthStatus.DEGRADED,
-                        "message": "OpenAI key missing"
+                        "message": "OpenAI key missing",
                     }
                 url = "https://api.openai.com/v1/models"
                 headers = {"Authorization": f"Bearer {key[:8]}..."}
@@ -230,7 +234,7 @@ async def check_openai() -> Dict[str, Any]:
         return {
             "status": HealthStatus.UNHEALTHY,
             "error": str(e)[:100],
-            "response_time_ms": None
+            "response_time_ms": None,
         }
 
 
@@ -256,27 +260,27 @@ async def check_background_workers() -> Dict[str, Any]:
             return {
                 "status": HealthStatus.HEALTHY,
                 "message": "No background workers configured",
-                "active_workers": 0
+                "active_workers": 0,
             }
         elif len(active_workers) == 0:
             return {
                 "status": HealthStatus.UNHEALTHY,
                 "message": "No active workers found",
                 "active_workers": 0,
-                "total_workers": len(worker_keys)
+                "total_workers": len(worker_keys),
             }
         elif len(active_workers) < len(worker_keys):
             return {
                 "status": HealthStatus.DEGRADED,
                 "active_workers": len(active_workers),
                 "total_workers": len(worker_keys),
-                "worker_ids": active_workers
+                "worker_ids": active_workers,
             }
         else:
             return {
                 "status": HealthStatus.HEALTHY,
                 "active_workers": len(active_workers),
-                "worker_ids": active_workers
+                "worker_ids": active_workers,
             }
 
     except Exception as e:
@@ -284,7 +288,7 @@ async def check_background_workers() -> Dict[str, Any]:
         return {
             "status": HealthStatus.UNHEALTHY,
             "error": str(e),
-            "active_workers": None
+            "active_workers": None,
         }
 
 
@@ -293,18 +297,19 @@ async def check_vector_backend() -> Dict[str, Any]:
     start_time = datetime.utcnow()
     try:
         from app.services.vector_service import get_vector_service
+
         vector_service = await get_vector_service()
-        
+
         # Test basic connection by getting stats
         stats = await vector_service.get_stats()
-        
+
         duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
-        
+
         return {
             "status": HealthStatus.HEALTHY,
             "backend": stats.get("backend", "unknown"),
             "total_embeddings": stats.get("total_embeddings", 0),
-            "response_time_ms": round(duration_ms, 2)
+            "response_time_ms": round(duration_ms, 2),
         }
     except Exception as e:
         logger.error(f"Vector backend health check failed: {e}")
@@ -312,14 +317,12 @@ async def check_vector_backend() -> Dict[str, Any]:
         return {
             "status": HealthStatus.UNHEALTHY,
             "error": str(e)[:100],
-            "response_time_ms": round(duration_ms, 2)
+            "response_time_ms": round(duration_ms, 2),
         }
 
 
 @router.get("/ready")
-async def readiness_check(
-    response: Response, db=Depends(get_db)
-) -> Dict[str, Any]:
+async def readiness_check(response: Response, db=Depends(get_db)) -> Dict[str, Any]:
     """Comprehensive readiness check for Kubernetes."""
     checks = {}
     overall_healthy = True
@@ -336,18 +339,17 @@ async def readiness_check(
         "redis": check_redis(),
         "openai": check_openai(),
         "workers": check_background_workers(),
-        "vector": check_vector_backend()
+        "vector": check_vector_backend(),
     }
-    
+
     # Run database check synchronously
     db_result = check_database(db)
-    
+
     # Run async checks concurrently
     async_results = await asyncio.gather(
-        *async_check_tasks.values(),
-        return_exceptions=True
+        *async_check_tasks.values(), return_exceptions=True
     )
-    
+
     # Combine results
     results = [db_result] + list(async_results)
     check_tasks = {"database": db_result, **async_check_tasks}
@@ -355,10 +357,7 @@ async def readiness_check(
     # Process results
     for (name, _), result in zip(check_tasks.items(), results):
         if isinstance(result, Exception):
-            checks[name] = {
-                "status": HealthStatus.UNHEALTHY,
-                "error": str(result)
-            }
+            checks[name] = {"status": HealthStatus.UNHEALTHY, "error": str(result)}
             if name in min_components:
                 overall_healthy = False
                 overall_status = HealthStatus.UNHEALTHY
@@ -368,12 +367,13 @@ async def readiness_check(
             if is_unhealthy and name in min_components:
                 overall_healthy = False
                 overall_status = HealthStatus.UNHEALTHY
-            elif (result["status"] == HealthStatus.DEGRADED and
-                  overall_status != HealthStatus.UNHEALTHY):
+            elif (
+                result["status"] == HealthStatus.DEGRADED
+                and overall_status != HealthStatus.UNHEALTHY
+            ):
                 overall_status = HealthStatus.DEGRADED
 
-    version = (settings.app_version if hasattr(settings, "app_version")
-               else "unknown")
+    version = settings.app_version if hasattr(settings, "app_version") else "unknown"
     response_data = {
         "status": overall_status,
         "timestamp": datetime.utcnow().isoformat(),
@@ -391,20 +391,14 @@ async def readiness_check(
 @router.get("/live")
 async def liveness_check() -> Dict[str, str]:
     """Simple liveness check for Kubernetes."""
-    return {
-        "status": "alive",
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    return {"status": "alive", "timestamp": datetime.utcnow().isoformat()}
 
 
 @router.get("/startup")
 async def startup_check() -> Dict[str, Any]:
     """Startup probe for Kubernetes - checks if app is ready to serve."""
     # Basic check that app has started
-    return {
-        "status": "started",
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    return {"status": "started", "timestamp": datetime.utcnow().isoformat()}
 
 
 @router.get("/metrics")
@@ -414,19 +408,16 @@ async def metrics():
         return Response(
             content="# Prometheus client not available\n",
             media_type="text/plain",
-            status_code=501
+            status_code=501,
         )
-    
+
     try:
         metrics_output = generate_latest()
-        return Response(
-            content=metrics_output,
-            media_type=CONTENT_TYPE_LATEST
-        )
+        return Response(content=metrics_output, media_type=CONTENT_TYPE_LATEST)
     except Exception as e:
         logger.error(f"Failed to generate metrics: {e}")
         return Response(
             content=f"# Error generating metrics: {e}\n",
             media_type="text/plain",
-            status_code=500
+            status_code=500,
         )

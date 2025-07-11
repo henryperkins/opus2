@@ -1,17 +1,17 @@
-import { useTheme } from '../../hooks/useTheme';
+import { useTheme } from "../../hooks/useTheme";
 
-export default function ThemeToggle({ className = '' }) {
+export default function ThemeToggle({ className = "" }) {
   const { theme, toggleTheme } = useTheme();
 
   return (
     <button
       onClick={toggleTheme}
       className={`p-2 rounded-md transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 ${className}`}
-      aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-      title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+      aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+      title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
       type="button"
     >
-      {theme === 'light' ? (
+      {theme === "light" ? (
         <svg
           className="w-5 h-5 text-gray-600"
           fill="none"

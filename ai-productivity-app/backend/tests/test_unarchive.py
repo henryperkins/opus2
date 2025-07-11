@@ -37,5 +37,7 @@ def test_unarchive_endpoint(client: TestClient, db):
     assert payload["status"] == "active"
 
     # Timeline event created
-    events = db.query(TimelineEvent).filter(TimelineEvent.project_id == project.id).all()
+    events = (
+        db.query(TimelineEvent).filter(TimelineEvent.project_id == project.id).all()
+    )
     assert any(e.title == "Project unarchived" for e in events)

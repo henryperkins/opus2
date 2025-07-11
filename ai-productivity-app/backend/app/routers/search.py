@@ -1,16 +1,24 @@
 """Enhanced search API with hybrid capabilities."""
+
 import logging
 
 from fastapi import APIRouter, Query, HTTPException, BackgroundTasks, Depends
 
 from app.dependencies import DatabaseDep, CurrentUserRequired, CurrentUserOptional
-from app.services.vector_service import get_vector_service, VectorService, vector_service
+from app.services.vector_service import (
+    get_vector_service,
+    VectorService,
+    vector_service,
+)
 from app.services.hybrid_search import HybridSearch
 from app.services.embedding_service import EmbeddingService
 from app.embeddings.generator import EmbeddingGenerator
 from app.schemas.search import (
-    SearchRequest, SearchResponse, SearchResult,
-    IndexRequest, IndexResponse
+    SearchRequest,
+    SearchResponse,
+    SearchResult,
+    IndexRequest,
+    IndexResponse,
 )
 from app.models.search_history import SearchHistory
 from app.models.project import Project
@@ -29,7 +37,7 @@ async def search(
     request: SearchRequest,
     current_user: CurrentUserRequired,
     db: DatabaseDep,
-    vector_service: VectorService = Depends(get_vector_service)  # Keep for future use
+    vector_service: VectorService = Depends(get_vector_service),  # Keep for future use
 ):
     """Execute hybrid search across code and documents."""
     # Initialize hybrid search with the pgvector-only VectorService
@@ -75,19 +83,27 @@ async def search(
         document = None
         if document_id:
             document = db.query(CodeDocument).filter_by(id=document_id).first()
-        
+
         # Extract metadata
         metadata = r.get("metadata", {})
-        
+
         # Create stable ID
-        result_id = f"{document_id}:{r.get('chunk_id', 0)}" if document_id else f"result_{len(formatted_results)}"
-        
+        result_id = (
+            f"{document_id}:{r.get('chunk_id', 0)}"
+            if document_id
+            else f"result_{len(formatted_results)}"
+        )
+
         formatted_result = SearchResult(
             id=result_id,
-            file_path=document.file_path if document else metadata.get("file_path", "unknown"),
+            file_path=(
+                document.file_path if document else metadata.get("file_path", "unknown")
+            ),
             start_line=metadata.get("start_line", 1),
             end_line=metadata.get("end_line", metadata.get("start_line", 1)),
-            language=document.language if document else metadata.get("language", "unknown"),
+            language=(
+                document.language if document else metadata.get("language", "unknown")
+            ),
             content=r["content"],
             symbol=metadata.get("symbol_name"),
             search_type=r["type"],
@@ -99,7 +115,6 @@ async def search(
             metadata=metadata,
         )
         formatted_results.append(formatted_result)
-    
 
     # Assemble response object
     response_payload = SearchResponse(
@@ -122,9 +137,7 @@ async def search(
         db.commit()
     except Exception as exc:  # noqa: BLE001 – don't fail request
         db.rollback()
-        logger.warning(
-            "Failed to persist search history: %s", exc, exc_info=False
-        )
+        logger.warning("Failed to persist search history: %s", exc, exc_info=False)
 
     return response_payload
 
@@ -133,7 +146,7 @@ async def search(
 async def get_suggestions(
     q: str = Query("", min_length=2, max_length=100),
     current_user: CurrentUserOptional = None,
-    db: DatabaseDep = None
+    db: DatabaseDep = None,
 ):
     """Get search suggestions."""
     if len(q) < 2:
@@ -143,16 +156,14 @@ async def get_suggestions(
     suggestions = []
 
     # Command suggestions
-    if q.startswith('/'):
-        commands = [
-            '/explain', '/generate-tests', '/summarize-pr', '/grep'
-        ]
+    if q.startswith("/"):
+        commands = ["/explain", "/generate-tests", "/summarize-pr", "/grep"]
         suggestions.extend([c for c in commands if c.startswith(q)])
 
     # Structural search suggestions
-    elif ':' in q:
-        prefix, _ = q.split(':', 1)
-        if prefix in ['func', 'function', 'class', 'method', 'type', 'file']:
+    elif ":" in q:
+        prefix, _ = q.split(":", 1)
+        if prefix in ["func", "function", "class", "method", "type", "file"]:
             suggestions.append(f"{prefix}:")
 
     # ------------------------------------------------------------------
@@ -223,7 +234,7 @@ async def index_document(
     request: IndexRequest,
     background_tasks: BackgroundTasks,
     current_user: CurrentUserRequired,
-    db: DatabaseDep
+    db: DatabaseDep,
 ):
     """Index or re-index document embeddings."""
     # Verify document access
@@ -243,34 +254,29 @@ async def index_document(
 
     if request.async_mode:
         # Queue for background processing
-        background_tasks.add_task(
-            embedding_service.index_document,
-            request.document_id
-        )
+        background_tasks.add_task(embedding_service.index_document, request.document_id)
 
         return IndexResponse(
             status="queued",
             message="Document queued for indexing",
-            document_id=request.document_id
+            document_id=request.document_id,
         )
     else:
         # Process synchronously
         result = await embedding_service.index_document(request.document_id)
 
         return IndexResponse(
-            status=result['status'],
-            message=result.get('message', 'Indexing complete'),
+            status=result["status"],
+            message=result.get("message", "Indexing complete"),
             document_id=request.document_id,
-            indexed_count=result.get('indexed', 0),
-            error_count=result.get('errors', 0)
+            indexed_count=result.get("indexed", 0),
+            error_count=result.get("errors", 0),
         )
 
 
 @router.delete("/index/{document_id}")
 async def delete_index(
-    document_id: int,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    document_id: int, current_user: CurrentUserRequired, db: DatabaseDep
 ):
     """Delete document from index."""
     # Verify access

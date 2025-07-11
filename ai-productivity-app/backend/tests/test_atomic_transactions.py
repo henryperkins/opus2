@@ -3,9 +3,7 @@
 import pytest
 from sqlalchemy.orm import Session
 from app.database.transactions import atomic
-from app.services.atomic_operations import (
-    AtomicProjectService, AtomicUserService
-)
+from app.services.atomic_operations import AtomicProjectService, AtomicUserService
 from app.models.project import Project
 from app.models.timeline import TimelineEvent
 from app.models.user import User
@@ -18,9 +16,7 @@ def test_atomic_decorator_commits_on_success(db: Session):
 
     with atomic(db):
         user = User(
-            username="testuser",
-            email="test@example.com",
-            password_hash="hashed"
+            username="testuser", email="test@example.com", password_hash="hashed"
         )
         db.add(user)
 
@@ -35,9 +31,7 @@ def test_atomic_decorator_rolls_back_on_error(db: Session):
     with pytest.raises(ValueError):
         with atomic(db):
             user = User(
-                username="testuser",
-                email="test@example.com",
-                password_hash="hashed"
+                username="testuser", email="test@example.com", password_hash="hashed"
             )
             db.add(user)
             raise ValueError("Test error")
@@ -47,9 +41,7 @@ def test_atomic_decorator_rolls_back_on_error(db: Session):
 
 
 @pytest.mark.asyncio
-async def test_create_project_with_timeline_atomic(
-    db: Session, test_user: User
-):
+async def test_create_project_with_timeline_atomic(db: Session, test_user: User):
     """Test project creation with timeline event is atomic."""
     initial_projects = db.query(Project).count()
     initial_events = db.query(TimelineEvent).count()
@@ -58,7 +50,7 @@ async def test_create_project_with_timeline_atomic(
         db=db,
         title="Test Project",
         owner_id=test_user.id,
-        description="Test description"
+        description="Test description",
     )
 
     # Both project and timeline event should exist
@@ -82,7 +74,7 @@ async def test_create_user_with_session_atomic(db: Session):
         username="newuser",
         email="new@example.com",
         password_hash="hashed",
-        jti="test-jti"
+        jti="test-jti",
     )
 
     # Both user and session should exist
@@ -103,9 +95,7 @@ async def test_archive_project_atomic(
     initial_events = db.query(TimelineEvent).count()
 
     success = await AtomicProjectService.archive_project(
-        db=db,
-        project_id=test_project.id,
-        user_id=test_user.id
+        db=db, project_id=test_project.id, user_id=test_user.id
     )
 
     assert success is True
@@ -117,9 +107,7 @@ async def test_archive_project_atomic(
     # Timeline event should be created
     assert db.query(TimelineEvent).count() == initial_events + 1
 
-    event = db.query(TimelineEvent).filter_by(
-        project_id=test_project.id
-    ).first()
+    event = db.query(TimelineEvent).filter_by(project_id=test_project.id).first()
     assert event is not None
     assert "archived" in event.title.lower()
 
@@ -128,24 +116,18 @@ async def test_archive_project_atomic(
 async def test_delete_user_cascade_atomic(db: Session, test_user: User):
     """Test cascading user deletion is atomic."""
     # Create some related data
-    project = Project(
-        title="Test Project",
-        owner_id=test_user.id
-    )
+    project = Project(title="Test Project", owner_id=test_user.id)
     db.add(project)
     db.flush()
 
-    session = UserSession(
-        user_id=test_user.id,
-        jti="test-jti"
-    )
+    session = UserSession(user_id=test_user.id, jti="test-jti")
     db.add(session)
 
     event = TimelineEvent(
         project_id=project.id,
         user_id=test_user.id,
         event_type="created",
-        title="Test event"
+        title="Test event",
     )
     db.add(event)
     db.commit()
@@ -153,10 +135,7 @@ async def test_delete_user_cascade_atomic(db: Session, test_user: User):
     user_id = test_user.id
 
     # Delete user cascade
-    success = await AtomicUserService.delete_user_cascade(
-        db=db,
-        user_id=user_id
-    )
+    success = await AtomicUserService.delete_user_cascade(db=db, user_id=user_id)
 
     assert success is True
 

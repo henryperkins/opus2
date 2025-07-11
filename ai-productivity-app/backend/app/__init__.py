@@ -6,6 +6,7 @@ If the environment variable **APP_CI_SANDBOX=1** is present, we import
 inside the seccomp-restricted grading sandbox.  Otherwise nothing
 happens and the runtime stays 100 % clean.
 """
+
 from importlib import import_module
 import os
 
@@ -54,10 +55,10 @@ if _SANDBOX_MODE and os.getenv("APP_CI_SANDBOX") != "1":
 #
 # We therefore import the sub-module via an *explicit relative* path which is
 # guaranteed to work regardless of whether the alias already exists.
-if _SANDBOX_MODE:            # pragma: no cover – only in CI sandbox
-    import_module(__name__ + ".compat")           # side-effect: installs patches
-else:                                     # defensive: prod must stay clean
+if _SANDBOX_MODE:  # pragma: no cover – only in CI sandbox
+    import_module(__name__ + ".compat")  # side-effect: installs patches
+else:  # defensive: prod must stay clean
     # Fail hard if anyone accidentally ships a build with the env-flag set
-    assert "pytest" not in os.getenv("_", ""), (
-        "APP_CI_SANDBOX must never be enabled in production!"
-    )
+    assert "pytest" not in os.getenv(
+        "_", ""
+    ), "APP_CI_SANDBOX must never be enabled in production!"

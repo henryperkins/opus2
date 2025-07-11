@@ -5,8 +5,8 @@
 // helper.  The hook *does not* decide where the uploaded files go – the caller
 // must pass a projectId.
 
-import { useState } from 'react';
-import { codeAPI } from '../api/code';
+import { useState } from "react";
+import { codeAPI } from "../api/code";
 
 export function useFileUpload() {
   const [uploading, setUploading] = useState(false);
@@ -14,7 +14,7 @@ export function useFileUpload() {
   const [error, setError] = useState(null);
 
   const uploadFiles = async (projectId, files) => {
-    if (!projectId) throw new Error('projectId is required');
+    if (!projectId) throw new Error("projectId is required");
     if (!files || files.length === 0) return [];
 
     setUploading(true);
@@ -28,7 +28,7 @@ export function useFileUpload() {
       });
       return res;
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Upload failed');
+      setError(err.response?.data?.detail || err.message || "Upload failed");
       throw err;
     } finally {
       setUploading(false);

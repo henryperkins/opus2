@@ -24,7 +24,9 @@ class SearchHistory(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True)
 
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Raw query string the user submitted (before any server-side expansion)
     query_text = Column(String(255), nullable=False)
@@ -41,7 +43,11 @@ class SearchHistory(Base, TimestampMixin):
             "<SearchHistory(id={0}, user_id={1}, query='{2}', created_at={3})>".format(
                 self.id,
                 self.user_id,
-                (self.query_text[:20] + "…") if len(self.query_text) > 20 else self.query_text,
+                (
+                    (self.query_text[:20] + "…")
+                    if len(self.query_text) > 20
+                    else self.query_text
+                ),
                 self.created_at,
             )
         )

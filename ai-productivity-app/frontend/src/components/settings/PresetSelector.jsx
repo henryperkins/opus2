@@ -1,9 +1,9 @@
 // frontend/src/components/settings/PresetSelector.jsx
-import React from 'react';
-import PropTypes from 'prop-types';
-import { useQuery } from '@tanstack/react-query';
-import { useAIConfig } from '../../contexts/AIConfigContext';
-import apiClient from '../../api/client';
+import React from "react";
+import PropTypes from "prop-types";
+import { useQuery } from "@tanstack/react-query";
+import { useAIConfig } from "../../contexts/AIConfigContext";
+import apiClient from "../../api/client";
 
 /**
  * Dropdown selector that lists all configuration *presets* returned by the
@@ -11,12 +11,12 @@ import apiClient from '../../api/client';
  * `applyPreset(presetId)` from the AIConfig context which in turn PATCHes the
  * config on the server.
  */
-export default function PresetSelector({ className = '' }) {
+export default function PresetSelector({ className = "" }) {
   const { applyPreset } = useAIConfig();
 
   // Helper fetcher – colocated to avoid tight coupling with the context
   const fetchPresets = React.useCallback(async () => {
-    const res = await apiClient.get('/api/v1/ai-config/presets');
+    const res = await apiClient.get("/api/v1/ai-config/presets");
     return res;
   }, []);
 
@@ -27,7 +27,7 @@ export default function PresetSelector({ className = '' }) {
     isError,
     error,
   } = useQuery({
-    queryKey: ['ai-config', 'presets'],
+    queryKey: ["ai-config", "presets"],
     queryFn: fetchPresets,
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
@@ -39,11 +39,15 @@ export default function PresetSelector({ className = '' }) {
   };
 
   if (isLoading) {
-    return <select disabled className={className}><option>Loading presets…</option></select>;
+    return (
+      <select disabled className={className}>
+        <option>Loading presets…</option>
+      </select>
+    );
   }
 
   if (isError) {
-    const msg = error?.message || 'Failed to load presets';
+    const msg = error?.message || "Failed to load presets";
     return <div className="text-sm text-red-600">{msg}</div>;
   }
 

@@ -1,13 +1,13 @@
 // api/config.js
-import client from './client';
+import client from "./client";
 
 // --------------------------------------------------------------------------
 // Factory helpers (keep in sync with backend pydantic models where possible)
 // --------------------------------------------------------------------------
 
 export const createModelConfig = (data = {}) => ({
-  provider: data.provider || 'openai',
-  model_id: data.model_id || data.modelId || data.chat_model || 'gpt-4o-mini',
+  provider: data.provider || "openai",
+  model_id: data.model_id || data.modelId || data.chat_model || "gpt-4o-mini",
   temperature: data.temperature,
   max_tokens: data.max_tokens || data.maxTokens,
   top_p: data.top_p || data.topP,
@@ -33,7 +33,7 @@ export const createTestResult = (data = {}) => ({
 
 class ConfigAPI {
   constructor() {
-    this.baseURL = '/api/v1/ai-config';
+    this.baseURL = "/api/v1/ai-config";
   }
 
   async getConfig() {
@@ -49,15 +49,19 @@ class ConfigAPI {
     // in the Axios request config so the interceptor can honour it.
     const { __noRetry, ...payload } = config ?? {};
     const axiosCfg = __noRetry ? { __noRetry } : undefined;
-    const response = await client.put(this.baseURL, payload, axiosCfg);
+    const response = await client.patch(
+      this.baseURL,
+      createModelConfig(payload),
+      axiosCfg,
+    );
 
     // The unified API returns the full updated config directly
     const fullConfig = response.data;
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       try {
         window.dispatchEvent(
-          new CustomEvent('configUpdate', {
+          new CustomEvent("configUpdate", {
             detail: {
               config: fullConfig,
               requested: true,
@@ -74,12 +78,15 @@ class ConfigAPI {
 
   async testModelConfig(config) {
     try {
-      const response = await client.post(`${this.baseURL}/test`, config);
+      const response = await client.post(
+        `${this.baseURL}/test`,
+        createModelConfig(config),
+      );
       return response.data;
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Test failed',
+        error: error.response?.data?.detail || "Test failed",
       };
     }
   }
@@ -112,19 +119,19 @@ export const configAPI = new ConfigAPI();
 // ---------------------------------------------------------------------------
 
 export const createVariable = (data = {}) => ({
-  name: data.name || '',
-  description: data.description || '',
+  name: data.name || "",
+  description: data.description || "",
   defaultValue: data.defaultValue,
   required: data.required || false,
 });
 
 export const createPromptTemplate = (data = {}) => ({
   id: data.id,
-  name: data.name || '',
-  description: data.description || '',
-  category: data.category || 'general',
-  systemPrompt: data.systemPrompt || '',
-  userPromptTemplate: data.userPromptTemplate || '',
+  name: data.name || "",
+  description: data.description || "",
+  category: data.category || "general",
+  systemPrompt: data.systemPrompt || "",
+  userPromptTemplate: data.userPromptTemplate || "",
   variables: data.variables || [],
   modelPreferences: data.modelPreferences,
   isPublic: data.isPublic || false,
@@ -136,7 +143,7 @@ export const createPromptTemplate = (data = {}) => ({
 
 class PromptsAPI {
   constructor() {
-    this.baseURL = '/api/prompts';
+    this.baseURL = "/api/prompts";
   }
 
   async getTemplates(filters = {}) {

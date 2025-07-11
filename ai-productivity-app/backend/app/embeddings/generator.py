@@ -82,8 +82,10 @@ except ModuleNotFoundError:  # pragma: no cover
 
         return None
 
+
 try:
     from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+
     HAS_AZURE_IDENTITY = True
 except ImportError:
     HAS_AZURE_IDENTITY = False
@@ -114,15 +116,18 @@ from app.exceptions import (  # pylint: disable=wrong-import-position
     VectorDimensionMismatchException,
 )
 from app.models.code import CodeEmbedding  # pylint: disable=wrong-import-position
-from app.embeddings.cache import EMBEDDING_CACHE  # pylint: disable=wrong-import-position
+from app.embeddings.cache import (
+    EMBEDDING_CACHE,
+)  # pylint: disable=wrong-import-position
 
 logger = logging.getLogger(__name__)
 
 
 def _is_oversize_error(exc: Exception) -> bool:
     """Check if an exception represents an oversized batch error."""
-    return (isinstance(exc, EmbeddingException) and
-            ("Batch too large" in str(exc) or "INPUT_TOO_LARGE" in str(exc)))
+    return isinstance(exc, EmbeddingException) and (
+        "Batch too large" in str(exc) or "INPUT_TOO_LARGE" in str(exc)
+    )
 
 
 def _is_retryable_error(exc: Exception) -> bool:
@@ -141,13 +146,15 @@ def _adaptive_wait(retry_state):
     if isinstance(exc, RateLimitError):
         try:
             # Honor Retry-After header if present
-            retry_after = exc.response.headers.get("Retry-After") if exc.response else None
+            retry_after = (
+                exc.response.headers.get("Retry-After") if exc.response else None
+            )
             if retry_after:
                 return float(retry_after)
         except (AttributeError, ValueError, TypeError):
             # Header missing or cast fails, fall back to exponential
             pass
-    
+
     # Fall back to capped exponential backoff (1, 2, 4, 8, 10 seconds)
     return min(2 ** (retry_state.attempt_number - 1), 10)
 
@@ -221,9 +228,12 @@ class EmbeddingGenerator:
         else:
             # For Azure, prefer deployment name from config if available
             from app.config import settings
-            if (self._get_current_provider() == "azure" and 
-                hasattr(settings, 'azure_openai_embeddings_deployment') and
-                settings.azure_openai_embeddings_deployment):
+
+            if (
+                self._get_current_provider() == "azure"
+                and hasattr(settings, "azure_openai_embeddings_deployment")
+                and settings.azure_openai_embeddings_deployment
+            ):
                 self.deployment_name = settings.azure_openai_embeddings_deployment
                 self.model_family = model
             else:
@@ -237,9 +247,10 @@ class EmbeddingGenerator:
         self._populate_model_meta()
         self.client: AsyncOpenAI | AsyncAzureOpenAI | None = None
         self._init_client()
-        
+
         # Initialize concurrency limiter
         import asyncio
+
         self._semaphore = asyncio.Semaphore(settings.embedding_max_concurrency)
 
     # ------------------------------------------------------------------ #
@@ -250,7 +261,7 @@ class EmbeddingGenerator:
         try:
             from app.services.unified_config_service import UnifiedConfigService
             from app.database import SessionLocal
-            
+
             with SessionLocal() as db:
                 service = UnifiedConfigService(db)
                 config = service.get_current_config()
@@ -258,6 +269,7 @@ class EmbeddingGenerator:
         except Exception as e:
             logger.debug(f"Failed to get provider from unified config: {e}")
             return settings.llm_provider.lower()
+
     def _init_client(self) -> None:
         """Instantiate AsyncOpenAI or AsyncAzureOpenAI client."""
         """Use shared factory helpers to create an SDK client."""
@@ -316,8 +328,9 @@ class EmbeddingGenerator:
                 batch_count += 1
                 logger.debug(
                     "Processing batch %d with %d texts, estimated %d tokens",
-                    batch_count, len(batch),
-                    sum(self.estimate_tokens(text) for text in batch)
+                    batch_count,
+                    len(batch),
+                    sum(self.estimate_tokens(text) for text in batch),
                 )
 
                 # Build kwargs for embedding creation
@@ -327,8 +340,10 @@ class EmbeddingGenerator:
                     "encoding_format": self.encoding_format,
                 }
                 # Only include dimensions if it's specified and supported
-                if (self.dimensions is not None and
-                        self._model_meta["supports_dimensions_param"]):
+                if (
+                    self.dimensions is not None
+                    and self._model_meta["supports_dimensions_param"]
+                ):
                     kwargs["dimensions"] = self.dimensions
 
                 # Use semaphore to limit concurrent requests
@@ -359,7 +374,7 @@ class EmbeddingGenerator:
                 batch_count,
                 self.model_family,
                 self._model_meta["dimension"],
-                duration
+                duration,
             )
             return all_embeddings
 
@@ -382,22 +397,22 @@ class EmbeddingGenerator:
         """Convenience wrapper for a single input with caching."""
         # Create cache key from model and text
         cache_key = (self.deployment_name, text)
-        
+
         # Check cache first
         cached_result = await EMBEDDING_CACHE.get(cache_key)
         if cached_result:
             logger.debug(f"Cache hit for embedding: {len(text)} chars")
             return cached_result
-        
+
         # Generate embedding
         out = await self.generate_embeddings([text])
         result = out[0] if out else []
-        
+
         # Cache the result
         if result:
             await EMBEDDING_CACHE.set(cache_key, result)
             logger.debug(f"Cache miss, stored embedding: {len(text)} chars")
-        
+
         return result
 
     async def generate_and_store(

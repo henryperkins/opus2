@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
-import PropTypes from 'prop-types';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Brain, X } from 'lucide-react';
+import { useState, useEffect, useRef } from "react";
+import PropTypes from "prop-types";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { Brain, X } from "lucide-react";
 
 /**
  * Simplified chat layout component using only react-resizable-panels and Tailwind CSS
@@ -18,7 +18,7 @@ export default function ChatLayout({
   onSidebarClose,
   onEditorClose,
   onLayout,
-  monacoRef
+  monacoRef,
 }) {
   const editorGroupRef = useRef(null);
   const [isEditorReady, setIsEditorReady] = useState(false);
@@ -26,9 +26,9 @@ export default function ChatLayout({
 
   // Fix localStorage corruption and panel state management
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
 
-    const storageKey = 'react-resizable-panels:chat-editor-vertical';
+    const storageKey = "react-resizable-panels:chat-editor-vertical";
 
     if (showEditor) {
       const saved = localStorage.getItem(storageKey);
@@ -36,9 +36,13 @@ export default function ChatLayout({
         try {
           const parsed = JSON.parse(saved);
           // Look for the correct entry by matching the autoSaveId
-          const entry = parsed['chat-editor-vertical'];
+          const entry = parsed["chat-editor-vertical"];
           // Only reset if editor panel is completely collapsed (0) or very small
-          if (entry && Array.isArray(entry.layout) && entry.layout.length >= 2) {
+          if (
+            entry &&
+            Array.isArray(entry.layout) &&
+            entry.layout.length >= 2
+          ) {
             // If editor panel is 0 or very small, set reasonable default
             if (entry.layout[1] < 5) {
               const DEFAULT_LAYOUT = [65, 35];
@@ -46,7 +50,10 @@ export default function ChatLayout({
             }
           }
         } catch (error) {
-          console.warn('Failed to parse panel layout from localStorage:', error);
+          console.warn(
+            "Failed to parse panel layout from localStorage:",
+            error,
+          );
           // ignore parse errors
         }
       }
@@ -87,7 +94,12 @@ export default function ChatLayout({
         onLayout={onLayout}
       >
         {/* Chat/Content Area */}
-        <Panel id="content" order={1} defaultSize={showSidebar ? 70 : 100} minSize={50}>
+        <Panel
+          id="content"
+          order={1}
+          defaultSize={showSidebar ? 70 : 100}
+          minSize={50}
+        >
           {showEditor ? (
             // Vertical split for chat + editor
             <PanelGroup
@@ -133,9 +145,7 @@ export default function ChatLayout({
                       <X className="w-4 h-4" />
                     </button>
                   )}
-                  <div className="flex-1 min-h-0">
-                    {editor}
-                  </div>
+                  <div className="flex-1 min-h-0">{editor}</div>
                 </div>
               </Panel>
             </PanelGroup>
@@ -182,9 +192,7 @@ export default function ChatLayout({
       {/* Mobile Sidebar - Bottom drawer */}
       {showSidebar && sidebar && (
         <div className="md:hidden">
-          <MobileDrawer>
-            {sidebar}
-          </MobileDrawer>
+          <MobileDrawer>{sidebar}</MobileDrawer>
         </div>
       )}
     </div>
@@ -202,7 +210,7 @@ ChatLayout.propTypes = {
   onSidebarClose: PropTypes.func,
   onEditorClose: PropTypes.func,
   onLayout: PropTypes.func,
-  monacoRef: PropTypes.object
+  monacoRef: PropTypes.object,
 };
 
 /**
@@ -233,12 +241,14 @@ function MobileDrawer({ children }) {
       )}
 
       {/* Drawer */}
-      <div className={`
+      <div
+        className={`
         fixed inset-x-0 bottom-0 z-50 bg-white dark:bg-gray-800
         transform transition-transform duration-300 ease-out
         rounded-t-xl shadow-xl md:hidden
-        ${isOpen ? 'translate-y-0' : 'translate-y-full'}
-      `}>
+        ${isOpen ? "translate-y-0" : "translate-y-full"}
+      `}
+      >
         {/* Handle */}
         <div className="flex items-center justify-center py-3">
           <div className="w-10 h-1 bg-gray-300 rounded-full" />
@@ -246,7 +256,9 @@ function MobileDrawer({ children }) {
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Knowledge Assistant</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Knowledge Assistant
+          </h2>
           <button
             onClick={() => setIsOpen(false)}
             className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg"
@@ -257,9 +269,7 @@ function MobileDrawer({ children }) {
         </div>
 
         {/* Content */}
-        <div className="p-4 max-h-[60vh] overflow-y-auto">
-          {children}
-        </div>
+        <div className="p-4 max-h-[60vh] overflow-y-auto">{children}</div>
       </div>
     </>
   );

@@ -1,4 +1,5 @@
 """Utility functions for LLM providers."""
+
 from typing import Any, Dict, List, Optional
 
 
@@ -37,8 +38,6 @@ def validate_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # keeps their own code minimal and avoids inevitable divergence over time.
 
 
-
-
 def extract_content_openai(response: Any) -> str:  # noqa: D401 – simple description
     """Return *response* content for OpenAI-style objects.
 
@@ -62,11 +61,13 @@ def extract_tool_calls_openai(response: Any):
         message = response.choices[0].message
         if hasattr(message, "tool_calls") and message.tool_calls:
             for call in message.tool_calls:
-                tool_calls.append({
-                    "id": call.id,
-                    "name": call.function.name,
-                    "arguments": call.function.arguments,
-                })
+                tool_calls.append(
+                    {
+                        "id": call.id,
+                        "name": call.function.name,
+                        "arguments": call.function.arguments,
+                    }
+                )
 
     return tool_calls
 
@@ -80,7 +81,6 @@ def format_tool_result_openai(tool_call_id: str, tool_name: str, result: str):
         "name": tool_name,
         "content": result,
     }
-
 
 
 def build_openai_chat_params(

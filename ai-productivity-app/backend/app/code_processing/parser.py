@@ -66,7 +66,9 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
             environments resilient even when the Docker build stage has not run.
             """
 
-            lib_path = os.path.join(os.path.dirname(__file__), "..", "..", "build", "languages.so")
+            lib_path = os.path.join(
+                os.path.dirname(__file__), "..", "..", "build", "languages.so"
+            )
             os.makedirs(os.path.dirname(lib_path), exist_ok=True)
 
             # ------------------------------------------------------------------
@@ -77,6 +79,7 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
             try:
                 # Try using tree-sitter-language-pack (modern approach)
                 import tree_sitter_language_pack
+
                 self.languages = {
                     "python": tree_sitter_language_pack.get_language("python"),
                     "javascript": tree_sitter_language_pack.get_language("javascript"),
@@ -86,7 +89,9 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                 logger.info("Loaded Tree-sitter languages using language pack")
                 return
             except ImportError:
-                logger.debug("tree-sitter-language-pack not available, trying individual packages")
+                logger.debug(
+                    "tree-sitter-language-pack not available, trying individual packages"
+                )
 
             try:
                 # Fallback to individual language packages
@@ -103,7 +108,9 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                 logger.info("Loaded Tree-sitter languages using individual packages")
                 return
             except ImportError:
-                logger.debug("Individual tree-sitter packages not available, trying shared library")
+                logger.debug(
+                    "Individual tree-sitter packages not available, trying shared library"
+                )
 
             # ------------------------------------------------------------------
             # Build the grammar bundle on-the-fly when missing (legacy approach)
@@ -147,14 +154,18 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                     logger.warning("Failed to load from shared library: %s", ex)
 
             # If all else fails, log and continue without Tree-sitter support
-            logger.warning("Tree-sitter languages not available - parsing will use fallback mode")
+            logger.warning(
+                "Tree-sitter languages not available - parsing will use fallback mode"
+            )
             self.languages = {}
 
         # ------------------------------------------------------------------
         # Public API
         # ------------------------------------------------------------------
 
-        def parse_file(self, content: str, language: str) -> Dict[str, Any]:  # noqa: D401
+        def parse_file(
+            self, content: str, language: str
+        ) -> Dict[str, Any]:  # noqa: D401
             """Return a structured representation of *content*.
 
             When the requested *language* is not supported an error message is
@@ -181,7 +192,7 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                     parser.set_language(lang_obj)
                 else:
                     # Modern API (≥ 0.23)
-                    parser.language = lang_obj      # type: ignore[attr-defined]
+                    parser.language = lang_obj  # type: ignore[attr-defined]
                 self.parsers[language] = parser
 
             parser = self.parsers[language]
@@ -202,7 +213,9 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
         # AST visitors (internal)
         # ------------------------------------------------------------------
 
-        def _extract_symbols(self, tree: tree_sitter.Tree, language: str, content: str) -> List[Dict]:
+        def _extract_symbols(
+            self, tree: tree_sitter.Tree, language: str, content: str
+        ) -> List[Dict]:
             symbols: list[dict[str, Any]] = []
 
             symbol_types: dict[str, dict[str, str]] = {
@@ -264,7 +277,9 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                         if node.type == "class_definition":
                             for child in node.children:
                                 if child.type == "argument_list":
-                                    symbol["bases"] = self._extract_bases(child, content)
+                                    symbol["bases"] = self._extract_bases(
+                                        child, content
+                                    )
 
                         symbols.append(symbol)
 
@@ -274,7 +289,9 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
             traverse(tree.root_node)
             return symbols
 
-        def _extract_imports(self, tree: tree_sitter.Tree, language: str, content: str) -> List[Dict]:
+        def _extract_imports(
+            self, tree: tree_sitter.Tree, language: str, content: str
+        ) -> List[Dict]:
             imports: list[dict[str, Any]] = []
 
             import_types: dict[str, list[str]] = {
@@ -299,14 +316,16 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                     if language == "python":
                         for child in node.children:
                             if child.type in ("dotted_name", "module"):
-                                import_info["module"] = content[child.start_byte : child.end_byte]
+                                import_info["module"] = content[
+                                    child.start_byte : child.end_byte
+                                ]
                                 break
                     else:
                         for child in node.children:
                             if child.type == "string":
-                                import_info["module"] = (
-                                    content[child.start_byte : child.end_byte].strip("\"'")
-                                )
+                                import_info["module"] = content[
+                                    child.start_byte : child.end_byte
+                                ].strip("\"'")
                                 break
 
                     imports.append(import_info)
@@ -324,7 +343,6 @@ if _TREE_SITTER_AVAILABLE:  # -------------------------------------------------
                     bases.append(content[child.start_byte : child.end_byte])
             return bases
 
-
 else:  # ---------------------------------------------------------------------
 
     class CodeParser:  # noqa: D401
@@ -341,7 +359,9 @@ else:  # ---------------------------------------------------------------------
                 "CodeParser will operate in *stub* mode."
             )
 
-        def parse_file(self, content: str, language: str) -> Dict[str, Any]:  # noqa: D401
+        def parse_file(
+            self, content: str, language: str
+        ) -> Dict[str, Any]:  # noqa: D401
             return {
                 "symbols": [],
                 "imports": [],

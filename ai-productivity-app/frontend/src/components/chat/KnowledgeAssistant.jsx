@@ -1,19 +1,30 @@
 // components/chat/KnowledgeAssistant.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { Brain, Search, X, ChevronRight, ChevronUp, ChevronDown, Sparkles, Upload, GitBranch, Network } from 'lucide-react';
-import { useKnowledgeChat } from '../../hooks/useKnowledgeContext';
-import { knowledgeAPI } from '../../api/knowledge';
-import KnowledgeContextPanel from '../knowledge/KnowledgeContextPanel';
-import SmartKnowledgeSearch from '../knowledge/SmartKnowledgeSearch';
-import FileUpload from '../knowledge/FileUpload';
-import RepositoryConnect from '../knowledge/RepositoryConnect';
-import DependencyGraph from '../knowledge/DependencyGraph';
-import PageErrorBoundary from '../common/PageErrorBoundary';
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Brain,
+  Search,
+  X,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  Sparkles,
+  Upload,
+  GitBranch,
+  Network,
+} from "lucide-react";
+import { useKnowledgeChat } from "../../hooks/useKnowledgeContext";
+import { knowledgeAPI } from "../../api/knowledge";
+import KnowledgeContextPanel from "../knowledge/KnowledgeContextPanel";
+import SmartKnowledgeSearch from "../knowledge/SmartKnowledgeSearch";
+import FileUpload from "../knowledge/FileUpload";
+import RepositoryConnect from "../knowledge/RepositoryConnect";
+import DependencyGraph from "../knowledge/DependencyGraph";
+import PageErrorBoundary from "../common/PageErrorBoundary";
 
 // Custom styles for scrollbar (Tailwind scrollbar plugin might not be available)
 const scrollbarStyle = {
-  scrollbarWidth: 'thin',
-  scrollbarColor: '#CBD5E0 #F7FAFC',
+  scrollbarWidth: "thin",
+  scrollbarColor: "#CBD5E0 #F7FAFC",
 };
 
 function KnowledgeAssistantCore({
@@ -22,11 +33,11 @@ function KnowledgeAssistantCore({
   onSuggestionApply,
   onContextAdd,
   isVisible = true,
-  position = 'right',
-  containerMode = 'overlay' // 'overlay' for desktop, 'inline' for mobile
+  position = "right",
+  containerMode = "overlay", // 'overlay' for desktop, 'inline' for mobile
 }) {
   // Normalise *message* so that downstream code always sees a *string*
-  const message = typeof incomingMessage === 'string' ? incomingMessage : '';
+  const message = typeof incomingMessage === "string" ? incomingMessage : "";
   const {
     analyzeMutation,
     retrieveMutation,
@@ -39,14 +50,14 @@ function KnowledgeAssistantCore({
 
   // Initialize missing state locally since the hook doesn't provide them
   const [selectedItems, setSelectedItems] = useState(new Set());
-  const [activeQuery, setActiveQuery] = useState('');
+  const [activeQuery, setActiveQuery] = useState("");
   const [context, setContext] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Helper functions for missing functionality
   const toggleItemSelection = useCallback((id) => {
-    setSelectedItems(prev => {
+    setSelectedItems((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
         newSet.delete(id);
@@ -61,48 +72,55 @@ function KnowledgeAssistantCore({
     setSelectedItems(new Set());
   }, []);
 
-  const updateContextFromChat = useCallback(async (message) => {
-    if (!message || message.length < 10) return;
+  const updateContextFromChat = useCallback(
+    async (message) => {
+      if (!message || message.length < 10) return;
 
-    setLoading(true);
-    setActiveQuery(message);
-    setError(null);
-    
-    try {
-      const result = await buildContextForQuery(message);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setContext(result);
-        setError(null);
+      setLoading(true);
+      setActiveQuery(message);
+      setError(null);
+
+      try {
+        const result = await buildContextForQuery(message);
+        if (result.error) {
+          setError(result.error);
+        } else {
+          setContext(result);
+          setError(null);
+        }
+      } catch (err) {
+        console.error("Failed to update context from chat:", err);
+        setError(err.message || "Failed to retrieve knowledge context");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to update context from chat:', err);
-      setError(err.message || 'Failed to retrieve knowledge context');
-    } finally {
-      setLoading(false);
-    }
-  }, [buildContextForQuery]);
+    },
+    [buildContextForQuery],
+  );
 
-  const search = useCallback(async (query) => {
-    setLoading(true);
-    setActiveQuery(query);
-    try {
-      const result = await buildContextForQuery(query);
-      setContext(result);
-    } catch (err) {
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Search failed';
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }, [buildContextForQuery]);
+  const search = useCallback(
+    async (query) => {
+      setLoading(true);
+      setActiveQuery(query);
+      try {
+        const result = await buildContextForQuery(query);
+        setContext(result);
+      } catch (err) {
+        const errorMessage =
+          err?.response?.data?.detail || err?.message || "Search failed";
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [buildContextForQuery],
+  );
 
   const [showSearch, setShowSearch] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   // Allow minimize functionality
   const [isMinimized, setIsMinimized] = useState(false);
-  const [activeTab, setActiveTab] = useState('context'); // 'context', 'upload', 'repository', 'graph'
+  const [activeTab, setActiveTab] = useState("context"); // 'context', 'upload', 'repository', 'graph'
 
   // Update context based on chat message
   useEffect(() => {
@@ -121,41 +139,61 @@ function KnowledgeAssistantCore({
     }
   }, [context, message]);
 
-  const handleDocumentSelect = useCallback((doc) => {
-    toggleItemSelection(doc.id);
-  }, [toggleItemSelection]);
+  const handleDocumentSelect = useCallback(
+    (doc) => {
+      toggleItemSelection(doc.id);
+    },
+    [toggleItemSelection],
+  );
 
-  const handleCodeSelect = useCallback((snippet) => {
-    toggleItemSelection(snippet.id);
-  }, [toggleItemSelection]);
+  const handleCodeSelect = useCallback(
+    (snippet) => {
+      toggleItemSelection(snippet.id);
+    },
+    [toggleItemSelection],
+  );
 
   const handleApplyContext = useCallback(() => {
     if (!context) return;
 
     // Get selected items
-    const selectedDocs = context.relevantDocs.filter(doc => selectedItems.has(doc.id));
-    const selectedCode = context.codeSnippets.filter(snippet => selectedItems.has(snippet.id));
+    const selectedDocs = context.relevantDocs.filter((doc) =>
+      selectedItems.has(doc.id),
+    );
+    const selectedCode = context.codeSnippets.filter((snippet) =>
+      selectedItems.has(snippet.id),
+    );
 
     // Create citations
     const newCitations = addToCitations([...selectedDocs, ...selectedCode]);
 
     // Build context summary
     const contextSummary = {
-      documents: selectedDocs.map(d => ({ id: d.id, title: d.title, path: d.path })),
-      codeSnippets: selectedCode.map(s => ({ id: s.id, content: s.content.slice(0, 100) })),
-      citations: newCitations
+      documents: selectedDocs.map((d) => ({
+        id: d.id,
+        title: d.title,
+        path: d.path,
+      })),
+      codeSnippets: selectedCode.map((s) => ({
+        id: s.id,
+        content: s.content.slice(0, 100),
+      })),
+      citations: newCitations,
     };
 
     onContextAdd(contextSummary);
     clearSelections();
   }, [context, selectedItems, addToCitations, onContextAdd, clearSelections]);
 
-  const handleSearchResult = useCallback((result) => {
-    // Add search result to citations
-    const newCitations = addToCitations([result]);
-    onSuggestionApply(`Referenced: ${result.title}`, newCitations);
-    setShowSearch(false);
-  }, [addToCitations, onSuggestionApply]);
+  const handleSearchResult = useCallback(
+    (result) => {
+      // Add search result to citations
+      const newCitations = addToCitations([result]);
+      onSuggestionApply(`Referenced: ${result.title}`, newCitations);
+      setShowSearch(false);
+    },
+    [addToCitations, onSuggestionApply],
+  );
 
   const handleFileUploadSuccess = useCallback(() => {
     // Refresh embeddings after successful file upload
@@ -167,17 +205,19 @@ function KnowledgeAssistantCore({
   if (!isVisible) return null;
 
   // Determine container styles based on mode
-  const containerClass = containerMode === 'overlay'
-    ? `fixed ${position === 'right' ? 'right-2 sm:right-4' : 'left-2 sm:left-4'} top-20 w-80 sm:w-96 z-50 max-h-[calc(var(--dvh)-6rem)]`
-    : 'w-full h-full flex flex-col';
+  const containerClass =
+    containerMode === "overlay"
+      ? `fixed ${position === "right" ? "right-2 sm:right-4" : "left-2 sm:left-4"} top-20 w-80 sm:w-96 z-50 max-h-[calc(var(--dvh)-6rem)]`
+      : "w-full h-full flex flex-col";
 
-  const panelClass = containerMode === 'overlay'
-    ? `bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden transition-all duration-300 ${
-        isMinimized ? 'h-12' : 'h-auto max-h-full'
-      }`
-    : `bg-white border-t border-gray-200 overflow-hidden transition-all duration-300 flex-1 ${
-        isMinimized ? 'h-12 flex-none' : 'flex flex-col'
-      }`;
+  const panelClass =
+    containerMode === "overlay"
+      ? `bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden transition-all duration-300 ${
+          isMinimized ? "h-12" : "h-auto max-h-full"
+        }`
+      : `bg-white border-t border-gray-200 overflow-hidden transition-all duration-300 flex-1 ${
+          isMinimized ? "h-12 flex-none" : "flex flex-col"
+        }`;
 
   return (
     <div className={containerClass}>
@@ -190,7 +230,7 @@ function KnowledgeAssistantCore({
               <Brain className="w-5 h-5" />
               <span className="font-medium">Knowledge Assistant</span>
               <div className="bg-white/20 px-2 py-0.5 rounded-full text-xs">
-                {isMinimized ? 'Minimized' : 'Active'}
+                {isMinimized ? "Minimized" : "Active"}
               </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -204,9 +244,13 @@ function KnowledgeAssistantCore({
               <button
                 onClick={() => setIsMinimized(!isMinimized)}
                 className="p-1 hover:bg-white/20 rounded"
-                title={isMinimized ? 'Expand' : 'Minimize'}
+                title={isMinimized ? "Expand" : "Minimize"}
               >
-                {isMinimized ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {isMinimized ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
@@ -218,44 +262,44 @@ function KnowledgeAssistantCore({
             {/* Tab Navigation */}
             <div className="flex border-b border-gray-200 overflow-x-auto">
               <button
-                onClick={() => setActiveTab('context')}
+                onClick={() => setActiveTab("context")}
                 className={`flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
-                  activeTab === 'context'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-800'
+                  activeTab === "context"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-600 hover:text-gray-800"
                 }`}
               >
                 <Search className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Context</span>
               </button>
               <button
-                onClick={() => setActiveTab('upload')}
+                onClick={() => setActiveTab("upload")}
                 className={`flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
-                  activeTab === 'upload'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-800'
+                  activeTab === "upload"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-600 hover:text-gray-800"
                 }`}
               >
                 <Upload className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Upload</span>
               </button>
               <button
-                onClick={() => setActiveTab('repository')}
+                onClick={() => setActiveTab("repository")}
                 className={`flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
-                  activeTab === 'repository'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-800'
+                  activeTab === "repository"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-600 hover:text-gray-800"
                 }`}
               >
                 <GitBranch className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Repository</span>
               </button>
               <button
-                onClick={() => setActiveTab('graph')}
+                onClick={() => setActiveTab("graph")}
                 className={`flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
-                  activeTab === 'graph'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-800'
+                  activeTab === "graph"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-600 hover:text-gray-800"
                 }`}
               >
                 <Network className="w-4 h-4 mr-1" />
@@ -264,20 +308,29 @@ function KnowledgeAssistantCore({
             </div>
 
             {/* Tab Content */}
-            <div 
-              className={containerMode === 'overlay' 
-                ? "overflow-y-auto max-h-[calc(70vh-8rem)]" 
-                : "flex-1 overflow-auto"}
-              style={containerMode === 'overlay' ? scrollbarStyle : undefined}>
+            <div
+              className={
+                containerMode === "overlay"
+                  ? "overflow-y-auto max-h-[calc(70vh-8rem)]"
+                  : "flex-1 overflow-auto"
+              }
+              style={containerMode === "overlay" ? scrollbarStyle : undefined}
+            >
               {/* Context Tab */}
-              {activeTab === 'context' && (
+              {activeTab === "context" && (
                 <>
                   {/* Active Query Indicator */}
                   {activeQuery && (
-                    <div className={`px-4 py-2 border-b ${error ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'}`}>
+                    <div
+                      className={`px-4 py-2 border-b ${error ? "bg-red-50 border-red-100" : "bg-blue-50 border-blue-100"}`}
+                    >
                       <div className="flex items-center justify-between">
-                        <span className={`text-sm ${error ? 'text-red-700' : 'text-blue-700'}`}>
-                          {error ? `Search failed: "${activeQuery}"` : `Searching: "${activeQuery}"`}
+                        <span
+                          className={`text-sm ${error ? "text-red-700" : "text-blue-700"}`}
+                        >
+                          {error
+                            ? `Search failed: "${activeQuery}"`
+                            : `Searching: "${activeQuery}"`}
                         </span>
                         {loading && (
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
@@ -300,7 +353,9 @@ function KnowledgeAssistantCore({
                         {suggestions.map((suggestion, idx) => (
                           <button
                             key={idx}
-                            onClick={() => onSuggestionApply(suggestion, citations)}
+                            onClick={() =>
+                              onSuggestionApply(suggestion, citations)
+                            }
                             className="w-full text-left px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
                           >
                             {suggestion}
@@ -311,14 +366,20 @@ function KnowledgeAssistantCore({
                   )}
 
                   {/* Knowledge Context */}
-                  <div className={containerMode === 'overlay' ? "max-h-96" : "flex-1"}>
+                  <div
+                    className={
+                      containerMode === "overlay" ? "max-h-96" : "flex-1"
+                    }
+                  >
                     <KnowledgeContextPanel
                       query={activeQuery}
                       projectId={projectId}
                       onDocumentSelect={handleDocumentSelect}
                       onCodeSelect={handleCodeSelect}
                       className="h-full"
-                      maxHeight={containerMode === 'overlay' ? "300px" : undefined}
+                      maxHeight={
+                        containerMode === "overlay" ? "300px" : undefined
+                      }
                     />
                   </div>
 
@@ -329,7 +390,8 @@ function KnowledgeAssistantCore({
                         onClick={handleApplyContext}
                         className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                       >
-                        Add {selectedItems.size} item{selectedItems.size > 1 ? 's' : ''} as context
+                        Add {selectedItems.size} item
+                        {selectedItems.size > 1 ? "s" : ""} as context
                       </button>
                     </div>
                   )}
@@ -337,7 +399,7 @@ function KnowledgeAssistantCore({
               )}
 
               {/* Upload Tab */}
-              {activeTab === 'upload' && (
+              {activeTab === "upload" && (
                 <div className="p-4">
                   <FileUpload
                     projectId={projectId}
@@ -347,7 +409,7 @@ function KnowledgeAssistantCore({
               )}
 
               {/* Repository Tab */}
-              {activeTab === 'repository' && (
+              {activeTab === "repository" && (
                 <div className="p-4">
                   <RepositoryConnect
                     projectId={projectId}
@@ -360,8 +422,10 @@ function KnowledgeAssistantCore({
               )}
 
               {/* Dependencies Tab */}
-              {activeTab === 'graph' && (
-                <div className={`p-4 ${containerMode === 'overlay' ? 'h-96' : 'h-full'}`}>
+              {activeTab === "graph" && (
+                <div
+                  className={`p-4 ${containerMode === "overlay" ? "h-96" : "h-full"}`}
+                >
                   <DependencyGraph projectId={projectId} />
                 </div>
               )}
@@ -388,25 +452,33 @@ function generateSuggestions(context, message) {
 
   // Based on context confidence and type
   if (context.confidence > 0.8) {
-    suggestions.push('Include relevant code examples from knowledge base');
+    suggestions.push("Include relevant code examples from knowledge base");
   }
 
   // Based on message content
-  if (message.toLowerCase().includes('how')) {
-    suggestions.push('Add step-by-step explanation with examples');
+  if (message.toLowerCase().includes("how")) {
+    suggestions.push("Add step-by-step explanation with examples");
   }
 
-  if (message.toLowerCase().includes('error') || message.toLowerCase().includes('bug')) {
-    suggestions.push('Search for similar issues and solutions');
+  if (
+    message.toLowerCase().includes("error") ||
+    message.toLowerCase().includes("bug")
+  ) {
+    suggestions.push("Search for similar issues and solutions");
   }
 
-  if (message.toLowerCase().includes('implement') || message.toLowerCase().includes('create')) {
-    suggestions.push('Include implementation patterns from codebase');
+  if (
+    message.toLowerCase().includes("implement") ||
+    message.toLowerCase().includes("create")
+  ) {
+    suggestions.push("Include implementation patterns from codebase");
   }
 
   // Based on available context
   if (context.codeSnippets.length > 0) {
-    suggestions.push(`Reference ${context.codeSnippets.length} related code examples`);
+    suggestions.push(
+      `Reference ${context.codeSnippets.length} related code examples`,
+    );
   }
 
   if (context.relevantDocs.length > 0) {

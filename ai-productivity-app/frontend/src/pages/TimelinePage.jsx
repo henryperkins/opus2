@@ -11,7 +11,6 @@ export default function TimelinePage() {
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-8">
       <main className="max-w-4xl mx-auto">
-
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Activity Log</h1>
 
         {loading && (
@@ -21,9 +20,7 @@ export default function TimelinePage() {
           </div>
         )}
 
-        {error && (
-          <div className="text-red-600 mb-4">{error}</div>
-        )}
+        {error && <div className="text-red-600 mb-4">{error}</div>}
 
         {!loading && !events.length && (
           <div className="text-gray-400">No activity yet.</div>
@@ -35,7 +32,9 @@ export default function TimelinePage() {
               <div key={evt.id} className="mb-4">
                 {/* Show project title with link */}
                 <div className="mb-1 text-sm text-blue-600">
-                  <Link to={`/projects/${evt.project_id}`}>Project #{evt.project_id}</Link>
+                  <Link to={`/projects/${evt.project_id}`}>
+                    Project #{evt.project_id}
+                  </Link>
                 </div>
                 <TimelineEvent event={evt} />
               </div>

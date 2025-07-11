@@ -1,4 +1,5 @@
 """Request utility helpers for extracting client information."""
+
 from fastapi import Request
 
 

@@ -1,5 +1,5 @@
-import React from 'react';
-import { AlertTriangle, RefreshCw, Code } from 'lucide-react';
+import React from "react";
+import { AlertTriangle, RefreshCw, Code } from "lucide-react";
 
 /**
  * Error boundary specifically for Monaco Editor
@@ -18,17 +18,17 @@ class EditorErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     this.setState({
       error: error,
-      errorInfo: errorInfo
+      errorInfo: errorInfo,
     });
 
     // Log to console for debugging
-    console.error('Monaco Editor Error:', error, errorInfo);
+    console.error("Monaco Editor Error:", error, errorInfo);
 
     // Report to monitoring service if available
     if (window.Sentry) {
       window.Sentry.captureException(error, {
-        tags: { component: 'monaco-editor' },
-        extra: errorInfo
+        tags: { component: "monaco-editor" },
+        extra: errorInfo,
       });
     }
   }
@@ -45,13 +45,14 @@ class EditorErrorBoundary extends React.Component {
             <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/30 rounded-full">
               <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
             </div>
-            
+
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
               Code Editor Error
             </h3>
-            
+
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              The code editor encountered an unexpected error. Your work has been preserved.
+              The code editor encountered an unexpected error. Your work has
+              been preserved.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -62,7 +63,7 @@ class EditorErrorBoundary extends React.Component {
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Retry Editor
               </button>
-              
+
               <button
                 onClick={() => this.props.onFallback?.(this.props.value)}
                 className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
@@ -72,13 +73,14 @@ class EditorErrorBoundary extends React.Component {
               </button>
             </div>
 
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {process.env.NODE_ENV === "development" && this.state.error && (
               <details className="mt-4 text-left">
                 <summary className="text-sm text-gray-500 cursor-pointer mb-2">
                   Technical Details
                 </summary>
                 <pre className="text-xs bg-gray-100 dark:bg-gray-900 p-3 rounded border overflow-auto max-h-32">
-                  {this.state.error && JSON.stringify(this.state.error, null, 2)}
+                  {this.state.error &&
+                    JSON.stringify(this.state.error, null, 2)}
                   {this.state.errorInfo && this.state.errorInfo.componentStack}
                 </pre>
               </details>

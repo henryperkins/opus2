@@ -19,9 +19,7 @@ class StreamingHandler:
         self.total_tokens = 0
 
     async def stream_response(
-        self,
-        response_generator: AsyncIterator[str],
-        message_id: int
+        self, response_generator: AsyncIterator[str], message_id: int
     ):
         """Stream LLM response chunks to WebSocket."""
         self.message_id = message_id
@@ -30,12 +28,15 @@ class StreamingHandler:
         if not hasattr(response_generator, "__aiter__"):
             # Extract response content from non-streaming response using same logic as processor
             full_text = ""
-            
+
             # Azure Responses API format
-            if hasattr(response_generator, 'output') and response_generator.output:
+            if hasattr(response_generator, "output") and response_generator.output:
                 for item in response_generator.output:
-                    if (getattr(item, "type", None) == "message" and
-                            hasattr(item, "content") and item.content):
+                    if (
+                        getattr(item, "type", None) == "message"
+                        and hasattr(item, "content")
+                        and item.content
+                    ):
                         if isinstance(item.content, str):
                             full_text = item.content
                             break
@@ -45,36 +46,42 @@ class StreamingHandler:
                             for content_item in item.content:
                                 if hasattr(content_item, "text"):
                                     text_parts.append(content_item.text)
-                            full_text = "\n".join(text_parts) if text_parts else str(item.content[0])
+                            full_text = (
+                                "\n".join(text_parts)
+                                if text_parts
+                                else str(item.content[0])
+                            )
                             break
                         else:
                             full_text = str(item.content)
                             break
             # Legacy formats
-            elif hasattr(response_generator, 'output_text'):
+            elif hasattr(response_generator, "output_text"):
                 full_text = response_generator.output_text or ""
-            elif hasattr(response_generator, 'choices') and response_generator.choices:
+            elif hasattr(response_generator, "choices") and response_generator.choices:
                 full_text = response_generator.choices[0].message.content or ""
             else:
                 full_text = str(response_generator)
-            
+
             # Ensure we don't return empty content
             if not full_text.strip():
                 full_text = "I apologize, but I wasn't able to generate a response. Please try again."
-            
+
             # Send as single complete message
-            await self.websocket.send_json({
-                'type': 'ai_stream',
-                'message_id': message_id,
-                'content': full_text,
-                'done': True,
-                'message': {
-                    'id': message_id,
-                    'content': full_text,
-                    'role': 'assistant',
-                    'created_at': datetime.now().isoformat()
+            await self.websocket.send_json(
+                {
+                    "type": "ai_stream",
+                    "message_id": message_id,
+                    "content": full_text,
+                    "done": True,
+                    "message": {
+                        "id": message_id,
+                        "content": full_text,
+                        "role": "assistant",
+                        "created_at": datetime.now().isoformat(),
+                    },
                 }
-            })
+            )
             return full_text
 
         try:
@@ -84,10 +91,10 @@ class StreamingHandler:
 
                 # Send chunk
                 chunk_data = {
-                    'type': 'ai_stream',
-                    'message_id': message_id,
-                    'content': chunk,
-                    'done': False
+                    "type": "ai_stream",
+                    "message_id": message_id,
+                    "content": chunk,
+                    "done": False,
                 }
                 await self.websocket.send_json(chunk_data)
 
@@ -95,24 +102,26 @@ class StreamingHandler:
                 await asyncio.sleep(0.01)
 
             # Send completion
-            full_content = ''.join(self.buffer)
-            
+            full_content = "".join(self.buffer)
+
             # Ensure we don't return empty content (violates database constraint)
             if not full_content.strip():
                 full_content = "I apologize, but I wasn't able to generate a response. Please try again."
-            
-            await self.websocket.send_json({
-                'type': 'ai_stream',
-                'message_id': message_id,
-                'content': '',
-                'done': True,
-                'message': {
-                    'id': message_id,
-                    'content': full_content,
-                    'role': 'assistant',
-                    'created_at': datetime.now().isoformat()
+
+            await self.websocket.send_json(
+                {
+                    "type": "ai_stream",
+                    "message_id": message_id,
+                    "content": "",
+                    "done": True,
+                    "message": {
+                        "id": message_id,
+                        "content": full_content,
+                        "role": "assistant",
+                        "created_at": datetime.now().isoformat(),
+                    },
                 }
-            })
+            )
 
             return full_content
 
@@ -120,20 +129,19 @@ class StreamingHandler:
             logger.error(f"Streaming error: {e}")
 
             # Send error message
-            await self.websocket.send_json({
-                'type': 'ai_stream',
-                'message_id': message_id,
-                'error': str(e),
-                'done': True
-            })
+            await self.websocket.send_json(
+                {
+                    "type": "ai_stream",
+                    "message_id": message_id,
+                    "error": str(e),
+                    "done": True,
+                }
+            )
 
             raise
 
     async def handle_code_generation(
-        self,
-        content: str,
-        language: str,
-        websocket: WebSocket
+        self, content: str, language: str, websocket: WebSocket
     ):
         """Special handling for code generation responses."""
         # Track code blocks
@@ -142,16 +150,18 @@ class StreamingHandler:
         in_code_block = False
         current_language = None
 
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         for line in lines:
-            if line.startswith('```'):
+            if line.startswith("```"):
                 if in_code_block:
                     # End of code block
-                    code_blocks.append({
-                        'language': current_language or language,
-                        'code': '\n'.join(current_block)
-                    })
+                    code_blocks.append(
+                        {
+                            "language": current_language or language,
+                            "code": "\n".join(current_block),
+                        }
+                    )
                     current_block = []
                     in_code_block = False
                 else:
@@ -163,12 +173,14 @@ class StreamingHandler:
 
         # Send code blocks separately for highlighting
         for i, block in enumerate(code_blocks):
-            await websocket.send_json({
-                'type': 'code_block',
-                'index': i,
-                'language': block['language'],
-                'code': block['code']
-            })
+            await websocket.send_json(
+                {
+                    "type": "code_block",
+                    "index": i,
+                    "language": block["language"],
+                    "code": block["code"],
+                }
+            )
 
 
 class EnhancedStreamingHandler(StreamingHandler):
@@ -180,9 +192,7 @@ class EnhancedStreamingHandler(StreamingHandler):
         self.current_tool_calls = {}  # Track in-progress tool calls by index
 
     async def stream_response_with_tools(
-        self,
-        response_generator: AsyncIterator[Any],
-        message_id: int
+        self, response_generator: AsyncIterator[Any], message_id: int
     ) -> Tuple[str, List[Dict[str, Any]]]:
         """Stream response and collect tool calls.
 
@@ -213,37 +223,43 @@ class EnhancedStreamingHandler(StreamingHandler):
             self._finalize_tool_calls()
 
             # Send completion
-            full_content = ''.join(self.buffer) or "I'll help you with that."
+            full_content = "".join(self.buffer) or "I'll help you with that."
 
             # Only send completion if we had content (not just tool calls)
             if content_started or not self.tool_calls:
-                await self.websocket.send_json({
-                    'type': 'ai_stream',
-                    'message_id': message_id,
-                    'content': '',
-                    'done': True,
-                    'has_tool_calls': len(self.tool_calls) > 0,
-                    'message': {
-                        'id': message_id,
-                        'content': full_content,
-                        'role': 'assistant',
-                        'created_at': datetime.now().isoformat()
+                await self.websocket.send_json(
+                    {
+                        "type": "ai_stream",
+                        "message_id": message_id,
+                        "content": "",
+                        "done": True,
+                        "has_tool_calls": len(self.tool_calls) > 0,
+                        "message": {
+                            "id": message_id,
+                            "content": full_content,
+                            "role": "assistant",
+                            "created_at": datetime.now().isoformat(),
+                        },
                     }
-                })
+                )
 
             return full_content, self.tool_calls
 
         except Exception as e:
             logger.error(f"Enhanced streaming error: {e}", exc_info=True)
-            await self.websocket.send_json({
-                'type': 'ai_stream',
-                'message_id': message_id,
-                'error': str(e),
-                'done': True
-            })
+            await self.websocket.send_json(
+                {
+                    "type": "ai_stream",
+                    "message_id": message_id,
+                    "error": str(e),
+                    "done": True,
+                }
+            )
             raise
 
-    async def _handle_openai_chunk(self, chunk: Any, message_id: int, content_started: bool):
+    async def _handle_openai_chunk(
+        self, chunk: Any, message_id: int, content_started: bool
+    ):
         """Handle OpenAI/Azure Chat Completions streaming chunk."""
         choice = chunk.choices[0]
 
@@ -251,11 +267,13 @@ class EnhancedStreamingHandler(StreamingHandler):
         if choice.finish_reason == "tool_calls":
             # Notify client that tool calls are being processed
             if not content_started:
-                await self.websocket.send_json({
-                    'type': 'ai_tool_start',
-                    'message_id': message_id,
-                    'content': 'Processing your request...'
-                })
+                await self.websocket.send_json(
+                    {
+                        "type": "ai_tool_start",
+                        "message_id": message_id,
+                        "content": "Processing your request...",
+                    }
+                )
 
         # Handle tool calls in the delta
         if hasattr(choice.delta, "tool_calls") and choice.delta.tool_calls:
@@ -268,12 +286,14 @@ class EnhancedStreamingHandler(StreamingHandler):
             self.total_tokens += len(choice.delta.content) // 4
 
             # Stream content to client
-            await self.websocket.send_json({
-                'type': 'ai_stream',
-                'message_id': message_id,
-                'content': choice.delta.content,
-                'done': False
-            })
+            await self.websocket.send_json(
+                {
+                    "type": "ai_stream",
+                    "message_id": message_id,
+                    "content": choice.delta.content,
+                    "done": False,
+                }
+            )
 
     async def _handle_azure_chunk(self, chunk: Any, message_id: int):
         """Handle Azure Responses API streaming chunk."""
@@ -287,16 +307,18 @@ class EnhancedStreamingHandler(StreamingHandler):
             self.current_tool_calls[call_id] = {
                 "id": call_id,
                 "name": name,
-                "arguments": ""
+                "arguments": "",
             }
 
             # Notify client
-            await self.websocket.send_json({
-                'type': 'ai_tool_call',
-                'message_id': message_id,
-                'tool_name': name,
-                'status': 'started'
-            })
+            await self.websocket.send_json(
+                {
+                    "type": "ai_tool_call",
+                    "message_id": message_id,
+                    "tool_name": name,
+                    "status": "started",
+                }
+            )
 
         elif event_type == "response.function_call.arguments.delta":
             # Function arguments streaming
@@ -316,12 +338,14 @@ class EnhancedStreamingHandler(StreamingHandler):
         # Handle text content
         elif hasattr(chunk, "delta") and chunk.delta:
             self.buffer.append(chunk.delta)
-            await self.websocket.send_json({
-                'type': 'ai_stream',
-                'message_id': message_id,
-                'content': chunk.delta,
-                'done': False
-            })
+            await self.websocket.send_json(
+                {
+                    "type": "ai_stream",
+                    "message_id": message_id,
+                    "content": chunk.delta,
+                    "done": False,
+                }
+            )
 
     async def _process_tool_call_delta(self, tool_call_delta: Any):
         """Process incremental tool call update."""
@@ -332,30 +356,34 @@ class EnhancedStreamingHandler(StreamingHandler):
             self.current_tool_calls[index] = {
                 "id": getattr(tool_call_delta, "id", f"call_{index}"),
                 "type": getattr(tool_call_delta, "type", "function"),
-                "function": {
-                    "name": "",
-                    "arguments": ""
-                }
+                "function": {"name": "", "arguments": ""},
             }
 
         current_call = self.current_tool_calls[index]
 
         # Update function name if provided
         if hasattr(tool_call_delta, "function"):
-            if hasattr(tool_call_delta.function, "name") and tool_call_delta.function.name:
+            if (
+                hasattr(tool_call_delta.function, "name")
+                and tool_call_delta.function.name
+            ):
                 current_call["function"]["name"] = tool_call_delta.function.name
 
                 # Notify client when we know the function name
-                await self.websocket.send_json({
-                    'type': 'ai_tool_call',
-                    'message_id': self.message_id,
-                    'tool_name': tool_call_delta.function.name,
-                    'status': 'started'
-                })
+                await self.websocket.send_json(
+                    {
+                        "type": "ai_tool_call",
+                        "message_id": self.message_id,
+                        "tool_name": tool_call_delta.function.name,
+                        "status": "started",
+                    }
+                )
 
             # Accumulate arguments
             if hasattr(tool_call_delta.function, "arguments"):
-                current_call["function"]["arguments"] += tool_call_delta.function.arguments
+                current_call["function"][
+                    "arguments"
+                ] += tool_call_delta.function.arguments
 
     def _finalize_tool_calls(self):
         """Convert in-progress tool calls to final format."""
@@ -363,8 +391,10 @@ class EnhancedStreamingHandler(StreamingHandler):
             call = self.current_tool_calls[index]
 
             # Convert to simple format for processor
-            self.tool_calls.append({
-                "id": call["id"],
-                "name": call["function"]["name"],
-                "arguments": call["function"]["arguments"]
-            })
+            self.tool_calls.append(
+                {
+                    "id": call["id"],
+                    "name": call["function"]["name"],
+                    "arguments": call["function"]["arguments"],
+                }
+            )

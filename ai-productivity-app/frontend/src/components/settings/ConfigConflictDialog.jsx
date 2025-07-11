@@ -1,8 +1,8 @@
 // frontend/src/components/settings/ConfigConflictDialog.jsx
-import React, { useState } from 'react';
-import PropTypes from 'prop-types';
-import { useAIConfig } from '../../contexts/AIConfigContext';
-import { AlertTriangle, X, Check, AlignCenter } from 'lucide-react';
+import React, { useState } from "react";
+import PropTypes from "prop-types";
+import { useAIConfig } from "../../contexts/AIConfigContext";
+import { AlertTriangle, X, Check, AlignCenter } from "lucide-react";
 
 /**
  * Modal dialog that appears when the backend reports a *configuration
@@ -12,18 +12,18 @@ import { AlertTriangle, X, Check, AlignCenter } from 'lucide-react';
  *   • Overwrite – force apply *my* proposed config.
  *   • Abort – discard my changes.
  */
-export default function ConfigConflictDialog({ className = '' }) {
-  const {
-    conflictState,
-    resolveConflict,
-    resetError,
-  } = useAIConfig();
+export default function ConfigConflictDialog({ className = "" }) {
+  const { conflictState, resolveConflict, resetError } = useAIConfig();
 
   const [submitting, setSubmitting] = useState(false);
 
   if (!conflictState) return null;
 
-  const { current_config: currentCfg, proposed_config: proposedCfg, conflicts } = conflictState;
+  const {
+    current_config: currentCfg,
+    proposed_config: proposedCfg,
+    conflicts,
+  } = conflictState;
 
   const handleResolve = async (strategy) => {
     setSubmitting(true);
@@ -44,7 +44,9 @@ export default function ConfigConflictDialog({ className = '' }) {
   const pretty = (obj) => JSON.stringify(obj, null, 2);
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm ${className}`}>
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm ${className}`}
+    >
       <div className="bg-white dark:bg-gray-800 w-full max-w-3xl rounded-lg shadow-lg p-6 relative">
         <button
           onClick={close}
@@ -56,23 +58,30 @@ export default function ConfigConflictDialog({ className = '' }) {
 
         <div className="flex items-center gap-2 mb-4">
           <AlertTriangle className="h-6 w-6 text-yellow-500" />
-          <h2 className="text-lg font-semibold">Configuration conflict detected</h2>
+          <h2 className="text-lg font-semibold">
+            Configuration conflict detected
+          </h2>
         </div>
 
         <p className="text-sm mb-4 text-gray-700 dark:text-gray-300">
-          Another user changed the AI configuration at the same time. Choose how to proceed.
+          Another user changed the AI configuration at the same time. Choose how
+          to proceed.
         </p>
 
         {/* Simple side-by-side diff */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div>
-            <h3 className="font-medium mb-1 flex items-center gap-1"><AlignCenter className="h-3 w-3" /> Current</h3>
+            <h3 className="font-medium mb-1 flex items-center gap-1">
+              <AlignCenter className="h-3 w-3" /> Current
+            </h3>
             <pre className="bg-gray-100 dark:bg-gray-900 rounded p-2 overflow-auto max-h-60 whitespace-pre-wrap">
               {pretty(currentCfg)}
             </pre>
           </div>
           <div>
-            <h3 className="font-medium mb-1 flex items-center gap-1"><AlignCenter className="h-3 w-3" /> Yours</h3>
+            <h3 className="font-medium mb-1 flex items-center gap-1">
+              <AlignCenter className="h-3 w-3" /> Yours
+            </h3>
             <pre className="bg-gray-100 dark:bg-gray-900 rounded p-2 overflow-auto max-h-60 whitespace-pre-wrap">
               {pretty(proposedCfg)}
             </pre>
@@ -93,21 +102,21 @@ export default function ConfigConflictDialog({ className = '' }) {
         {/* Actions */}
         <div className="mt-6 flex flex-col md:flex-row gap-3 justify-end">
           <button
-            onClick={() => handleResolve('abort')}
+            onClick={() => handleResolve("abort")}
             disabled={submitting}
             className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
           >
             Cancel my changes
           </button>
           <button
-            onClick={() => handleResolve('merge')}
+            onClick={() => handleResolve("merge")}
             disabled={submitting}
             className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
           >
             Merge non-conflicting
           </button>
           <button
-            onClick={() => handleResolve('overwrite')}
+            onClick={() => handleResolve("overwrite")}
             disabled={submitting}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
           >

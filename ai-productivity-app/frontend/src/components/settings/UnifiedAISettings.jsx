@@ -1,6 +1,5 @@
-
 // frontend/src/components/settings/UnifiedAISettings.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Brain,
   Settings,
@@ -11,17 +10,17 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronRight,
-  Info
-} from 'lucide-react';
+  Info,
+} from "lucide-react";
 import {
   useAIConfig,
   useModelSelection,
   useGenerationParams,
-  useReasoningConfig
-} from '../../contexts/AIConfigContext';
+  useReasoningConfig,
+} from "../../contexts/AIConfigContext";
 
 // Lazy import to break potential circular deps when this file is SSR-ed.
-import PresetSelector from './PresetSelector';
+import PresetSelector from "./PresetSelector";
 
 export default function UnifiedAISettings() {
   const {
@@ -31,7 +30,7 @@ export default function UnifiedAISettings() {
     testResult,
     testConfig,
     applyPreset,
-    providers
+    providers,
   } = useAIConfig();
 
   const {
@@ -39,7 +38,7 @@ export default function UnifiedAISettings() {
     currentProvider,
     availableModels,
     selectModel,
-    selectProvider
+    selectProvider,
   } = useModelSelection();
 
   const {
@@ -48,7 +47,7 @@ export default function UnifiedAISettings() {
     topP,
     frequencyPenalty,
     presencePenalty,
-    updateParams
+    updateParams,
   } = useGenerationParams();
 
   const {
@@ -61,22 +60,22 @@ export default function UnifiedAISettings() {
     isAzureOrOpenAI,
     supportsReasoning,
     supportsThinking,
-    updateReasoningConfig
+    updateReasoningConfig,
   } = useReasoningConfig();
 
   const [expandedSections, setExpandedSections] = useState({
     model: true,
     generation: true,
     reasoning: true,
-    presets: false
+    presets: false,
   });
 
   const [isTesting, setIsTesting] = useState(false);
 
   const toggleSection = (section) => {
-    setExpandedSections(prev => ({
+    setExpandedSections((prev) => ({
       ...prev,
-      [section]: !prev[section]
+      [section]: !prev[section],
     }));
   };
 
@@ -103,7 +102,7 @@ export default function UnifiedAISettings() {
      * Convert anything that is not a plain string into a readable string first.
      */
     const errorMessage =
-      typeof error === 'string'
+      typeof error === "string"
         ? error
         : (error?.message ?? JSON.stringify(error, null, 2));
 
@@ -112,7 +111,9 @@ export default function UnifiedAISettings() {
         <div className="flex items-start">
           <AlertCircle className="h-5 w-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
           <div>
-            <h3 className="text-sm font-medium text-red-800">Configuration Error</h3>
+            <h3 className="text-sm font-medium text-red-800">
+              Configuration Error
+            </h3>
             <p className="mt-1 text-sm text-red-600 whitespace-pre-wrap">
               {errorMessage}
             </p>
@@ -132,7 +133,9 @@ export default function UnifiedAISettings() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Brain className="h-6 w-6 text-blue-500" />
-          <h2 className="text-xl font-semibold text-gray-900">AI Configuration</h2>
+          <h2 className="text-xl font-semibold text-gray-900">
+            AI Configuration
+          </h2>
         </div>
         <button
           onClick={handleTestConfig}
@@ -155,11 +158,13 @@ export default function UnifiedAISettings() {
 
       {/* Test Result */}
       {testResult && (
-        <div className={`p-4 rounded-lg border ${
-          testResult.success
-            ? 'bg-green-50 border-green-200'
-            : 'bg-red-50 border-red-200'
-        }`}>
+        <div
+          className={`p-4 rounded-lg border ${
+            testResult.success
+              ? "bg-green-50 border-green-200"
+              : "bg-red-50 border-red-200"
+          }`}
+        >
           <div className="flex items-start">
             {testResult.success ? (
               <Check className="h-5 w-5 text-green-600 mr-2 flex-shrink-0 mt-0.5" />
@@ -167,9 +172,11 @@ export default function UnifiedAISettings() {
               <AlertCircle className="h-5 w-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
             )}
             <div className="flex-1">
-              <p className={`text-sm font-medium ${
-                testResult.success ? 'text-green-800' : 'text-red-800'
-              }`}>
+              <p
+                className={`text-sm font-medium ${
+                  testResult.success ? "text-green-800" : "text-red-800"
+                }`}
+              >
                 {testResult.message}
               </p>
               {testResult.response_time && (
@@ -192,7 +199,7 @@ export default function UnifiedAISettings() {
         title="Presets"
         icon={Settings}
         expanded={expandedSections.presets}
-        onToggle={() => toggleSection('presets')}
+        onToggle={() => toggleSection("presets")}
       >
         <PresetSelector className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
       </Section>
@@ -202,7 +209,7 @@ export default function UnifiedAISettings() {
         title="Model Selection"
         icon={Settings}
         expanded={expandedSections.model}
-        onToggle={() => toggleSection('model')}
+        onToggle={() => toggleSection("model")}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -210,7 +217,7 @@ export default function UnifiedAISettings() {
               Provider
             </label>
             <select
-              value={config?.provider || ''}
+              value={config?.provider || ""}
               onChange={(e) => selectProvider(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
@@ -227,7 +234,7 @@ export default function UnifiedAISettings() {
               Model
             </label>
             <select
-              value={config?.model_id || ''}
+              value={config?.model_id || ""}
               onChange={(e) => selectModel(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
@@ -235,8 +242,10 @@ export default function UnifiedAISettings() {
                 // Some older backend payloads don’t include the *provider* field
                 // on each model entry.  Treat those models as belonging to the
                 // currently selected provider so the list doesn’t render empty.
-                .filter(m => (m.provider ?? config?.provider) === config?.provider)
-                .map(model => (
+                .filter(
+                  (m) => (m.provider ?? config?.provider) === config?.provider,
+                )
+                .map((model) => (
                   <option key={model.model_id} value={model.model_id}>
                     {/* Fallback to model_id when no display_name provided */}
                     {model.display_name || model.model_id}
@@ -252,70 +261,92 @@ export default function UnifiedAISettings() {
         title="Generation Parameters"
         icon={Settings}
         expanded={expandedSections.generation}
-        onToggle={() => toggleSection('generation')}
+        onToggle={() => toggleSection("generation")}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Temperature */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Temperature</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Temperature
+            </label>
             <input
               type="number"
               step="0.01"
               min="0"
               max="2"
               value={temperature ?? 0}
-              onChange={(e) => updateParams({ temperature: parseFloat(e.target.value) })}
+              onChange={(e) =>
+                updateParams({ temperature: parseFloat(e.target.value) })
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           {/* Max tokens */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Max tokens</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Max tokens
+            </label>
             <input
               type="number"
               min="16"
               max="200000"
-              value={maxTokens ?? ''}
-              onChange={(e) => updateParams({ max_tokens: parseInt(e.target.value || '0', 10) })}
+              value={maxTokens ?? ""}
+              onChange={(e) =>
+                updateParams({
+                  max_tokens: parseInt(e.target.value || "0", 10),
+                })
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           {/* Top-p */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Top-p</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Top-p
+            </label>
             <input
               type="number"
               step="0.01"
               min="0"
               max="1"
               value={topP ?? 1}
-              onChange={(e) => updateParams({ top_p: parseFloat(e.target.value) })}
+              onChange={(e) =>
+                updateParams({ top_p: parseFloat(e.target.value) })
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           {/* Frequency penalty */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Frequency penalty</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Frequency penalty
+            </label>
             <input
               type="number"
               step="0.1"
               min="-2"
               max="2"
               value={frequencyPenalty ?? 0}
-              onChange={(e) => updateParams({ frequency_penalty: parseFloat(e.target.value) })}
+              onChange={(e) =>
+                updateParams({ frequency_penalty: parseFloat(e.target.value) })
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           {/* Presence penalty */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Presence penalty</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Presence penalty
+            </label>
             <input
               type="number"
               step="0.1"
               min="-2"
               max="2"
               value={presencePenalty ?? 0}
-              onChange={(e) => updateParams({ presence_penalty: parseFloat(e.target.value) })}
+              onChange={(e) =>
+                updateParams({ presence_penalty: parseFloat(e.target.value) })
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -328,7 +359,7 @@ export default function UnifiedAISettings() {
           title="Reasoning / Thinking"
           icon={Brain}
           expanded={expandedSections.reasoning}
-          onToggle={() => toggleSection('reasoning')}
+          onToggle={() => toggleSection("reasoning")}
         >
           <div className="space-y-4">
             {isAzureOrOpenAI && (
@@ -338,19 +369,33 @@ export default function UnifiedAISettings() {
                     id="enableReasoning"
                     type="checkbox"
                     checked={enableReasoning || false}
-                    onChange={(e) => updateReasoningConfig({ enable_reasoning: e.target.checked })}
+                    onChange={(e) =>
+                      updateReasoningConfig({
+                        enable_reasoning: e.target.checked,
+                      })
+                    }
                   />
-                  <label htmlFor="enableReasoning" className="text-sm">Enable Reasoning (Responses API)</label>
+                  <label htmlFor="enableReasoning" className="text-sm">
+                    Enable Reasoning (Responses API)
+                  </label>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Reasoning effort</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Reasoning effort
+                  </label>
                   <select
-                    value={reasoningEffort || 'medium'}
-                    onChange={(e) => updateReasoningConfig({ reasoning_effort: e.target.value })}
+                    value={reasoningEffort || "medium"}
+                    onChange={(e) =>
+                      updateReasoningConfig({
+                        reasoning_effort: e.target.value,
+                      })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    {['low', 'medium', 'high'].map(level => (
-                      <option key={level} value={level}>{level}</option>
+                    {["low", "medium", "high"].map((level) => (
+                      <option key={level} value={level}>
+                        {level}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -364,31 +409,54 @@ export default function UnifiedAISettings() {
                     id="extendedThinking"
                     type="checkbox"
                     checked={claudeExtendedThinking || false}
-                    onChange={(e) => updateReasoningConfig({ claude_extended_thinking: e.target.checked })}
+                    onChange={(e) =>
+                      updateReasoningConfig({
+                        claude_extended_thinking: e.target.checked,
+                      })
+                    }
                   />
-                  <label htmlFor="extendedThinking" className="text-sm">Claude extended thinking</label>
+                  <label htmlFor="extendedThinking" className="text-sm">
+                    Claude extended thinking
+                  </label>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Thinking mode</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Thinking mode
+                  </label>
                   <select
-                    value={claudeThinkingMode || 'enabled'}
-                    onChange={(e) => updateReasoningConfig({ claude_thinking_mode: e.target.value })}
+                    value={claudeThinkingMode || "enabled"}
+                    onChange={(e) =>
+                      updateReasoningConfig({
+                        claude_thinking_mode: e.target.value,
+                      })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    {['off', 'enabled', 'aggressive'].map(m => (
-                      <option key={m} value={m}>{m}</option>
+                    {["off", "enabled", "aggressive"].map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Thinking token budget</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Thinking token budget
+                  </label>
                   <input
                     type="number"
                     min="1024"
                     max="65536"
                     step="1024"
                     value={claudeThinkingBudget || 16384}
-                    onChange={(e) => updateReasoningConfig({ claude_thinking_budget_tokens: parseInt(e.target.value || '0', 10) })}
+                    onChange={(e) =>
+                      updateReasoningConfig({
+                        claude_thinking_budget_tokens: parseInt(
+                          e.target.value || "0",
+                          10,
+                        ),
+                      })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -418,11 +486,7 @@ function Section({ title, icon: Icon, expanded, onToggle, children }) {
           <ChevronRight className="h-5 w-5 text-gray-500" />
         )}
       </button>
-      {expanded && (
-        <div className="p-4 bg-white rounded-b-lg">
-          {children}
-        </div>
-      )}
+      {expanded && <div className="p-4 bg-white rounded-b-lg">{children}</div>}
     </div>
   );
 }

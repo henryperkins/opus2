@@ -1,6 +1,6 @@
 .color-dot {
-  width: .5rem;
-  height: .5rem;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 9999px;
-  background: var(--dot-color, #6B7280);
+  background: var(--dot-color, #6b7280);
 }

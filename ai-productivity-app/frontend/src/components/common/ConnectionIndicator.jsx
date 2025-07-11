@@ -1,4 +1,4 @@
-import PropTypes from 'prop-types';
+import PropTypes from "prop-types";
 
 /**
  * Connection indicator pill that shows the current websocket connection
@@ -9,20 +9,24 @@ import PropTypes from 'prop-types';
  * a `data-state` attribute. This keeps the markup small and allows all
  * styling logic to live in CSS (globals.css).
  */
-export default function ConnectionIndicator({ state, className = '' }) {
+export default function ConnectionIndicator({ state, className = "" }) {
   return (
     <span
       className={`connection-indicator ${className}`.trim()}
       data-state={state}
       aria-label={`Connection ${state}`}
     >
-      {state === 'connecting' ? 'Connecting…' : state === 'connected' ? 'Online' : 'Offline'}
+      {state === "connecting"
+        ? "Connecting…"
+        : state === "connected"
+          ? "Online"
+          : "Offline"}
     </span>
   );
 }
 
 ConnectionIndicator.propTypes = {
-  state: PropTypes.oneOf(['connected', 'connecting', 'disconnected', 'error'])
+  state: PropTypes.oneOf(["connected", "connecting", "disconnected", "error"])
     .isRequired,
   className: PropTypes.string,
 };

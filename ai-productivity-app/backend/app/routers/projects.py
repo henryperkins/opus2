@@ -2,6 +2,7 @@
 
 Provides CRUD operations for projects, timeline events, and filtering.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -12,10 +13,14 @@ from app.models.user import User
 from app.models.project import Project
 from app.models.timeline import TimelineEvent
 from app.schemas.project import (
-    ProjectCreate, ProjectUpdate, ProjectResponse,
-    ProjectListResponse, ProjectFilters,
-    TimelineEventCreate, TimelineEventResponse,
-    UserInfo
+    ProjectCreate,
+    ProjectUpdate,
+    ProjectResponse,
+    ProjectListResponse,
+    ProjectFilters,
+    TimelineEventCreate,
+    TimelineEventResponse,
+    UserInfo,
 )
 from app.schemas.search import SuggestionsResponse
 from app.services.project_service import ProjectService
@@ -41,8 +46,7 @@ def get_project_or_404(project_id: int, db: Session) -> Project:
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
         )
     return project
 
@@ -61,7 +65,7 @@ async def list_projects(
     search: Optional[str] = None,
     owner_id: Optional[int] = None,
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100)
+    per_page: int = Query(20, ge=1, le=100),
 ):
     """List all projects with filtering and pagination."""
     logger.info(
@@ -81,7 +85,7 @@ async def list_projects(
         search=search,
         owner_id=owner_id,
         page=page,
-        per_page=per_page
+        per_page=per_page,
     )
 
     service = ProjectService(db)
@@ -103,23 +107,16 @@ async def list_projects(
             owner=serialize_user(project.owner),
             created_at=project.created_at,
             updated_at=project.updated_at,
-            stats=project.stats
+            stats=project.stats,
         )
         items.append(item)
 
-    return ProjectListResponse(
-        items=items,
-        total=total,
-        page=page,
-        per_page=per_page
-    )
+    return ProjectListResponse(items=items, total=total, page=page, per_page=per_page)
 
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(
-    project_data: ProjectCreate,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    project_data: ProjectCreate, current_user: CurrentUserRequired, db: DatabaseDep
 ):
     """Create a new project."""
     service = ProjectService(db)
@@ -138,15 +135,13 @@ async def create_project(
         tags=project.tags,
         owner=serialize_user(project.owner),
         created_at=project.created_at,
-        updated_at=project.updated_at
+        updated_at=project.updated_at,
     )
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(
-    project_id: int,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    project_id: int, current_user: CurrentUserRequired, db: DatabaseDep
 ):
     """Get project details."""
     project = get_project_or_404(project_id, db)
@@ -164,7 +159,7 @@ async def get_project(
         owner=serialize_user(project.owner),
         created_at=project.created_at,
         updated_at=project.updated_at,
-        stats=stats
+        stats=stats,
     )
 
 
@@ -173,7 +168,7 @@ async def update_project(
     project_id: int,
     update_data: ProjectUpdate,
     current_user: CurrentUserRequired,
-    db: DatabaseDep
+    db: DatabaseDep,
 ):
     """Update project details."""
     # Check project exists
@@ -183,7 +178,7 @@ async def update_project(
     if not project.can_modify(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to modify this project"
+            detail="Not authorized to modify this project",
         )
 
     service = ProjectService(db)
@@ -191,8 +186,7 @@ async def update_project(
 
     if not updated_project:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
         )
 
     return ProjectResponse(
@@ -205,15 +199,13 @@ async def update_project(
         tags=updated_project.tags,
         owner=serialize_user(updated_project.owner),
         created_at=updated_project.created_at,
-        updated_at=updated_project.updated_at
+        updated_at=updated_project.updated_at,
     )
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
-    project_id: int,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    project_id: int, current_user: CurrentUserRequired, db: DatabaseDep
 ):
     """Delete a project and all associated data."""
     project = get_project_or_404(project_id, db)
@@ -222,7 +214,7 @@ async def delete_project(
     if not project.can_modify(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to delete this project"
+            detail="Not authorized to delete this project",
         )
 
     db.delete(project)
@@ -235,17 +227,20 @@ async def get_project_timeline(
     current_user: CurrentUserRequired,
     db: DatabaseDep,
     limit: int = Query(50, ge=1, le=100),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
 ):
     """Get project timeline events."""
     # Verify project exists
     get_project_or_404(project_id, db)
 
-    events = db.query(TimelineEvent).filter(
-        TimelineEvent.project_id == project_id
-    ).order_by(
-        TimelineEvent.created_at.desc()
-    ).offset(offset).limit(limit).all()
+    events = (
+        db.query(TimelineEvent)
+        .filter(TimelineEvent.project_id == project_id)
+        .order_by(TimelineEvent.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
     return [
         TimelineEventResponse(
@@ -256,7 +251,7 @@ async def get_project_timeline(
             description=event.description,
             metadata=event.event_metadata or {},
             user=serialize_user(event.user) if event.user else None,
-            created_at=event.created_at
+            created_at=event.created_at,
         )
         for event in events
     ]
@@ -265,13 +260,13 @@ async def get_project_timeline(
 @router.post(
     "/{project_id}/timeline",
     response_model=TimelineEventResponse,
-    status_code=status.HTTP_201_CREATED
+    status_code=status.HTTP_201_CREATED,
 )
 async def add_timeline_event(
     project_id: int,
     event_data: TimelineEventCreate,
     current_user: CurrentUserRequired,
-    db: DatabaseDep
+    db: DatabaseDep,
 ):
     """Add a custom timeline event to a project."""
     # Verify project exists
@@ -281,7 +276,7 @@ async def add_timeline_event(
     if not project.can_modify(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to add events to this project"
+            detail="Not authorized to add events to this project",
         )
 
     service = ProjectService(db)
@@ -289,8 +284,7 @@ async def add_timeline_event(
 
     if not event:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
         )
 
     return TimelineEventResponse(
@@ -301,15 +295,13 @@ async def add_timeline_event(
         description=event.description,
         metadata=event.event_metadata or {},
         user=serialize_user(event.user) if event.user else None,
-        created_at=event.created_at
+        created_at=event.created_at,
     )
 
 
 @router.post("/{project_id}/archive", response_model=ProjectResponse)
 async def archive_project(
-    project_id: int,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    project_id: int, current_user: CurrentUserRequired, db: DatabaseDep
 ):
     """Archive a project."""
     project = get_project_or_404(project_id, db)
@@ -318,7 +310,7 @@ async def archive_project(
     if not project.can_modify(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to archive this project"
+            detail="Not authorized to archive this project",
         )
 
     service = ProjectService(db)
@@ -326,8 +318,7 @@ async def archive_project(
 
     if not archived_project:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
         )
 
     return ProjectResponse(
@@ -340,7 +331,7 @@ async def archive_project(
         tags=archived_project.tags,
         owner=serialize_user(archived_project.owner),
         created_at=archived_project.created_at,
-        updated_at=archived_project.updated_at
+        updated_at=archived_project.updated_at,
     )
 
 
@@ -392,36 +383,34 @@ async def unarchive_project(
 # Project-scoped search endpoints to match frontend expectations
 # ---------------------------------------------------------------------------
 
+
 @router.post("/{project_id}/search/documents")
 async def search_project_documents(
-    project_id: int,
-    request: dict,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    project_id: int, request: dict, current_user: CurrentUserRequired, db: DatabaseDep
 ):
     """Search documents within a specific project."""
     # Verify project exists and user has access
     project = get_project_or_404(project_id, db)
-    
+
     # Import here to avoid circular imports
     from app.schemas.search import SearchRequest, SearchResponse
     from app.services.hybrid_search import HybridSearch
     from app.services.vector_service import vector_service
     from app.embeddings.generator import EmbeddingGenerator
-    
+
     # Create search request with project scope
     search_request = SearchRequest(
         query=request.get("query", ""),
         project_ids=[project_id],
         search_types=["documents"],
         limit=request.get("limit", 10),
-        filters=request.get("filters", {})
+        filters=request.get("filters", {}),
     )
-    
+
     # Execute search
     embedding_generator = EmbeddingGenerator()
     hybrid_search = HybridSearch(db, vector_service, embedding_generator)
-    
+
     try:
         results = await hybrid_search.search(
             query=search_request.query,
@@ -438,34 +427,31 @@ async def search_project_documents(
 
 @router.post("/{project_id}/search/code")
 async def search_project_code(
-    project_id: int,
-    request: dict,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    project_id: int, request: dict, current_user: CurrentUserRequired, db: DatabaseDep
 ):
     """Search code within a specific project."""
     # Verify project exists and user has access
     project = get_project_or_404(project_id, db)
-    
+
     # Import here to avoid circular imports
     from app.schemas.search import SearchRequest, SearchResponse
     from app.services.hybrid_search import HybridSearch
     from app.services.vector_service import vector_service
     from app.embeddings.generator import EmbeddingGenerator
-    
+
     # Create search request with project scope
     search_request = SearchRequest(
         query=request.get("query", ""),
         project_ids=[project_id],
         search_types=["code"],
         limit=request.get("limit", 10),
-        filters=request.get("filters", {})
+        filters=request.get("filters", {}),
     )
-    
+
     # Execute search
     embedding_generator = EmbeddingGenerator()
     hybrid_search = HybridSearch(db, vector_service, embedding_generator)
-    
+
     try:
         results = await hybrid_search.search(search_request)
         return {"results": results.results, "total": results.total}
@@ -476,33 +462,30 @@ async def search_project_code(
 
 @router.post("/{project_id}/search/hybrid")
 async def search_project_hybrid(
-    project_id: int,
-    request: dict,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    project_id: int, request: dict, current_user: CurrentUserRequired, db: DatabaseDep
 ):
     """Hybrid search across all content types within a specific project."""
     # Verify project exists and user has access
     project = get_project_or_404(project_id, db)
-    
+
     # Import here to avoid circular imports
     from app.schemas.search import SearchRequest, SearchResponse
     from app.services.hybrid_search import HybridSearch
     from app.services.vector_service import vector_service
     from app.embeddings.generator import EmbeddingGenerator
-    
+
     # Create search request with project scope
     search_request = SearchRequest(
         query=request.get("query", ""),
         project_ids=[project_id],
         limit=request.get("limit", 10),
-        filters=request.get("filters", {})
+        filters=request.get("filters", {}),
     )
-    
+
     # Execute search
     embedding_generator = EmbeddingGenerator()
     hybrid_search = HybridSearch(db, vector_service, embedding_generator)
-    
+
     try:
         results = await hybrid_search.search(search_request)
         return {"results": results.results, "total": results.total}
@@ -513,38 +496,37 @@ async def search_project_hybrid(
 
 @router.post("/{project_id}/search/similar")
 async def find_similar_content(
-    project_id: int,
-    request: dict,
-    current_user: CurrentUserRequired,
-    db: DatabaseDep
+    project_id: int, request: dict, current_user: CurrentUserRequired, db: DatabaseDep
 ):
     """Find content similar to provided text within a specific project."""
     # Verify project exists and user has access
     project = get_project_or_404(project_id, db)
-    
+
     content = request.get("content", "")
     if not content:
-        raise HTTPException(status_code=400, detail="Content is required for similarity search")
-    
+        raise HTTPException(
+            status_code=400, detail="Content is required for similarity search"
+        )
+
     # Import here to avoid circular imports
     from app.schemas.search import SearchRequest, SearchResponse
     from app.services.hybrid_search import HybridSearch
     from app.services.vector_service import vector_service
     from app.embeddings.generator import EmbeddingGenerator
-    
+
     # Create search request for similarity
     search_request = SearchRequest(
         query=content,
         project_ids=[project_id],
         limit=request.get("limit", 10),
         filters=request.get("filters", {}),
-        threshold=request.get("threshold", 0.7)
+        threshold=request.get("threshold", 0.7),
     )
-    
+
     # Execute search
     embedding_generator = EmbeddingGenerator()
     hybrid_search = HybridSearch(db, vector_service, embedding_generator)
-    
+
     try:
         results = await hybrid_search.search(search_request)
         return {"items": results.results, "total": results.total}
@@ -567,23 +549,24 @@ async def project_suggestions(
     try:
         # Get the project (raises 404 if not found)
         project = get_project_or_404(project_id, db)
-        
+
         # Initialize services - use the dependency injection properly
         vector_service_instance = await get_vector_service()
         embedding_generator = EmbeddingGenerator()
         hybrid_search = HybridSearch(db, vector_service_instance, embedding_generator)
-        
+
         # Execute search with keyword search only for suggestions
         results = await hybrid_search.search(
-            query=q,
-            project_ids=[project_id],
-            limit=limit,
-            search_types=["keyword"]
+            query=q, project_ids=[project_id], limit=limit, search_types=["keyword"]
         )
-        
+
         # Extract suggestion strings from results
-        suggestions = [result.get("content", "")[:100] for result in results if result.get("content")]
-        
+        suggestions = [
+            result.get("content", "")[:100]
+            for result in results
+            if result.get("content")
+        ]
+
         return {"suggestions": suggestions}
     except HTTPException:
         raise

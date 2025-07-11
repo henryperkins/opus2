@@ -4,6 +4,7 @@ from typing import Dict, Any
 import asyncio
 import logging
 from sqlalchemy.orm import Session
+
 # Unused import removed: from sqlalchemy import select
 from app.models.code import CodeDocument, CodeEmbedding
 from app.embeddings.generator import EmbeddingGenerator
@@ -69,7 +70,7 @@ class BatchEmbeddingProcessor:
 
         # Process in batches
         for i in range(0, total, self.batch_size):
-            batch = chunks[i:i + self.batch_size]
+            batch = chunks[i : i + self.batch_size]
 
             try:
                 await self.generator.generate_and_store(batch, db)

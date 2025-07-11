@@ -1,6 +1,6 @@
 // frontend/src/components/common/AIProviderStatus.jsx
-import { useAIConfig } from '../../contexts/AIConfigContext';
-import PropTypes from 'prop-types';
+import { useAIConfig } from "../../contexts/AIConfigContext";
+import PropTypes from "prop-types";
 
 const AIProviderStatus = ({ className = "" }) => {
   const { config, loading } = useAIConfig();
@@ -12,32 +12,35 @@ const AIProviderStatus = ({ className = "" }) => {
   const currentProvider = config.current?.provider;
   const currentModel = config.current?.chat_model;
 
-  const providerDisplayName = currentProvider === 'azure' ? 'Azure OpenAI' : 'OpenAI';
-  const isAzure = currentProvider === 'azure';
+  const providerDisplayName =
+    currentProvider === "azure" ? "Azure OpenAI" : "OpenAI";
+  const isAzure = currentProvider === "azure";
 
   // Azure-specific features
   const azureFeatures = isAzure ? config.providers?.azure?.features : {};
   const hasResponsesAPI = azureFeatures?.responses_api;
 
   return (
-    <div className={`flex items-center space-x-2 text-xs text-gray-600 ${className}`}>
+    <div
+      className={`flex items-center space-x-2 text-xs text-gray-600 ${className}`}
+    >
       <div className="flex items-center space-x-1">
-        <div className={`w-2 h-2 rounded-full ${isAzure ? 'bg-brand-primary-600' : 'bg-green-600'}`}></div>
+        <div
+          className={`w-2 h-2 rounded-full ${isAzure ? "bg-brand-primary-600" : "bg-green-600"}`}
+        ></div>
         <span>{providerDisplayName}</span>
       </div>
 
-      {currentModel && (
-        <span className="text-gray-500">•</span>
-      )}
+      {currentModel && <span className="text-gray-500">•</span>}
 
-      {currentModel && (
-        <span className="font-mono">{currentModel}</span>
-      )}
+      {currentModel && <span className="font-mono">{currentModel}</span>}
 
       {hasResponsesAPI && (
         <>
           <span className="text-gray-500">•</span>
-          <span className="text-brand-primary-600 font-semibold">Responses API</span>
+          <span className="text-brand-primary-600 font-semibold">
+            Responses API
+          </span>
         </>
       )}
     </div>

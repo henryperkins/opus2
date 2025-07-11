@@ -20,27 +20,18 @@ class AtomicUserService:
     @staticmethod
     @atomic
     async def create_user_with_session(
-        db: Session,
-        username: str,
-        email: str,
-        password_hash: str,
-        jti: str
+        db: Session, username: str, email: str, password_hash: str, jti: str
     ) -> User:
         """Create user and session in single transaction."""
         # Create user
         user = User(
-            username=username.lower(),
-            email=email.lower(),
-            password_hash=password_hash
+            username=username.lower(), email=email.lower(), password_hash=password_hash
         )
         db.add(user)
         db.flush()  # Get user.id without committing
 
         # Create session
-        session = UserSession(
-            user_id=user.id,
-            jti=jti
-        )
+        session = UserSession(user_id=user.id, jti=jti)
         db.add(session)
 
         # Both will be committed together
@@ -72,4 +63,3 @@ class AtomicUserService:
 
 class AtomicProjectService:
     """Project operations with transaction safety."""
-

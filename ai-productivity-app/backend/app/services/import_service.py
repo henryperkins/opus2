@@ -20,7 +20,7 @@ class AtomicImportService:
         job_id: int,
         status: ImportStatus,
         progress: int,
-        error: Optional[str] = None
+        error: Optional[str] = None,
     ) -> bool:
         """Update import job status atomically."""
         tm = TransactionManager(db)
@@ -41,16 +41,17 @@ class AtomicImportService:
             # Log status change
             logger.info(
                 "Import job %s status: %s -> %s (progress: %d%%)",
-                job_id, job.status, status, progress
+                job_id,
+                job.status,
+                status,
+                progress,
             )
 
             return True
 
     @staticmethod
     async def create_documents_batch(
-        db: Session,
-        project_id: int,
-        files: list[dict]
+        db: Session, project_id: int, files: list[dict]
     ) -> list[CodeDocument]:
         """Create multiple code documents in single transaction."""
         tm = TransactionManager(db)
@@ -60,11 +61,11 @@ class AtomicImportService:
             for file_info in files:
                 doc = CodeDocument(
                     project_id=project_id,
-                    file_path=file_info['path'],
-                    language=file_info.get('language'),
-                    content_hash=file_info['hash'],
-                    file_size=file_info.get('size', 0),
-                    is_indexed=False  # Mark as not indexed until embeddings are complete
+                    file_path=file_info["path"],
+                    language=file_info.get("language"),
+                    content_hash=file_info["hash"],
+                    file_size=file_info.get("size", 0),
+                    is_indexed=False,  # Mark as not indexed until embeddings are complete
                 )
                 db.add(doc)
                 documents.append(doc)
@@ -73,8 +74,7 @@ class AtomicImportService:
             db.flush()
 
             logger.info(
-                "Created %d code documents for project %d",
-                len(documents), project_id
+                "Created %d code documents for project %d", len(documents), project_id
             )
 
         return documents
@@ -84,7 +84,7 @@ class AtomicImportService:
         db: Session,
         project_id: int,
         changed_files: list[dict],
-        deleted_files: list[str]
+        deleted_files: list[str],
     ) -> dict:
         """Update only changed files for incremental indexing."""
         tm = TransactionManager(db)
@@ -95,7 +95,7 @@ class AtomicImportService:
             if deleted_files:
                 delete_stmt = delete(CodeDocument).where(
                     CodeDocument.project_id == project_id,
-                    CodeDocument.file_path.in_(deleted_files)
+                    CodeDocument.file_path.in_(deleted_files),
                 )
                 deleted_result = db.execute(delete_stmt)
                 results["deleted"] = deleted_result.rowcount
@@ -104,34 +104,37 @@ class AtomicImportService:
             for file_info in changed_files:
                 select_stmt = select(CodeDocument).where(
                     CodeDocument.project_id == project_id,
-                    CodeDocument.file_path == file_info['path']
+                    CodeDocument.file_path == file_info["path"],
                 )
                 result = db.execute(select_stmt)
                 doc = result.scalar_one_or_none()
-                
+
                 if doc:
                     # Update existing document
-                    doc.content_hash = file_info['hash']
-                    doc.file_size = file_info.get('size', 0)
-                    doc.language = file_info.get('language')
+                    doc.content_hash = file_info["hash"]
+                    doc.file_size = file_info.get("size", 0)
+                    doc.language = file_info.get("language")
                     doc.is_indexed = False  # Mark for re-indexing
                     results["updated"] += 1
                 else:
                     # Create new document
                     new_doc = CodeDocument(
                         project_id=project_id,
-                        file_path=file_info['path'],
-                        language=file_info.get('language'),
-                        content_hash=file_info['hash'],
-                        file_size=file_info.get('size', 0),
-                        is_indexed=False
+                        file_path=file_info["path"],
+                        language=file_info.get("language"),
+                        content_hash=file_info["hash"],
+                        file_size=file_info.get("size", 0),
+                        is_indexed=False,
                     )
                     db.add(new_doc)
                     results["created"] += 1
 
             logger.info(
                 "Incremental update for project %d: %d updated, %d created, %d deleted",
-                project_id, results["updated"], results["created"], results["deleted"]
+                project_id,
+                results["updated"],
+                results["created"],
+                results["deleted"],
             )
 
         return results

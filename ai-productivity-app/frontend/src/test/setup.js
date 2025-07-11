@@ -1,5 +1,5 @@
-import '@testing-library/jest-dom';
-import { server } from './server';
+import "@testing-library/jest-dom";
+import { server } from "./server";
 
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
@@ -11,7 +11,7 @@ global.IntersectionObserver = class IntersectionObserver {
   disconnect() {}
   observe() {}
   unobserve() {}
-}
+};
 
 // Mock ResizeObserver for components that use it
 global.ResizeObserver = class ResizeObserver {
@@ -19,13 +19,13 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
   observe() {}
   unobserve() {}
-}
+};
 
 // Mock fetch for API calls
-global.fetch = vi.fn()
+global.fetch = vi.fn();
 
 // Mock localStorage
-Object.defineProperty(window, 'localStorage', {
+Object.defineProperty(window, "localStorage", {
   value: {
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -33,10 +33,10 @@ Object.defineProperty(window, 'localStorage', {
     clear: vi.fn(),
   },
   writable: true,
-})
+});
 
 // Mock sessionStorage
-Object.defineProperty(window, 'sessionStorage', {
+Object.defineProperty(window, "sessionStorage", {
   value: {
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -44,4 +44,4 @@ Object.defineProperty(window, 'sessionStorage', {
     clear: vi.fn(),
   },
   writable: true,
-})
+});

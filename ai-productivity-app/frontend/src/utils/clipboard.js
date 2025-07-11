@@ -18,13 +18,17 @@
  *                             `false`.
  */
 export async function copyToClipboard(text) {
-  if (typeof text !== 'string') {
+  if (typeof text !== "string") {
     // Normalise any non-string input to string to avoid runtime errors.
     text = String(text);
   }
 
   // Prefer navigator.clipboard when available (secure contexts only).
-  if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.clipboard &&
+    window.isSecureContext
+  ) {
     try {
       await navigator.clipboard.writeText(text);
       return true;
@@ -36,20 +40,20 @@ export async function copyToClipboard(text) {
   // Fallback approach: create a hidden <textarea>, select its content and
   // execute the legacy copy command.
   try {
-    const textArea = document.createElement('textarea');
+    const textArea = document.createElement("textarea");
     textArea.value = text;
 
     // Move the element out of the viewport so it isn't visible.
-    textArea.style.position = 'fixed';
-    textArea.style.top = '-1000px';
-    textArea.style.left = '-1000px';
+    textArea.style.position = "fixed";
+    textArea.style.top = "-1000px";
+    textArea.style.left = "-1000px";
 
     document.body.appendChild(textArea);
 
     textArea.focus();
     textArea.select();
 
-    const successful = document.execCommand('copy');
+    const successful = document.execCommand("copy");
 
     document.body.removeChild(textArea);
 

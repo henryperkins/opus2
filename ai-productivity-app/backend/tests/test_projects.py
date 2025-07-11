@@ -1,4 +1,5 @@
 """Comprehensive tests for project management functionality."""
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -15,9 +16,7 @@ from app.database import get_db
 def test_user(db: Session):
     """Create a test user."""
     user = User(
-        username="testuser",
-        email="test@example.com",
-        password_hash="hashed_password"
+        username="testuser", email="test@example.com", password_hash="hashed_password"
     )
     db.add(user)
     db.commit()
@@ -42,7 +41,7 @@ def test_project(db: Session, test_user):
         owner_id=test_user.id,
         color="#3B82F6",
         emoji="🚀",
-        tags=["test", "demo"]
+        tags=["test", "demo"],
     )
     db.add(project)
     db.commit()
@@ -63,9 +62,9 @@ class TestProjectCRUD:
                 "status": "active",
                 "color": "#10B981",
                 "emoji": "💡",
-                "tags": ["backend", "api"]
+                "tags": ["backend", "api"],
             },
-            headers=auth_headers
+            headers=auth_headers,
         )
 
         assert response.status_code == 201
@@ -86,7 +85,7 @@ class TestProjectCRUD:
                 "title": "",  # Empty title
                 "color": "invalid",  # Invalid color format
             },
-            headers=auth_headers
+            headers=auth_headers,
         )
 
         assert response.status_code == 422
@@ -102,42 +101,32 @@ class TestProjectCRUD:
         assert len(data["items"]) >= 1
         assert data["total"] >= 1
 
-    def test_list_projects_with_filters(self, client: TestClient, auth_headers, test_project):
+    def test_list_projects_with_filters(
+        self, client: TestClient, auth_headers, test_project
+    ):
         """Test listing projects with filters."""
         # Test status filter
-        response = client.get(
-            "/api/projects?status=active",
-            headers=auth_headers
-        )
+        response = client.get("/api/projects?status=active", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         for project in data["items"]:
             assert project["status"] == "active"
 
         # Test tag filter
-        response = client.get(
-            "/api/projects?tags=test",
-            headers=auth_headers
-        )
+        response = client.get("/api/projects?tags=test", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) >= 1
 
         # Test search
-        response = client.get(
-            "/api/projects?search=Test",
-            headers=auth_headers
-        )
+        response = client.get("/api/projects?search=Test", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) >= 1
 
     def test_get_project(self, client: TestClient, auth_headers, test_project):
         """Test getting a single project."""
-        response = client.get(
-            f"/api/projects/{test_project.id}",
-            headers=auth_headers
-        )
+        response = client.get(f"/api/projects/{test_project.id}", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -147,10 +136,7 @@ class TestProjectCRUD:
 
     def test_get_nonexistent_project(self, client: TestClient, auth_headers):
         """Test getting a project that doesn't exist."""
-        response = client.get(
-            "/api/projects/99999",
-            headers=auth_headers
-        )
+        response = client.get("/api/projects/99999", headers=auth_headers)
 
         assert response.status_code == 404
 
@@ -161,9 +147,9 @@ class TestProjectCRUD:
             json={
                 "title": "Updated Title",
                 "status": "completed",
-                "tags": ["updated", "test"]
+                "tags": ["updated", "test"],
             },
-            headers=auth_headers
+            headers=auth_headers,
         )
 
         assert response.status_code == 200
@@ -175,24 +161,19 @@ class TestProjectCRUD:
     def test_delete_project(self, client: TestClient, auth_headers, test_project):
         """Test deleting a project."""
         response = client.delete(
-            f"/api/projects/{test_project.id}",
-            headers=auth_headers
+            f"/api/projects/{test_project.id}", headers=auth_headers
         )
 
         assert response.status_code == 204
 
         # Verify project is deleted
-        response = client.get(
-            f"/api/projects/{test_project.id}",
-            headers=auth_headers
-        )
+        response = client.get(f"/api/projects/{test_project.id}", headers=auth_headers)
         assert response.status_code == 404
 
     def test_archive_project(self, client: TestClient, auth_headers, test_project):
         """Test archiving a project."""
         response = client.post(
-            f"/api/projects/{test_project.id}/archive",
-            headers=auth_headers
+            f"/api/projects/{test_project.id}/archive", headers=auth_headers
         )
 
         assert response.status_code == 200
@@ -207,16 +188,13 @@ class TestTimelineEvents:
         """Test that creating a project creates an initial timeline event."""
         # Create project
         response = client.post(
-            "/api/projects",
-            json={"title": "Timeline Test"},
-            headers=auth_headers
+            "/api/projects", json={"title": "Timeline Test"}, headers=auth_headers
         )
         project_id = response.json()["id"]
 
         # Get timeline
         response = client.get(
-            f"/api/projects/{project_id}/timeline",
-            headers=auth_headers
+            f"/api/projects/{project_id}/timeline", headers=auth_headers
         )
 
         assert response.status_code == 200
@@ -225,20 +203,21 @@ class TestTimelineEvents:
         assert events[0]["event_type"] == "created"
         assert "Timeline Test" in events[0]["title"]
 
-    def test_update_creates_timeline_event(self, client: TestClient, auth_headers, test_project):
+    def test_update_creates_timeline_event(
+        self, client: TestClient, auth_headers, test_project
+    ):
         """Test that updating a project creates timeline events."""
         # Update status
         response = client.put(
             f"/api/projects/{test_project.id}",
             json={"status": "completed"},
-            headers=auth_headers
+            headers=auth_headers,
         )
         assert response.status_code == 200
 
         # Get timeline
         response = client.get(
-            f"/api/projects/{test_project.id}/timeline",
-            headers=auth_headers
+            f"/api/projects/{test_project.id}/timeline", headers=auth_headers
         )
 
         events = response.json()
@@ -246,7 +225,9 @@ class TestTimelineEvents:
         assert len(status_events) >= 1
         assert status_events[0]["title"] == "Status changed to completed"
 
-    def test_add_custom_timeline_event(self, client: TestClient, auth_headers, test_project):
+    def test_add_custom_timeline_event(
+        self, client: TestClient, auth_headers, test_project
+    ):
         """Test adding a custom timeline event."""
         response = client.post(
             f"/api/projects/{test_project.id}/timeline",
@@ -254,9 +235,9 @@ class TestTimelineEvents:
                 "event_type": "milestone",
                 "title": "Beta Release",
                 "description": "Released beta version to testers",
-                "metadata": {"version": "0.1.0"}
+                "metadata": {"version": "0.1.0"},
             },
-            headers=auth_headers
+            headers=auth_headers,
         )
 
         assert response.status_code == 201
@@ -265,7 +246,9 @@ class TestTimelineEvents:
         assert data["title"] == "Beta Release"
         assert data["metadata"]["version"] == "0.1.0"
 
-    def test_timeline_pagination(self, client: TestClient, auth_headers, test_project, db: Session):
+    def test_timeline_pagination(
+        self, client: TestClient, auth_headers, test_project, db: Session
+    ):
         """Test timeline pagination."""
         # Add multiple events
         for i in range(10):
@@ -273,15 +256,14 @@ class TestTimelineEvents:
                 project_id=test_project.id,
                 event_type=TimelineEvent.EVENT_COMMENT,
                 title=f"Comment {i}",
-                user_id=test_project.owner_id
+                user_id=test_project.owner_id,
             )
             db.add(event)
         db.commit()
 
         # Test limit
         response = client.get(
-            f"/api/projects/{test_project.id}/timeline?limit=5",
-            headers=auth_headers
+            f"/api/projects/{test_project.id}/timeline?limit=5", headers=auth_headers
         )
         assert response.status_code == 200
         assert len(response.json()) == 5
@@ -289,7 +271,7 @@ class TestTimelineEvents:
         # Test offset
         response = client.get(
             f"/api/projects/{test_project.id}/timeline?limit=5&offset=5",
-            headers=auth_headers
+            headers=auth_headers,
         )
         assert response.status_code == 200
         assert len(response.json()) >= 5
@@ -303,13 +285,13 @@ class TestProjectAuthorization:
         response = client.get("/api/projects")
         assert response.status_code == 401
 
-    def test_all_users_can_modify_projects(self, client: TestClient, auth_headers, test_project, db: Session):
+    def test_all_users_can_modify_projects(
+        self, client: TestClient, auth_headers, test_project, db: Session
+    ):
         """Test that all authenticated users can modify any project (small team feature)."""
         # Create another user
         other_user = User(
-            username="otheruser",
-            email="other@example.com",
-            password_hash="hashed"
+            username="otheruser", email="other@example.com", password_hash="hashed"
         )
         db.add(other_user)
         db.commit()
@@ -321,7 +303,7 @@ class TestProjectAuthorization:
         response = client.put(
             f"/api/projects/{test_project.id}",
             json={"title": "Updated by other user"},
-            headers=other_headers
+            headers=other_headers,
         )
 
         # For small team, this should succeed
@@ -335,17 +317,13 @@ class TestProjectValidation:
         """Test project title validation."""
         # Empty title
         response = client.post(
-            "/api/projects",
-            json={"title": ""},
-            headers=auth_headers
+            "/api/projects", json={"title": ""}, headers=auth_headers
         )
         assert response.status_code == 422
 
         # Title too long
         response = client.post(
-            "/api/projects",
-            json={"title": "x" * 201},
-            headers=auth_headers
+            "/api/projects", json={"title": "x" * 201}, headers=auth_headers
         )
         assert response.status_code == 422
 
@@ -355,7 +333,7 @@ class TestProjectValidation:
         response = client.post(
             "/api/projects",
             json={"title": "Test", "color": "#FF5733"},
-            headers=auth_headers
+            headers=auth_headers,
         )
         assert response.status_code == 201
 
@@ -363,7 +341,7 @@ class TestProjectValidation:
         response = client.post(
             "/api/projects",
             json={"title": "Test", "color": "red"},
-            headers=auth_headers
+            headers=auth_headers,
         )
         assert response.status_code == 422
 
@@ -374,9 +352,9 @@ class TestProjectValidation:
             "/api/projects",
             json={
                 "title": "Test",
-                "tags": ["  Backend  ", "BACKEND", "frontend", "api"]
+                "tags": ["  Backend  ", "BACKEND", "frontend", "api"],
             },
-            headers=auth_headers
+            headers=auth_headers,
         )
         assert response.status_code == 201
         data = response.json()

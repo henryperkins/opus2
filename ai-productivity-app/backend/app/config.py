@@ -43,6 +43,7 @@ from pydantic import ConfigDict, Field, field_validator
 
 class Settings(BaseSettings):
     """Application settings."""
+
     app_name: str = "AI Productivity App"
     app_version: str = "0.1.0"
     debug: bool = False
@@ -368,11 +369,16 @@ class Settings(BaseSettings):
         """Ensure CORS origins are properly configured for production."""
         if not _IN_TEST:
             # Check if production domains are hardcoded
-            production_patterns = ['.io', '.com', '.net', '.org', 'https://']
-            has_production_domain = any(pattern in v for pattern in production_patterns if pattern != 'localhost')
+            production_patterns = [".io", ".com", ".net", ".org", "https://"]
+            has_production_domain = any(
+                pattern in v
+                for pattern in production_patterns
+                if pattern != "localhost"
+            )
 
             if has_production_domain and not os.getenv("CORS_ORIGINS"):
                 import logging
+
                 logger = logging.getLogger(__name__)
                 logger.warning(
                     "Production CORS origins detected in code. "
@@ -433,8 +439,7 @@ class Settings(BaseSettings):
 
     # Reasoning effort levels for Azure/OpenAI models: "low", "medium", "high"
     reasoning_effort: str = Field(
-        default="medium",
-        description="Reasoning effort level for Azure/OpenAI models"
+        default="medium", description="Reasoning effort level for Azure/OpenAI models"
     )
 
     # --- Extended Thinking Configuration (Anthropic Claude only) ----------
@@ -449,8 +454,7 @@ class Settings(BaseSettings):
 
     # Thinking modes: "off", "enabled", "aggressive"
     claude_thinking_mode: str = Field(
-        default="enabled",
-        description="Extended thinking mode for Claude models only"
+        default="enabled", description="Extended thinking mode for Claude models only"
     )
 
     # Enable thinking transparency in responses for Claude
@@ -465,7 +469,7 @@ class Settings(BaseSettings):
     # Comma-separated list of Claude models that support the "thinking" feature
     claude_thinking_models: str = Field(
         default="claude-opus-4-20250514,claude-sonnet-4-20250514,claude-3-5-sonnet-20241022,claude-3-5-sonnet-latest",
-        description="Comma-separated list of Claude models that support the 'thinking' feature"
+        description="Comma-separated list of Claude models that support the 'thinking' feature",
     )
 
     # Tool calling optimization settings (based on o3/o4-mini guidance)
@@ -479,16 +483,13 @@ class Settings(BaseSettings):
 
     # LLM retry configuration
     llm_max_retries: int = Field(
-        default=3,
-        description="Maximum retry attempts for LLM calls"
+        default=3, description="Maximum retry attempts for LLM calls"
     )
     llm_retry_max_wait: int = Field(
-        default=60,
-        description="Maximum wait time between retries in seconds"
+        default=60, description="Maximum wait time between retries in seconds"
     )
     llm_timeout_seconds: int = Field(
-        default=300,
-        description="Timeout for LLM API calls in seconds"
+        default=300, description="Timeout for LLM API calls in seconds"
     )
 
     # WebSocket settings
@@ -527,7 +528,6 @@ class Settings(BaseSettings):
         alias="WS_TASK_TRACKING",
         description="Enable WebSocket per-connection task tracking",
     )
-
 
     # URL where the user-facing frontend is served.  Used to build absolute
     # links in transactional emails (e.g. password-reset).  Defaults to

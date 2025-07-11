@@ -18,7 +18,7 @@ let _idCounter = 0;
  * @param {string}    tag  Short label that appears in the console logs.
  * @returns {WebSocket}    The **same** WebSocket instance (allows chaining).
  */
-export function attachDebug(ws, tag = 'WS') {
+export function attachDebug(ws, tag = "WS") {
   // Give each socket an incremental identifier so we can disambiguate
   // multiple connections that might coexist during hot-reloads or
   // reconnect attempts.
@@ -34,11 +34,11 @@ export function attachDebug(ws, tag = 'WS') {
     });
   };
 
-  ws.addEventListener('open', () => logEvent('open'));
-  ws.addEventListener('close', (e) =>
-    logEvent('close', { code: e.code, reason: e.reason })
+  ws.addEventListener("open", () => logEvent("open"));
+  ws.addEventListener("close", (e) =>
+    logEvent("close", { code: e.code, reason: e.reason }),
   );
-  ws.addEventListener('error', (e) => logEvent('error', { error: e }));
+  ws.addEventListener("error", (e) => logEvent("error", { error: e }));
 
   // Message events can be *very* noisy.  Uncomment the next two lines if you
   // need to see the raw traffic in the console.
@@ -49,7 +49,7 @@ export function attachDebug(ws, tag = 'WS') {
   // Wrap send() so we can observe outbound traffic and the state at send time.
   const _send = ws.send.bind(ws);
   ws.send = function patchedSend(...args) {
-    logEvent('send ⇒', { data: args[0] });
+    logEvent("send ⇒", { data: args[0] });
     return _send(...args);
   };
 

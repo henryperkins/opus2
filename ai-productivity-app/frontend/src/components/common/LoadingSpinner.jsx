@@ -1,12 +1,17 @@
-import React from 'react';
-import PropTypes from 'prop-types';
+import React from "react";
+import PropTypes from "prop-types";
 
-export default function LoadingSpinner({ size = 'md', className = '', label = 'Loading...', showLabel = false }) {
+export default function LoadingSpinner({
+  size = "md",
+  className = "",
+  label = "Loading...",
+  showLabel = false,
+}) {
   const sizeClasses = {
-    sm: 'h-4 w-4',
-    md: 'h-8 w-8',
-    lg: 'h-12 w-12',
-    xl: 'h-16 w-16',
+    sm: "h-4 w-4",
+    md: "h-8 w-8",
+    lg: "h-12 w-12",
+    xl: "h-16 w-16",
   };
 
   return (
@@ -21,7 +26,14 @@ export default function LoadingSpinner({ size = 'md', className = '', label = 'L
         fill="none"
         viewBox="0 0 24 24"
       >
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <circle
+          className="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          strokeWidth="4"
+        />
         <path
           className="opacity-75"
           fill="currentColor"
@@ -38,7 +50,7 @@ export default function LoadingSpinner({ size = 'md', className = '', label = 'L
 }
 
 LoadingSpinner.propTypes = {
-  size: PropTypes.oneOf(['sm', 'md', 'lg', 'xl']),
+  size: PropTypes.oneOf(["sm", "md", "lg", "xl"]),
   className: PropTypes.string,
   label: PropTypes.string,
   showLabel: PropTypes.bool,

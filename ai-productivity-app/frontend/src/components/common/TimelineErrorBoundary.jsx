@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 class TimelineErrorBoundary extends React.Component {
   constructor(props) {
@@ -13,10 +13,10 @@ class TimelineErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     // Log the error for debugging
-    console.error('Timeline Error Boundary caught an error:', error, errorInfo);
+    console.error("Timeline Error Boundary caught an error:", error, errorInfo);
     this.setState({
       error: error,
-      errorInfo: errorInfo
+      errorInfo: errorInfo,
     });
   }
 
@@ -27,8 +27,18 @@ class TimelineErrorBoundary extends React.Component {
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-start">
             <div className="shrink-0">
-              <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-5 h-5 text-red-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </div>
             <div className="ml-3 flex-1">
@@ -36,15 +46,20 @@ class TimelineErrorBoundary extends React.Component {
                 Timeline Unavailable
               </h3>
               <div className="mt-2 text-sm text-red-700">
-                <p>The timeline feature encountered an error and has been disabled to prevent issues with the chat interface.</p>
+                <p>
+                  The timeline feature encountered an error and has been
+                  disabled to prevent issues with the chat interface.
+                </p>
                 {this.props.showDetails && (
                   <details className="mt-2">
                     <summary className="cursor-pointer text-red-600 hover:text-red-800">
                       Technical Details
                     </summary>
                     <pre className="mt-2 text-xs bg-red-100 p-2 rounded overflow-auto">
-                      {this.state.error && JSON.stringify(this.state.error, null, 2)}
-                      {this.state.errorInfo && this.state.errorInfo.componentStack}
+                      {this.state.error &&
+                        JSON.stringify(this.state.error, null, 2)}
+                      {this.state.errorInfo &&
+                        this.state.errorInfo.componentStack}
                     </pre>
                   </details>
                 )}
@@ -52,7 +67,11 @@ class TimelineErrorBoundary extends React.Component {
               <div className="mt-3">
                 <button
                   onClick={() => {
-                    this.setState({ hasError: false, error: null, errorInfo: null });
+                    this.setState({
+                      hasError: false,
+                      error: null,
+                      errorInfo: null,
+                    });
                     if (this.props.onRetry) {
                       this.props.onRetry();
                     }

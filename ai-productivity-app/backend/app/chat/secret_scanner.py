@@ -10,29 +10,44 @@ class SecretScanner:
 
     # Common secret patterns
     PATTERNS = {
-        'api_key': [
-            (r'[aA][pP][iI][-_]?[kK][eE][yY]\s*[:=]\s*["\']?([a-zA-Z0-9_\-]{20,})["\']?', 'API Key'),
-            (r'[aA][pP][iI][-_]?[sS][eE][cC][rR][eE][tT]\s*[:=]\s*["\']?([a-zA-Z0-9_\-]{20,})["\']?', 'API Secret'),
+        "api_key": [
+            (
+                r'[aA][pP][iI][-_]?[kK][eE][yY]\s*[:=]\s*["\']?([a-zA-Z0-9_\-]{20,})["\']?',
+                "API Key",
+            ),
+            (
+                r'[aA][pP][iI][-_]?[sS][eE][cC][rR][eE][tT]\s*[:=]\s*["\']?([a-zA-Z0-9_\-]{20,})["\']?',
+                "API Secret",
+            ),
         ],
-        'aws': [
-            (r'AKIA[0-9A-Z]{16}', 'AWS Access Key'),
-            (r'aws_secret_access_key\s*=\s*["\']?([a-zA-Z0-9/+=]{40})["\']?', 'AWS Secret Key'),
+        "aws": [
+            (r"AKIA[0-9A-Z]{16}", "AWS Access Key"),
+            (
+                r'aws_secret_access_key\s*=\s*["\']?([a-zA-Z0-9/+=]{40})["\']?',
+                "AWS Secret Key",
+            ),
         ],
-        'github': [
-            (r'ghp_[a-zA-Z0-9]{36}', 'GitHub Personal Token'),
-            (r'gho_[a-zA-Z0-9]{36}', 'GitHub OAuth Token'),
-            (r'github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}', 'GitHub Fine-grained Token'),
+        "github": [
+            (r"ghp_[a-zA-Z0-9]{36}", "GitHub Personal Token"),
+            (r"gho_[a-zA-Z0-9]{36}", "GitHub OAuth Token"),
+            (
+                r"github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}",
+                "GitHub Fine-grained Token",
+            ),
         ],
-        'database': [
-            (r'(?:postgres|mysql|mongodb)://[^:]+:([^@]+)@', 'Database Password'),
-            (r'[pP][aA][sS][sS][wW][oO][rR][dD]\s*[:=]\s*["\']?([^"\'\s]{8,})["\']?', 'Password'),
+        "database": [
+            (r"(?:postgres|mysql|mongodb)://[^:]+:([^@]+)@", "Database Password"),
+            (
+                r'[pP][aA][sS][sS][wW][oO][rR][dD]\s*[:=]\s*["\']?([^"\'\s]{8,})["\']?',
+                "Password",
+            ),
         ],
-        'jwt': [
-            (r'eyJ[a-zA-Z0-9_\-]+\.eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+', 'JWT Token'),
+        "jwt": [
+            (r"eyJ[a-zA-Z0-9_\-]+\.eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+", "JWT Token"),
         ],
-        'private_key': [
-            (r'-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----', 'Private Key'),
-            (r'-----BEGIN\s+OPENSSH\s+PRIVATE\s+KEY-----', 'SSH Private Key'),
+        "private_key": [
+            (r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----", "Private Key"),
+            (r"-----BEGIN\s+OPENSSH\s+PRIVATE\s+KEY-----", "SSH Private Key"),
         ],
     }
 
@@ -45,8 +60,7 @@ class SecretScanner:
 
         for category, patterns in self.PATTERNS.items():
             compiled[category] = [
-                (re.compile(pattern, re.IGNORECASE), name)
-                for pattern, name in patterns
+                (re.compile(pattern, re.IGNORECASE), name) for pattern, name in patterns
             ]
 
         return compiled
@@ -58,14 +72,16 @@ class SecretScanner:
         for category, patterns in self.compiled_patterns.items():
             for pattern, secret_type in patterns:
                 for match in pattern.finditer(text):
-                    findings.append({
-                        'type': secret_type,
-                        'category': category,
-                        'match': match.group(0),
-                        'start': match.start(),
-                        'end': match.end(),
-                        'severity': self._get_severity(category)
-                    })
+                    findings.append(
+                        {
+                            "type": secret_type,
+                            "category": category,
+                            "match": match.group(0),
+                            "start": match.start(),
+                            "end": match.end(),
+                            "severity": self._get_severity(category),
+                        }
+                    )
 
         # Check for high entropy strings
         entropy_findings = self._check_entropy(text)
@@ -79,13 +95,13 @@ class SecretScanner:
             return text
 
         # Sort findings by position (reverse to maintain positions)
-        sorted_findings = sorted(findings, key=lambda x: x['start'], reverse=True)
+        sorted_findings = sorted(findings, key=lambda x: x["start"], reverse=True)
 
         redacted = text
         for finding in sorted_findings:
-            start = finding['start']
-            end = finding['end']
-            secret_type = finding['type']
+            start = finding["start"]
+            end = finding["end"]
+            secret_type = finding["type"]
 
             # Create redaction placeholder
             redaction = f"[REDACTED {secret_type}]"
@@ -100,18 +116,15 @@ class SecretScanner:
         findings = self.scan(text)
 
         if not findings:
-            return {
-                'valid': True,
-                'findings': []
-            }
+            return {"valid": True, "findings": []}
 
         # Check severity
-        high_severity = [f for f in findings if f['severity'] == 'high']
+        high_severity = [f for f in findings if f["severity"] == "high"]
 
         return {
-            'valid': len(high_severity) == 0,
-            'findings': findings,
-            'message': f"Found {len(findings)} potential secrets ({len(high_severity)} high severity)"
+            "valid": len(high_severity) == 0,
+            "findings": findings,
+            "message": f"Found {len(findings)} potential secrets ({len(high_severity)} high severity)",
         }
 
     def _check_entropy(self, text: str) -> List[Dict]:
@@ -119,7 +132,7 @@ class SecretScanner:
         findings = []
 
         # Look for base64-like strings
-        base64_pattern = re.compile(r'[a-zA-Z0-9+/]{40,}={0,2}')
+        base64_pattern = re.compile(r"[a-zA-Z0-9+/]{40,}={0,2}")
 
         for match in base64_pattern.finditer(text):
             string = match.group(0)
@@ -131,15 +144,17 @@ class SecretScanner:
             # *tests/test_secret_scanner.py*.
 
             if entropy >= 4.0:
-                findings.append({
-                    'type': 'High Entropy String',
-                    'category': 'entropy',
-                    'match': string[:20] + '...' if len(string) > 20 else string,
-                    'start': match.start(),
-                    'end': match.end(),
-                    'severity': 'medium',
-                    'entropy': entropy
-                })
+                findings.append(
+                    {
+                        "type": "High Entropy String",
+                        "category": "entropy",
+                        "match": string[:20] + "..." if len(string) > 20 else string,
+                        "start": match.start(),
+                        "end": match.end(),
+                        "severity": "medium",
+                        "entropy": entropy,
+                    }
+                )
 
         return findings
 
@@ -168,15 +183,15 @@ class SecretScanner:
 
     def _get_severity(self, category: str) -> str:
         """Get severity level for secret category."""
-        high_severity = {'private_key', 'aws', 'database'}
-        medium_severity = {'api_key', 'github', 'jwt'}
+        high_severity = {"private_key", "aws", "database"}
+        medium_severity = {"api_key", "github", "jwt"}
 
         if category in high_severity:
-            return 'high'
+            return "high"
         elif category in medium_severity:
-            return 'medium'
+            return "medium"
         else:
-            return 'low'
+            return "low"
 
     def get_redaction_summary(self, findings: List[Dict]) -> str:
         """Generate summary of redacted content."""
@@ -185,7 +200,7 @@ class SecretScanner:
 
         by_type = {}
         for finding in findings:
-            secret_type = finding['type']
+            secret_type = finding["type"]
             by_type[secret_type] = by_type.get(secret_type, 0) + 1
 
         summary_parts = []

@@ -40,6 +40,7 @@ def _install_fastapi_stub():
 
     class Response:
         """Stub FastAPI Response."""
+
         def __init__(self):
             self.headers = {}
             self._cookies = {}
@@ -58,6 +59,7 @@ def _install_fastapi_stub():
 
     class Request:
         """Stub FastAPI Request."""
+
         def __init__(self):
             self.cookies = {}
             self.headers = {}
@@ -80,19 +82,12 @@ def _install_fastapi_stub():
         """Stub dependency/field identity function."""
         return None
 
-    for _name in [
-        "Body",
-        "Query",
-        "Header",
-        "Path",
-        "Cookie",
-        "Depends",
-        "File"
-    ]:
+    for _name in ["Body", "Query", "Header", "Path", "Cookie", "Depends", "File"]:
         setattr(module, _name, _identity)
 
     class UploadFile:
         """Stub FastAPI UploadFile."""
+
         def __init__(self, filename, content=None):
             self.filename = filename
             self._content = content or b""
@@ -105,6 +100,7 @@ def _install_fastapi_stub():
 
     class BackgroundTasks(list):
         """Stub FastAPI BackgroundTasks."""
+
         def add_task(self, func: Callable, *args: Any, **kwargs: Any) -> None:
             """Add task to background queue."""
             self.append((func, args, kwargs))
@@ -113,6 +109,7 @@ def _install_fastapi_stub():
 
     class WebSocket:
         """Stub FastAPI WebSocket."""
+
         async def accept(self):
             """Accept the websocket."""
             return None
@@ -249,6 +246,7 @@ def _install_fastapi_stub():
                     created = None
                     try:
                         from pydantic import BaseModel as _BM
+
                         if isinstance(anno, type) and issubclass(anno, _BM):
                             created = anno(**body)
                     except (ImportError, TypeError, AttributeError):
@@ -257,14 +255,12 @@ def _install_fastapi_stub():
                 elif name == "background_tasks":
                     kwargs[name] = BackgroundTasks()
                 elif name in ("current_user", "current_user_required"):
-                    kwargs[name] = types.SimpleNamespace(
-                        id=1, username="stub"
-                    )
+                    kwargs[name] = types.SimpleNamespace(id=1, username="stub")
                 elif name == "db":
                     override_dep = None
-                    for dep_fn, override_fn in (
-                        getattr(self.app, "dependency_overrides", {}).items()
-                    ):
+                    for dep_fn, override_fn in getattr(
+                        self.app, "dependency_overrides", {}
+                    ).items():
                         if getattr(dep_fn, "__name__", "") == "get_db":
                             override_dep = override_fn
                             break
@@ -279,6 +275,7 @@ def _install_fastapi_stub():
                         # just give back a dummy.
                         try:
                             from app.database import SessionLocal
+
                             kwargs[name] = SessionLocal()
                         except ImportError:
                             kwargs[name] = object()
@@ -289,11 +286,13 @@ def _install_fastapi_stub():
                 else:
                     kwargs[name] = None
             import types as _types
+
             HTTPException = module.HTTPException  # type: ignore
 
             try:
                 if inspect.iscoroutinefunction(handler):
                     import asyncio as _asyncio
+
                     response_val = _asyncio.run(handler(**kwargs))
                 else:
                     response_val = handler(**kwargs)
@@ -427,8 +426,10 @@ def _install_pydantic_stub():
 
     def _validator(*_f, **_k):
         """Stub Pydantic validator."""
+
         def dec(fn):
             return fn
+
         return dec
 
     class _EmailStr(str):
@@ -448,9 +449,7 @@ def _install_pydantic_stub():
                 env_val = _os.getenv(key.upper())
                 if env_val is not None:
                     if isinstance(attr_val, bool):
-                        merged[key] = env_val.lower() in {
-                            "1", "true", "yes", "on"
-                        }
+                        merged[key] = env_val.lower() in {"1", "true", "yes", "on"}
                     elif isinstance(attr_val, int) and env_val.isdigit():
                         merged[key] = int(env_val)
                     else:
@@ -471,13 +470,16 @@ def _install_pydantic_stub():
     def _identity_factory(rt):
         def _factory(*_a, **_k):
             return rt
+
         return _factory
 
     _pydantic_mod.confloat = _identity_factory(float)
     _pydantic_mod.conint = _identity_factory(int)
     from typing import List as _List  # local import to avoid top-level dependency
 
-    def _conlist_factory(item_type, *, min_length=0, max_length=None):  # noqa: D401 – mimic API
+    def _conlist_factory(
+        item_type, *, min_length=0, max_length=None
+    ):  # noqa: D401 – mimic API
         def _factory(seq: _List[item_type] | None = None):  # type: ignore[var-annotated]
             return seq or []
 
@@ -553,6 +555,7 @@ def _install_gitpython_stub():
 
     class _DummyRemote:
         """Stub remote."""
+
         def fetch(self):
             """Stub fetch method."""
             return []
@@ -563,6 +566,7 @@ def _install_gitpython_stub():
 
     class _DummyGit:
         """Stub Git commands."""
+
         def checkout(self, _):
             """Stub checkout method."""
             return None
@@ -573,6 +577,7 @@ def _install_gitpython_stub():
 
     class _DummyCommit:
         """Stub commit."""
+
         def __init__(self):
             self.hexsha = "0" * 40
             self.tree = []
@@ -582,6 +587,7 @@ def _install_gitpython_stub():
 
     class _Repo:
         """Stub Repo."""
+
         def __init__(self, *_a, **_k):
             self.remote_obj = _DummyRemote()
             self.git = _DummyGit()
@@ -613,6 +619,7 @@ def _install_aiofiles_stub():
 
     class _AsyncFile:
         """Stub Async file for aiofiles."""
+
         def __init__(self, fname, mode, encoding=None):
             self._fp = open(fname, mode, encoding=encoding or "utf-8")
 
@@ -687,7 +694,7 @@ def _install_numpy_stub():
             super().__init__(name)
             self.norm = _norm
 
-# add linalg module registration
+    # add linalg module registration
     np.linalg = _LinalgModule("numpy.linalg")
 
     _sys.modules["numpy"] = np
@@ -815,7 +822,7 @@ def _install_tenacity_stub():  # noqa: D401 – mimic API
     t_module.retry_if_exception_type = _identity  # type: ignore
     t_module.before_sleep_log = lambda *_a, **_kw: None  # type: ignore
     t_module.retry_if_exception = _identity  # type: ignore
-    
+
     class RetryError(Exception):
         pass
 

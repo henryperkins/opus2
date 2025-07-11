@@ -1,25 +1,25 @@
-import { useState } from 'react';
-import { useAuth } from '../../hooks/useAuth';
-import { toast } from '../common/Toast';
+import { useState } from "react";
+import { useAuth } from "../../hooks/useAuth";
+import { toast } from "../common/Toast";
 
 function Login() {
   const { login } = useAuth();
   const [formData, setFormData] = useState({
-    username_or_email: '',
-    password: ''
+    username_or_email: "",
+    password: "",
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       await login(formData.username_or_email, formData.password);
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Login failed';
+      const msg = err.response?.data?.detail || "Login failed";
       setError(msg);
       toast.error(msg);
     } finally {
@@ -30,7 +30,7 @@ function Login() {
   const handleChange = (e) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 
@@ -69,7 +69,7 @@ function Login() {
       {error && <div className="error-message">{error}</div>}
 
       <button type="submit" disabled={loading} className="login-button">
-        {loading ? 'Logging in...' : 'Login'}
+        {loading ? "Logging in..." : "Login"}
       </button>
     </form>
   );

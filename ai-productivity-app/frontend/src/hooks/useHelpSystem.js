@@ -1,13 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
 /**
  * Hook for managing the integrated help system (tooltips + documentation modal)
  */
 export const useHelpSystem = () => {
   const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
-  const [activeDocTab, setActiveDocTab] = useState('overview');
+  const [activeDocTab, setActiveDocTab] = useState("overview");
 
-  const openDocumentation = useCallback((tab = 'overview') => {
+  const openDocumentation = useCallback((tab = "overview") => {
     setActiveDocTab(tab);
     setIsDocumentationOpen(true);
   }, []);
@@ -22,7 +22,7 @@ export const useHelpSystem = () => {
 
   const openRAGOnboarding = useCallback(() => {
     // This would be implemented when integrating with main app
-    console.log('Opening RAG onboarding...');
+    console.log("Opening RAG onboarding...");
   }, []);
 
   return {
@@ -32,15 +32,15 @@ export const useHelpSystem = () => {
     openDocumentation,
     closeDocumentation,
     switchDocTab,
-    
+
     // Onboarding
     openRAGOnboarding,
-    
+
     // Helper functions for specific help topics
-    showRAGHelp: () => openDocumentation('rag'),
-    showSearchHelp: () => openDocumentation('search'),
-    showKnowledgeHelp: () => openDocumentation('knowledge'),
-    showChatHelp: () => openDocumentation('chat'),
+    showRAGHelp: () => openDocumentation("rag"),
+    showSearchHelp: () => openDocumentation("search"),
+    showKnowledgeHelp: () => openDocumentation("knowledge"),
+    showChatHelp: () => openDocumentation("chat"),
   };
 };
 

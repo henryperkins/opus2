@@ -71,7 +71,9 @@ def _send_via_smtp(payload: EmailPayload) -> None:
 
 
 @router.post("", status_code=status.HTTP_200_OK)
-async def send_email_endpoint(payload: EmailPayload, background: BackgroundTasks) -> dict[str, str]:
+async def send_email_endpoint(
+    payload: EmailPayload, background: BackgroundTasks
+) -> dict[str, str]:
     """Handle incoming email send requests."""
 
     # In local/dev and **test** mode we skip SMTP to avoid network calls which

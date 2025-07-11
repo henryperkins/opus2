@@ -7,25 +7,34 @@
 //  • keeping a local in-memory basket of citations so multiple components
 //    (KnowledgeAssistant, KnowledgeContextPanel, ChatPage) stay in sync.
 
-import { useState, useCallback, useMemo } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useState, useCallback, useMemo } from "react";
+import { useMutation } from "@tanstack/react-query";
 
 const DEFAULT_SETTINGS = {
   autoContext: true,
   maxContextDocs: 5,
   minConfidence: 0.2,
-  citationStyle: 'inline', // or 'footnote'
+  citationStyle: "inline", // or 'footnote'
 };
 
-export function useKnowledgeChat(projectId, userSettings = {}, knowledgeAPI = null) {
-  const settings = useMemo(() => ({ ...DEFAULT_SETTINGS, ...userSettings }), [userSettings]);
+export function useKnowledgeChat(
+  projectId,
+  userSettings = {},
+  knowledgeAPI = null,
+) {
+  const settings = useMemo(
+    () => ({ ...DEFAULT_SETTINGS, ...userSettings }),
+    [userSettings],
+  );
 
   const [citations, setCitations] = useState([]);
   const [currentContext, setCurrentContext] = useState([]);
 
   // Ensure knowledgeAPI is provided
   if (!knowledgeAPI) {
-    console.warn('useKnowledgeChat: knowledgeAPI not provided, hook will have limited functionality');
+    console.warn(
+      "useKnowledgeChat: knowledgeAPI not provided, hook will have limited functionality",
+    );
   }
 
   // -----------------------------
@@ -34,14 +43,14 @@ export function useKnowledgeChat(projectId, userSettings = {}, knowledgeAPI = nu
 
   const analyzeMutation = useMutation({
     mutationFn: ({ query }) => {
-      if (!knowledgeAPI) throw new Error('Knowledge API not available');
+      if (!knowledgeAPI) throw new Error("Knowledge API not available");
       return knowledgeAPI.analyzeQuery(query, projectId);
     },
   });
 
   const retrieveMutation = useMutation({
     mutationFn: ({ analysis }) => {
-      if (!knowledgeAPI) throw new Error('Knowledge API not available');
+      if (!knowledgeAPI) throw new Error("Knowledge API not available");
       return knowledgeAPI.retrieveKnowledge(analysis, projectId, settings);
     },
   });
@@ -66,8 +75,14 @@ export function useKnowledgeChat(projectId, userSettings = {}, knowledgeAPI = nu
   const buildContextForQuery = useCallback(
     async (query) => {
       if (!knowledgeAPI) {
-        console.warn('Knowledge API not available');
-        return { contextualisedQuery: query, documents: [], relevantDocs: [], codeSnippets: [], confidence: 0 };
+        console.warn("Knowledge API not available");
+        return {
+          contextualisedQuery: query,
+          documents: [],
+          relevantDocs: [],
+          codeSnippets: [],
+          confidence: 0,
+        };
       }
 
       try {
@@ -88,37 +103,44 @@ export function useKnowledgeChat(projectId, userSettings = {}, knowledgeAPI = nu
             contextualised = await knowledgeAPI.injectContext(
               query,
               docs,
-              settings
+              settings,
             );
           } catch (error) {
-            console.warn('Context injection failed, using original query:', error);
+            console.warn(
+              "Context injection failed, using original query:",
+              error,
+            );
           }
         }
 
         // Separate documents and code snippets for UI compatibility
-        const relevantDocs = Array.isArray(docs) ? docs.filter(doc => doc.type === 'document' || !doc.type) : [];
-        const codeSnippets = Array.isArray(docs) ? docs.filter(doc => doc.type === 'code') : [];
-        
-        return { 
-          contextualisedQuery: contextualised, 
+        const relevantDocs = Array.isArray(docs)
+          ? docs.filter((doc) => doc.type === "document" || !doc.type)
+          : [];
+        const codeSnippets = Array.isArray(docs)
+          ? docs.filter((doc) => doc.type === "code")
+          : [];
+
+        return {
+          contextualisedQuery: contextualised,
           documents: docs || [],
           relevantDocs,
           codeSnippets,
-          confidence: analysis?.confidence || 0.5
+          confidence: analysis?.confidence || 0.5,
         };
       } catch (error) {
-        console.error('buildContextForQuery failed:', error);
-        return { 
-          contextualisedQuery: query, 
-          documents: [], 
-          relevantDocs: [], 
+        console.error("buildContextForQuery failed:", error);
+        return {
+          contextualisedQuery: query,
+          documents: [],
+          relevantDocs: [],
           codeSnippets: [],
           confidence: 0,
-          error: error.message
+          error: error.message,
         };
       }
     },
-    [settings, analyzeMutation, retrieveMutation, addToCitations, knowledgeAPI]
+    [settings, analyzeMutation, retrieveMutation, addToCitations, knowledgeAPI],
   );
 
   const value = useMemo(
@@ -138,7 +160,7 @@ export function useKnowledgeChat(projectId, userSettings = {}, knowledgeAPI = nu
       addToCitations,
       citations,
       currentContext,
-    ]
+    ],
   );
 
   return value;

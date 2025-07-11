@@ -58,7 +58,6 @@ def get_openai_client() -> AsyncOpenAI:  # pragma: no cover – trivial
 def get_azure_client() -> AsyncAzureOpenAI:  # pragma: no cover – trivial
     """Return a fully configured *AsyncAzureOpenAI* instance."""
 
-
     # ------------------------------------------------------------------
     # Azure *v1* preview surface (incl. **Responses API**)
     # ------------------------------------------------------------------

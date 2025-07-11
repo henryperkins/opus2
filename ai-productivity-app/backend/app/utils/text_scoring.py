@@ -1,4 +1,3 @@
-
 """Lightweight text-scoring helpers (tokenization + TF-IDF).
 
 This module is extracted from search.hybrid so the calculation can be

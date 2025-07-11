@@ -1,4 +1,5 @@
 """Chat API endpoints."""
+
 import logging
 from typing import List, Optional
 
@@ -117,9 +118,7 @@ async def get_session(
 
     response = ChatSessionResponse.from_orm(session)
     response.message_count = (
-        db.query(ChatMessage)
-        .filter_by(session_id=session.id, is_deleted=False)
-        .count()
+        db.query(ChatMessage).filter_by(session_id=session.id, is_deleted=False).count()
     )
 
     return response
@@ -181,14 +180,14 @@ async def get_messages(
         msg_dict = MessageResponse.from_orm(msg).dict()
 
         # Add metadata object with RAG information to match WebSocket format
-        msg_dict['metadata'] = {
-            'ragUsed': msg.rag_used,
-            'ragConfidence': float(msg.rag_confidence) if msg.rag_confidence else None,
-            'knowledgeSourcesCount': msg.knowledge_sources_count,
-            'searchQuery': msg.search_query_used,
-            'contextTokensUsed': msg.context_tokens_used,
-            'ragStatus': msg.rag_status,
-            'ragError': msg.rag_error_message,
+        msg_dict["metadata"] = {
+            "ragUsed": msg.rag_used,
+            "ragConfidence": float(msg.rag_confidence) if msg.rag_confidence else None,
+            "knowledgeSourcesCount": msg.knowledge_sources_count,
+            "searchQuery": msg.search_query_used,
+            "contextTokensUsed": msg.context_tokens_used,
+            "ragStatus": msg.rag_status,
+            "ragError": msg.rag_error_message,
         }
         response_messages.append(msg_dict)
 
@@ -198,6 +197,7 @@ async def get_messages(
 # ---------------------------------------------------------------------------
 # Message CRUD endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.post(
     "/sessions/{session_id}/messages",
@@ -226,10 +226,10 @@ async def create_message(
 
     # Extract metadata from the schema fields
     metadata = {
-        'code_snippets': message.code_snippets,
-        'referenced_files': message.referenced_files,
-        'referenced_chunks': message.referenced_chunks,
-        'applied_commands': message.applied_commands,
+        "code_snippets": message.code_snippets,
+        "referenced_files": message.referenced_files,
+        "referenced_chunks": message.referenced_chunks,
+        "applied_commands": message.applied_commands,
     }
 
     msg = await service.create_message(
@@ -242,7 +242,7 @@ async def create_message(
     )
 
     # Trigger AI processing for user messages
-    if msg.role == 'user':
+    if msg.role == "user":
         import asyncio
         from app.websocket.mock import MockWebSocket
 
@@ -263,16 +263,20 @@ async def create_message(
 
                     await vector_service.initialize()
                     embedding_generator = EmbeddingGenerator()
-                    knowledge_service = KnowledgeService(vector_service, embedding_generator)
-                    logger.info("Knowledge service initialized for REST API chat processor")
+                    knowledge_service = KnowledgeService(
+                        vector_service, embedding_generator
+                    )
+                    logger.info(
+                        "Knowledge service initialized for REST API chat processor"
+                    )
                 except Exception as e:
-                    logger.warning(f"Failed to initialize knowledge service for REST API: {e}")
+                    logger.warning(
+                        f"Failed to initialize knowledge service for REST API: {e}"
+                    )
 
                 processor = ChatProcessor(async_db, kb=knowledge_service)
                 await processor.process_message(
-                    session_id=session_id,
-                    message=msg,
-                    websocket=mock_websocket
+                    session_id=session_id, message=msg, websocket=mock_websocket
                 )
 
         asyncio.create_task(process_with_async_session())
@@ -325,13 +329,13 @@ async def delete_message(
     # 2. Users flagged as *admin* may delete **any** message.
     # Any other request is rejected with HTTP 403.
 
-# ------------------------------------------------------------------
-#  Additional rule – allow the *owner* of the **project** to delete any
-#  message within their project’s chat sessions.  This resolves the scenario
-#  where a user attempts to remove an *assistant* message which naturally has
-#  no *author* (``user_id is NULL``) and therefore failed the original
-#  author-only check.
-# ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    #  Additional rule – allow the *owner* of the **project** to delete any
+    #  message within their project’s chat sessions.  This resolves the scenario
+    #  where a user attempts to remove an *assistant* message which naturally has
+    #  no *author* (``user_id is NULL``) and therefore failed the original
+    #  author-only check.
+    # ------------------------------------------------------------------
 
     is_author = message.user_id == current_user.id
     is_admin = getattr(current_user, "is_admin", False)
@@ -390,6 +394,7 @@ async def websocket_endpoint(
 
         # Create async session for chat processing since ChatProcessor expects async
         from app.database import AsyncSessionLocal
+
         async with AsyncSessionLocal() as async_db:
             await handle_chat_connection(websocket, session_id, current_user, async_db)
 

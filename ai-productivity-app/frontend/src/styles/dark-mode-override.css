@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 @import "tailwindcss";
 
@@ -99,7 +99,7 @@
   * {
     @apply border-gray-200;
   }
-  
+
   .dark * {
     @apply border-gray-700;
   }
@@ -107,7 +107,7 @@
   body {
     @apply bg-white text-gray-900 antialiased transition-colors duration-200;
   }
-  
+
   .dark body {
     @apply bg-gray-900 text-gray-100;
   }
@@ -142,16 +142,28 @@
 
   /* Fix btn-primary dark mode */
   .btn-primary {
-    background: linear-gradient(to right, theme(--color-blue-600), theme(--color-blue-700));
+    background: linear-gradient(
+      to right,
+      theme(--color-blue-600),
+      theme(--color-blue-700)
+    );
     color: theme(--color-white);
   }
 
   .dark .btn-primary {
-    background: linear-gradient(to right, theme(--color-blue-500), theme(--color-blue-600));
+    background: linear-gradient(
+      to right,
+      theme(--color-blue-500),
+      theme(--color-blue-600)
+    );
   }
 
   .dark .btn-primary:hover:not(:disabled) {
-    background: linear-gradient(to right, theme(--color-blue-600), theme(--color-blue-700));
+    background: linear-gradient(
+      to right,
+      theme(--color-blue-600),
+      theme(--color-blue-700)
+    );
   }
 
   /* Fix btn-secondary dark mode */
@@ -186,7 +198,7 @@
   .skeleton {
     @apply animate-pulse bg-gray-200 rounded;
   }
-  
+
   .dark .skeleton {
     @apply bg-gray-700;
   }

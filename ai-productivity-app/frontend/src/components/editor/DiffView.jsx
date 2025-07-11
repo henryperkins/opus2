@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
-import MonacoEditor from '@monaco-editor/react';
+import React, { useState } from "react";
+import MonacoEditor from "@monaco-editor/react";
 
-const DiffView = ({ 
-  original, 
-  modified, 
-  language = 'javascript',
-  theme = 'vs-dark',
-  height = '400px',
-  className = '',
+const DiffView = ({
+  original,
+  modified,
+  language = "javascript",
+  theme = "vs-dark",
+  height = "400px",
+  className = "",
   onApplyChanges,
-  onRejectChanges
+  onRejectChanges,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -26,7 +26,9 @@ const DiffView = ({
   };
 
   return (
-    <div className={`diff-view ${className} ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}>
+    <div
+      className={`diff-view ${className} ${isFullscreen ? "fixed inset-0 z-50 bg-white" : ""}`}
+    >
       <div className="flex items-center justify-between p-3 bg-gray-100 border-b">
         <div className="flex items-center space-x-4">
           <h3 className="text-sm font-medium text-gray-900">Code Diff</h3>
@@ -41,25 +43,40 @@ const DiffView = ({
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
             className="p-1 text-gray-600 hover:text-gray-900 rounded"
-            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               {isFullscreen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
               ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                />
               )}
             </svg>
           </button>
         </div>
       </div>
 
-      <div style={{ height: isFullscreen ? 'calc(100vh - 120px)' : height }}>
+      <div style={{ height: isFullscreen ? "calc(100vh - 120px)" : height }}>
         <MonacoEditor
           original={original}
           modified={modified}
@@ -73,7 +90,7 @@ const DiffView = ({
             fontSize: 14,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
-            wordWrap: 'on'
+            wordWrap: "on",
           }}
         />
       </div>

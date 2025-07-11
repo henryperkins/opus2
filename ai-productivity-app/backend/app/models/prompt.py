@@ -14,23 +14,42 @@ class PromptTemplate(Base, TimestampMixin):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False, comment="Template name")
     description = Column(Text, nullable=True, comment="Template description")
-    category = Column(String(100), nullable=False, default="Custom", comment="Template category")
+    category = Column(
+        String(100), nullable=False, default="Custom", comment="Template category"
+    )
 
     # Prompt content
     system_prompt = Column(Text, nullable=True, comment="System prompt for AI")
-    user_prompt_template = Column(Text, nullable=False, comment="User prompt template with variables")
+    user_prompt_template = Column(
+        Text, nullable=False, comment="User prompt template with variables"
+    )
 
     # Template configuration
-    variables = Column(JSONB, default=list, nullable=False, comment="Template variables definition")
-    llm_preferences = Column(JSONB, default=dict, nullable=False, comment="Model-specific preferences")
+    variables = Column(
+        JSONB, default=list, nullable=False, comment="Template variables definition"
+    )
+    llm_preferences = Column(
+        JSONB, default=dict, nullable=False, comment="Model-specific preferences"
+    )
 
     # Ownership and visibility
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, comment="Template owner")
-    is_public = Column(Boolean, default=False, nullable=False, comment="Whether template is public")
-    is_default = Column(Boolean, default=False, nullable=False, comment="Whether template is a default/system template")
+    user_id = Column(
+        Integer, ForeignKey("users.id"), nullable=False, comment="Template owner"
+    )
+    is_public = Column(
+        Boolean, default=False, nullable=False, comment="Whether template is public"
+    )
+    is_default = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="Whether template is a default/system template",
+    )
 
     # Usage tracking
-    usage_count = Column(Integer, default=0, nullable=False, comment="Number of times template was used")
+    usage_count = Column(
+        Integer, default=0, nullable=False, comment="Number of times template was used"
+    )
 
     # Relationships
     user = relationship("User", back_populates="prompt_templates")
@@ -48,8 +67,14 @@ class PromptTemplate(Base, TimestampMixin):
     def validate_category(self, key, category):
         """Validate template category"""
         valid_categories = [
-            "Code Generation", "Code Review", "Documentation", "Testing",
-            "Debugging", "Refactoring", "Architecture", "Custom"
+            "Code Generation",
+            "Code Review",
+            "Documentation",
+            "Testing",
+            "Debugging",
+            "Refactoring",
+            "Architecture",
+            "Custom",
         ]
         if category not in valid_categories:
             raise ValueError(f"Category must be one of: {', '.join(valid_categories)}")

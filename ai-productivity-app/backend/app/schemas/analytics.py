@@ -1,6 +1,7 @@
 """
 Analytics API schemas for metrics tracking and reporting.
 """
+
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
@@ -8,6 +9,7 @@ from pydantic import BaseModel, Field
 
 class QualityMetrics(BaseModel):
     """Quality metrics for response tracking."""
+
     response_id: str
     project_id: str
     accuracy: Optional[float] = Field(None, ge=0, le=1)
@@ -21,6 +23,7 @@ class QualityMetrics(BaseModel):
 
 class UserFeedback(BaseModel):
     """User feedback on responses."""
+
     rating: int = Field(..., ge=1, le=5)
     feedback_text: Optional[str] = None
     helpful: Optional[bool] = None
@@ -31,6 +34,7 @@ class UserFeedback(BaseModel):
 
 class FlowMetrics(BaseModel):
     """Metrics for chat flow execution."""
+
     project_id: str
     flow_type: str = Field(..., pattern=r"^(knowledge|model|rendering)$")
     success: bool
@@ -43,6 +47,7 @@ class FlowMetrics(BaseModel):
 
 class InteractionData(BaseModel):
     """User interaction with interactive elements."""
+
     project_id: str
     element_type: str
     action: str
@@ -55,15 +60,15 @@ class InteractionData(BaseModel):
 
 class TimeRange(BaseModel):
     """Time range for analytics queries."""
+
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    period: Optional[str] = Field(
-        None, pattern=r"^(hour|day|week|month|year)$"
-    )
+    period: Optional[str] = Field(None, pattern=r"^(hour|day|week|month|year)$")
 
 
 class DashboardMetrics(BaseModel):
     """Dashboard metrics response."""
+
     total_requests: int
     successful_requests: int
     average_response_time: float
@@ -76,6 +81,7 @@ class DashboardMetrics(BaseModel):
 
 class AnalyticsResponse(BaseModel):
     """Standard analytics response."""
+
     success: bool
     message: Optional[str] = None
     data: Optional[Dict[str, Any]] = None

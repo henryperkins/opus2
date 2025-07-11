@@ -13,11 +13,11 @@ logger = logging.getLogger(__name__)
 class VectorServiceProtocol(Protocol):
     """Protocol defining the interface for vector database services."""
 
-    async def initialize(self) -> None:
-        ...
+    async def initialize(self) -> None: ...
 
-    async def insert_embeddings(self, embeddings: List[Dict[str, Any]]) -> List[str]:
-        ...
+    async def insert_embeddings(
+        self, embeddings: List[Dict[str, Any]]
+    ) -> List[str]: ...
 
     async def search(
         self,
@@ -26,16 +26,11 @@ class VectorServiceProtocol(Protocol):
         project_ids: Optional[List[int]],
         score_threshold: Optional[float],
         filters: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
-        ...
+    ) -> List[Dict[str, Any]]: ...
 
-    async def delete_by_document(self, document_id: int) -> None:
-        ...
+    async def delete_by_document(self, document_id: int) -> None: ...
 
-
-
-    async def get_stats(self) -> Dict[str, Any]:
-        ...
+    async def get_stats(self) -> Dict[str, Any]: ...
 
 
 class VectorService:
@@ -48,9 +43,13 @@ class VectorService:
         elif settings.vector_store_type == "pgvector":
             self._backend = PostgresVectorService()
         else:
-            raise ValueError(f"Unsupported vector_store_type: {settings.vector_store_type}")
+            raise ValueError(
+                f"Unsupported vector_store_type: {settings.vector_store_type}"
+            )
         self._initialized = False
-        logger.info(f"VectorService initialized with backend: {settings.vector_store_type}")
+        logger.info(
+            f"VectorService initialized with backend: {settings.vector_store_type}"
+        )
 
     async def initialize(self) -> None:
         """Initialize the vector service."""
@@ -58,11 +57,11 @@ class VectorService:
             return
         await self._backend.initialize()
         self._initialized = True
-        logger.info(f"Vector service initialized with {settings.vector_store_type} backend")
+        logger.info(
+            f"Vector service initialized with {settings.vector_store_type} backend"
+        )
 
-    async def insert_embeddings(
-        self, embeddings: List[Dict[str, Any]]
-    ) -> List[str]:
+    async def insert_embeddings(self, embeddings: List[Dict[str, Any]]) -> List[str]:
         """Insert embeddings with metadata."""
         await self.initialize()
         return await self._backend.insert_embeddings(embeddings)
@@ -86,7 +85,7 @@ class VectorService:
             query_vector=query_vector,
             limit=limit,
             project_ids=project_ids,
-            score_threshold=score_threshold
+            score_threshold=score_threshold,
         )
 
     async def delete_by_document(self, document_id: int) -> None:
@@ -105,6 +104,7 @@ class VectorService:
         """Get the underlying vector backend for advanced operations."""
         await self.initialize()
         return self._backend
+
 
 # Global instance
 vector_service = VectorService()

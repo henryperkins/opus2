@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # Optional Prometheus support
 try:
     from prometheus_client import Counter, Histogram, Gauge
+
     HAS_PROMETHEUS = True
 except ImportError:
     HAS_PROMETHEUS = False
@@ -39,41 +40,37 @@ except ImportError:
 
 # Metrics definitions
 embedding_batches_total = Counter(
-    "embedding_batches_total",
-    "Total number of embedding batches processed",
-    ["status"]
+    "embedding_batches_total", "Total number of embedding batches processed", ["status"]
 )
 
 embedding_tokens_total = Counter(
-    "embedding_tokens_total",
-    "Total number of tokens sent for embedding"
+    "embedding_tokens_total", "Total number of tokens sent for embedding"
 )
 
 embedding_batch_size = Histogram(
     "embedding_batch_size",
     "Size of embedding batches",
-    buckets=(1, 5, 10, 25, 50, 100, 200)
+    buckets=(1, 5, 10, 25, 50, 100, 200),
 )
 
 embedding_processing_duration = Histogram(
     "embedding_processing_duration_seconds",
     "Time taken to process embedding batches",
-    buckets=(0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0)
+    buckets=(0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0),
 )
 
 embedding_queue_length = Gauge(
-    "embedding_queue_length",
-    "Number of pending embeddings in the queue"
+    "embedding_queue_length", "Number of pending embeddings in the queue"
 )
 
 embedding_errors_total = Counter(
-    "embedding_errors_total",
-    "Total number of embedding errors",
-    ["error_type"]
+    "embedding_errors_total", "Total number of embedding errors", ["error_type"]
 )
 
 
-def record_success(batch_size: int, tokens: int, duration: Optional[float] = None) -> None:
+def record_success(
+    batch_size: int, tokens: int, duration: Optional[float] = None
+) -> None:
     """Record successful embedding batch processing.
 
     Args:
@@ -106,10 +103,7 @@ def record_oversize_error(batch_size: int, tokens: int) -> None:
     embedding_errors_total.labels(error_type="oversize").inc()
     embedding_batch_size.observe(batch_size)
 
-    logger.warning(
-        "Oversized batch detected: %d texts, %d tokens",
-        batch_size, tokens
-    )
+    logger.warning("Oversized batch detected: %d texts, %d tokens", batch_size, tokens)
 
 
 def record_retry_error(error_type: str) -> None:
@@ -169,6 +163,6 @@ def get_metrics_summary() -> dict:
             "embedding_batch_size",
             "embedding_processing_duration",
             "embedding_queue_length",
-            "embedding_errors_total"
-        ]
+            "embedding_errors_total",
+        ],
     }

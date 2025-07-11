@@ -10,7 +10,7 @@
  * from hooks/useAuth.js.
  */
 
-import React from 'react';
+import React from "react";
 import {
   createBrowserRouter,
   RouterProvider,
@@ -18,25 +18,25 @@ import {
   Navigate,
   Outlet,
   redirect,
-} from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import LoginPage from './pages/LoginPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import UserProfile from './components/auth/UserProfile';
-import UnifiedSettingsPage from './pages/UnifiedSettingsPage';
-import TimelinePage from './pages/TimelinePage';
-import SearchPage from './pages/SearchPage';
-import ProjectDashboard from './pages/ProjectDashboard';
-import ProjectPage from './pages/ProjectPage';
-import ProjectChatPage from './pages/ProjectChatPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import ProjectFilesPage from './pages/ProjectFilesPage';
-import ProjectKnowledgePage from './pages/ProjectKnowledgePage';
-import FileViewerPage from './pages/FileViewerPage';
-import Layout from './components/common/Layout';
-import ProjectLayout from './layouts/ProjectLayout';
-import { useRequireAuth } from './hooks/useAuth';
+} from "react-router-dom";
+import Dashboard from "./pages/Dashboard";
+import LoginPage from "./pages/LoginPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import UserProfile from "./components/auth/UserProfile";
+import UnifiedSettingsPage from "./pages/UnifiedSettingsPage";
+import TimelinePage from "./pages/TimelinePage";
+import SearchPage from "./pages/SearchPage";
+import ProjectDashboard from "./pages/ProjectDashboard";
+import ProjectPage from "./pages/ProjectPage";
+import ProjectChatPage from "./pages/ProjectChatPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import ProjectFilesPage from "./pages/ProjectFilesPage";
+import ProjectKnowledgePage from "./pages/ProjectKnowledgePage";
+import FileViewerPage from "./pages/FileViewerPage";
+import Layout from "./components/common/Layout";
+import ProjectLayout from "./layouts/ProjectLayout";
+import { useRequireAuth } from "./hooks/useAuth";
 
 // -----------------------------------------------------------------------------
 // ProtectedRoute wrapper
@@ -69,74 +69,78 @@ function ProtectedRoute({ element }) {
 export const router = createBrowserRouter(
   [
     {
-      path: '/',
-      element: <Layout><Outlet /></Layout>,
+      path: "/",
+      element: (
+        <Layout>
+          <Outlet />
+        </Layout>
+      ),
       children: [
         {
           index: true,
           element: <ProtectedRoute element={<Dashboard />} />,
         },
         {
-          path: 'login',
+          path: "login",
           element: <LoginPage />,
         },
         {
-          path: 'forgot',
+          path: "forgot",
           element: <ForgotPasswordPage />,
         },
         {
-          path: 'reset/:token',
+          path: "reset/:token",
           element: <ResetPasswordPage />,
         },
         {
-          path: 'projects',
+          path: "projects",
           element: <ProtectedRoute element={<ProjectDashboard />} />,
         },
         {
-          path: 'profile',
+          path: "profile",
           element: <ProtectedRoute element={<UserProfile />} />,
         },
         {
-          path: 'settings',
+          path: "settings",
           element: <ProtectedRoute element={<UnifiedSettingsPage />} />,
         },
         {
-          path: 'search',
+          path: "search",
           element: <ProtectedRoute element={<SearchPage />} />,
         },
         {
-          path: 'timeline',
+          path: "timeline",
           element: <ProtectedRoute element={<TimelinePage />} />,
         },
         // Deprecated route – perform server-style redirect preserving method (307)
         {
-          path: 'dashboard',
-          loader: () => redirect('/projects', 307),
+          path: "dashboard",
+          loader: () => redirect("/projects", 307),
         },
         {
-          path: 'projects/:projectId',
+          path: "projects/:projectId",
           element: <ProtectedRoute element={<ProjectLayout />} />,
           children: [
             { index: true, element: <ProjectPage /> },
-            { path: 'chat/:sessionId?', element: <ProjectChatPage /> },
-            { path: 'files', element: <ProjectFilesPage /> },
-            { path: 'analytics', element: <AnalyticsPage /> },
-            { path: 'knowledge', element: <ProjectKnowledgePage /> },
-          ]
+            { path: "chat/:sessionId?", element: <ProjectChatPage /> },
+            { path: "files", element: <ProjectFilesPage /> },
+            { path: "analytics", element: <AnalyticsPage /> },
+            { path: "knowledge", element: <ProjectKnowledgePage /> },
+          ],
         },
         {
-          path: 'models',
+          path: "models",
           element: <ProtectedRoute element={<UnifiedSettingsPage />} />,
         },
         {
-          path: 'files/:path',
+          path: "files/:path",
           element: <ProtectedRoute element={<FileViewerPage />} />,
         },
       ],
     },
   ],
   {
-    basename: '/',
+    basename: "/",
     future: {
       v7_startTransition: true,
       v7_normalizeFormMethod: true,
@@ -145,7 +149,7 @@ export const router = createBrowserRouter(
       v7_partialHydration: true,
       v7_skipActionErrorRevalidation: true,
     },
-  }
+  },
 );
 
 // Root provider component

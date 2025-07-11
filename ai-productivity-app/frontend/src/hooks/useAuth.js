@@ -12,9 +12,9 @@
  *
  */
 
-import { useContext, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../contexts/AuthContext';
+import { useContext, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../contexts/AuthContext";
 
 // Hook to access AuthContext
 export function useAuthContext() {
@@ -43,10 +43,15 @@ export function useRequireAuth() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    console.log('useRequireAuth effect triggered - loading:', loading, 'user:', !!user);
+    console.log(
+      "useRequireAuth effect triggered - loading:",
+      loading,
+      "user:",
+      !!user,
+    );
     if (!loading && !user) {
-      console.log('useRequireAuth: Redirecting to login - no user found');
-      navigate('/login');
+      console.log("useRequireAuth: Redirecting to login - no user found");
+      navigate("/login");
     }
   }, [user, loading, navigate]);
 

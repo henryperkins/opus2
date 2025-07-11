@@ -13,30 +13,39 @@ export function checkAuthEnvironment() {
   const resolvedApiUrl = (() => {
     const envUrl = import.meta.env.VITE_API_URL;
     try {
-      const urlObj = new URL(envUrl || 'http://localhost:8000', window.location.origin);
-      if (window.location.protocol === 'https:' && urlObj.protocol === 'http:') {
-        const sameHost = ['localhost', window.location.hostname].includes(
-          urlObj.hostname
+      const urlObj = new URL(
+        envUrl || "http://localhost:8000",
+        window.location.origin,
+      );
+      if (
+        window.location.protocol === "https:" &&
+        urlObj.protocol === "http:"
+      ) {
+        const sameHost = ["localhost", window.location.hostname].includes(
+          urlObj.hostname,
         );
         if (sameHost) {
-          urlObj.protocol = 'https:';
+          urlObj.protocol = "https:";
         } else {
-          return '/';
+          return "/";
         }
       }
       return urlObj.toString();
     } catch {
-      if (window.location.protocol === 'https:' && envUrl?.startsWith('http://')) {
-        return envUrl.replace(/^http:/, 'https:');
+      if (
+        window.location.protocol === "https:" &&
+        envUrl?.startsWith("http://")
+      ) {
+        return envUrl.replace(/^http:/, "https:");
       }
-      return envUrl || 'http://localhost:8000';
+      return envUrl || "http://localhost:8000";
     }
   })();
 
   const info = {
     apiUrl: resolvedApiUrl,
     cookies: document.cookie,
-    localStorageAuth: localStorage.getItem('ai-productivity-auth'),
+    localStorageAuth: localStorage.getItem("ai-productivity-auth"),
     extensions: detectBrowserExtensions(),
   };
 
@@ -50,13 +59,13 @@ function detectBrowserExtensions() {
   // Heuristic detections (can expand later)
 
   // LastPass injects an element with data-lastpass-root
-  if (document.querySelector('[data-lastpass-root]')) {
-    list.push('LastPass');
+  if (document.querySelector("[data-lastpass-root]")) {
+    list.push("LastPass");
   }
 
   // 1Password adds a "data-op-target" attribute to input elements
-  if (document.querySelector('[data-op-target]')) {
-    list.push('1Password');
+  if (document.querySelector("[data-op-target]")) {
+    list.push("1Password");
   }
 
   return list;

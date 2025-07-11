@@ -8,6 +8,7 @@ from sqlalchemy import select
 from ..models.chat import ChatSession, ChatMessage
 from ..models.timeline import TimelineEvent
 from ..websocket.manager import connection_manager
+
 # Pydantic request models are not required inside the service layer
 
 
@@ -82,11 +83,19 @@ class ChatService:
             # RAG tracking fields
             rag_used=rag_metadata.get("rag_used", False) if rag_metadata else False,
             rag_confidence=rag_metadata.get("rag_confidence") if rag_metadata else None,
-            knowledge_sources_count=rag_metadata.get("knowledge_sources_count", 0) if rag_metadata else 0,
-            search_query_used=rag_metadata.get("search_query_used") if rag_metadata else None,
-            context_tokens_used=rag_metadata.get("context_tokens_used", 0) if rag_metadata else 0,
+            knowledge_sources_count=(
+                rag_metadata.get("knowledge_sources_count", 0) if rag_metadata else 0
+            ),
+            search_query_used=(
+                rag_metadata.get("search_query_used") if rag_metadata else None
+            ),
+            context_tokens_used=(
+                rag_metadata.get("context_tokens_used", 0) if rag_metadata else 0
+            ),
             rag_status=rag_metadata.get("rag_status") if rag_metadata else None,
-            rag_error_message=rag_metadata.get("rag_error_message") if rag_metadata else None,
+            rag_error_message=(
+                rag_metadata.get("rag_error_message") if rag_metadata else None
+            ),
         )
 
         if self.is_async:
@@ -126,7 +135,7 @@ class ChatService:
                 select(ChatMessage).where(
                     ChatMessage.id == message_id,
                     ChatMessage.user_id == user_id,
-                    ChatMessage.is_deleted.is_(False)
+                    ChatMessage.is_deleted.is_(False),
                 )
             )
             message = result.scalar_one_or_none()
@@ -163,15 +172,17 @@ class ChatService:
         return message
 
     async def update_message_content(
-        self, message_id: int, content: str, code_snippets: Optional[List[Dict[str, Any]]] = None,
-        broadcast: bool = True
+        self,
+        message_id: int,
+        content: str,
+        code_snippets: Optional[List[Dict[str, Any]]] = None,
+        broadcast: bool = True,
     ) -> Optional[ChatMessage]:
         """Update message content and code snippets (for AI messages)."""
         if self.is_async:
             result = await self.db.execute(
                 select(ChatMessage).where(
-                    ChatMessage.id == message_id,
-                    ChatMessage.is_deleted.is_(False)
+                    ChatMessage.id == message_id, ChatMessage.is_deleted.is_(False)
                 )
             )
             message = result.scalar_one_or_none()
@@ -200,7 +211,9 @@ class ChatService:
 
         return message
 
-    async def delete_message(self, message_id: int, _user_id: int) -> bool:  # noqa: D401 – keep signature for BC
+    async def delete_message(
+        self, message_id: int, _user_id: int
+    ) -> bool:  # noqa: D401 – keep signature for BC
         """Soft-delete *any* message by ``message_id``.
 
         The caller is responsible for *authorisation*.  This method merely
@@ -232,11 +245,13 @@ class ChatService:
         # Broadcast deletion
         try:
             await connection_manager.send_message(
-                {"type": "message_deleted", "message_id": message_id}, message.session_id
+                {"type": "message_deleted", "message_id": message_id},
+                message.session_id,
             )
         except Exception as e:
             # Log but don't fail the deletion
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning("Failed to broadcast message deletion: %s", e)
 
@@ -280,10 +295,7 @@ class ChatService:
             if before_id is None:
                 # Latest page – order DESC to grab most recent, then reverse
                 # to maintain chronological order.
-                query = (
-                    base_query.order_by(ChatMessage.created_at.desc())
-                    .limit(limit)
-                )
+                query = base_query.order_by(ChatMessage.created_at.desc()).limit(limit)
                 result = await self.db.execute(query)
                 rows = result.scalars().all()
                 return _reverse_if_needed(rows)
@@ -307,11 +319,7 @@ class ChatService:
         )
 
         if before_id is None:
-            rows = (
-                base_query.order_by(ChatMessage.created_at.desc())
-                .limit(limit)
-                .all()
-            )
+            rows = base_query.order_by(ChatMessage.created_at.desc()).limit(limit).all()
             return _reverse_if_needed(rows)
 
         rows = (
@@ -340,7 +348,11 @@ class ChatService:
                         # RAG metadata for frontend
                         "metadata": {
                             "ragUsed": message.rag_used,
-                            "ragConfidence": float(message.rag_confidence) if message.rag_confidence else None,
+                            "ragConfidence": (
+                                float(message.rag_confidence)
+                                if message.rag_confidence
+                                else None
+                            ),
                             "knowledgeSourcesCount": message.knowledge_sources_count,
                             "searchQuery": message.search_query_used,
                             "contextTokensUsed": message.context_tokens_used,
@@ -354,6 +366,7 @@ class ChatService:
         except Exception as e:
             # Log but don't fail the operation
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning("Failed to broadcast message: %s", e)
 
@@ -366,7 +379,9 @@ class ChatService:
                     "message": {
                         "id": message.id,
                         "content": message.content,
-                        "edited_at": message.edited_at.isoformat() if message.edited_at else None,
+                        "edited_at": (
+                            message.edited_at.isoformat() if message.edited_at else None
+                        ),
                     },
                 },
                 message.session_id,
@@ -374,6 +389,6 @@ class ChatService:
         except Exception as e:
             # Log but don't fail the operation
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning("Failed to broadcast message update: %s", e)
-

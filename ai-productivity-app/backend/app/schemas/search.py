@@ -14,6 +14,7 @@ class SearchType(str, Enum):
 
 class SearchFilters(BaseModel):
     """Search filters."""
+
     language: Optional[str] = None
     file_type: Optional[str] = None
     symbol_type: Optional[str] = None
@@ -22,6 +23,7 @@ class SearchFilters(BaseModel):
 
 class SearchRequest(BaseModel):
     """Search request schema."""
+
     query: str = Field(..., min_length=1, max_length=500)
     project_ids: Optional[List[int]] = None
     filters: Optional[SearchFilters] = None
@@ -31,6 +33,7 @@ class SearchRequest(BaseModel):
 
 class SearchResult(BaseModel):
     """Individual search result."""
+
     id: str
     file_path: str
     start_line: int
@@ -49,6 +52,7 @@ class SearchResult(BaseModel):
 
 class SearchResponse(BaseModel):
     """Search response schema."""
+
     query: str
     results: List[SearchResult]
     total: int
@@ -57,11 +61,13 @@ class SearchResponse(BaseModel):
 
 class SuggestionsResponse(BaseModel):
     """Suggestions response schema."""
+
     suggestions: List[str]
 
 
 class IndexRequest(BaseModel):
     """Document indexing request."""
+
     document_id: int
     force_reindex: bool = False
     async_mode: bool = True
@@ -69,6 +75,7 @@ class IndexRequest(BaseModel):
 
 class IndexResponse(BaseModel):
     """Indexing response."""
+
     status: str
     message: str
     document_id: int

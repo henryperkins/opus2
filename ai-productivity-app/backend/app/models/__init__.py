@@ -103,7 +103,7 @@ _PREFIX_BACKEND = "backend.app.models."
 def _alias_submodules(prefix_from: str, prefix_to: str) -> None:
     """Mirror every sub-module under *prefix_from* into *prefix_to*."""
     for name, module in list(sys.modules.items()):
-        if not isinstance(module, ModuleType):      # pragma: no cover – defensive
+        if not isinstance(module, ModuleType):  # pragma: no cover – defensive
             continue
         if name.startswith(prefix_from):
             suffix = name[len(prefix_from) :]

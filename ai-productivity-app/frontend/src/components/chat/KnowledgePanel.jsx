@@ -1,10 +1,18 @@
-import { useState, useCallback } from 'react';
-import { Search, Upload, Clock, X, FileText, Code, Database } from 'lucide-react';
-import PropTypes from 'prop-types';
+import { useState, useCallback } from "react";
+import {
+  Search,
+  Upload,
+  Clock,
+  X,
+  FileText,
+  Code,
+  Database,
+} from "lucide-react";
+import PropTypes from "prop-types";
 
 // Simple search panel
 function SearchPanel({ projectId, onResultSelect }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
 
@@ -14,25 +22,28 @@ function SearchPanel({ projectId, onResultSelect }) {
     setIsSearching(true);
     try {
       // This would integrate with your knowledge search API
-      const response = await fetch(`/api/projects/${projectId}/knowledge/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-      });
+      const response = await fetch(
+        `/api/projects/${projectId}/knowledge/search`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        },
+      );
 
       if (response.ok) {
         const data = await response.json();
         setResults(data.results || []);
       }
     } catch (error) {
-      console.error('Search failed:', error);
+      console.error("Search failed:", error);
     } finally {
       setIsSearching(false);
     }
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleSearch();
     }
   };
@@ -57,7 +68,7 @@ function SearchPanel({ projectId, onResultSelect }) {
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700
             disabled:opacity-50 transition-colors"
         >
-          {isSearching ? '...' : 'Search'}
+          {isSearching ? "..." : "Search"}
         </button>
       </div>
 
@@ -72,13 +83,15 @@ function SearchPanel({ projectId, onResultSelect }) {
                 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
             >
               <div className="flex items-start gap-2">
-                {result.type === 'document' ? (
+                {result.type === "document" ? (
                   <FileText className="w-4 h-4 text-blue-500 mt-0.5" />
                 ) : (
                   <Code className="w-4 h-4 text-green-500 mt-0.5" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-sm truncate">{result.title}</h4>
+                  <h4 className="font-medium text-sm truncate">
+                    {result.title}
+                  </h4>
                   <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
                     {result.excerpt}
                   </p>
@@ -118,20 +131,23 @@ function UploadPanel({ projectId, onUploadSuccess }) {
     setIsUploading(true);
     try {
       const formData = new FormData();
-      Array.from(files).forEach(file => {
-        formData.append('files', file);
+      Array.from(files).forEach((file) => {
+        formData.append("files", file);
       });
 
-      const response = await fetch(`/api/projects/${projectId}/knowledge/upload`, {
-        method: 'POST',
-        body: formData
-      });
+      const response = await fetch(
+        `/api/projects/${projectId}/knowledge/upload`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
 
       if (response.ok) {
         onUploadSuccess && onUploadSuccess();
       }
     } catch (error) {
-      console.error('Upload failed:', error);
+      console.error("Upload failed:", error);
     } finally {
       setIsUploading(false);
     }
@@ -162,16 +178,19 @@ function UploadPanel({ projectId, onUploadSuccess }) {
         onDragLeave={handleDragLeave}
         className={`
           border-2 border-dashed rounded-lg p-8 text-center transition-colors
-          ${dragActive
-            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-            : 'border-gray-300 dark:border-gray-600'
+          ${
+            dragActive
+              ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+              : "border-gray-300 dark:border-gray-600"
           }
-          ${isUploading ? 'opacity-50 pointer-events-none' : ''}
+          ${isUploading ? "opacity-50 pointer-events-none" : ""}
         `}
       >
         <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-          {isUploading ? 'Uploading...' : 'Drag and drop files here, or click to select'}
+          {isUploading
+            ? "Uploading..."
+            : "Drag and drop files here, or click to select"}
         </p>
         <input
           type="file"
@@ -199,30 +218,29 @@ function UploadPanel({ projectId, onUploadSuccess }) {
 
 // Simple recent items panel
 function RecentPanel({ onItemSelect }) {
-
   // This would fetch recent items from your API
   const mockRecentItems = [
     {
-      id: '1',
-      title: 'Project Documentation',
-      type: 'document',
-      lastAccessed: '2 hours ago',
-      excerpt: 'Main project documentation covering architecture and setup...'
+      id: "1",
+      title: "Project Documentation",
+      type: "document",
+      lastAccessed: "2 hours ago",
+      excerpt: "Main project documentation covering architecture and setup...",
     },
     {
-      id: '2',
-      title: 'API Routes',
-      type: 'code',
-      lastAccessed: '1 day ago',
-      excerpt: 'Express.js API route definitions and middleware...'
+      id: "2",
+      title: "API Routes",
+      type: "code",
+      lastAccessed: "1 day ago",
+      excerpt: "Express.js API route definitions and middleware...",
     },
     {
-      id: '3',
-      title: 'Database Schema',
-      type: 'document',
-      lastAccessed: '3 days ago',
-      excerpt: 'PostgreSQL schema definitions and relationships...'
-    }
+      id: "3",
+      title: "Database Schema",
+      type: "document",
+      lastAccessed: "3 days ago",
+      excerpt: "PostgreSQL schema definitions and relationships...",
+    },
   ];
 
   return (
@@ -235,7 +253,7 @@ function RecentPanel({ onItemSelect }) {
             hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
         >
           <div className="flex items-start gap-2">
-            {item.type === 'document' ? (
+            {item.type === "document" ? (
               <FileText className="w-4 h-4 text-blue-500 mt-0.5" />
             ) : (
               <Code className="w-4 h-4 text-green-500 mt-0.5" />
@@ -274,28 +292,28 @@ export default function KnowledgePanel({
   projectId,
   isOpen = true,
   onClose,
-  containerMode = 'overlay' // 'overlay' for desktop, 'inline' for mobile
+  containerMode = "overlay", // 'overlay' for desktop, 'inline' for mobile
 }) {
-  const [activeTab, setActiveTab] = useState('search');
+  const [activeTab, setActiveTab] = useState("search");
 
   const handleResultSelect = useCallback((result) => {
     // Handle search result selection
     if (import.meta.env.DEV) {
-      console.log('Result selected:', result.id || result.title);
+      console.log("Result selected:", result.id || result.title);
     }
   }, []);
 
   const handleUploadSuccess = useCallback(() => {
     // Handle successful upload
     if (import.meta.env.DEV) {
-      console.log('Upload successful');
+      console.log("Upload successful");
     }
   }, []);
 
   const handleItemSelect = useCallback((item) => {
     // Handle recent item selection
     if (import.meta.env.DEV) {
-      console.log('Item selected:', item.id || item.title);
+      console.log("Item selected:", item.id || item.title);
     }
   }, []);
 
@@ -303,24 +321,27 @@ export default function KnowledgePanel({
 
   // Mobile: Full screen modal
   // Desktop: Side panel
-  const panelClass = containerMode === 'overlay'
-    ? `fixed inset-0 md:relative md:inset-auto md:h-full md:w-full
+  const panelClass =
+    containerMode === "overlay"
+      ? `fixed inset-0 md:relative md:inset-auto md:h-full md:w-full
        bg-white dark:bg-gray-800 z-50 md:z-auto
-       ${isOpen ? 'block' : 'hidden md:block'}`
-    : 'w-full h-full bg-white dark:bg-gray-800';
+       ${isOpen ? "block" : "hidden md:block"}`
+      : "w-full h-full bg-white dark:bg-gray-800";
 
   const tabs = [
-    { id: 'search', label: 'Search', icon: Search },
-    { id: 'upload', label: 'Upload', icon: Upload },
-    { id: 'recent', label: 'Recent', icon: Clock }
+    { id: "search", label: "Search", icon: Search },
+    { id: "upload", label: "Upload", icon: Upload },
+    { id: "recent", label: "Recent", icon: Clock },
   ];
 
   return (
     <div className={panelClass}>
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="font-semibold text-gray-900 dark:text-gray-100">Knowledge Base</h3>
-        {containerMode === 'overlay' && (
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+          Knowledge Base
+        </h3>
+        {containerMode === "overlay" && (
           <button
             onClick={onClose}
             className="md:hidden p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg"
@@ -332,7 +353,7 @@ export default function KnowledgePanel({
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-        {tabs.map(tab => {
+        {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
@@ -340,9 +361,10 @@ export default function KnowledgePanel({
               onClick={() => setActiveTab(tab.id)}
               className={`
                 flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap transition-colors
-                ${activeTab === tab.id
-                  ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                ${
+                  activeTab === tab.id
+                    ? "border-b-2 border-blue-600 text-blue-600 dark:text-blue-400"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                 }
               `}
             >
@@ -355,22 +377,20 @@ export default function KnowledgePanel({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === 'search' && (
+        {activeTab === "search" && (
           <SearchPanel
             projectId={projectId}
             onResultSelect={handleResultSelect}
           />
         )}
-        {activeTab === 'upload' && (
+        {activeTab === "upload" && (
           <UploadPanel
             projectId={projectId}
             onUploadSuccess={handleUploadSuccess}
           />
         )}
-        {activeTab === 'recent' && (
-          <RecentPanel
-            onItemSelect={handleItemSelect}
-          />
+        {activeTab === "recent" && (
+          <RecentPanel onItemSelect={handleItemSelect} />
         )}
       </div>
     </div>
@@ -381,19 +401,19 @@ KnowledgePanel.propTypes = {
   projectId: PropTypes.string.isRequired,
   isOpen: PropTypes.bool,
   onClose: PropTypes.func,
-  containerMode: PropTypes.oneOf(['overlay', 'inline'])
+  containerMode: PropTypes.oneOf(["overlay", "inline"]),
 };
 
 SearchPanel.propTypes = {
   projectId: PropTypes.string.isRequired,
-  onResultSelect: PropTypes.func
+  onResultSelect: PropTypes.func,
 };
 
 UploadPanel.propTypes = {
   projectId: PropTypes.string.isRequired,
-  onUploadSuccess: PropTypes.func
+  onUploadSuccess: PropTypes.func,
 };
 
 RecentPanel.propTypes = {
-  onItemSelect: PropTypes.func
+  onItemSelect: PropTypes.func,
 };

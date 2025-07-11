@@ -4,6 +4,7 @@ Service for querying and formatting Prometheus metrics data.
 
 import logging
 from typing import Dict, Any, Optional, List
+
 # Optional Prometheus support – this service must *not* hard-fail when the
 # ``prometheus_client`` dependency is absent (e.g. in CI or local dev
 # environments without metrics).  We therefore attempt to import it and fall
@@ -12,18 +13,20 @@ from typing import Dict, Any, Optional, List
 try:
     from prometheus_client import CollectorRegistry, REGISTRY, generate_latest  # type: ignore
     from prometheus_client.parser import text_string_to_metric_families  # type: ignore
+
     HAS_PROMETHEUS = True
 except ImportError:  # pragma: no cover
     HAS_PROMETHEUS = False
 
     class _StubRegistry:  # Minimal placeholder to satisfy type checks
         """Very small stub to stand-in for a real ``CollectorRegistry``."""
+
         pass
 
     # Provide stubbed names so type-checkers and the rest of this module are
     # satisfied without conditional imports throughout the code.
     CollectorRegistry = _StubRegistry  # type: ignore
-    REGISTRY = _StubRegistry()        # type: ignore
+    REGISTRY = _StubRegistry()  # type: ignore
 
     def generate_latest(_registry: "_StubRegistry") -> bytes:  # type: ignore
         return b""
@@ -31,6 +34,7 @@ except ImportError:  # pragma: no cover
     def text_string_to_metric_families(_text: str):  # type: ignore
         # Yield nothing – callers will therefore treat it as “no metrics”.
         return []
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +54,12 @@ class MetricsService:
             return self._get_default_metrics()
         try:
             # Generate the latest metrics in text format
-            metrics_text = generate_latest(self.registry).decode('utf-8')
+            metrics_text = generate_latest(self.registry).decode("utf-8")
 
             # Parse the metrics
             parsed_metrics = {}
             for family in text_string_to_metric_families(metrics_text):
-                if family.name.startswith('embedding_'):
+                if family.name.startswith("embedding_"):
                     parsed_metrics[family.name] = self._process_metric_family(family)
 
             return self._format_embedding_metrics(parsed_metrics)
@@ -66,33 +70,33 @@ class MetricsService:
 
     def _process_metric_family(self, family) -> Dict[str, Any]:
         """Process a metric family into a structured format."""
-        if family.type == 'counter':
+        if family.type == "counter":
             # For counters, get the total value
             total = 0
             for sample in family.samples:
                 total += sample.value
             return {"type": "counter", "value": total}
 
-        elif family.type == 'gauge':
+        elif family.type == "gauge":
             # For gauges, get the current value
             value = 0
             for sample in family.samples:
                 value = sample.value
             return {"type": "gauge", "value": value}
 
-        elif family.type == 'histogram':
+        elif family.type == "histogram":
             # For histograms, extract useful stats
             count = 0
             sum_value = 0
             buckets = {}
 
             for sample in family.samples:
-                if sample.name.endswith('_count'):
+                if sample.name.endswith("_count"):
                     count = sample.value
-                elif sample.name.endswith('_sum'):
+                elif sample.name.endswith("_sum"):
                     sum_value = sample.value
-                elif sample.name.endswith('_bucket'):
-                    le = sample.labels.get('le', 'inf')
+                elif sample.name.endswith("_bucket"):
+                    le = sample.labels.get("le", "inf")
                     buckets[le] = sample.value
 
             avg = sum_value / count if count > 0 else 0
@@ -101,29 +105,39 @@ class MetricsService:
                 "count": count,
                 "sum": sum_value,
                 "average": avg,
-                "buckets": buckets
+                "buckets": buckets,
             }
 
         else:
             return {"type": family.type, "value": 0}
 
-    def _format_embedding_metrics(self, parsed_metrics: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_embedding_metrics(
+        self, parsed_metrics: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Format parsed metrics into analytics-friendly structure."""
 
         # Extract key metrics
-        batches_metric = parsed_metrics.get('embedding_batches_total', {"value": 0})
-        tokens_metric = parsed_metrics.get('embedding_tokens_total', {"value": 0})
-        batch_size_metric = parsed_metrics.get('embedding_batch_size', {"count": 0, "average": 0})
-        duration_metric = parsed_metrics.get('embedding_processing_duration_seconds', {"count": 0, "average": 0})
-        queue_metric = parsed_metrics.get('embedding_queue_length', {"value": 0})
-        errors_metric = parsed_metrics.get('embedding_errors_total', {"value": 0})
+        batches_metric = parsed_metrics.get("embedding_batches_total", {"value": 0})
+        tokens_metric = parsed_metrics.get("embedding_tokens_total", {"value": 0})
+        batch_size_metric = parsed_metrics.get(
+            "embedding_batch_size", {"count": 0, "average": 0}
+        )
+        duration_metric = parsed_metrics.get(
+            "embedding_processing_duration_seconds", {"count": 0, "average": 0}
+        )
+        queue_metric = parsed_metrics.get("embedding_queue_length", {"value": 0})
+        errors_metric = parsed_metrics.get("embedding_errors_total", {"value": 0})
 
         # Calculate derived metrics
         total_batches = batches_metric.get("value", 0)
         total_tokens = tokens_metric.get("value", 0)
         total_errors = errors_metric.get("value", 0)
 
-        success_rate = 1.0 if total_batches == 0 else max(0, (total_batches - total_errors) / total_batches)
+        success_rate = (
+            1.0
+            if total_batches == 0
+            else max(0, (total_batches - total_errors) / total_batches)
+        )
         avg_batch_size = batch_size_metric.get("average", 0)
         avg_processing_time = duration_metric.get("average", 0)
         current_queue_length = queue_metric.get("value", 0)
@@ -136,18 +150,22 @@ class MetricsService:
                 "success_rate": round(success_rate, 3),
                 "average_batch_size": round(avg_batch_size, 1),
                 "average_processing_time_seconds": round(avg_processing_time, 2),
-                "current_queue_length": int(current_queue_length)
+                "current_queue_length": int(current_queue_length),
             },
             "health_indicators": {
                 "processing_healthy": success_rate >= 0.95,
                 "queue_healthy": current_queue_length < 100,
-                "performance_healthy": avg_processing_time < 5.0
+                "performance_healthy": avg_processing_time < 5.0,
             },
             "performance_metrics": {
                 "throughput_batches_per_hour": self._estimate_throughput(total_batches),
-                "tokens_per_second": self._estimate_token_rate(total_tokens, avg_processing_time),
-                "error_rate_percent": round((total_errors / max(total_batches, 1)) * 100, 2)
-            }
+                "tokens_per_second": self._estimate_token_rate(
+                    total_tokens, avg_processing_time
+                ),
+                "error_rate_percent": round(
+                    (total_errors / max(total_batches, 1)) * 100, 2
+                ),
+            },
         }
 
     def _estimate_throughput(self, total_batches: float) -> float:
@@ -156,7 +174,9 @@ class MetricsService:
         # For now, assume service has been running for at least 1 hour
         return round(total_batches, 1)
 
-    def _estimate_token_rate(self, total_tokens: float, avg_processing_time: float) -> float:
+    def _estimate_token_rate(
+        self, total_tokens: float, avg_processing_time: float
+    ) -> float:
         """Estimate tokens processed per second."""
         if avg_processing_time <= 0:
             return 0
@@ -172,18 +192,18 @@ class MetricsService:
                 "success_rate": 1.0,
                 "average_batch_size": 0,
                 "average_processing_time_seconds": 0,
-                "current_queue_length": 0
+                "current_queue_length": 0,
             },
             "health_indicators": {
                 "processing_healthy": True,
                 "queue_healthy": True,
-                "performance_healthy": True
+                "performance_healthy": True,
             },
             "performance_metrics": {
                 "throughput_batches_per_hour": 0,
                 "tokens_per_second": 0,
-                "error_rate_percent": 0
-            }
+                "error_rate_percent": 0,
+            },
         }
 
     def get_quality_metrics(self, project_id: int) -> Dict[str, Any]:
@@ -195,12 +215,16 @@ class MetricsService:
         # Calculate quality indicators based on embedding performance
         success_rate = embedding_data["embedding_stats"]["success_rate"]
         error_rate = embedding_data["performance_metrics"]["error_rate_percent"]
-        processing_time = embedding_data["embedding_stats"]["average_processing_time_seconds"]
+        processing_time = embedding_data["embedding_stats"][
+            "average_processing_time_seconds"
+        ]
 
         # Map technical metrics to quality scores
         accuracy = max(0.5, min(1.0, success_rate))
         relevance = max(0.6, min(1.0, 1.0 - (error_rate / 100)))
-        completeness = max(0.7, min(1.0, 1.0 - (processing_time / 10)))  # Faster = more complete responses
+        completeness = max(
+            0.7, min(1.0, 1.0 - (processing_time / 10))
+        )  # Faster = more complete responses
         clarity = 0.8  # Static for now, could be enhanced with NLP analysis
 
         return {
@@ -209,17 +233,21 @@ class MetricsService:
             "average_relevance": round(relevance, 2),
             "average_completeness": round(completeness, 2),
             "average_clarity": round(clarity, 2),
-            "average_user_rating": round((accuracy + relevance + completeness + clarity) / 4 * 5, 1),
-            "total_responses": embedding_data["embedding_stats"]["total_batches_processed"],
+            "average_user_rating": round(
+                (accuracy + relevance + completeness + clarity) / 4 * 5, 1
+            ),
+            "total_responses": embedding_data["embedding_stats"][
+                "total_batches_processed"
+            ],
             "trend_data": [
                 round(accuracy - 0.03, 2),
                 round(accuracy - 0.01, 2),
                 round(accuracy, 2),
                 round(min(1.0, accuracy + 0.01), 2),
-                round(min(1.0, accuracy + 0.02), 2)
+                round(min(1.0, accuracy + 0.02), 2),
             ],
             "embedding_performance": embedding_data,
-            "last_updated": None  # Will be set by the endpoint
+            "last_updated": None,  # Will be set by the endpoint
         }
 
 

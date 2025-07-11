@@ -6,6 +6,7 @@ import logging
 
 from app.models.code import CodeDocument, CodeEmbedding
 from app.models.project import Project
+
 # Optional integrations (import guarded to avoid hard dependency during testing)
 try:
     from app.services.hybrid_search import HybridSearch  # noqa: F401
@@ -40,31 +41,33 @@ class ExplainCommand(SlashCommand):
         super().__init__(
             name="explain",
             description="Explain code functionality",
-            usage="/explain [file:line] or /explain [symbol]"
+            usage="/explain [file:line] or /explain [symbol]",
         )
 
     async def execute(self, args: str, context: Dict, db: Session) -> Dict:
         # Parse arguments
-        file_match = re.match(r'(\S+):(\d+)', args)
+        file_match = re.match(r"(\S+):(\d+)", args)
 
         if file_match:
             file_path = file_match.group(1)
             line_num = int(file_match.group(2))
 
             # Get code context
-            chunks = context.get('chunks', [])
+            chunks = context.get("chunks", [])
             relevant_chunk = None
 
             for chunk in chunks:
-                if (chunk['file_path'].endswith(file_path) and
-                    chunk['start_line'] <= line_num <= chunk['end_line']):
+                if (
+                    chunk["file_path"].endswith(file_path)
+                    and chunk["start_line"] <= line_num <= chunk["end_line"]
+                ):
                     relevant_chunk = chunk
                     break
 
             if not relevant_chunk:
                 return {
-                    'success': False,
-                    'message': f"Could not find {file_path}:{line_num}"
+                    "success": False,
+                    "message": f"Could not find {file_path}:{line_num}",
                 }
 
             prompt = f"""Explain the following {relevant_chunk['language']} code:
@@ -83,18 +86,12 @@ Provide a clear explanation of what this code does, including:
         else:
             # Symbol-based explanation
             symbol = args.strip()
-            chunks = context.get('chunks', [])
+            chunks = context.get("chunks", [])
 
-            relevant_chunks = [
-                c for c in chunks
-                if c.get('symbol_name') == symbol
-            ]
+            relevant_chunks = [c for c in chunks if c.get("symbol_name") == symbol]
 
             if not relevant_chunks:
-                return {
-                    'success': False,
-                    'message': f"Could not find symbol: {symbol}"
-                }
+                return {"success": False, "message": f"Could not find symbol: {symbol}"}
 
             chunk = relevant_chunks[0]
             prompt = f"""Explain the {chunk['symbol_type']} '{chunk['symbol_name']}':
@@ -103,11 +100,7 @@ Provide a clear explanation of what this code does, including:
 
 Provide a comprehensive explanation."""
 
-        return {
-            'success': True,
-            'prompt': prompt,
-            'requires_llm': True
-        }
+        return {"success": True, "prompt": prompt, "requires_llm": True}
 
 
 class GenerateTestsCommand(SlashCommand):
@@ -117,36 +110,37 @@ class GenerateTestsCommand(SlashCommand):
         super().__init__(
             name="generate-tests",
             description="Generate unit tests for functions/classes",
-            usage="/generate-tests [function_name]"
+            usage="/generate-tests [function_name]",
         )
 
     async def execute(self, args: str, context: Dict, db: Session) -> Dict:
         symbol = args.strip()
-        chunks = context.get('chunks', [])
+        chunks = context.get("chunks", [])
 
         # Find function/class
         relevant_chunks = [
-            c for c in chunks
-            if c.get('symbol_name') == symbol and
-            c.get('symbol_type') in ['function', 'class', 'method']
+            c
+            for c in chunks
+            if c.get("symbol_name") == symbol
+            and c.get("symbol_type") in ["function", "class", "method"]
         ]
 
         if not relevant_chunks:
             return {
-                'success': False,
-                'message': f"Could not find function/class: {symbol}"
+                "success": False,
+                "message": f"Could not find function/class: {symbol}",
             }
 
         chunk = relevant_chunks[0]
-        language = chunk['language']
+        language = chunk["language"]
 
         # Language-specific test framework
         framework_map = {
-            'python': 'pytest',
-            'javascript': 'Jest',
-            'typescript': 'Jest with TypeScript'
+            "python": "pytest",
+            "javascript": "Jest",
+            "typescript": "Jest with TypeScript",
         }
-        framework = framework_map.get(language, 'appropriate test framework')
+        framework = framework_map.get(language, "appropriate test framework")
 
         prompt = f"""Generate comprehensive unit tests for the following {chunk['symbol_type']}:
 
@@ -163,11 +157,7 @@ Generate tests using {framework} that cover:
 
 Include setup/teardown if needed."""
 
-        return {
-            'success': True,
-            'prompt': prompt,
-            'requires_llm': True
-        }
+        return {"success": True, "prompt": prompt, "requires_llm": True}
 
 
 class SummarizePRCommand(SlashCommand):
@@ -177,25 +167,26 @@ class SummarizePRCommand(SlashCommand):
         super().__init__(
             name="summarize-pr",
             description="Summarize recent changes in PR format",
-            usage="/summarize-pr [#commits]"
+            usage="/summarize-pr [#commits]",
         )
 
     async def execute(self, args: str, context: Dict, db: Session) -> Dict:
         # This would integrate with git in full implementation
         # For now, summarize recent file changes
 
-        project_id = context.get('project_id')
+        project_id = context.get("project_id")
 
         # Get recent documents
-        recent_docs = db.query(CodeDocument).filter_by(
-            project_id=project_id
-        ).order_by(CodeDocument.updated_at.desc()).limit(10).all()
+        recent_docs = (
+            db.query(CodeDocument)
+            .filter_by(project_id=project_id)
+            .order_by(CodeDocument.updated_at.desc())
+            .limit(10)
+            .all()
+        )
 
         if not recent_docs:
-            return {
-                'success': False,
-                'message': "No recent changes found"
-            }
+            return {"success": False, "message": "No recent changes found"}
 
         files_summary = []
         for doc in recent_docs:
@@ -213,11 +204,7 @@ Generate a PR description that includes:
 
 Format it as a proper GitHub PR description."""
 
-        return {
-            'success': True,
-            'prompt': prompt,
-            'requires_llm': True
-        }
+        return {"success": True, "prompt": prompt, "requires_llm": True}
 
 
 class GrepCommand(SlashCommand):
@@ -227,7 +214,7 @@ class GrepCommand(SlashCommand):
         super().__init__(
             name="grep",
             description="Search code for pattern",
-            usage="/grep [pattern] [--type=python]"
+            usage="/grep [pattern] [--type=python]",
         )
 
     async def execute(self, args: str, context: Dict, db: Session) -> Dict:
@@ -235,8 +222,8 @@ class GrepCommand(SlashCommand):
         parts = args.split()
         if not parts:
             return {
-                'success': False,
-                'message': "Usage: /grep pattern [--type=language]"
+                "success": False,
+                "message": "Usage: /grep pattern [--type=language]",
             }
 
         pattern = parts[0]
@@ -244,15 +231,19 @@ class GrepCommand(SlashCommand):
 
         # Check for type flag
         for part in parts[1:]:
-            if part.startswith('--type='):
-                language = part.split('=')[1]
+            if part.startswith("--type="):
+                language = part.split("=")[1]
 
-        project_id = context.get('project_id')
+        project_id = context.get("project_id")
 
         # Search in chunks
-        query = db.query(CodeEmbedding).join(CodeDocument).filter(
-            CodeDocument.project_id == project_id,
-            CodeEmbedding.chunk_content.like(f'%{pattern}%')
+        query = (
+            db.query(CodeEmbedding)
+            .join(CodeDocument)
+            .filter(
+                CodeDocument.project_id == project_id,
+                CodeEmbedding.chunk_content.like(f"%{pattern}%"),
+            )
         )
 
         if language:
@@ -261,17 +252,14 @@ class GrepCommand(SlashCommand):
         results = query.limit(10).all()
 
         if not results:
-            return {
-                'success': True,
-                'message': f"No matches found for '{pattern}'"
-            }
+            return {"success": True, "message": f"No matches found for '{pattern}'"}
 
         # Format results
         output = [f"Found {len(results)} matches for '{pattern}':\n"]
 
         for chunk in results:
             # Find matching lines
-            lines = chunk.chunk_content.split('\n')
+            lines = chunk.chunk_content.split("\n")
             matches = []
 
             for i, line in enumerate(lines):
@@ -285,11 +273,7 @@ class GrepCommand(SlashCommand):
                 if len(matches) > 3:
                     output.append(f"  ... and {len(matches) - 3} more matches")
 
-        return {
-            'success': True,
-            'message': '\n'.join(output),
-            'requires_llm': False
-        }
+        return {"success": True, "message": "\n".join(output), "requires_llm": False}
 
 
 class CommandRegistry:
@@ -315,7 +299,7 @@ class CommandRegistry:
         commands = []
 
         # Match /command args format
-        pattern = re.compile(r'/(\w+)\s*([^/]*?)(?=/\w+|$)')
+        pattern = re.compile(r"/(\w+)\s*([^/]*?)(?=/\w+|$)")
 
         for match in pattern.finditer(message):
             cmd_name = match.group(1)
@@ -327,10 +311,7 @@ class CommandRegistry:
         return commands
 
     async def execute_commands(
-        self,
-        message: str,
-        context: Dict,
-        db: Session
+        self, message: str, context: Dict, db: Session
     ) -> List[Dict]:
         """Execute all commands in message."""
         commands = self.parse_message(message)
@@ -341,21 +322,23 @@ class CommandRegistry:
             if command:
                 try:
                     result = await command.execute(args, context, db)
-                    result['command'] = cmd_name
+                    result["command"] = cmd_name
                     results.append(result)
                 except Exception as e:
                     logger.error(f"Command execution failed: {e}")
-                    results.append({
-                        'command': cmd_name,
-                        'success': False,
-                        'message': f"Command failed: {str(e)}"
-                    })
+                    results.append(
+                        {
+                            "command": cmd_name,
+                            "success": False,
+                            "message": f"Command failed: {str(e)}",
+                        }
+                    )
 
         return results
 
     def get_suggestions(self, partial: str) -> List[Dict]:
         """Get command suggestions."""
-        if not partial.startswith('/'):
+        if not partial.startswith("/"):
             return []
 
         partial_cmd = partial[1:].lower()
@@ -363,16 +346,19 @@ class CommandRegistry:
 
         for name, command in self.commands.items():
             if name.startswith(partial_cmd):
-                suggestions.append({
-                    'command': name,
-                    'description': command.description,
-                    'usage': command.usage
-                })
+                suggestions.append(
+                    {
+                        "command": name,
+                        "description": command.description,
+                        "usage": command.usage,
+                    }
+                )
 
         # Sort suggestions alphabetically
-        suggestions.sort(key=lambda x: x['command'])
+        suggestions.sort(key=lambda x: x["command"])
 
         return suggestions
+
 
 # ---------------------------------------------------------------------------
 # Global command registry instance

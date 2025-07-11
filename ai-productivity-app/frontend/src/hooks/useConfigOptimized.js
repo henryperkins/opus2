@@ -1,18 +1,18 @@
 // DEPRECATED: This file has been consolidated into AIConfigContext.jsx
 // // DEPRECATED: This hook has been consolidated into AIConfigContext.jsx
 // // Use useAIConfig() instead of useConfigOptimized()
-// // 
+// //
 // // hooks/useConfigOptimized.js
 // // Optimized version of useConfig using React Query for better caching and deduplication
 // // import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 // import { configAPI } from '../api/config';
 // import { toast } from 'react-hot-toast';
 // import { useDefaults } from './useDefaults';
-// 
+//
 // export function useConfigOptimized() {
 //   const queryClient = useQueryClient();
 //   const { data: defaults } = useDefaults();
-// 
+//
 //   // Query for fetching config with optimized caching
 //   const {
 //     data: config,
@@ -44,13 +44,13 @@
 //       }
 //     }
 //   });
-// 
+//
 //   // Mutation for updating model config with optimistic updates
 //   const updateModelConfigMutation = useMutation({
 //     mutationFn: async (updates) => {
 //       const defaultProvider = defaults?.provider || 'openai';
 //       const defaultModel = defaults?.model || 'gpt-4o-mini';
-// 
+//
 //       return await configAPI.updateModelConfig({
 //         provider: updates.provider || config?.current.provider || defaultProvider,
 //         chat_model: updates.chat_model || config?.current.chat_model || defaultModel,
@@ -67,10 +67,10 @@
 //     onMutate: async (updates) => {
 //       // Cancel any outgoing refetches
 //       await queryClient.cancelQueries(['config']);
-// 
+//
 //       // Snapshot the previous value
 //       const previousConfig = queryClient.getQueryData(['config']);
-// 
+//
 //       // Optimistically update to the new value
 //       queryClient.setQueryData(['config'], old => {
 //         if (!old) return old;
@@ -82,7 +82,7 @@
 //           }
 //         };
 //       });
-// 
+//
 //       // Return a context object with the snapshotted value
 //       return { previousConfig };
 //     },
@@ -102,7 +102,7 @@
 //       queryClient.invalidateQueries(['config']);
 //     },
 //   });
-// 
+//
 //   // Debounced config update function to prevent rapid API calls
 //   const updateConfig = async (updates) => {
 //     try {
@@ -112,7 +112,7 @@
 //       throw error;
 //     }
 //   };
-// 
+//
 //   // Prefetch config on mount for better UX
 //   const prefetchConfig = () => {
 //     queryClient.prefetchQuery({
@@ -124,7 +124,7 @@
 //       staleTime: 30000,
 //     });
 //   };
-// 
+//
 //   return {
 //     config,
 //     loading,
@@ -136,11 +136,11 @@
 //     updateError: updateModelConfigMutation.error,
 //   };
 // }
-// 
+//
 // // Alternative hook that maintains backward compatibility with existing useConfig
 // export function useConfig() {
 //   const optimized = useConfigOptimized();
-//   
+//
 //   return {
 //     config: optimized.config,
 //     loading: optimized.loading,
@@ -149,14 +149,14 @@
 //     updateConfig: optimized.updateConfig,
 //   };
 // }
-// 
-// 
+//
+//
 // // Helper function to create a default config structure
 // export function createConfigData(data, defaults) {
 //   const defaultProvider = defaults?.provider || 'openai';
 //   const defaultModel = defaults?.model || 'gpt-4o-mini';
 //   const defaultTemperature = defaults?.temperature ?? 0.7;
-// 
+//
 //   return {
 //     current: {
 //       provider: data?.provider || defaultProvider,

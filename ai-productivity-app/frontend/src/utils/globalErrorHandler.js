@@ -26,7 +26,7 @@ class GlobalErrorHandler {
         cb(errorInfo);
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('Error inside error handler subscriber:', err);
+        console.error("Error inside error handler subscriber:", err);
       }
     });
 
@@ -40,22 +40,22 @@ class GlobalErrorHandler {
   // -------------------------------------------------------------------------
 
   _setupGlobalListeners() {
-    window.addEventListener('unhandledrejection', (event) => {
+    window.addEventListener("unhandledrejection", (event) => {
       // eslint-disable-next-line no-console
-      console.error('Unhandled promise rejection:', event.reason);
+      console.error("Unhandled promise rejection:", event.reason);
       this.handleError({
-        type: 'unhandledRejection',
+        type: "unhandledRejection",
         error: event.reason,
         promise: event.promise,
         timestamp: new Date().toISOString(),
       });
     });
 
-    window.addEventListener('error', (event) => {
+    window.addEventListener("error", (event) => {
       // eslint-disable-next-line no-console
-      console.error('Global error:', event.error);
+      console.error("Global error:", event.error);
       this.handleError({
-        type: 'globalError',
+        type: "globalError",
         error: event.error,
         message: event.message,
         filename: event.filename,
@@ -69,7 +69,7 @@ class GlobalErrorHandler {
   _sendToErrorService(errorInfo) {
     // Placeholder – integrate with Sentry, LogRocket, etc.
     // eslint-disable-next-line no-console
-    console.log('[ErrorService] would send:', errorInfo);
+    console.log("[ErrorService] would send:", errorInfo);
   }
 }
 

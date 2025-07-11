@@ -1,12 +1,12 @@
 /* eslint-env browser */
 /* eslint-disable no-alert */
-import { useRef, useEffect, useState, useCallback } from 'react';
-import * as d3 from 'd3';
-import PropTypes from 'prop-types';
+import { useRef, useEffect, useState, useCallback } from "react";
+import * as d3 from "d3";
+import PropTypes from "prop-types";
 
-import { codeAPI } from '../../api/code';
-import { toast } from '../common/Toast';
-import { useProjectTimeline } from '../../hooks/useProjects';
+import { codeAPI } from "../../api/code";
+import { toast } from "../common/Toast";
+import { useProjectTimeline } from "../../hooks/useProjects";
 import { useAuth } from "../../hooks/useAuth";
 
 /**
@@ -19,9 +19,9 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
   const { user, loading: authLoading } = useAuth();
 
   /* ──────────────────────────── State ──────────────────────────── */
-  const [tool, setTool] = useState('select');             // 'select' | 'draw'
-  const [shapes, setShapes] = useState([]);               // drawn paths / rects
-  const [annotations, setAnnotations] = useState([]);     // text labels
+  const [tool, setTool] = useState("select"); // 'select' | 'draw'
+  const [shapes, setShapes] = useState([]); // drawn paths / rects
+  const [annotations, setAnnotations] = useState([]); // text labels
   const [isDrawing, setIsDrawing] = useState(false);
   const [selectedElement, setSelectedElement] = useState(null);
   const [showGrid, setShowGrid] = useState(true);
@@ -40,7 +40,7 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
         toast.success(`Loaded ${artifacts.length} saved artifacts`);
       } catch (err) {
         console.error(err);
-        toast.error('Failed to load saved artifacts');
+        toast.error("Failed to load saved artifacts");
       }
     })();
   }, [projectId, authLoading, user]);
@@ -48,47 +48,47 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
   /* ──────────────────────────── Renderer ────────────────────────── */
   const renderShapes = useCallback(
     (group) => {
-      group.selectAll('.shape').remove();
+      group.selectAll(".shape").remove();
 
       shapes.forEach((shape) => {
-        if (shape.type === 'path') {
+        if (shape.type === "path") {
           group
-            .append('path')
-            .attr('class', 'shape')
-            .attr('d', shape.d)
-            .attr('stroke', shape.stroke)
-            .attr('stroke-width', shape.strokeWidth)
-            .attr('fill', shape.fill)
-            .style('cursor', 'pointer')
-            .on('click', () => setSelectedElement(shape));
-        } else if (shape.type === 'rect') {
+            .append("path")
+            .attr("class", "shape")
+            .attr("d", shape.d)
+            .attr("stroke", shape.stroke)
+            .attr("stroke-width", shape.strokeWidth)
+            .attr("fill", shape.fill)
+            .style("cursor", "pointer")
+            .on("click", () => setSelectedElement(shape));
+        } else if (shape.type === "rect") {
           group
-            .append('rect')
-            .attr('class', 'shape')
-            .attr('x', shape.x)
-            .attr('y', shape.y)
-            .attr('width', shape.width)
-            .attr('height', shape.height)
-            .attr('stroke', shape.stroke)
-            .attr('stroke-width', shape.strokeWidth)
-            .attr('fill', shape.fill)
-            .style('cursor', 'pointer')
-            .on('click', () => setSelectedElement(shape));
+            .append("rect")
+            .attr("class", "shape")
+            .attr("x", shape.x)
+            .attr("y", shape.y)
+            .attr("width", shape.width)
+            .attr("height", shape.height)
+            .attr("stroke", shape.stroke)
+            .attr("stroke-width", shape.strokeWidth)
+            .attr("fill", shape.fill)
+            .style("cursor", "pointer")
+            .on("click", () => setSelectedElement(shape));
         }
       });
 
-      group.selectAll('.annotation').remove();
+      group.selectAll(".annotation").remove();
       annotations.forEach((a) =>
         group
-          .append('text')
-          .attr('class', 'annotation')
-          .attr('x', a.x)
-          .attr('y', a.y)
-          .attr('font-size', a.fontSize)
-          .attr('fill', a.color)
+          .append("text")
+          .attr("class", "annotation")
+          .attr("x", a.x)
+          .attr("y", a.y)
+          .attr("font-size", a.fontSize)
+          .attr("fill", a.color)
           .text(a.text)
-          .style('cursor', 'pointer')
-          .on('click', () => setSelectedElement(a)),
+          .style("cursor", "pointer")
+          .on("click", () => setSelectedElement(a)),
       );
     },
     [shapes, annotations],
@@ -102,84 +102,90 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
     const gridSize = 20;
 
     /* Reset */
-    svg.selectAll('*').remove();
-    svg.on('.zoom', null).on('mousedown.draw mousemove.draw mouseup.draw', null);
+    svg.selectAll("*").remove();
+    svg
+      .on(".zoom", null)
+      .on("mousedown.draw mousemove.draw mouseup.draw", null);
 
     svg
-      .attr('width', width)
-      .attr('height', height)
-      .style('border', '1px solid #e2e8f0')
-      .style('background', '#ffffff');
+      .attr("width", width)
+      .attr("height", height)
+      .style("border", "1px solid #e2e8f0")
+      .style("background", "#ffffff");
 
     /* Grid */
     if (showGrid) {
-      const defs = svg.append('defs');
+      const defs = svg.append("defs");
       defs
-        .append('pattern')
-        .attr('id', 'grid')
-        .attr('width', gridSize)
-        .attr('height', gridSize)
-        .attr('patternUnits', 'userSpaceOnUse')
-        .append('path')
-        .attr('d', `M ${gridSize} 0 L 0 0 0 ${gridSize}`)
-        .attr('fill', 'none')
-        .attr('stroke', '#f1f5f9')
-        .attr('stroke-width', 1);
+        .append("pattern")
+        .attr("id", "grid")
+        .attr("width", gridSize)
+        .attr("height", gridSize)
+        .attr("patternUnits", "userSpaceOnUse")
+        .append("path")
+        .attr("d", `M ${gridSize} 0 L 0 0 0 ${gridSize}`)
+        .attr("fill", "none")
+        .attr("stroke", "#f1f5f9")
+        .attr("stroke-width", 1);
 
-      svg.append('rect').attr('width', '100%').attr('height', '100%').attr('fill', 'url(#grid)');
+      svg
+        .append("rect")
+        .attr("width", "100%")
+        .attr("height", "100%")
+        .attr("fill", "url(#grid)");
     }
 
     /* Drawing layer */
-    const drawingGroup = svg.append('g').attr('class', 'drawing-group');
+    const drawingGroup = svg.append("g").attr("class", "drawing-group");
 
     /* Zoom / pan */
     svg.call(
       d3
         .zoom()
         .scaleExtent([0.1, 5])
-        .on('zoom', (event) => drawingGroup.attr('transform', event.transform)),
+        .on("zoom", (event) => drawingGroup.attr("transform", event.transform)),
     );
 
     /* Draw-tool handlers */
-    let pathStr = '';
+    let pathStr = "";
     svg
-      .on('mousedown.draw', (event) => {
-        if (tool !== 'draw') return;
+      .on("mousedown.draw", (event) => {
+        if (tool !== "draw") return;
         const [x, y] = d3.pointer(event);
         pathStr = `M${x},${y}`;
         setIsDrawing(true);
       })
-      .on('mousemove.draw', (event) => {
-        if (!isDrawing || tool !== 'draw') return;
+      .on("mousemove.draw", (event) => {
+        if (!isDrawing || tool !== "draw") return;
         const [x, y] = d3.pointer(event);
         pathStr += ` L${x},${y}`;
 
-        drawingGroup.selectAll('.current-path').remove();
+        drawingGroup.selectAll(".current-path").remove();
         drawingGroup
-          .append('path')
-          .attr('class', 'current-path')
-          .attr('d', pathStr)
-          .attr('stroke', '#3b82f6')
-          .attr('stroke-width', 2)
-          .attr('fill', 'none');
+          .append("path")
+          .attr("class", "current-path")
+          .attr("d", pathStr)
+          .attr("stroke", "#3b82f6")
+          .attr("stroke-width", 2)
+          .attr("fill", "none");
       })
-      .on('mouseup.draw', () => {
-        if (!isDrawing || tool !== 'draw') return;
+      .on("mouseup.draw", () => {
+        if (!isDrawing || tool !== "draw") return;
         setIsDrawing(false);
 
         setShapes((s) => [
           ...s,
           {
             id: Date.now(),
-            type: 'path',
+            type: "path",
             d: pathStr,
-            stroke: '#3b82f6',
+            stroke: "#3b82f6",
             strokeWidth: 2,
-            fill: 'none',
+            fill: "none",
           },
         ]);
         setHasUnsavedChanges(true);
-        toast.success('Drawing saved to canvas');
+        toast.success("Drawing saved to canvas");
       });
 
     /* Initial render */
@@ -197,9 +203,9 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
         y: 100,
         width: 100,
         height: 80,
-        stroke: '#3b82f6',
+        stroke: "#3b82f6",
         strokeWidth: 2,
-        fill: 'rgba(59,130,246,0.1)',
+        fill: "rgba(59,130,246,0.1)",
       },
     ]);
     setHasUnsavedChanges(true);
@@ -207,7 +213,7 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
   };
 
   const addTextAnnotation = () => {
-    const text = window.prompt('Enter text annotation:');
+    const text = window.prompt("Enter text annotation:");
     if (!text) return;
     setAnnotations((prev) => [
       ...prev,
@@ -217,15 +223,19 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
         x: 200,
         y: 200,
         fontSize: 14,
-        color: '#1f2937',
+        color: "#1f2937",
       },
     ]);
     setHasUnsavedChanges(true);
-    toast.success('Text annotation added');
+    toast.success("Text annotation added");
   };
 
   const clearCanvas = () => {
-    if (hasUnsavedChanges && !window.confirm('Unsaved changes will be lost. Continue?')) return;
+    if (
+      hasUnsavedChanges &&
+      !window.confirm("Unsaved changes will be lost. Continue?")
+    )
+      return;
     setShapes([]);
     setAnnotations([]);
     setSelectedElement(null);
@@ -253,13 +263,16 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
         },
       };
 
-      const savedArtifact = await codeAPI.saveCanvasArtifact(projectId, payload);
+      const savedArtifact = await codeAPI.saveCanvasArtifact(
+        projectId,
+        payload,
+      );
       setSavedArtifacts((a) => [...a, savedArtifact]);
       setShowSaveDialog(false);
       setHasUnsavedChanges(false);
 
       await addEvent({
-        event_type: 'canvas_created',
+        event_type: "canvas_created",
         title: `Canvas "${name}" created`,
         description,
         metadata: {
@@ -273,7 +286,7 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
       toast.success(`Canvas "${name}" saved to knowledge base`);
     } catch (err) {
       console.error(err);
-      toast.error(err?.response?.data?.detail ?? 'Failed to save canvas');
+      toast.error(err?.response?.data?.detail ?? "Failed to save canvas");
     } finally {
       setSaving(false);
     }
@@ -289,12 +302,12 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
   const exportCanvas = () => {
     const serializer = new window.XMLSerializer();
     const source = serializer.serializeToString(svgRef.current);
-    const blob = new window.Blob([source], { type: 'image/svg+xml' });
+    const blob = new window.Blob([source], { type: "image/svg+xml" });
     const url = window.URL.createObjectURL(blob);
 
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = 'canvas-export.svg';
+    a.download = "canvas-export.svg";
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -307,23 +320,24 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
         <div className="flex items-center space-x-2">
           {hasUnsavedChanges && (
             <span className="flex items-center text-orange-600 text-xs mr-4">
-              <span className="w-2 h-2 bg-orange-500 rounded-full mr-1" /> Unsaved changes
+              <span className="w-2 h-2 bg-orange-500 rounded-full mr-1" />{" "}
+              Unsaved changes
             </span>
           )}
           <button
-            onClick={() => setTool('select')}
-            className={`btn ${tool === 'select' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setTool("select")}
+            className={`btn ${tool === "select" ? "btn-primary" : "btn-secondary"}`}
           >
             Select
           </button>
           <button
-            onClick={() => setTool('draw')}
-            className={`btn ${tool === 'draw' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setTool("draw")}
+            className={`btn ${tool === "draw" ? "btn-primary" : "btn-secondary"}`}
           >
             Draw
           </button>
           <button
-            onClick={() => addShape('rect')}
+            onClick={() => addShape("rect")}
             className="px-3 py-1 text-sm bg-white border rounded hover:bg-gray-50"
           >
             Rectangle
@@ -343,7 +357,9 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
               defaultValue=""
               className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
               onChange={(e) => {
-                const art = savedArtifacts.find((a) => String(a.id) === e.target.value);
+                const art = savedArtifacts.find(
+                  (a) => String(a.id) === e.target.value,
+                );
                 if (art) loadArtifact(art);
               }}
             >
@@ -359,7 +375,9 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
           <button
             onClick={() => setShowGrid((g) => !g)}
             className={`px-3 py-1 text-sm rounded ${
-              showGrid ? 'bg-gray-200 text-gray-800' : 'bg-white border hover:bg-gray-50'
+              showGrid
+                ? "bg-gray-200 text-gray-800"
+                : "bg-white border hover:bg-gray-50"
             }`}
           >
             Grid
@@ -369,8 +387,8 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
             onClick={() => setShowSaveDialog(true)}
             className={`px-3 py-1 text-sm rounded flex items-center ${
               hasUnsavedChanges
-                ? 'bg-orange-600 text-white hover:bg-orange-700'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                ? "bg-orange-600 text-white hover:bg-orange-700"
+                : "bg-blue-600 text-white hover:bg-blue-700"
             } disabled:opacity-50`}
           >
             {saving && (
@@ -394,7 +412,7 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
                 />
               </svg>
             )}
-            {saving ? 'Saving…' : 'Save to KB'}
+            {saving ? "Saving…" : "Save to KB"}
           </button>
           <button
             onClick={clearCanvas}
@@ -416,7 +434,7 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
         <svg
           ref={svgRef}
           className="w-full h-full cursor-crosshair"
-          style={{ minHeight: '400px' }}
+          style={{ minHeight: "400px" }}
         />
         {isDrawing && (
           <span className="absolute top-2 left-2 px-2 py-1 bg-brand-primary-600 text-white text-xs rounded">
@@ -434,10 +452,17 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
             {selectedElement.text && <div>Text: {selectedElement.text}</div>}
             <button
               onClick={() => {
-                if (selectedElement.type === 'rect' || selectedElement.type === 'path') {
-                  setShapes((s) => s.filter((sh) => sh.id !== selectedElement.id));
+                if (
+                  selectedElement.type === "rect" ||
+                  selectedElement.type === "path"
+                ) {
+                  setShapes((s) =>
+                    s.filter((sh) => sh.id !== selectedElement.id),
+                  );
                 } else {
-                  setAnnotations((a) => a.filter((an) => an.id !== selectedElement.id));
+                  setAnnotations((a) =>
+                    a.filter((an) => an.id !== selectedElement.id),
+                  );
                 }
                 setSelectedElement(null);
               }}
@@ -461,8 +486,8 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
               onSubmit={(e) => {
                 e.preventDefault();
                 const data = new window.FormData(e.target);
-                const name = data.get('name');
-                const description = data.get('description');
+                const name = data.get("name");
+                const description = data.get("description");
                 if (name) saveToKnowledgeBase(name, description);
               }}
             >
@@ -502,7 +527,7 @@ const InteractiveCanvas = ({ projectId, width = 800, height = 600 }) => {
                   disabled={saving}
                   className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {saving ? 'Saving…' : 'Save'}
+                  {saving ? "Saving…" : "Save"}
                 </button>
               </div>
             </form>

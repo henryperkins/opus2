@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 @import "tailwindcss";
 
@@ -9,8 +9,6 @@
    Custom component shortcuts (@apply) – kept in *components* layer so that
    the utilities are emitted after base + before one-off utilities.
    ------------------------------------------------------------------- */
-
-
 
 @theme {
   /* Core colors */
@@ -97,8 +95,8 @@
   --spacing-96: 24rem;
 
   /* Custom font families */
-  --font-family-display: 'Inter', system-ui, sans-serif;
-  --font-family-code: 'JetBrains Mono', 'Menlo', monospace;
+  --font-family-display: "Inter", system-ui, sans-serif;
+  --font-family-code: "JetBrains Mono", "Menlo", monospace;
 
   /* Animation timing functions */
   --transition-timing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
@@ -124,16 +122,19 @@
   /* Shadow scale */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 
   /* Custom container sizes */
   --width-prose: 65ch;
   --width-content: 90rem;
 
-
   /* Fonts */
-  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans:
+    Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
   --font-mono: "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
 
   /* Font sizes */
@@ -301,7 +302,6 @@
  * ------------------------------------------------------------------------------------------------*/
 
 @layer components {
-
   /* Layout containers - standardized patterns */
   .chat-layout {
     display: flex;
@@ -417,16 +417,28 @@
   }
 
   .btn-primary {
-    background: linear-gradient(to right, theme(--color-blue-600), theme(--color-blue-700));
+    background: linear-gradient(
+      to right,
+      theme(--color-blue-600),
+      theme(--color-blue-700)
+    );
     color: theme(--color-white);
 
     &:hover:not(:disabled) {
-      background: linear-gradient(to right, theme(--color-blue-700), theme(--color-blue-800));
+      background: linear-gradient(
+        to right,
+        theme(--color-blue-700),
+        theme(--color-blue-800)
+      );
       transform: scale(1.02);
     }
 
     &:active:not(:disabled) {
-      background: linear-gradient(to right, theme(--color-blue-800), theme(--color-blue-900));
+      background: linear-gradient(
+        to right,
+        theme(--color-blue-800),
+        theme(--color-blue-900)
+      );
       transform: scale(0.98);
     }
 
@@ -435,10 +447,18 @@
     }
 
     @media (prefers-color-scheme: dark) {
-      background: linear-gradient(to right, theme(--color-blue-500), theme(--color-blue-600));
+      background: linear-gradient(
+        to right,
+        theme(--color-blue-500),
+        theme(--color-blue-600)
+      );
 
       &:hover:not(:disabled) {
-        background: linear-gradient(to right, theme(--color-blue-600), theme(--color-blue-700));
+        background: linear-gradient(
+          to right,
+          theme(--color-blue-600),
+          theme(--color-blue-700)
+        );
       }
     }
   }
@@ -575,7 +595,6 @@
  * ------------------------------------------------------------------------------------------------*/
 
 @layer components {
-
   /* Animation utilities */
   .animate-fade-in {
     animation: var(--animate-fade-in);
@@ -710,7 +729,6 @@
  * ------------------------------------------------------------------------------------------------*/
 
 @layer utilities {
-
   /* Logical property utilities */
   .margin-inline-auto {
     margin-inline: auto;
@@ -771,8 +789,8 @@
      :where() wrapper that breaks WebKit pseudo-element syntax.
      ------------------------------------------------------------------ */
   .scrollbar-thin::-webkit-scrollbar {
-    width: 0.5rem;   /* w-2 */
-    height: 0.5rem;  /* h-2 */
+    width: 0.5rem; /* w-2 */
+    height: 0.5rem; /* h-2 */
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
@@ -906,7 +924,6 @@
 
   /* Mobile-specific styles */
   @media (max-width: 768px) {
-
     /* Increase touch targets on mobile */
     button,
     [role="button"],
@@ -955,7 +972,6 @@
 
   /* Tablet optimizations */
   @media (min-width: 768px) and (max-width: 1024px) {
-
     /* Slightly larger touch targets for tablet */
     .touch-target {
       min-width: 40px;
@@ -986,12 +1002,20 @@
     transition: background-color theme(--duration-300);
 
     &[data-state="connected"] {
-      background-color: color-mix(in srgb, theme(--color-success) 10%, transparent);
+      background-color: color-mix(
+        in srgb,
+        theme(--color-success) 10%,
+        transparent
+      );
       color: theme(--color-success);
     }
 
     &[data-state="connecting"] {
-      background-color: color-mix(in srgb, theme(--color-warning) 10%, transparent);
+      background-color: color-mix(
+        in srgb,
+        theme(--color-warning) 10%,
+        transparent
+      );
       color: theme(--color-warning);
 
       /* Pulse animation for connecting state */
@@ -1000,13 +1024,16 @@
 
     &[data-state="disconnected"],
     &[data-state="error"] {
-      background-color: color-mix(in srgb, theme(--color-error) 10%, transparent);
+      background-color: color-mix(
+        in srgb,
+        theme(--color-error) 10%,
+        transparent
+      );
       color: theme(--color-error);
     }
   }
 
   @keyframes pulse {
-
     0%,
     100% {
       opacity: 1;
@@ -1135,7 +1162,6 @@
 
   /* Mobile sidebar styles */
   @media (max-width: 768px) {
-
     /* Fixed sidebar positioning on mobile */
     .fixed-sidebar {
       position: fixed;
@@ -1196,7 +1222,9 @@
 
   /* Header shadow for better visibility */
   .header-shadow {
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    box-shadow:
+      0 1px 3px 0 rgba(0, 0, 0, 0.1),
+      0 1px 2px 0 rgba(0, 0, 0, 0.06);
   }
 
   /* Smooth transitions */
@@ -1247,7 +1275,6 @@
 
   /* Desktop override: allow chat input to behave as normal flex item */
   @media (min-width: 769px) {
-
     /* Reset positioning for both normal and :focus-within states */
     .chat-input-container,
     .chat-input-container:focus-within {
@@ -1291,7 +1318,6 @@
 
 /* Panel Visibility - CSS-based responsive */
 @media (max-width: 767px) {
-
   /* Hide desktop panels on mobile */
   .panel-desktop {
     display: none !important;
@@ -1351,7 +1377,7 @@
 }
 
 .panel-resize-handle::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: 50%;
@@ -1432,7 +1458,6 @@
 
 /* Streaming text cursor animation */
 @keyframes pulse {
-
   0%,
   100% {
     opacity: 0.4;
@@ -1449,7 +1474,6 @@
 }
 
 @keyframes blink {
-
   0%,
   50% {
     opacity: 1;
@@ -1495,7 +1519,7 @@
 
 /* Citation tooltip arrow */
 .citation-tooltip::after {
-  content: '';
+  content: "";
   @apply absolute top-full left-1/2 transform -translate-x-1/2;
   @apply border-4 border-transparent border-t-gray-900;
 }
@@ -1876,7 +1900,9 @@ kbd {
 }
 
 .syntax-highlighter-mobile code {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace !important;
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo,
+    monospace !important;
   word-wrap: break-word !important;
 }
 
@@ -2035,12 +2061,12 @@ kbd {
     font-size: clamp(0.875rem, 2.5vw, 1rem);
     line-height: 1.5;
   }
-  
+
   .text-responsive-lg {
     font-size: clamp(1rem, 3vw, 1.25rem);
     line-height: 1.4;
   }
-  
+
   .text-responsive-xl {
     font-size: clamp(1.25rem, 4vw, 1.5rem);
     line-height: 1.3;
@@ -2054,7 +2080,7 @@ kbd {
     background-color: rgba(0, 0, 0, 0.05);
     transform: scale(0.98);
   }
-  
+
   .dark .touch-active:active {
     background-color: rgba(255, 255, 255, 0.05);
   }

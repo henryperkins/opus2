@@ -1,31 +1,31 @@
-import React, { useMemo } from 'react';
-import PropTypes from 'prop-types';
+import React, { useMemo } from "react";
+import PropTypes from "prop-types";
 
 /**
  * ?? NOTE: Feel free to swap the emoji for your preferred icon set.
  * The key point is: printable, no control characters, no quotes to escape.
  */
 export const SUPPORTED_LANGUAGES = [
-  { value: 'javascript', label: 'JavaScript', icon: '??' },
-  { value: 'typescript', label: 'TypeScript', icon: '??' },
-  { value: 'python',     label: 'Python',     icon: '??' },
-  { value: 'java',       label: 'Java',       icon: '?' },
-  { value: 'csharp',     label: 'C#',         icon: '?' },
-  { value: 'cpp',        label: 'C++',        icon: '?' },
-  { value: 'c',          label: 'C',          icon: '??' },
-  { value: 'go',         label: 'Go',         icon: '??' },
-  { value: 'rust',       label: 'Rust',       icon: '??' },
-  { value: 'php',        label: 'PHP',        icon: '??' },
-  { value: 'ruby',       label: 'Ruby',       icon: '??' },
-  { value: 'html',       label: 'HTML',       icon: '??' },
-  { value: 'css',        label: 'CSS',        icon: '??' },
-  { value: 'scss',       label: 'SCSS',       icon: '??' },
-  { value: 'json',       label: 'JSON',       icon: '{}' },
-  { value: 'yaml',       label: 'YAML',       icon: '??' },
-  { value: 'xml',        label: 'XML',        icon: '??' },
-  { value: 'markdown',   label: 'Markdown',   icon: '??' },
-  { value: 'shell',      label: 'Shell',      icon: '??' },
-  { value: 'sql',        label: 'SQL',        icon: '??' },
+  { value: "javascript", label: "JavaScript", icon: "??" },
+  { value: "typescript", label: "TypeScript", icon: "??" },
+  { value: "python", label: "Python", icon: "??" },
+  { value: "java", label: "Java", icon: "?" },
+  { value: "csharp", label: "C#", icon: "?" },
+  { value: "cpp", label: "C++", icon: "?" },
+  { value: "c", label: "C", icon: "??" },
+  { value: "go", label: "Go", icon: "??" },
+  { value: "rust", label: "Rust", icon: "??" },
+  { value: "php", label: "PHP", icon: "??" },
+  { value: "ruby", label: "Ruby", icon: "??" },
+  { value: "html", label: "HTML", icon: "??" },
+  { value: "css", label: "CSS", icon: "??" },
+  { value: "scss", label: "SCSS", icon: "??" },
+  { value: "json", label: "JSON", icon: "{}" },
+  { value: "yaml", label: "YAML", icon: "??" },
+  { value: "xml", label: "XML", icon: "??" },
+  { value: "markdown", label: "Markdown", icon: "??" },
+  { value: "shell", label: "Shell", icon: "??" },
+  { value: "sql", label: "SQL", icon: "??" },
 ];
 
 /**
@@ -34,19 +34,22 @@ export const SUPPORTED_LANGUAGES = [
 const LanguageSelector = ({
   value,
   onChange,
-  className = '',
+  className = "",
   showIcon = true,
-  size = 'md',
-  id = 'language-selector',
+  size = "md",
+  id = "language-selector",
   ...rest
 }) => {
   const selectedLanguage = SUPPORTED_LANGUAGES.find((l) => l.value === value);
 
-  const sizeClasses = useMemo(() => ({
-    sm: 'text-xs px-2 py-1',
-    md: 'text-sm px-3 py-1.5',
-    lg: 'text-base px-4 py-2',
-  }), []);
+  const sizeClasses = useMemo(
+    () => ({
+      sm: "text-xs px-2 py-1",
+      md: "text-sm px-3 py-1.5",
+      lg: "text-base px-4 py-2",
+    }),
+    [],
+  );
 
   return (
     <div className={`relative inline-block ${className}`}>
@@ -111,7 +114,7 @@ LanguageSelector.propTypes = {
   onChange: PropTypes.func.isRequired,
   className: PropTypes.string,
   showIcon: PropTypes.bool,
-  size: PropTypes.oneOf(['sm', 'md', 'lg']),
+  size: PropTypes.oneOf(["sm", "md", "lg"]),
   /** optional id for a11y */
   id: PropTypes.string,
 };

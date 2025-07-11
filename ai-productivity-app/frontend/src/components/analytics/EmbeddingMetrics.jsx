@@ -1,49 +1,67 @@
 // components/analytics/EmbeddingMetrics.jsx
-import { useState, useEffect } from 'react';
-import { 
-  Activity, 
-  Zap, 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle, 
+import { useState, useEffect } from "react";
+import {
+  Activity,
+  Zap,
+  Clock,
+  AlertTriangle,
+  CheckCircle,
   TrendingUp,
   Database,
-  Server
-} from 'lucide-react';
-import { analyticsAPI } from '../../api/analytics';
+  Server,
+} from "lucide-react";
+import { analyticsAPI } from "../../api/analytics";
 
-const MetricCard = ({ title, value, unit = '', icon: Icon, status = 'normal', trend = null }) => {
+const MetricCard = ({
+  title,
+  value,
+  unit = "",
+  icon: Icon,
+  status = "normal",
+  trend = null,
+}) => {
   const statusColors = {
-    normal: 'text-gray-900 dark:text-gray-100',
-    success: 'text-green-600 dark:text-green-400',
-    warning: 'text-yellow-600 dark:text-yellow-400',
-    error: 'text-red-600 dark:text-red-400'
+    normal: "text-gray-900 dark:text-gray-100",
+    success: "text-green-600 dark:text-green-400",
+    warning: "text-yellow-600 dark:text-yellow-400",
+    error: "text-red-600 dark:text-red-400",
   };
 
   const statusBgColors = {
-    normal: 'bg-gray-50 dark:bg-gray-800',
-    success: 'bg-green-50 dark:bg-green-900/20',
-    warning: 'bg-yellow-50 dark:bg-yellow-900/20',
-    error: 'bg-red-50 dark:bg-red-900/20'
+    normal: "bg-gray-50 dark:bg-gray-800",
+    success: "bg-green-50 dark:bg-green-900/20",
+    warning: "bg-yellow-50 dark:bg-yellow-900/20",
+    error: "bg-red-50 dark:bg-red-900/20",
   };
 
   return (
-    <div className={`p-4 rounded-lg border ${statusBgColors[status]} dark:border-gray-700`}>
+    <div
+      className={`p-4 rounded-lg border ${statusBgColors[status]} dark:border-gray-700`}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Icon className={`w-5 h-5 ${statusColors[status]}`} />
           <div>
             <p className="text-sm text-gray-600 dark:text-gray-400">{title}</p>
             <p className={`text-lg font-semibold ${statusColors[status]}`}>
-              {value}{unit}
+              {value}
+              {unit}
             </p>
           </div>
         </div>
         {trend && (
-          <div className={`flex items-center space-x-1 text-sm ${
-            trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-500'
-          }`}>
-            <TrendingUp className={`w-4 h-4 ${trend < 0 ? 'rotate-180' : ''}`} />
+          <div
+            className={`flex items-center space-x-1 text-sm ${
+              trend > 0
+                ? "text-green-600"
+                : trend < 0
+                  ? "text-red-600"
+                  : "text-gray-500"
+            }`}
+          >
+            <TrendingUp
+              className={`w-4 h-4 ${trend < 0 ? "rotate-180" : ""}`}
+            />
             <span>{Math.abs(trend)}%</span>
           </div>
         )}
@@ -60,7 +78,9 @@ const HealthIndicator = ({ label, healthy, description }) => (
       <AlertTriangle className="w-5 h-5 text-red-500" />
     )}
     <div>
-      <p className={`font-medium ${healthy ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+      <p
+        className={`font-medium ${healthy ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}
+      >
         {label}
       </p>
       <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
@@ -88,10 +108,10 @@ export default function EmbeddingMetrics() {
         setMetrics(response.data);
         setError(null);
       } else {
-        setError('Failed to fetch embedding metrics');
+        setError("Failed to fetch embedding metrics");
       }
     } catch (err) {
-      setError(err.message || 'Failed to fetch embedding metrics');
+      setError(err.message || "Failed to fetch embedding metrics");
     } finally {
       setLoading(false);
     }
@@ -104,7 +124,10 @@ export default function EmbeddingMetrics() {
           <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded mb-4 w-1/3"></div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              <div
+                key={i}
+                className="h-20 bg-gray-200 dark:bg-gray-700 rounded"
+              ></div>
             ))}
           </div>
         </div>
@@ -119,7 +142,7 @@ export default function EmbeddingMetrics() {
           <AlertTriangle className="w-5 h-5" />
           <span>Error loading embedding metrics: {error}</span>
         </div>
-        <button 
+        <button
           onClick={fetchMetrics}
           className="mt-3 px-4 py-2 text-sm bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/40"
         >
@@ -132,7 +155,9 @@ export default function EmbeddingMetrics() {
   if (!metrics) {
     return (
       <div className="p-6 bg-white dark:bg-gray-900 rounded-lg shadow">
-        <p className="text-gray-500 dark:text-gray-400">No embedding metrics available</p>
+        <p className="text-gray-500 dark:text-gray-400">
+          No embedding metrics available
+        </p>
       </div>
     );
   }
@@ -151,30 +176,47 @@ export default function EmbeddingMetrics() {
           title="Total Batches"
           value={embedding_stats.total_batches_processed.toLocaleString()}
           icon={Database}
-          status={embedding_stats.total_batches_processed > 0 ? 'success' : 'normal'}
+          status={
+            embedding_stats.total_batches_processed > 0 ? "success" : "normal"
+          }
         />
         <MetricCard
           title="Success Rate"
           value={Math.round(embedding_stats.success_rate * 100)}
           unit="%"
           icon={CheckCircle}
-          status={embedding_stats.success_rate >= 0.95 ? 'success' : 
-                 embedding_stats.success_rate >= 0.9 ? 'warning' : 'error'}
+          status={
+            embedding_stats.success_rate >= 0.95
+              ? "success"
+              : embedding_stats.success_rate >= 0.9
+                ? "warning"
+                : "error"
+          }
         />
         <MetricCard
           title="Avg Processing Time"
           value={embedding_stats.average_processing_time_seconds}
           unit="s"
           icon={Clock}
-          status={embedding_stats.average_processing_time_seconds <= 2 ? 'success' :
-                 embedding_stats.average_processing_time_seconds <= 5 ? 'warning' : 'error'}
+          status={
+            embedding_stats.average_processing_time_seconds <= 2
+              ? "success"
+              : embedding_stats.average_processing_time_seconds <= 5
+                ? "warning"
+                : "error"
+          }
         />
         <MetricCard
           title="Queue Length"
           value={embedding_stats.current_queue_length}
           icon={Activity}
-          status={embedding_stats.current_queue_length === 0 ? 'success' :
-                 embedding_stats.current_queue_length < 10 ? 'warning' : 'error'}
+          status={
+            embedding_stats.current_queue_length === 0
+              ? "success"
+              : embedding_stats.current_queue_length < 10
+                ? "warning"
+                : "error"
+          }
         />
       </div>
 
@@ -197,8 +239,13 @@ export default function EmbeddingMetrics() {
           value={performance_metrics.error_rate_percent}
           unit="%"
           icon={AlertTriangle}
-          status={performance_metrics.error_rate_percent <= 1 ? 'success' :
-                 performance_metrics.error_rate_percent <= 5 ? 'warning' : 'error'}
+          status={
+            performance_metrics.error_rate_percent <= 1
+              ? "success"
+              : performance_metrics.error_rate_percent <= 5
+                ? "warning"
+                : "error"
+          }
         />
       </div>
 
@@ -219,27 +266,35 @@ export default function EmbeddingMetrics() {
 
       {/* Health Indicators */}
       <div className="space-y-3">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">System Health</h3>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+          System Health
+        </h3>
         <HealthIndicator
           label="Processing Health"
           healthy={health_indicators.processing_healthy}
-          description={health_indicators.processing_healthy ? 
-            "Embedding processing is operating normally" : 
-            "Embedding processing has elevated error rates"}
+          description={
+            health_indicators.processing_healthy
+              ? "Embedding processing is operating normally"
+              : "Embedding processing has elevated error rates"
+          }
         />
         <HealthIndicator
           label="Queue Health"
           healthy={health_indicators.queue_healthy}
-          description={health_indicators.queue_healthy ? 
-            "Processing queue is at normal levels" : 
-            "Processing queue is experiencing backlog"}
+          description={
+            health_indicators.queue_healthy
+              ? "Processing queue is at normal levels"
+              : "Processing queue is experiencing backlog"
+          }
         />
         <HealthIndicator
           label="Performance Health"
           healthy={health_indicators.performance_healthy}
-          description={health_indicators.performance_healthy ? 
-            "Processing times are within acceptable limits" : 
-            "Processing times are elevated"}
+          description={
+            health_indicators.performance_healthy
+              ? "Processing times are within acceptable limits"
+              : "Processing times are elevated"
+          }
         />
       </div>
 

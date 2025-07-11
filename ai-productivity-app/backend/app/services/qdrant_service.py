@@ -13,8 +13,10 @@ from qdrant_client import QdrantClient, models
 from prometheus_client import Summary, Gauge
 
 from app.config import settings
+
 # Avoid circular import - define protocol locally or use TYPE_CHECKING
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from app.services.vector_service import VectorServiceProtocol
 
@@ -25,7 +27,9 @@ __all__ = ["QdrantService"]
 VECTOR_UPSERT_LAT = Summary("vector_upsert_seconds", "Qdrant upsert latency")
 VECTOR_SEARCH_LAT = Summary("vector_search_seconds", "Qdrant search latency")
 VECTOR_DELETE_LAT = Summary("vector_delete_seconds", "Qdrant delete latency")
-VECTOR_POINTS_COUNT = Gauge("vector_points_total", "Total points in Qdrant", ["collection"])
+VECTOR_POINTS_COUNT = Gauge(
+    "vector_points_total", "Total points in Qdrant", ["collection"]
+)
 
 
 def _run_blocking(func, /, *args, **kwargs):
@@ -78,8 +82,7 @@ class QdrantService:
             self.client.create_collection,
             collection_name=self.collection_name,
             vectors_config=models.VectorParams(
-                size=self.vector_size,
-                distance=models.Distance.COSINE
+                size=self.vector_size, distance=models.Distance.COSINE
             ),
             hnsw_config=models.HnswConfigDiff(m=16, ef_construct=200),
         )
@@ -111,7 +114,7 @@ class QdrantService:
         )
         if result.status != models.UpdateStatus.COMPLETED:
             logger.error("Qdrant upsert failed (%s)", result.status)
-        
+
         VECTOR_POINTS_COUNT.labels(collection=self.collection_name).inc(len(points))
         return [str(p.id) for p in points]
 
@@ -129,8 +132,7 @@ class QdrantService:
         if project_ids:
             must_conditions.append(
                 models.FieldCondition(
-                    key="project_id",
-                    match=models.MatchAny(any=project_ids)
+                    key="project_id", match=models.MatchAny(any=project_ids)
                 )
             )
         if filters:
@@ -138,11 +140,10 @@ class QdrantService:
                 if value is not None:
                     must_conditions.append(
                         models.FieldCondition(
-                            key=f"metadata.{key}",
-                            match=models.MatchValue(value=value)
+                            key=f"metadata.{key}", match=models.MatchValue(value=value)
                         )
                     )
-        
+
         filt = models.Filter(must=must_conditions) if must_conditions else None
 
         results = await _run_blocking(
@@ -171,13 +172,16 @@ class QdrantService:
             points_selector=models.Filter(
                 must=[
                     models.FieldCondition(
-                        key="document_id",
-                        match=models.MatchValue(value=document_id)
+                        key="document_id", match=models.MatchValue(value=document_id)
                     )
                 ]
             ),
         )
-        logger.info("Removed vectors for document %s from '%s'", document_id, self.collection_name)
+        logger.info(
+            "Removed vectors for document %s from '%s'",
+            document_id,
+            self.collection_name,
+        )
 
     async def get_stats(self) -> Dict[str, Any]:
         """Get statistics about the Qdrant collection."""
@@ -187,63 +191,68 @@ class QdrantService:
             "total_embeddings": info.points_count or 0,
             "collection_name": self.collection_name,
         }
-        
+
         # Handle vector configuration based on the actual structure
-        if hasattr(info, 'config') and hasattr(info.config, 'params'):
+        if hasattr(info, "config") and hasattr(info.config, "params"):
             # Handle VectorParams structure
             vector_config = info.config.params
-            if hasattr(vector_config, 'size'):
+            if hasattr(vector_config, "size"):
                 stats["vector_size"] = vector_config.size
-            if hasattr(vector_config, 'distance'):
+            if hasattr(vector_config, "distance"):
                 stats["distance_metric"] = vector_config.distance
-        elif hasattr(info, 'vectors_config'):
+        elif hasattr(info, "vectors_config"):
             # Handle alternative structure
-            if hasattr(info.vectors_config, 'params'):
+            if hasattr(info.vectors_config, "params"):
                 params = info.vectors_config.params
-                if hasattr(params, 'size'):
+                if hasattr(params, "size"):
                     stats["vector_size"] = params.size
-                if hasattr(params, 'distance'):
+                if hasattr(params, "distance"):
                     stats["distance_metric"] = params.distance
-        
+
         if info.points_count is not None:
-            VECTOR_POINTS_COUNT.labels(collection=self.collection_name).set(info.points_count)
+            VECTOR_POINTS_COUNT.labels(collection=self.collection_name).set(
+                info.points_count
+            )
         return stats
 
     async def gc_dangling_points(self) -> int:
         """Garbage collect dangling vector points that no longer exist in the database."""
         from app.models.code import CodeEmbedding
         from app.database import SessionLocal
-        
+
         removed_count = 0
-        
+
         try:
             qdrant_ids = await _run_blocking(
-                lambda: {str(p.id) for p in self.client.scroll(
-                    collection_name=self.collection_name,
-                    limit=10000,
-                    with_payload=False,
-                    with_vectors=False
-                )[0]}
+                lambda: {
+                    str(p.id)
+                    for p in self.client.scroll(
+                        collection_name=self.collection_name,
+                        limit=10000,
+                        with_payload=False,
+                        with_vectors=False,
+                    )[0]
+                }
             )
-            
+
             with SessionLocal() as db:
                 db_ids = {str(row[0]) for row in db.query(CodeEmbedding.id).all()}
-            
+
             stale_ids = qdrant_ids - db_ids
-            
+
             if stale_ids:
                 logger.info(f"Found {len(stale_ids)} stale embeddings to remove")
                 await _run_blocking(
                     self.client.delete,
                     collection_name=self.collection_name,
-                    points_selector=models.PointIdsList(points=list(stale_ids))
+                    points_selector=models.PointIdsList(points=list(stale_ids)),
                 )
                 removed_count = len(stale_ids)
                 logger.info(f"Removed {len(stale_ids)} stale embeddings")
-                    
+
         except Exception as exc:
             logger.error(f"GC failed: {exc}")
-        
+
         return removed_count
 
     @classmethod

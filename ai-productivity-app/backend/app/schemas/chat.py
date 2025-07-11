@@ -51,10 +51,10 @@ except ImportError:  # Older Pydantic version *or* stubbed implementation
 
     def field_validator(*args, **kwargs):  # type: ignore
         """Replacement decorator that returns the original function unchanged."""
-        
+
         def decorator(fn):  # noqa: D401 – keep signature identical
             return fn
-        
+
         return decorator
 
     class ConfigDict(dict):  # type: ignore
@@ -77,12 +77,14 @@ class MessageRole(str, Enum):
 # --------------------------------------------------------------------------- #
 class ChatSessionCreate(BaseModel):
     """Create a new chat session."""
+
     project_id: int
     title: Optional[str] = Field(default=None, max_length=200)
 
 
 class ChatSessionUpdate(BaseModel):
     """Patch a chat session."""
+
     title: Optional[str] = Field(default=None, max_length=200)
     is_active: Optional[bool] = None
 
@@ -92,6 +94,7 @@ class ChatSessionUpdate(BaseModel):
 # --------------------------------------------------------------------------- #
 class CodeSnippet(BaseModel):
     """A code excerpt attached to a message."""
+
     language: str
     code: str
     file_path: Optional[str] = None
@@ -101,6 +104,7 @@ class CodeSnippet(BaseModel):
 
 class MessageCreate(BaseModel):
     """Payload when posting a new chat message."""
+
     role: MessageRole | str = Field(..., description="sender role")
     content: str = Field(..., min_length=1, max_length=10_000)
 
@@ -129,6 +133,7 @@ class MessageCreate(BaseModel):
 
 class MessageUpdate(BaseModel):
     """Edit an existing message (only content for now)."""
+
     content: str = Field(..., min_length=1, max_length=10_000)
 
 
@@ -137,6 +142,7 @@ class MessageUpdate(BaseModel):
 # --------------------------------------------------------------------------- #
 class MessageResponse(BaseModel):
     """Message returned from the API."""
+
     id: int
     session_id: int
     user_id: Optional[int] = None
@@ -162,7 +168,7 @@ class MessageResponse(BaseModel):
     rag_status: Optional[str] = None
     rag_error_message: Optional[str] = None
 
-    @field_validator('is_edited', mode='before')
+    @field_validator("is_edited", mode="before")
     def validate_is_edited(cls, v):
         """Convert None to False for is_edited field."""
         return False if v is None else v
@@ -184,6 +190,7 @@ class MessageResponse(BaseModel):
 
 class ChatSessionResponse(BaseModel):
     """Session metadata shown in lists/detail views."""
+
     id: int
     project_id: int
     title: str
@@ -200,5 +207,6 @@ class ChatSessionResponse(BaseModel):
 
 class ChatSessionListResponse(BaseModel):
     """Paginated list wrapper."""
+
     items: List[ChatSessionResponse]
     total: int

@@ -6,7 +6,7 @@ from app.exceptions import (
     ModelNotFoundException,
     LLMRateLimitException,
     LLMTimeoutException,
-    VectorDimensionMismatchException
+    VectorDimensionMismatchException,
 )
 
 
@@ -48,7 +48,7 @@ def test_vector_dimension_mismatch_exception():
     assert exc.details["actual"] == 768
 
 
-@patch('app.llm.client.sentry_sdk')
+@patch("app.llm.client.sentry_sdk")
 def test_sentry_integration_captures_exceptions(mock_sentry):
     """Test that Sentry captures custom exceptions."""
     from app.llm.client import LLMClient
@@ -72,12 +72,12 @@ def test_exception_inheritance():
     vector_exc = VectorDimensionMismatchException(100, 200)
 
     # All should inherit from their respective base classes
-    assert hasattr(model_exc, 'error_code')
-    assert hasattr(model_exc, 'details')
+    assert hasattr(model_exc, "error_code")
+    assert hasattr(model_exc, "details")
 
-    assert hasattr(rate_exc, 'error_code')
-    assert hasattr(timeout_exc, 'error_code')
-    assert hasattr(vector_exc, 'error_code')
+    assert hasattr(rate_exc, "error_code")
+    assert hasattr(timeout_exc, "error_code")
+    assert hasattr(vector_exc, "error_code")
 
 
 @pytest.mark.asyncio
@@ -86,7 +86,7 @@ async def test_llm_client_exception_handling():
     from app.llm.client import LLMClient
 
     # Mock the OpenAI client to raise different errors
-    with patch('app.llm.client.AsyncOpenAI') as mock_openai:
+    with patch("app.llm.client.AsyncOpenAI") as mock_openai:
         mock_client = MagicMock()
         mock_openai.return_value = mock_client
 

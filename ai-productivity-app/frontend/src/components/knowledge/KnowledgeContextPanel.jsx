@@ -1,18 +1,25 @@
 /* eslint-env browser */
 /* global AbortController */
 
-import { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
-import { searchAPI } from '../../api/search';
-import { ChevronRight, ChevronDown, FileText, Code, Link, AlertCircle } from 'lucide-react';
-import { useDebounce } from '../../hooks/useDebounce';
+import { useState, useEffect } from "react";
+import PropTypes from "prop-types";
+import { searchAPI } from "../../api/search";
+import {
+  ChevronRight,
+  ChevronDown,
+  FileText,
+  Code,
+  Link,
+  AlertCircle,
+} from "lucide-react";
+import { useDebounce } from "../../hooks/useDebounce";
 
 // Custom hook for search logic
 function useKnowledgeSearch(projectId, query) {
   const [state, setState] = useState({
     results: null,
     loading: false,
-    error: null
+    error: null,
   });
 
   const debouncedQuery = useDebounce(query, 500);
@@ -27,29 +34,33 @@ function useKnowledgeSearch(projectId, query) {
     const controller = new AbortController();
 
     const search = async () => {
-      setState(prev => ({ ...prev, loading: true, error: null }));
+      setState((prev) => ({ ...prev, loading: true, error: null }));
 
       try {
-        const results = await searchAPI.searchProject(projectId, debouncedQuery, {
-          include_code: true,
-          include_docs: true,
-          max_results: 10,
-          signal: controller.signal
-        });
+        const results = await searchAPI.searchProject(
+          projectId,
+          debouncedQuery,
+          {
+            include_code: true,
+            include_docs: true,
+            max_results: 10,
+            signal: controller.signal,
+          },
+        );
 
         if (!cancelled) {
           setState({
             results: processResults(results, debouncedQuery),
             loading: false,
-            error: null
+            error: null,
           });
         }
       } catch (err) {
-        if (!cancelled && err.name !== 'AbortError') {
+        if (!cancelled && err.name !== "AbortError") {
           setState({
             results: null,
             loading: false,
-            error: err.message || 'Search failed'
+            error: err.message || "Search failed",
           });
         }
       }
@@ -69,22 +80,24 @@ function useKnowledgeSearch(projectId, query) {
 
 // Process search results
 function processResults(results, query) {
-  const documents = (results.documents || []).map(doc => ({
+  const documents = (results.documents || []).map((doc) => ({
     ...doc,
-    type: 'document',
-    highlights: extractHighlights(doc.content, query)
+    type: "document",
+    highlights: extractHighlights(doc.content, query),
   }));
 
-  const code = (results.code_snippets || []).map(snippet => ({
+  const code = (results.code_snippets || []).map((snippet) => ({
     ...snippet,
-    type: 'code'
+    type: "code",
   }));
 
-  const allItems = [...documents, ...code].sort((a, b) => (b.score || 0) - (a.score || 0));
+  const allItems = [...documents, ...code].sort(
+    (a, b) => (b.score || 0) - (a.score || 0),
+  );
 
   return {
     items: allItems,
-    totalCount: allItems.length
+    totalCount: allItems.length,
   };
 }
 
@@ -93,19 +106,19 @@ function extractHighlights(content, query) {
   if (!content || !query) return [];
 
   const terms = query.toLowerCase().split(/\s+/);
-  const sentences = content.split(/[.!?]+/).filter(s => s.trim());
+  const sentences = content.split(/[.!?]+/).filter((s) => s.trim());
 
   return sentences
-    .filter(sentence => {
+    .filter((sentence) => {
       const lower = sentence.toLowerCase();
-      return terms.some(term => lower.includes(term));
+      return terms.some((term) => lower.includes(term));
     })
     .slice(0, 3)
-    .map(sentence => {
+    .map((sentence) => {
       let highlighted = sentence.trim();
-      terms.forEach(term => {
-        const regex = new RegExp(`(${term})`, 'gi');
-        highlighted = highlighted.replace(regex, '<mark>$1</mark>');
+      terms.forEach((term) => {
+        const regex = new RegExp(`(${term})`, "gi");
+        highlighted = highlighted.replace(regex, "<mark>$1</mark>");
       });
       return highlighted;
     });
@@ -124,7 +137,7 @@ function EmptyState({ icon: Icon, message }) {
 }
 EmptyState.propTypes = {
   icon: PropTypes.elementType.isRequired,
-  message: PropTypes.string.isRequired
+  message: PropTypes.string.isRequired,
 };
 // Loading component
 function LoadingState() {
@@ -139,18 +152,31 @@ function LoadingState() {
 }
 
 // Result item component
-function ResultItem({ item, isExpanded, isSelected, onToggleExpanded, onSelect }) {
-  const isDocument = item.type === 'document';
-  const title = item.title || item.file_path?.split('/').pop() || 'Untitled';
-  const path = item.path || item.file_path || '';
+function ResultItem({
+  item,
+  isExpanded,
+  isSelected,
+  onToggleExpanded,
+  onSelect,
+}) {
+  const isDocument = item.type === "document";
+  const title = item.title || item.file_path?.split("/").pop() || "Untitled";
+  const path = item.path || item.file_path || "";
   const score = Math.round((item.score || 0) * 100);
 
   return (
-    <div className={`border rounded-lg overflow-hidden transition-colors ${
-      isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-    }`}>
+    <div
+      className={`border rounded-lg overflow-hidden transition-colors ${
+        isSelected
+          ? "border-blue-500 bg-blue-50"
+          : "border-gray-200 hover:border-gray-300"
+      }`}
+    >
       {/* Header */}
-      <div className="px-4 py-3 cursor-pointer hover:bg-gray-50" onClick={onSelect}>
+      <div
+        className="px-4 py-3 cursor-pointer hover:bg-gray-50"
+        onClick={onSelect}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 flex-1 min-w-0">
             {isDocument ? (
@@ -159,7 +185,9 @@ function ResultItem({ item, isExpanded, isSelected, onToggleExpanded, onSelect }
               <Code className="w-4 h-4 text-gray-500 flex-shrink-0" />
             )}
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-medium text-gray-900 truncate">{title}</h4>
+              <h4 className="text-sm font-medium text-gray-900 truncate">
+                {title}
+              </h4>
               <p className="text-xs text-gray-600 truncate">{path}</p>
             </div>
           </div>
@@ -194,9 +222,12 @@ function ResultItem({ item, isExpanded, isSelected, onToggleExpanded, onSelect }
 
           <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-300">
             <div className="text-xs text-gray-500">
-              Click to {isSelected ? 'deselect' : 'select'}
+              Click to {isSelected ? "deselect" : "select"}
             </div>
-            <button className="p-1 text-gray-500 hover:text-gray-700 rounded" title="Open source">
+            <button
+              className="p-1 text-gray-500 hover:text-gray-700 rounded"
+              title="Open source"
+            >
               <Link className="w-4 h-4" />
             </button>
           </div>
@@ -239,9 +270,7 @@ function DocumentContent({ item }) {
   }
 
   return (
-    <p className="text-sm text-gray-700">
-      {item.content?.slice(0, 200)}...
-    </p>
+    <p className="text-sm text-gray-700">{item.content?.slice(0, 200)}...</p>
   );
 }
 DocumentContent.propTypes = {
@@ -255,7 +284,9 @@ function CodeContent({ item }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center space-x-2 text-xs text-gray-600">
-        <span>Lines {item.start_line}-{item.end_line}</span>
+        <span>
+          Lines {item.start_line}-{item.end_line}
+        </span>
         <span>•</span>
         <span>{item.language}</span>
       </div>
@@ -280,14 +311,14 @@ export default function KnowledgeContextPanel({
   projectId,
   onDocumentSelect,
   onCodeSelect,
-  maxHeight = '400px'
+  maxHeight = "400px",
 }) {
   const [expanded, setExpanded] = useState(new Set());
   const [selected, setSelected] = useState(new Set());
   const { results, loading, error } = useKnowledgeSearch(projectId, query);
 
   const toggleExpanded = (id) => {
-    setExpanded(prev => {
+    setExpanded((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
         newSet.delete(id);
@@ -308,7 +339,7 @@ export default function KnowledgeContextPanel({
     setSelected(newSelected);
 
     // Call appropriate callback
-    if (item.type === 'document') {
+    if (item.type === "document") {
       onDocumentSelect?.(item);
     } else {
       onCodeSelect?.(item);
@@ -322,7 +353,12 @@ export default function KnowledgeContextPanel({
   }, [query]);
 
   if (!query || query.length < 3) {
-    return <EmptyState icon={FileText} message="Enter a search query to find relevant context" />;
+    return (
+      <EmptyState
+        icon={FileText}
+        message="Enter a search query to find relevant context"
+      />
+    );
   }
 
   if (loading) {
@@ -338,7 +374,7 @@ export default function KnowledgeContextPanel({
   }
 
   return (
-    <div className="space-y-4" style={{ maxHeight, overflow: 'auto' }}>
+    <div className="space-y-4" style={{ maxHeight, overflow: "auto" }}>
       {/* Summary */}
       <div className="px-4 py-3 bg-blue-50 rounded-lg">
         <div className="flex items-center space-x-2">
@@ -351,7 +387,7 @@ export default function KnowledgeContextPanel({
 
       {/* Results */}
       <div className="space-y-2">
-        {results.items.map(item => (
+        {results.items.map((item) => (
           <ResultItem
             key={item.id}
             item={item}

@@ -27,7 +27,9 @@ def simple_tokenizer_estimate(text: str) -> int:
     return len(text) // 4
 
 
-def split_long_text(text: str, max_tokens: int, tokenizer_fn=simple_tokenizer_estimate) -> Iterator[str]:
+def split_long_text(
+    text: str, max_tokens: int, tokenizer_fn=simple_tokenizer_estimate
+) -> Iterator[str]:
     """Split a single text into smaller chunks that fit within token limits.
 
     Args:
@@ -43,12 +45,12 @@ def split_long_text(text: str, max_tokens: int, tokenizer_fn=simple_tokenizer_es
         return
 
     # Try splitting by paragraphs first
-    paragraphs = text.split('\n\n')
+    paragraphs = text.split("\n\n")
     if len(paragraphs) > 1:
         current_chunk = ""
         for para in paragraphs:
             # Check if adding this paragraph would exceed the limit
-            test_chunk = current_chunk + ('\n\n' + para if current_chunk else para)
+            test_chunk = current_chunk + ("\n\n" + para if current_chunk else para)
             if tokenizer_fn(test_chunk) > max_tokens:
                 # Yield current chunk if it has content
                 if current_chunk:
@@ -69,11 +71,11 @@ def split_long_text(text: str, max_tokens: int, tokenizer_fn=simple_tokenizer_es
         return
 
     # Fallback: split by sentences
-    sentences = re.split(r'[.!?]+\s+', text)
+    sentences = re.split(r"[.!?]+\s+", text)
     if len(sentences) > 1:
         current_chunk = ""
         for sentence in sentences:
-            test_chunk = current_chunk + (' ' + sentence if current_chunk else sentence)
+            test_chunk = current_chunk + (" " + sentence if current_chunk else sentence)
             if tokenizer_fn(test_chunk) > max_tokens:
                 if current_chunk:
                     yield current_chunk
@@ -95,13 +97,15 @@ def split_long_text(text: str, max_tokens: int, tokenizer_fn=simple_tokenizer_es
     yield from _split_by_words(text, max_tokens, tokenizer_fn)
 
 
-def _split_by_words(text: str, max_tokens: int, tokenizer_fn=simple_tokenizer_estimate) -> Iterator[str]:
+def _split_by_words(
+    text: str, max_tokens: int, tokenizer_fn=simple_tokenizer_estimate
+) -> Iterator[str]:
     """Split text by words as a last resort."""
     words = text.split()
     current_chunk = ""
 
     for word in words:
-        test_chunk = current_chunk + (' ' + word if current_chunk else word)
+        test_chunk = current_chunk + (" " + word if current_chunk else word)
         if tokenizer_fn(test_chunk) > max_tokens:
             if current_chunk:
                 yield current_chunk
@@ -111,7 +115,7 @@ def _split_by_words(text: str, max_tokens: int, tokenizer_fn=simple_tokenizer_es
             if tokenizer_fn(word) > max_tokens:
                 # Truncate the word to fit
                 while tokenizer_fn(word) > max_tokens and len(word) > 10:
-                    word = word[:len(word) // 2]
+                    word = word[: len(word) // 2]
                 logger.warning("Truncated oversized word to fit token limit")
 
             current_chunk = word
@@ -123,10 +127,7 @@ def _split_by_words(text: str, max_tokens: int, tokenizer_fn=simple_tokenizer_es
 
 
 def iter_token_limited_batches(
-    chunks: List[str],
-    tokenizer,
-    limit: int,
-    safety: int = 200
+    chunks: List[str], tokenizer, limit: int, safety: int = 200
 ) -> Iterator[List[str]]:
     """Iterate over batches of text chunks that respect token limits.
 
@@ -144,9 +145,11 @@ def iter_token_limited_batches(
     effective_limit = limit - safety
 
     # Handle both tokenizer objects and functions
-    if hasattr(tokenizer, 'encode'):
+    if hasattr(tokenizer, "encode"):
+
         def count_tokens(text: str) -> int:
             return len(tokenizer.encode(text))
+
     else:
         count_tokens = tokenizer
 
@@ -157,7 +160,8 @@ def iter_token_limited_batches(
         if text_tokens > effective_limit:
             logger.warning(
                 "Text chunk with %d tokens exceeds limit %d, splitting",
-                text_tokens, effective_limit
+                text_tokens,
+                effective_limit,
             )
             for part in split_long_text(text, effective_limit, count_tokens):
                 yield [part]
@@ -178,6 +182,8 @@ def iter_token_limited_batches(
         yield batch
 
 
-def estimate_total_tokens(texts: List[str], tokenizer_fn=simple_tokenizer_estimate) -> int:
+def estimate_total_tokens(
+    texts: List[str], tokenizer_fn=simple_tokenizer_estimate
+) -> int:
     """Estimate total tokens for a list of texts."""
     return sum(tokenizer_fn(text) for text in texts)

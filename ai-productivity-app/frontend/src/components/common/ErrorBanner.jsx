@@ -1,4 +1,3 @@
-
 export default function ErrorBanner({ children }) {
   if (!children) return null;
   return (

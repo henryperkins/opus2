@@ -4,19 +4,19 @@
 // Each ProjectCard now links directly to the full project overview page.
 // -----------------------------------------------------------------------------
 
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 // Components & hooks
-import ProjectCard from '../components/projects/ProjectCard';
-import CreateProjectModal from '../components/projects/CreateProjectModal';
-import Timeline from '../components/projects/Timeline';
-import ProjectFilters from '../components/projects/ProjectFilters';
-import LoadingSpinner from '../components/common/LoadingSpinner';
-import Pagination from '../components/common/Pagination';
+import ProjectCard from "../components/projects/ProjectCard";
+import CreateProjectModal from "../components/projects/CreateProjectModal";
+import Timeline from "../components/projects/Timeline";
+import ProjectFilters from "../components/projects/ProjectFilters";
+import LoadingSpinner from "../components/common/LoadingSpinner";
+import Pagination from "../components/common/Pagination";
 
-import useProjectStore from '../stores/projectStore';
-import { useAuth } from '../hooks/useAuth';
+import useProjectStore from "../stores/projectStore";
+import { useAuth } from "../hooks/useAuth";
 
 export default function ProjectDashboard() {
   const navigate = useNavigate();
@@ -42,31 +42,36 @@ export default function ProjectDashboard() {
   // Local UI state
   // ---------------------------------------------------------------------------
   const [showCreateModal, setShowCreateModal] = useState(false);
-  
+
   // Debug logging
   useEffect(() => {
-    console.log('ProjectDashboard showCreateModal changed:', showCreateModal);
+    console.log("ProjectDashboard showCreateModal changed:", showCreateModal);
   }, [showCreateModal]);
-  
+
   useEffect(() => {
-    console.log('ProjectDashboard filters changed:', filters);
+    console.log("ProjectDashboard filters changed:", filters);
   }, [filters]);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [view, setView] = useState('grid'); // 'grid' | 'timeline'
+  const [view, setView] = useState("grid"); // 'grid' | 'timeline'
 
   // ---------------------------------------------------------------------------
   // Authentication – only fetch once user is known
   // ---------------------------------------------------------------------------
   const { user, loading: authLoading } = useAuth();
-  
+
   // Debug auth changes
   useEffect(() => {
-    console.log('ProjectDashboard auth state changed - user:', !!user, 'authLoading:', authLoading);
+    console.log(
+      "ProjectDashboard auth state changed - user:",
+      !!user,
+      "authLoading:",
+      authLoading,
+    );
   }, [user, authLoading]);
 
   useEffect(() => {
     if (!authLoading && user) fetchProjects();
-  }, [authLoading, user]);          // ← filters removed, callers are responsible
+  }, [authLoading, user]); // ← filters removed, callers are responsible
 
   // ---------------------------------------------------------------------------
   // Action handlers
@@ -77,7 +82,7 @@ export default function ProjectDashboard() {
       fetchProjects();
     } catch (err) {
       /* eslint-disable no-console */
-      console.error('Failed to archive project:', err);
+      console.error("Failed to archive project:", err);
     }
   };
 
@@ -86,24 +91,24 @@ export default function ProjectDashboard() {
       await unarchiveProject(projectId);
       fetchProjects();
     } catch (err) {
-      console.error('Failed to unarchive project:', err);
+      console.error("Failed to unarchive project:", err);
     }
   };
 
   const handleDelete = async (projectId) => {
-    if (window.confirm('Are you sure you want to delete this project?')) {
+    if (window.confirm("Are you sure you want to delete this project?")) {
       try {
         await deleteProject(projectId);
         fetchProjects();
       } catch (err) {
-        console.error('Failed to delete project:', err);
+        console.error("Failed to delete project:", err);
       }
     }
   };
 
   const handleProjectCreated = (project) => {
     if (import.meta.env.DEV) {
-      console.log('Project created:', project.name || project.id);
+      console.log("Project created:", project.name || project.id);
     }
     setShowCreateModal(false);
     fetchProjects();
@@ -116,8 +121,8 @@ export default function ProjectDashboard() {
   const handlePageChange = (newPage) => setPage(newPage);
 
   // Derived counts
-  const activeProjects = projects.filter((p) => p.status === 'active');
-  const archivedProjects = projects.filter((p) => p.status === 'archived');
+  const activeProjects = projects.filter((p) => p.status === "active");
+  const archivedProjects = projects.filter((p) => p.status === "archived");
 
   const totalPages = Math.ceil(totalProjects / filters.per_page);
 
@@ -138,7 +143,9 @@ export default function ProjectDashboard() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                navigate(`/projects/${project.id}/chat`, { state: { project } });
+                navigate(`/projects/${project.id}/chat`, {
+                  state: { project },
+                });
               }}
               className="p-1 bg-white rounded shadow hover:bg-gray-100"
               title="Open Chat"
@@ -158,7 +165,7 @@ export default function ProjectDashboard() {
               </svg>
             </button>
 
-            {project.status === 'active' && (
+            {project.status === "active" && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -183,7 +190,7 @@ export default function ProjectDashboard() {
               </button>
             )}
 
-            {project.status === 'archived' && (
+            {project.status === "archived" && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -218,7 +225,6 @@ export default function ProjectDashboard() {
   // ---------------------------------------------------------------------------
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-8 gradient-bg">
-
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Page header with quick stats */}
         <div className="flex justify-between items-center mb-8 animate-fade-in">
@@ -230,7 +236,7 @@ export default function ProjectDashboard() {
             <div className="flex items-center mt-2 space-x-4 text-sm">
               <div className="flex items-center text-gray-600 dark:text-gray-400">
                 <div className="w-2 h-2 bg-blue-500 rounded-full mr-2" />
-                {totalProjects} project{totalProjects !== 1 ? 's' : ''}
+                {totalProjects} project{totalProjects !== 1 ? "s" : ""}
               </div>
               <div className="flex items-center text-green-600 dark:text-green-400">
                 <div className="w-2 h-2 bg-green-500 rounded-full mr-2" />
@@ -247,13 +253,20 @@ export default function ProjectDashboard() {
           <div className="flex items-center space-x-4">
             <div className="flex bg-gray-200 rounded-lg p-1">
               <button
-                onClick={() => setView('grid')}
+                onClick={() => setView("grid")}
                 className={`px-3 py-1 rounded ${
-                  view === 'grid' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+                  view === "grid"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600"
                 }`}
                 aria-label="Grid view"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -263,13 +276,20 @@ export default function ProjectDashboard() {
                 </svg>
               </button>
               <button
-                onClick={() => setView('timeline')}
+                onClick={() => setView("timeline")}
                 className={`px-3 py-1 rounded ${
-                  view === 'timeline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+                  view === "timeline"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600"
                 }`}
                 aria-label="Timeline view"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -283,13 +303,23 @@ export default function ProjectDashboard() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                console.log('New Project button clicked');
+                console.log("New Project button clicked");
                 setShowCreateModal(true);
               }}
               className="btn btn-primary animate-bounce-in"
             >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+              <svg
+                className="w-4 h-4 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 4v16m8-8H4"
+                />
               </svg>
               New Project
             </button>
@@ -308,7 +338,7 @@ export default function ProjectDashboard() {
           <div className="bg-red-50 border border-red-200 rounded-md p-4">
             <p className="text-red-800">{error}</p>
           </div>
-        ) : view === 'grid' ? (
+        ) : view === "grid" ? (
           renderProjectGrid()
         ) : (
           <Timeline projectId={selectedProject?.id} />
@@ -325,10 +355,10 @@ export default function ProjectDashboard() {
       </div>
 
       {/* Create Project Modal */}
-      <CreateProjectModal 
+      <CreateProjectModal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)} 
-        onSuccess={handleProjectCreated} 
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={handleProjectCreated}
       />
     </div>
   );

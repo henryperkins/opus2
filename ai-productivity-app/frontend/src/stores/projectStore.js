@@ -4,8 +4,8 @@
  * Handles project CRUD operations, filtering, and optimistic updates
  * for a responsive user experience.
  */
-import { create } from 'zustand';
-import { projectAPI } from '../api/projects';
+import { create } from "zustand";
+import { projectAPI } from "../api/projects";
 
 const useProjectStore = create((set, get) => ({
   // State
@@ -19,9 +19,9 @@ const useProjectStore = create((set, get) => ({
   filters: {
     status: null,
     tags: [],
-    search: '',
+    search: "",
     page: 1,
-    per_page: 20
+    per_page: 20,
   },
   totalProjects: 0,
   lastFetch: null,
@@ -29,28 +29,28 @@ const useProjectStore = create((set, get) => ({
 
   // Actions (flattened to root level for easier access)
   setFilters: (newFilters) => {
-    set(state => ({
-      filters: { ...state.filters, ...newFilters, page: 1 }
+    set((state) => ({
+      filters: { ...state.filters, ...newFilters, page: 1 },
     }));
   },
 
   setPage: (page) => {
-    set(state => ({
-      filters: { ...state.filters, page }
+    set((state) => ({
+      filters: { ...state.filters, page },
     }));
   },
 
   fetchProjects: async (force = false) => {
     const { filters, fetchInProgress, lastFetch } = get();
-    
+
     // Prevent duplicate calls within 30 seconds unless forced
     const now = Date.now();
     if (!force && fetchInProgress) {
-      console.log('Project fetch already in progress, skipping...');
+      console.log("Project fetch already in progress, skipping...");
       return;
     }
-    if (!force && lastFetch && (now - lastFetch) < 30000) {
-      console.log('Recent project fetch found, skipping...');
+    if (!force && lastFetch && now - lastFetch < 30000) {
+      console.log("Recent project fetch found, skipping...");
       return;
     }
 
@@ -63,13 +63,13 @@ const useProjectStore = create((set, get) => ({
         totalProjects: response.total,
         loading: false,
         fetchInProgress: false,
-        lastFetch: now
+        lastFetch: now,
       });
     } catch (error) {
       set({
-        error: error.response?.data?.detail || 'Failed to fetch projects',
+        error: error.response?.data?.detail || "Failed to fetch projects",
         loading: false,
-        fetchInProgress: false
+        fetchInProgress: false,
       });
       throw error;
     }
@@ -82,13 +82,13 @@ const useProjectStore = create((set, get) => ({
       const project = await projectAPI.get(id);
       set({
         currentProject: project,
-        loading: false
+        loading: false,
       });
       return project;
     } catch (error) {
       set({
-        error: error.response?.data?.detail || 'Failed to fetch project',
-        loading: false
+        error: error.response?.data?.detail || "Failed to fetch project",
+        loading: false,
       });
       throw error;
     }
@@ -102,36 +102,34 @@ const useProjectStore = create((set, get) => ({
     const tempProject = {
       ...data,
       id: tempId,
-      status: data.status || 'active',
-      owner: { id: 0, username: 'You' },
+      status: data.status || "active",
+      owner: { id: 0, username: "You" },
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
-    set(state => ({
+    set((state) => ({
       projects: [tempProject, ...state.projects],
-      totalProjects: state.totalProjects + 1
+      totalProjects: state.totalProjects + 1,
     }));
 
     try {
       const project = await projectAPI.create(data);
 
       // Replace temp with real project
-      set(state => ({
-        projects: state.projects.map(p =>
-          p.id === tempId ? project : p
-        ),
-        loading: false
+      set((state) => ({
+        projects: state.projects.map((p) => (p.id === tempId ? project : p)),
+        loading: false,
       }));
 
       return project;
     } catch (error) {
       // Rollback optimistic update
-      set(state => ({
-        projects: state.projects.filter(p => p.id !== tempId),
+      set((state) => ({
+        projects: state.projects.filter((p) => p.id !== tempId),
         totalProjects: state.totalProjects - 1,
-        error: error.response?.data?.detail || 'Failed to create project',
-        loading: false
+        error: error.response?.data?.detail || "Failed to create project",
+        loading: false,
       }));
       throw error;
     }
@@ -142,37 +140,40 @@ const useProjectStore = create((set, get) => ({
 
     // Store original for rollback
     const { projects } = get();
-    const original = projects.find(p => p.id === id);
+    const original = projects.find((p) => p.id === id);
 
     if (!original) {
-      set({ error: 'Project not found', loading: false });
+      set({ error: "Project not found", loading: false });
       return;
     }
 
     // Optimistic update
-    set(state => ({
-      projects: state.projects.map(p =>
-        p.id === id ? { ...p, ...data, updated_at: new Date().toISOString() } : p
-      )
+    set((state) => ({
+      projects: state.projects.map((p) =>
+        p.id === id
+          ? { ...p, ...data, updated_at: new Date().toISOString() }
+          : p,
+      ),
     }));
 
     try {
       const updated = await projectAPI.update(id, data);
 
       // Replace with server response
-      set(state => ({
-        projects: state.projects.map(p => p.id === id ? updated : p),
-        currentProject: state.currentProject?.id === id ? updated : state.currentProject,
-        loading: false
+      set((state) => ({
+        projects: state.projects.map((p) => (p.id === id ? updated : p)),
+        currentProject:
+          state.currentProject?.id === id ? updated : state.currentProject,
+        loading: false,
       }));
 
       return updated;
     } catch (error) {
       // Rollback
-      set(state => ({
-        projects: state.projects.map(p => p.id === id ? original : p),
-        error: error.response?.data?.detail || 'Failed to update project',
-        loading: false
+      set((state) => ({
+        projects: state.projects.map((p) => (p.id === id ? original : p)),
+        error: error.response?.data?.detail || "Failed to update project",
+        loading: false,
       }));
       throw error;
     }
@@ -183,13 +184,13 @@ const useProjectStore = create((set, get) => ({
 
     // Store for rollback
     const { projects, totalProjects } = get();
-    const original = projects.find(p => p.id === id);
-    const originalIndex = projects.findIndex(p => p.id === id);
+    const original = projects.find((p) => p.id === id);
+    const originalIndex = projects.findIndex((p) => p.id === id);
 
     // Optimistic delete
-    set(state => ({
-      projects: state.projects.filter(p => p.id !== id),
-      totalProjects: state.totalProjects - 1
+    set((state) => ({
+      projects: state.projects.filter((p) => p.id !== id),
+      totalProjects: state.totalProjects - 1,
     }));
 
     try {
@@ -198,14 +199,14 @@ const useProjectStore = create((set, get) => ({
     } catch (error) {
       // Rollback
       if (original && originalIndex >= 0) {
-        set(state => {
+        set((state) => {
           const newProjects = [...state.projects];
           newProjects.splice(originalIndex, 0, original);
           return {
             projects: newProjects,
             totalProjects: totalProjects,
-            error: error.response?.data?.detail || 'Failed to delete project',
-            loading: false
+            error: error.response?.data?.detail || "Failed to delete project",
+            loading: false,
           };
         });
       }
@@ -215,12 +216,12 @@ const useProjectStore = create((set, get) => ({
 
   archiveProject: async (id) => {
     const { updateProject } = get();
-    return updateProject(id, { status: 'archived' });
+    return updateProject(id, { status: "archived" });
   },
 
   unarchiveProject: async (id) => {
     const { updateProject } = get();
-    return updateProject(id, { status: 'active' });
+    return updateProject(id, { status: "active" });
   },
 
   fetchTimeline: async (projectId) => {
@@ -230,12 +231,13 @@ const useProjectStore = create((set, get) => ({
       const timeline = await projectAPI.getTimeline(projectId);
       set({
         timeline,
-        timelineLoading: false
+        timelineLoading: false,
       });
     } catch (error) {
       set({
-        timelineError: error.response?.data?.detail || 'Failed to fetch timeline',
-        timelineLoading: false
+        timelineError:
+          error.response?.data?.detail || "Failed to fetch timeline",
+        timelineLoading: false,
       });
       throw error; // Re-throw to allow caller to handle
     }
@@ -245,13 +247,18 @@ const useProjectStore = create((set, get) => ({
     // Don't set loading state for adding events - it's non-blocking
     try {
       const newEvent = await projectAPI.addTimelineEvent(projectId, eventData);
-      set(state => ({
-        timeline: [...state.timeline, newEvent].sort((a, b) => new Date(b.created_at || b.timestamp) - new Date(a.created_at || a.timestamp))
+      set((state) => ({
+        timeline: [...state.timeline, newEvent].sort(
+          (a, b) =>
+            new Date(b.created_at || b.timestamp) -
+            new Date(a.created_at || a.timestamp),
+        ),
       }));
       return newEvent;
     } catch (error) {
       set({
-        timelineError: error.response?.data?.detail || 'Failed to add timeline event'
+        timelineError:
+          error.response?.data?.detail || "Failed to add timeline event",
       });
       throw error;
     }
@@ -259,7 +266,8 @@ const useProjectStore = create((set, get) => ({
 
   clearError: () => set({ error: null }),
   clearTimelineError: () => set({ timelineError: null }),
-  clearTimeline: () => set({ timeline: [], timelineError: null, timelineLoading: false })
+  clearTimeline: () =>
+    set({ timeline: [], timelineError: null, timelineLoading: false }),
 }));
 
 export default useProjectStore;

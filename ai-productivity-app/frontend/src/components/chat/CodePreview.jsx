@@ -1,5 +1,5 @@
-import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { atomOneDark } from 'react-syntax-highlighter/dist/cjs/styles/hljs/atom-one-dark';
+import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
+import { atomOneDark } from "react-syntax-highlighter/dist/cjs/styles/hljs/atom-one-dark";
 
 export default function CodePreview({ snippets, onApply }) {
   if (!snippets || snippets.length === 0) return null;
@@ -33,10 +33,10 @@ export default function CodePreview({ snippets, onApply }) {
                 style={atomOneDark}
                 customStyle={{
                   margin: 0,
-                  padding: '0.5rem',
-                  fontSize: '0.75rem',
-                  maxHeight: '150px',
-                  overflow: 'auto'
+                  padding: "0.5rem",
+                  fontSize: "0.75rem",
+                  maxHeight: "150px",
+                  overflow: "auto",
                 }}
               >
                 {snippet.code}

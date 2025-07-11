@@ -3,6 +3,7 @@
 Includes status tracking, visual customization (color/emoji), tags,
 and relationship to timeline events for comprehensive project management.
 """
+
 from sqlalchemy import Column, Enum, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship, validates
 from sqlalchemy.ext.mutable import MutableList
@@ -29,6 +30,7 @@ import re
 
 class ProjectStatus(enum.Enum):
     """Project status enumeration."""
+
     ACTIVE = "active"
     ARCHIVED = "archived"
     COMPLETED = "completed"
@@ -43,51 +45,30 @@ class Project(Base, TimestampMixin):
     # Database vendors create indexes automatically for primary and unique
     # keys which is sufficient for the lightweight unit-test workload.
 
-    __table_args__ = (
-        {"extend_existing": True},
-    )
+    __table_args__ = ({"extend_existing": True},)
 
     id = Column(Integer, primary_key=True)
-    title = Column(
-        String(200),
-        nullable=False,
-        comment="Project title"
-    )
-    description = Column(
-        Text,
-        comment="Project description"
-    )
+    title = Column(String(200), nullable=False, comment="Project title")
+    description = Column(Text, comment="Project description")
     status = Column(
         Enum(ProjectStatus),
         default=ProjectStatus.ACTIVE,
         nullable=False,
-        comment="Project status"
+        comment="Project status",
     )
     owner_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        comment="User who created the project"
+        comment="User who created the project",
     )
 
     # Visual customization
-    color = Column(
-        String(7),
-        default="#3B82F6",
-        comment="Hex color for project"
-    )
-    emoji = Column(
-        String(10),
-        default="📁",
-        comment="Emoji for project"
-    )
+    color = Column(String(7), default="#3B82F6", comment="Hex color for project")
+    emoji = Column(String(10), default="📁", comment="Emoji for project")
 
     # Metadata
-    tags = Column(
-        MutableList.as_mutable(JSON),
-        default=list,
-        comment="Project tags"
-    )
+    tags = Column(MutableList.as_mutable(JSON), default=list, comment="Project tags")
 
     # Relationships
     owner = relationship("User", back_populates="projects")
@@ -95,12 +76,10 @@ class Project(Base, TimestampMixin):
         "TimelineEvent",
         back_populates="project",
         cascade="all, delete-orphan",
-        order_by="TimelineEvent.created_at.desc()"
+        order_by="TimelineEvent.created_at.desc()",
     )
     chat_sessions = relationship(
-        "ChatSession",
-        back_populates="project",
-        cascade="all, delete-orphan"
+        "ChatSession", back_populates="project", cascade="all, delete-orphan"
     )
 
     # Import jobs
@@ -122,7 +101,7 @@ class Project(Base, TimestampMixin):
     @validates("color")
     def validate_color(self, key, color):
         """Validate hex color format."""
-        if color and not re.match(r'^#[0-9A-Fa-f]{6}$', color):
+        if color and not re.match(r"^#[0-9A-Fa-f]{6}$", color):
             raise ValueError("Color must be a valid hex color (e.g., #3B82F6)")
         return color
 
@@ -152,4 +131,6 @@ class Project(Base, TimestampMixin):
         return True
 
     def __repr__(self):
-        return f"<Project(id={self.id}, title='{self.title}', status={self.status.value})>"
+        return (
+            f"<Project(id={self.id}, title='{self.title}', status={self.status.value})>"
+        )

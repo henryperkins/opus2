@@ -7,6 +7,7 @@ Contains:
 • create_session      – persist login session and return it
 • get_current_user    – FastAPI dependency to retrieve authenticated user
 """
+
 from __future__ import annotations
 
 import datetime
@@ -87,7 +88,9 @@ def create_user(
     return user
 
 
-def create_session(db: DBSession, user: User, jti: str, ttl_minutes: int = 60) -> Session:  # noqa: W0613
+def create_session(
+    db: DBSession, user: User, jti: str, ttl_minutes: int = 60
+) -> Session:  # noqa: W0613
     """Persist login session and return it."""
     session = Session(user_id=user.id, jti=jti)
     db.add(session)
@@ -108,6 +111,7 @@ def send_welcome_email(email: str, username: str) -> None:
         username: User's username
     """
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info("Welcome email sent to %s (username: %s)", email, username)
 
@@ -162,9 +166,7 @@ def is_session_active(db: DBSession, jti: str) -> bool:
     return session.is_active
 
 
-def cleanup_expired_sessions(
-    db: DBSession, user_id: Optional[int] = None
-) -> int:
+def cleanup_expired_sessions(db: DBSession, user_id: Optional[int] = None) -> int:
     """
     Clean up old/expired sessions. This can be called periodically.
 
@@ -176,9 +178,9 @@ def cleanup_expired_sessions(
         int: Number of sessions cleaned up
     """
     # Remove sessions older than 30 days
-    cutoff_date = datetime.datetime.now(
-        datetime.timezone.utc
-    ) - datetime.timedelta(days=30)
+    cutoff_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+        days=30
+    )
 
     query = db.query(Session).filter(Session.created_at < cutoff_date)
     if user_id:
@@ -189,6 +191,7 @@ def cleanup_expired_sessions(
     db.commit()
 
     return count
+
 
 # ---------------------------------------------------------------------------
 # Registration / invite helpers
@@ -245,15 +248,15 @@ def get_current_user(
     elif access_cookie:
         token = access_cookie
 
-# ---------------------------------------------------------------------
-# Testing convenience: allow deterministic "test_token_<user_id>" values
-# ---------------------------------------------------------------------
-# The automated test-suite uses static bearer tokens such as
-#     Authorization: Bearer test_token_1
-# to avoid the overhead of generating real JWTs for every request.
-# To keep production security unchanged *and* satisfy the tests we
-# transparently detect this pattern and short-circuit the normal JWT
-# decoding flow.
+    # ---------------------------------------------------------------------
+    # Testing convenience: allow deterministic "test_token_<user_id>" values
+    # ---------------------------------------------------------------------
+    # The automated test-suite uses static bearer tokens such as
+    #     Authorization: Bearer test_token_1
+    # to avoid the overhead of generating real JWTs for every request.
+    # To keep production security unchanged *and* satisfy the tests we
+    # transparently detect this pattern and short-circuit the normal JWT
+    # decoding flow.
 
     if not token:
         raise HTTPException(

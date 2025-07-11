@@ -5,6 +5,7 @@ import logging
 from openai import AsyncOpenAI
 
 from .base import LLMProvider
+
 # Helper for parameter construction
 # Shared helpers for parameter construction **and** response parsing
 from .utils import (
@@ -29,7 +30,7 @@ class OpenAIProvider(LLMProvider):
         self.client = AsyncOpenAI(
             api_key=api_key,
             timeout=self.config.get("timeout", 300),
-            max_retries=0  # We handle retries at a higher level
+            max_retries=0,  # We handle retries at a higher level
         )
 
     async def complete(
@@ -42,7 +43,7 @@ class OpenAIProvider(LLMProvider):
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[str | Dict[str, Any]] = None,
         parallel_tool_calls: bool = True,
-        **kwargs
+        **kwargs,
     ) -> Any:
         """Execute OpenAI completion."""
 
@@ -55,67 +56,80 @@ class OpenAIProvider(LLMProvider):
             tools=tools,
             tool_choice=tool_choice,
             parallel_tool_calls=parallel_tool_calls,
-            **kwargs
+            **kwargs,
         )
 
-        logger.debug(f"OpenAI request: model={model}, stream={stream}, tools={len(tools or [])}")
+        logger.debug(
+            f"OpenAI request: model={model}, stream={stream}, tools={len(tools or [])}"
+        )
 
         return await self.client.chat.completions.create(**params)
 
     async def stream(self, response: Any) -> AsyncIterator[str]:
         """Stream response content and tool calls."""
         tool_call_buffer = {}  # Buffer for accumulating tool call deltas
-        
+
         async for chunk in response:
             if not chunk.choices:
                 continue
-                
+
             delta = chunk.choices[0].delta
-            
+
             # Handle content streaming
             if delta.content:
                 yield delta.content
-            
+
             # Handle tool call streaming
             if delta.tool_calls:
                 for tool_call_delta in delta.tool_calls:
                     index = tool_call_delta.index
-                    
+
                     # Initialize tool call buffer for this index if needed
                     if index not in tool_call_buffer:
                         tool_call_buffer[index] = {
                             "id": "",
                             "type": "function",
-                            "function": {"name": "", "arguments": ""}
+                            "function": {"name": "", "arguments": ""},
                         }
-                    
+
                     # Accumulate deltas
                     if tool_call_delta.id:
                         tool_call_buffer[index]["id"] += tool_call_delta.id
-                    
+
                     if tool_call_delta.function:
                         if tool_call_delta.function.name:
-                            tool_call_buffer[index]["function"]["name"] += tool_call_delta.function.name
+                            tool_call_buffer[index]["function"][
+                                "name"
+                            ] += tool_call_delta.function.name
                         if tool_call_delta.function.arguments:
-                            tool_call_buffer[index]["function"]["arguments"] += tool_call_delta.function.arguments
-                    
+                            tool_call_buffer[index]["function"][
+                                "arguments"
+                            ] += tool_call_delta.function.arguments
+
                     # Yield tool call updates as formatted text
                     tool_call = tool_call_buffer[index]
-                    if tool_call["function"]["name"] and tool_call["function"]["arguments"]:
+                    if (
+                        tool_call["function"]["name"]
+                        and tool_call["function"]["arguments"]
+                    ):
                         # Only yield when we have complete function info
                         function_name = tool_call["function"]["name"]
                         try:
                             import json
+
                             args = json.loads(tool_call["function"]["arguments"])
                             tool_text = f"\n[Calling {function_name} with {args}]\n"
                         except json.JSONDecodeError:
                             # Arguments still being streamed
                             tool_text = f"\n[Calling {function_name}...]\n"
-                        
+
                         yield tool_text
-                        
+
             # Handle finish reason for tool calls
-            if hasattr(chunk.choices[0], "finish_reason") and chunk.choices[0].finish_reason == "tool_calls":
+            if (
+                hasattr(chunk.choices[0], "finish_reason")
+                and chunk.choices[0].finish_reason == "tool_calls"
+            ):
                 if tool_call_buffer:
                     yield "\n[Tool calls completed]\n"
 
@@ -131,7 +145,9 @@ class OpenAIProvider(LLMProvider):
     # Capability descriptor ---------------------------------------------
     # ------------------------------------------------------------------
 
-    def get_model_info(self, model: str) -> Dict[str, Any]:  # noqa: D401 – simple description
+    def get_model_info(
+        self, model: str
+    ) -> Dict[str, Any]:  # noqa: D401 – simple description
         """Return capability flags for the given *model*.
 
         We assume that *all* current OpenAI Chat Completion models support

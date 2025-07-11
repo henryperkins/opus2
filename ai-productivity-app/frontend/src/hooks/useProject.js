@@ -1,6 +1,6 @@
 // frontend/src/hooks/useProject.js
-import { useState, useEffect } from 'react';
-import { projectAPI } from '../api/projects';
+import { useState, useEffect } from "react";
+import { projectAPI } from "../api/projects";
 
 export function useProject(projectId) {
   const [project, setProject] = useState(null);
@@ -20,8 +20,8 @@ export function useProject(projectId) {
       const projectData = await projectAPI.get(projectId);
       setProject(projectData);
     } catch (err) {
-      setError('Failed to load project');
-      console.error('Failed to load project:', err);
+      setError("Failed to load project");
+      console.error("Failed to load project:", err);
     } finally {
       setLoading(false);
     }

@@ -11,8 +11,8 @@
 // NOTE: This file is the first step of the Phase-2 frontend auth layer.
 // Subsequent commits will add AuthContext, hooks, components, tests.
 
-import axios from 'axios';
-import { queryClient } from '../queryClient.js';
+import axios from "axios";
+import { queryClient } from "../queryClient.js";
 
 // -----------------------------------------------------------------------------
 // Configuration
@@ -37,7 +37,7 @@ import { queryClient } from '../queryClient.js';
  *     (assuming the backend also supports HTTPS on the same host/port).
  *  3. Fallback to relative '/' which relies on same-origin or reverse-proxy routing.
  */
-let resolvedBaseUrl = '/';
+let resolvedBaseUrl = "/";
 const envUrl = import.meta.env.VITE_API_URL;
 
 /**
@@ -73,8 +73,8 @@ if (envUrl) {
     //   • If the page is HTTPS and the backend URL is HTTP → **always**
     //     upgrade to HTTPS.
     //   • Otherwise leave the URL untouched.
-    if (window.location.protocol === 'https:' && urlObj.protocol === 'http:') {
-      urlObj.protocol = 'https:';
+    if (window.location.protocol === "https:" && urlObj.protocol === "http:") {
+      urlObj.protocol = "https:";
     }
 
     // At this point the protocol matches the page’s protocol, or the page is
@@ -97,20 +97,18 @@ const client = axios.create({
 // -----------------------------------------------------------------------------
 
 function getCookie(name) {
-  const match = document.cookie.match(
-    new RegExp('(^| )' + name + '=([^;]+)')
-  );
+  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
   return match ? decodeURIComponent(match[2]) : null;
 }
 
 function attachCsrf(config) {
-  const csrfToken = getCookie('csrftoken');
-  const mutating = ['post', 'put', 'patch', 'delete'];
+  const csrfToken = getCookie("csrftoken");
+  const mutating = ["post", "put", "patch", "delete"];
 
   if (csrfToken && mutating.includes(config.method?.toLowerCase())) {
     // Ensure headers object exists
     config.headers = config.headers || {};
-    config.headers['X-CSRFToken'] = csrfToken;
+    config.headers["X-CSRFToken"] = csrfToken;
   }
 
   return config;
@@ -149,24 +147,28 @@ client.interceptors.request.use(
 
     // Optional request logging in development
     if (import.meta.env.DEV && import.meta.env.VITE_API_DEBUG) {
-      console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+      console.log(
+        `🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`,
+      );
     }
 
     return config;
   },
   (error) => {
     if (import.meta.env.DEV) {
-      console.error('❌ Request Error:', error);
+      console.error("❌ Request Error:", error);
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 client.interceptors.response.use(
   (resp) => {
     // Optional response logging in development
     if (import.meta.env.DEV && import.meta.env.VITE_API_DEBUG) {
-      console.log(`✅ API Response: ${resp.status} ${resp.config.method?.toUpperCase()} ${resp.config.url}`);
+      console.log(
+        `✅ API Response: ${resp.status} ${resp.config.method?.toUpperCase()} ${resp.config.url}`,
+      );
     }
     return resp;
   },
@@ -189,16 +191,16 @@ client.interceptors.response.use(
     // out via `authAPI.logout()` (that path still calls `queryClient.clear()`).
     if (response && response.status === 401) {
       if (queryClient) {
-        queryClient.setQueryData(['me'], null);
+        queryClient.setQueryData(["me"], null);
       }
-      window.dispatchEvent(new CustomEvent('auth:logout'));
+      window.dispatchEvent(new CustomEvent("auth:logout"));
     }
 
     // Provide clearer messages for backend availability issues
     if (response && response.status === 503) {
       // Service unavailable – often database down or migrations pending
       error.message =
-        'Service temporarily unavailable. Please ensure the backend and database are running.';
+        "Service temporarily unavailable. Please ensure the backend and database are running.";
     }
 
     // ---------------------------------------------------------------------
@@ -222,8 +224,9 @@ client.interceptors.response.use(
         // Collect human-readable messages, prefer the `msg` field, fall back to JSON stringification
         const messages = detail
           .map((item) => {
-            if (typeof item === 'string') return item;
-            if (item && typeof item === 'object' && 'msg' in item) return item.msg;
+            if (typeof item === "string") return item;
+            if (item && typeof item === "object" && "msg" in item)
+              return item.msg;
             try {
               return JSON.stringify(item);
             } catch {
@@ -231,43 +234,46 @@ client.interceptors.response.use(
             }
           })
           .filter(Boolean)
-          .join('; ');
+          .join("; ");
 
-        response.data.detail = messages || 'Validation error';
+        response.data.detail = messages || "Validation error";
       }
 
       // Case 2: Single error object
       if (
         !Array.isArray(detail) &&
-        typeof detail === 'object' &&
+        typeof detail === "object" &&
         detail !== null
       ) {
-        const message = 'msg' in detail ? detail.msg : JSON.stringify(detail);
+        const message = "msg" in detail ? detail.msg : JSON.stringify(detail);
         response.data.detail = message;
       }
     }
 
     // Handle generic network / CORS errors (no response object present)
-    if (!response && error.code === 'ERR_NETWORK') {
+    if (!response && error.code === "ERR_NETWORK") {
       error.message =
-        'Network error. Unable to reach backend server. Check that it is running and not blocked by CORS.';
+        "Network error. Unable to reach backend server. Check that it is running and not blocked by CORS.";
     }
 
     // Handle timeout errors
-    if (!response && error.code === 'ECONNABORTED') {
+    if (!response && error.code === "ECONNABORTED") {
       error.message =
-        'Request timeout. The server is taking too long to respond.';
+        "Request timeout. The server is taking too long to respond.";
     }
 
     // Handle connection refused errors (common in development)
-    if (!response && (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED'))) {
+    if (
+      !response &&
+      (error.code === "ECONNREFUSED" || error.message.includes("ECONNREFUSED"))
+    ) {
       error.message =
-        'Connection refused. Backend server may not be running on the expected port.';
+        "Connection refused. Backend server may not be running on the expected port.";
     }
 
     // Retry transient 5xx
     return retryRequest(error);
-  }
+  },
 );
 
 export default client;

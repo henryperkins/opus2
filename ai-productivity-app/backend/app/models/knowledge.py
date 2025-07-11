@@ -10,39 +10,25 @@ from .project import Project
 class KnowledgeDocument(Base, TimestampMixin):
     """Represents a knowledge base document with full content."""
 
-    __tablename__ = 'knowledge_documents'
+    __tablename__ = "knowledge_documents"
     __table_args__ = (
         # Indexes for efficient queries
-        Index('idx_knowledge_project', 'project_id'),
-        Index('idx_knowledge_title', 'title'),
+        Index("idx_knowledge_project", "project_id"),
+        Index("idx_knowledge_title", "title"),
         {"extend_existing": True},
     )
 
     id = Column(String(100), primary_key=True, comment="Unique knowledge entry ID")
     project_id = Column(
         Integer,
-        ForeignKey('projects.id', ondelete='CASCADE'),
+        ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
-        comment="Associated project"
+        comment="Associated project",
     )
-    content = Column(
-        Text,
-        nullable=False,
-        comment="Full knowledge document content"
-    )
-    title = Column(
-        String(500),
-        nullable=False,
-        comment="Document title"
-    )
-    source = Column(
-        String(500),
-        comment="Source of the knowledge (file, URL, etc.)"
-    )
-    category = Column(
-        String(100),
-        comment="Knowledge category"
-    )
+    content = Column(Text, nullable=False, comment="Full knowledge document content")
+    title = Column(String(500), nullable=False, comment="Document title")
+    source = Column(String(500), comment="Source of the knowledge (file, URL, etc.)")
+    category = Column(String(100), comment="Knowledge category")
 
     # Relationships
     project = relationship("Project", back_populates="knowledge_documents")
@@ -69,7 +55,5 @@ class KnowledgeDocument(Base, TimestampMixin):
 
 # Update Project model relationship
 Project.knowledge_documents = relationship(
-    "KnowledgeDocument",
-    back_populates="project",
-    cascade="all, delete-orphan"
+    "KnowledgeDocument", back_populates="project", cascade="all, delete-orphan"
 )

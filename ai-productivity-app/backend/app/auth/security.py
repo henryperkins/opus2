@@ -72,6 +72,7 @@ except ModuleNotFoundError:  # pragma: no cover – fallback stubs
 
 
 from fastapi import HTTPException, status
+
 # SlowAPI limiter will use Redis so that limits are shared across gunicorn
 # workers.  We dynamically derive the connection URL from the same helper that
 # the rest of the application uses to talk to Redis to avoid configuration
@@ -132,17 +133,20 @@ except ModuleNotFoundError:  # pragma: no cover
             return base64.urlsafe_b64decode(data + padding)
 
         @staticmethod
-        def encode(payload: Dict[str, Any], secret: str, algorithm: str = "HS256") -> str:  # noqa: D401
+        def encode(
+            payload: Dict[str, Any], secret: str, algorithm: str = "HS256"
+        ) -> str:  # noqa: D401
             header = {"alg": algorithm, "typ": "JWT"}
             segments = [
                 _FakeJWTModule._b64url_encode(json.dumps(header).encode()),
                 _FakeJWTModule._b64url_encode(json.dumps(payload).encode()),
             ]
             signing_input = ".".join(segments).encode()
-            signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+            signature = hmac.new(
+                secret.encode(), signing_input, hashlib.sha256
+            ).digest()
             segments.append(_FakeJWTModule._b64url_encode(signature))
             return ".".join(segments)
-
 
         # Accept *algorithms* kwarg for compatibility with python-jose API
         @staticmethod
@@ -160,7 +164,9 @@ except ModuleNotFoundError:  # pragma: no cover
                 raise JWTError("Invalid token structure") from exc
 
             signing_input = f"{header_b64}.{payload_b64}".encode()
-            expected_sig = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+            expected_sig = hmac.new(
+                secret.encode(), signing_input, hashlib.sha256
+            ).digest()
             actual_sig = _FakeJWTModule._b64url_decode(signature_b64)
             if not hmac.compare_digest(expected_sig, actual_sig):
                 raise JWTError("Signature verification failed")
@@ -184,7 +190,9 @@ _RATE_WINDOW_SECONDS = 60.0
 _RATE_MAX_ATTEMPTS = 5
 
 
-def enforce_rate_limit(key: str, *, limit: int = _RATE_MAX_ATTEMPTS, window: float = _RATE_WINDOW_SECONDS) -> None:
+def enforce_rate_limit(
+    key: str, *, limit: int = _RATE_MAX_ATTEMPTS, window: float = _RATE_WINDOW_SECONDS
+) -> None:
     """Raise 429 if *key* exceeds *limit* hits in the preceding *window* seconds."""
     now = time.time()
     bucket = _AUTH_RATE_LIMIT.setdefault(key, [])
@@ -195,6 +203,7 @@ def enforce_rate_limit(key: str, *, limit: int = _RATE_MAX_ATTEMPTS, window: flo
             detail=f"Too many attempts. Please wait {int(window/60)} minute(s) before trying again.",
         )
     bucket.append(now)
+
 
 # -----------------------------------------------------------------------------
 # SlowAPI Limiter instance (used by middleware/security.py)
@@ -211,7 +220,6 @@ limiter: "Limiter" = Limiter(  # type: ignore[name-defined]
     key_func=get_remote_address,
     storage_uri=_redis_url() if _HAS_SLOWAPI else None,
 )
-
 
 
 # -----------------------------------------------------------------------------
@@ -255,12 +263,12 @@ def validate_csrf(request) -> None:
     if not cookie_token or not header_token:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="CSRF protection failed. Please refresh the page and try again."
+            detail="CSRF protection failed. Please refresh the page and try again.",
         )
     if not hmac.compare_digest(cookie_token, header_token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="CSRF token validation failed. Please refresh the page and try again."
+            detail="CSRF token validation failed. Please refresh the page and try again.",
         )
 
 
@@ -283,7 +291,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 ACCESS_COOKIE_NAME = "access_token"
 
 
-def create_access_token(payload: Dict[str, Any], *, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    payload: Dict[str, Any], *, expires_delta: Optional[timedelta] = None
+) -> str:
     """Return a signed JWT (never mutates *payload*)."""
     now = datetime.now(timezone.utc)
     exp_delta = expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
@@ -293,13 +303,17 @@ def create_access_token(payload: Dict[str, Any], *, expires_delta: Optional[time
         "exp": int((now + exp_delta).timestamp()),
         "jti": payload.get("jti", secrets.token_urlsafe(32)),
     }
-    return jwt.encode(to_encode, settings.effective_secret_key, algorithm=settings.algorithm)
+    return jwt.encode(
+        to_encode, settings.effective_secret_key, algorithm=settings.algorithm
+    )
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
     """Return payload if *token* is valid, else raise 401."""
     try:
-        return jwt.decode(token, settings.effective_secret_key, algorithms=[settings.algorithm])
+        return jwt.decode(
+            token, settings.effective_secret_key, algorithms=[settings.algorithm]
+        )
     except JWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

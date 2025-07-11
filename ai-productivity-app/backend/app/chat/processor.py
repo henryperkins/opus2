@@ -371,14 +371,18 @@ class ChatProcessor:
             tool_choice="auto",
             parallel_tool_calls=True,
             reasoning=(
-                self.config_service.get_current_config().enable_reasoning if not is_reasoning_model else None
+                self.config_service.get_current_config().enable_reasoning
+                if not is_reasoning_model
+                else None
             ),
             max_tokens=cfg.get("max_tokens"),
         )
 
         # Use enhanced handler for streaming with tool support
         handler = EnhancedStreamingHandler(websocket)
-        full_response, tool_calls = await handler.stream_response_with_tools(stream, ai_msg.id)
+        full_response, tool_calls = await handler.stream_response_with_tools(
+            stream, ai_msg.id
+        )
 
         # Process any tool calls that came through
         rounds = 0
@@ -387,12 +391,14 @@ class ChatProcessor:
             logger.info(f"Processing {len(tool_calls)} tool calls (round {rounds})")
 
             # Notify client about tool execution
-            await websocket.send_json({
-                'type': 'ai_tools_executing',
-                'message_id': ai_msg.id,
-                'tool_count': len(tool_calls),
-                'tools': [{"name": tc["name"]} for tc in tool_calls]
-            })
+            await websocket.send_json(
+                {
+                    "type": "ai_tools_executing",
+                    "message_id": ai_msg.id,
+                    "tool_count": len(tool_calls),
+                    "tools": [{"name": tc["name"]} for tc in tool_calls],
+                }
+            )
 
             # Execute tools in parallel
             tool_results = await self._run_parallel_tool_calls(tool_calls)
@@ -411,7 +417,9 @@ class ChatProcessor:
 
             # Continue streaming
             handler = EnhancedStreamingHandler(websocket)
-            tool_response, tool_calls = await handler.stream_response_with_tools(stream, ai_msg.id)
+            tool_response, tool_calls = await handler.stream_response_with_tools(
+                stream, ai_msg.id
+            )
             full_response += "\n\n" + tool_response if full_response else tool_response
 
         if rounds >= MAX_TOOL_CALL_ROUNDS:
@@ -421,7 +429,7 @@ class ChatProcessor:
         # Add confidence warnings if needed
         # ------------------------------------------------------------------ #
         enhanced_response = await self._add_confidence_warnings(full_response, context)
-        
+
         # ------------------------------------------------------------------ #
         # Persist and broadcast
         # ------------------------------------------------------------------ #
@@ -447,7 +455,7 @@ class ChatProcessor:
     ) -> str:
         """Add confidence warnings to response if needed."""
         rag_metadata = context.get("rag_metadata", {})
-        
+
         if not rag_metadata.get("rag_used", False):
             # No RAG was used - add a general disclaimer for knowledge-based questions
             if self._seems_like_knowledge_question(response):
@@ -458,13 +466,13 @@ class ChatProcessor:
                 )
                 return response + warning
             return response
-            
+
         rag_confidence = rag_metadata.get("rag_confidence")
         rag_status = rag_metadata.get("rag_status", "standard")
         knowledge_sources_count = rag_metadata.get("knowledge_sources_count", 0)
-        
+
         warnings = []
-        
+
         # Low confidence warnings
         if rag_confidence is not None:
             if rag_confidence < 0.3:
@@ -477,7 +485,7 @@ class ChatProcessor:
                     "⚠️ **Moderate Confidence**: This response may not be fully comprehensive. "
                     "Consider checking additional sources."
                 )
-                
+
         # Status-based warnings
         if rag_status == "poor":
             warnings.append(
@@ -491,7 +499,7 @@ class ChatProcessor:
             warnings.append(
                 "⚠️ **Search Error**: There was an issue retrieving information from your codebase."
             )
-            
+
         # Source count warnings
         if knowledge_sources_count == 0:
             warnings.append(
@@ -501,33 +509,40 @@ class ChatProcessor:
             warnings.append(
                 "ℹ️ **Single Source**: This response is based on only one source from your codebase."
             )
-            
+
         # Content filtering warnings
         if context.get("content_filter_warnings"):
             warnings.append(
                 "ℹ️ **Content Filtered**: Some sensitive content was filtered from the sources."
             )
-            
+
         if warnings:
             warning_text = "\n\n---\n\n" + "\n\n".join(warnings)
             return response + warning_text
-            
+
         return response
-        
+
     def _seems_like_knowledge_question(self, response: str) -> bool:
         """Heuristic to detect if a question seems like it needs specific knowledge."""
         # Check if response contains general disclaimers or seems to lack specific details
         general_phrases = [
-            "generally", "typically", "usually", "in most cases", 
-            "it depends", "you should", "you might want to",
-            "without seeing", "without knowing", "would need to see"
+            "generally",
+            "typically",
+            "usually",
+            "in most cases",
+            "it depends",
+            "you should",
+            "you might want to",
+            "without seeing",
+            "without knowing",
+            "would need to see",
         ]
-        
+
         response_lower = response.lower()
-        
+
         # Count general phrases
         general_count = sum(1 for phrase in general_phrases if phrase in response_lower)
-        
+
         # If response is short and has many general phrases, it's probably general knowledge
         return len(response) < 500 and general_count >= 2
 
@@ -786,12 +801,13 @@ class ChatProcessor:
         return {"message_deltas": deltas}
 
     async def _run_parallel_tool_calls(
-        self,
-        tool_calls: List[Dict[str, Any]]
+        self, tool_calls: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Execute multiple tool calls in parallel."""
 
-        async def execute_single_tool(call: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        async def execute_single_tool(
+            call: Dict[str, Any]
+        ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
             """Execute a single tool and return (call, result)."""
             name = call["name"]
             try:
@@ -824,8 +840,7 @@ class ChatProcessor:
 
         # Execute all tools in parallel
         results = await asyncio.gather(
-            *[execute_single_tool(call) for call in tool_calls],
-            return_exceptions=False
+            *[execute_single_tool(call) for call in tool_calls], return_exceptions=False
         )
 
         # Format results for message deltas
@@ -834,18 +849,22 @@ class ChatProcessor:
             formatted_output = llm_tools.format_tool_result_for_api(result)
 
             if getattr(llm_client, "use_responses_api", False):
-                deltas.append({
-                    "type": "function_call_output",
-                    "call_id": call.get("id", "unknown"),
-                    "output": formatted_output,
-                })
+                deltas.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": call.get("id", "unknown"),
+                        "output": formatted_output,
+                    }
+                )
             else:
-                deltas.append({
-                    "role": "tool",
-                    "tool_call_id": call.get("id", "unknown"),
-                    "name": call["name"],
-                    "content": formatted_output,
-                })
+                deltas.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.get("id", "unknown"),
+                        "name": call["name"],
+                        "content": formatted_output,
+                    }
+                )
 
         return {"message_deltas": deltas}
 

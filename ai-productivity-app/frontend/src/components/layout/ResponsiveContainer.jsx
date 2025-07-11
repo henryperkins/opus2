@@ -1,6 +1,9 @@
 // components/layout/ResponsiveContainer.jsx
-import React from 'react';
-import { useResponsiveLayout, getResponsiveStyles } from '../../hooks/useResponsiveLayout';
+import React from "react";
+import {
+  useResponsiveLayout,
+  getResponsiveStyles,
+} from "../../hooks/useResponsiveLayout";
 
 /**
  * ResponsiveContainer - A wrapper component that provides consistent responsive behavior
@@ -8,9 +11,9 @@ import { useResponsiveLayout, getResponsiveStyles } from '../../hooks/useRespons
  */
 export default function ResponsiveContainer({
   children,
-  component = 'div',
-  variant = 'default',
-  className = '',
+  component = "div",
+  variant = "default",
+  className = "",
   style = {},
   padding = true,
   maxWidth = true,
@@ -24,87 +27,91 @@ export default function ResponsiveContainer({
   // Generate responsive styles based on variant
   const getVariantStyles = () => {
     const baseStyles = getResponsiveStyles(layout);
-    
+
     switch (variant) {
-      case 'page':
+      case "page":
         return {
           ...baseStyles.container,
-          minHeight: fullHeight ? '100vh' : 'auto',
+          minHeight: fullHeight ? "100vh" : "auto",
           padding: padding ? layout.spacing.lg : 0,
-          maxWidth: maxWidth ? (layout.isMobile ? '100%' : '1200px') : '100%'
+          maxWidth: maxWidth ? (layout.isMobile ? "100%" : "1200px") : "100%",
         };
-        
-      case 'section':
+
+      case "section":
         return {
-          width: '100%',
+          width: "100%",
           padding: padding ? `${layout.spacing.md} 0` : 0,
-          margin: center ? '0 auto' : '0',
-          maxWidth: maxWidth ? (layout.isMobile ? '100%' : '800px') : '100%'
+          margin: center ? "0 auto" : "0",
+          maxWidth: maxWidth ? (layout.isMobile ? "100%" : "800px") : "100%",
         };
-        
-      case 'card':
+
+      case "card":
         return {
-          backgroundColor: 'var(--bg-surface)',
-          borderRadius: layout.isMobile ? '0.5rem' : '0.75rem',
+          backgroundColor: "var(--bg-surface)",
+          borderRadius: layout.isMobile ? "0.5rem" : "0.75rem",
           padding: padding ? layout.spacing.md : 0,
-          border: '1px solid var(--border-color)',
-          boxShadow: layout.isMobile ? 'none' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+          border: "1px solid var(--border-color)",
+          boxShadow: layout.isMobile ? "none" : "0 1px 3px rgba(0, 0, 0, 0.1)",
           margin: layout.spacing.sm,
-          width: '100%'
+          width: "100%",
         };
-        
-      case 'grid':
+
+      case "grid":
         return {
           ...baseStyles.grid,
-          padding: padding ? layout.spacing.md : 0
+          padding: padding ? layout.spacing.md : 0,
         };
-        
-      case 'flex':
+
+      case "flex":
         return {
           ...baseStyles.flex,
-          padding: padding ? layout.spacing.sm : 0
+          padding: padding ? layout.spacing.sm : 0,
         };
-        
-      case 'modal':
+
+      case "modal":
         return {
-          position: layout.useFullScreenModal ? 'fixed' : 'relative',
-          top: layout.useFullScreenModal ? 0 : 'auto',
-          left: layout.useFullScreenModal ? 0 : 'auto',
-          right: layout.useFullScreenModal ? 0 : 'auto',
-          bottom: layout.useFullScreenModal ? 0 : 'auto',
-          width: layout.useFullScreenModal ? '100%' : 'auto',
-          height: layout.useFullScreenModal ? '100%' : 'auto',
-          maxWidth: layout.useFullScreenModal ? 'none' : '90vw',
-          maxHeight: layout.useFullScreenModal ? 'none' : '90vh',
-          backgroundColor: 'var(--bg-surface)',
-          borderRadius: layout.useFullScreenModal ? 0 : '0.75rem',
+          position: layout.useFullScreenModal ? "fixed" : "relative",
+          top: layout.useFullScreenModal ? 0 : "auto",
+          left: layout.useFullScreenModal ? 0 : "auto",
+          right: layout.useFullScreenModal ? 0 : "auto",
+          bottom: layout.useFullScreenModal ? 0 : "auto",
+          width: layout.useFullScreenModal ? "100%" : "auto",
+          height: layout.useFullScreenModal ? "100%" : "auto",
+          maxWidth: layout.useFullScreenModal ? "none" : "90vw",
+          maxHeight: layout.useFullScreenModal ? "none" : "90vh",
+          backgroundColor: "var(--bg-surface)",
+          borderRadius: layout.useFullScreenModal ? 0 : "0.75rem",
           padding: padding ? layout.spacing.lg : 0,
-          zIndex: 1000
+          zIndex: 1000,
         };
-        
-      case 'sidebar':
+
+      case "sidebar":
         return {
-          width: layout.isMobile ? '100%' : '300px',
-          height: layout.isMobile ? 'auto' : '100%',
-          backgroundColor: 'var(--bg-surface)',
-          borderRight: layout.isMobile ? 'none' : '1px solid var(--border-color)',
-          borderBottom: layout.isMobile ? '1px solid var(--border-color)' : 'none',
+          width: layout.isMobile ? "100%" : "300px",
+          height: layout.isMobile ? "auto" : "100%",
+          backgroundColor: "var(--bg-surface)",
+          borderRight: layout.isMobile
+            ? "none"
+            : "1px solid var(--border-color)",
+          borderBottom: layout.isMobile
+            ? "1px solid var(--border-color)"
+            : "none",
           padding: padding ? layout.spacing.md : 0,
-          overflow: 'auto'
+          overflow: "auto",
         };
-        
-      case 'content':
+
+      case "content":
         return {
           flex: 1,
           padding: padding ? layout.spacing.md : 0,
-          overflow: 'auto',
-          width: '100%'
+          overflow: "auto",
+          width: "100%",
         };
-        
+
       default:
         return {
-          width: '100%',
-          ...style
+          width: "100%",
+          ...style,
         };
     }
   };
@@ -112,31 +119,27 @@ export default function ResponsiveContainer({
   // Generate responsive class names
   const getResponsiveClasses = () => {
     const baseClasses = [
-      'responsive-container',
+      "responsive-container",
       `responsive-container-${variant}`,
-      `responsive-container-${layout.layoutType}`
+      `responsive-container-${layout.layoutType}`,
     ];
 
     // Add layout-specific classes
-    if (layout.isMobile) baseClasses.push('mobile-layout');
-    if (layout.isTablet) baseClasses.push('tablet-layout');
-    if (layout.isDesktop) baseClasses.push('desktop-layout');
-    if (layout.isTouch) baseClasses.push('touch-device');
-    if (layout.hasHover) baseClasses.push('hover-device');
-    if (layout.prefersReducedMotion) baseClasses.push('reduced-motion');
+    if (layout.isMobile) baseClasses.push("mobile-layout");
+    if (layout.isTablet) baseClasses.push("tablet-layout");
+    if (layout.isDesktop) baseClasses.push("desktop-layout");
+    if (layout.isTouch) baseClasses.push("touch-device");
+    if (layout.hasHover) baseClasses.push("hover-device");
+    if (layout.prefersReducedMotion) baseClasses.push("reduced-motion");
 
-    return baseClasses.join(' ');
+    return baseClasses.join(" ");
   };
 
   const combinedClassName = `${getResponsiveClasses()} ${className}`.trim();
   const combinedStyle = { ...getVariantStyles(), ...style };
 
   return (
-    <Component
-      className={combinedClassName}
-      style={combinedStyle}
-      {...props}
-    >
+    <Component className={combinedClassName} style={combinedStyle} {...props}>
       {children}
     </Component>
   );
@@ -269,29 +272,29 @@ export function ShowOnHover({ children }) {
  */
 export function useResponsiveWrapper(componentName, options = {}) {
   const layout = useResponsiveLayout();
-  
+
   return {
     // Wrapper props
     wrapperProps: {
       className: `responsive-wrapper responsive-wrapper-${componentName} ${layout.containerClass}`,
-      'data-layout': layout.layoutType,
-      'data-touch': layout.isTouch,
-      'data-hover': layout.hasHover
+      "data-layout": layout.layoutType,
+      "data-touch": layout.isTouch,
+      "data-hover": layout.hasHover,
     },
-    
+
     // Layout information
     layout,
-    
+
     // Component configuration
     shouldWrap: options.alwaysWrap || layout.isMobile,
-    wrapperComponent: layout.isMobile ? 'div' : React.Fragment,
-    
+    wrapperComponent: layout.isMobile ? "div" : React.Fragment,
+
     // Responsive behavior
     behaviors: {
       stackOnMobile: layout.isMobile,
       showLabelsOnDesktop: layout.isDesktop,
       useBottomSheetOnMobile: layout.isMobile,
-      preferContextMenuOnDesktop: layout.hasHover && layout.isDesktop
-    }
+      preferContextMenuOnDesktop: layout.hasHover && layout.isDesktop,
+    },
   };
 }

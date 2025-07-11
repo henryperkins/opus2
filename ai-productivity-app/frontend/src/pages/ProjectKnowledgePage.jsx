@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState } from "react";
+import { useParams } from "react-router-dom";
 
-import RepositoryConnect from '../components/knowledge/RepositoryConnect';
-import FileUpload from '../components/knowledge/FileUpload';
-import KnowledgeContextPanel from '../components/knowledge/KnowledgeContextPanel';
-import PageErrorBoundary from '../components/common/PageErrorBoundary';
+import RepositoryConnect from "../components/knowledge/RepositoryConnect";
+import FileUpload from "../components/knowledge/FileUpload";
+import KnowledgeContextPanel from "../components/knowledge/KnowledgeContextPanel";
+import PageErrorBoundary from "../components/common/PageErrorBoundary";
 
 // -----------------------------------------------------------------------------
 // ProjectKnowledgePage – central hub for everything "Knowledge Base" related to
@@ -22,7 +22,7 @@ import PageErrorBoundary from '../components/common/PageErrorBoundary';
 function ProjectKnowledgePageCore() {
   const { projectId } = useParams();
 
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
 
   return (
     <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-12">
@@ -74,7 +74,7 @@ function ProjectKnowledgePageCore() {
   );
 }
 
-// Wrap with error boundary to prevent SPA crashes  
+// Wrap with error boundary to prevent SPA crashes
 export default function ProjectKnowledgePage() {
   return (
     <PageErrorBoundary pageName="Project Knowledge">

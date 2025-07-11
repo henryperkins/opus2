@@ -5,27 +5,27 @@
  *
  * Features
  *   • automatic exponential-backoff reconnect with jitter
-*   • status tracking: 'connecting' | 'connected' | 'disconnected' | 'error'
+ *   • status tracking: 'connecting' | 'connected' | 'disconnected' | 'error'
  *   • helper send() that queues messages while socket connecting
  *   • optional custom onMessage handler
  */
 
 /* eslint-env browser */
 /* global requestAnimationFrame */
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import debounce from 'lodash.debounce';
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import debounce from "lodash.debounce";
 
 function buildWsUrl(path) {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   let host = window.location.host;
 
   // Handle development environment where frontend runs on 5173 but backend on 8000
-  if (host.includes(':5173')) {
-    host = host.replace(':5173', ':8000');
+  if (host.includes(":5173")) {
+    host = host.replace(":5173", ":8000");
   }
 
   // Ensure leading slash
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
   return `${protocol}//${host}${cleanPath}`;
 }
 
@@ -45,7 +45,7 @@ export function useWebSocketChannel({
   //   closed) which caused a mismatch – `connected` was never reported and the
   //   UI refused to send messages. Aligning the vocabulary here fixes the
   //   "Cannot send message: Not connected to server" error.
-  const [state, setState] = useState('connecting');
+  const [state, setState] = useState("connecting");
   const [lastCloseEvent, setLastCloseEvent] = useState(null);
   const wsRef = useRef(null);
   const retryRef = useRef(0);
@@ -76,7 +76,10 @@ export function useWebSocketChannel({
               const syntheticEvent = { data: JSON.stringify(data) };
               onMessageRef.current(syntheticEvent);
             } catch (error) {
-              console.error(`Failed to process buffered message at index ${index}:`, error);
+              console.error(
+                `Failed to process buffered message at index ${index}:`,
+                error,
+              );
               // Continue processing remaining messages instead of breaking
             }
           });
@@ -87,17 +90,14 @@ export function useWebSocketChannel({
     return () => clearInterval(interval);
   }, []);
 
-  const send = useCallback(
-    (payload) => {
-      const ws = wsRef.current;
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(typeof payload === 'string' ? payload : JSON.stringify(payload));
-      } else {
-        queueRef.current.push(payload);
-      }
-    },
-    []
-  );
+  const send = useCallback((payload) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(typeof payload === "string" ? payload : JSON.stringify(payload));
+    } else {
+      queueRef.current.push(payload);
+    }
+  }, []);
 
   // ----------------------------------------------------------------------
   // Helper: health-check polling – resolves to **true** when /api/health
@@ -105,9 +105,9 @@ export function useWebSocketChannel({
   // ----------------------------------------------------------------------
   async function checkBackendHealth() {
     try {
-      const res = await fetch('/api/health', {
-        method: 'HEAD',
-        credentials: 'include',
+      const res = await fetch("/api/health", {
+        method: "HEAD",
+        credentials: "include",
       });
       return res.ok;
     } catch {
@@ -117,7 +117,7 @@ export function useWebSocketChannel({
 
   const close = useCallback(() => {
     console.log(`🔌 WebSocket close() called`);
-    if (wsRef.current) wsRef.current.close(1000, 'client-close');
+    if (wsRef.current) wsRef.current.close(1000, "client-close");
     clearTimeout(timerRef.current);
   }, []);
 
@@ -135,10 +135,11 @@ export function useWebSocketChannel({
 
   // Create debounced connect function to prevent rapid reconnections
   const debouncedConnect = useMemo(
-    () => debounce((connectFn) => {
-      if (connectFn) connectFn();
-    }, debounceMs),
-    [debounceMs]
+    () =>
+      debounce((connectFn) => {
+        if (connectFn) connectFn();
+      }, debounceMs),
+    [debounceMs],
   );
 
   // Enhanced connection reuse logic
@@ -165,12 +166,12 @@ export function useWebSocketChannel({
     // This prevents the null→valid→null oscillation that closes
     // and re-opens the connection every render.
     if (!path) {
-      return () => {};       // keep current socket alive
+      return () => {}; // keep current socket alive
     }
 
     // Enhanced connection reuse with stability tracking
     if (shouldReuseConnection(path)) {
-      return () => { };
+      return () => {};
     }
 
     // Reset stability on new connection attempts
@@ -180,7 +181,7 @@ export function useWebSocketChannel({
     function connect() {
       if (aborted) return;
 
-      setState('connecting');
+      setState("connecting");
       const ws = new WebSocket(buildWsUrl(path), protocols);
       wsRef.current = ws;
 
@@ -188,7 +189,7 @@ export function useWebSocketChannel({
         console.log(`WebSocket connected: ${ws.url}`);
         retryRef.current = 0;
         globalRetryRef.current = 0; // Reset global counter on successful connection
-        setState('connected');
+        setState("connected");
 
         // Track successful connection for stability
         lastSuccessfulPath.current = path;
@@ -218,16 +219,22 @@ export function useWebSocketChannel({
               try {
                 onMessageRef.current(evt);
               } catch (handlerError) {
-                console.error('Failed to process WebSocket message in direct fallback:', handlerError);
+                console.error(
+                  "Failed to process WebSocket message in direct fallback:",
+                  handlerError,
+                );
               }
             }
           } catch (error) {
-            console.error('Failed to parse WebSocket message:', error);
+            console.error("Failed to parse WebSocket message:", error);
             // Still try to process the raw event
             try {
               onMessageRef.current(evt);
             } catch (handlerError) {
-              console.error('Failed to process WebSocket message in handler:', handlerError);
+              console.error(
+                "Failed to process WebSocket message in handler:",
+                handlerError,
+              );
             }
           }
         }
@@ -235,14 +242,16 @@ export function useWebSocketChannel({
 
       ws.onclose = (evt) => {
         if (aborted) return;
-        setState('disconnected');
+        setState("disconnected");
         setLastCloseEvent(evt);
 
         // Reset stability tracking on closure
         connectionStable.current = false;
 
         // Enhanced logging for debugging
-        console.warn(`WebSocket closed: code=${evt.code}, reason="${evt.reason}", wasClean=${evt.wasClean}`);
+        console.warn(
+          `WebSocket closed: code=${evt.code}, reason="${evt.reason}", wasClean=${evt.wasClean}`,
+        );
 
         // ------------------------------------------------------------------
         // Retry strategy ----------------------------------------------------
@@ -262,14 +271,18 @@ export function useWebSocketChannel({
           evt.code === 1011 || // Internal error
           evt.code === 1012 || // Service restart
           evt.code === 1013 || // Try again later
-          evt.code === 1014;   // Bad gateway
+          evt.code === 1014; // Bad gateway
 
         const withinRetryBudget = retryRef.current < retry;
         const withinGlobalLimit = globalRetryRef.current < maxRetries;
 
         const shouldRetry =
-          (isBackendRestart || evt.code === 1005 || // No status
-            (evt.code >= 1000 && evt.code < 4000 && evt.code !== 1000 && evt.code !== 1001)) &&
+          (isBackendRestart ||
+            evt.code === 1005 || // No status
+            (evt.code >= 1000 &&
+              evt.code < 4000 &&
+              evt.code !== 1000 &&
+              evt.code !== 1001)) &&
           (withinRetryBudget || isBackendRestart) &&
           withinGlobalLimit; // Always respect global limit
 
@@ -306,14 +319,17 @@ export function useWebSocketChannel({
           }
 
           // Exponential backoff: 1s * 1.5^n with 30 s cap + jitter.
-          const baseDelay = Math.min(30000, 1000 * Math.pow(1.5, retryRef.current));
+          const baseDelay = Math.min(
+            30000,
+            1000 * Math.pow(1.5, retryRef.current),
+          );
           const jitter = Math.random() * 1000;
           const delay = baseDelay + jitter;
 
           retryRef.current += 1;
           globalRetryRef.current += 1;
           console.warn(
-            `WebSocket reconnecting in ${Math.round(delay / 1000)}s (attempt ${retryRef.current}${withinRetryBudget ? `/${retry}` : ''}, global: ${globalRetryRef.current}/${maxRetries})`
+            `WebSocket reconnecting in ${Math.round(delay / 1000)}s (attempt ${retryRef.current}${withinRetryBudget ? `/${retry}` : ""}, global: ${globalRetryRef.current}/${maxRetries})`,
           );
           timerRef.current = setTimeout(connect, delay);
         } else {
@@ -321,16 +337,22 @@ export function useWebSocketChannel({
             ? `global retry limit (${maxRetries}) exceeded`
             : `retry limit (${retry}) exceeded`;
           console.error(`WebSocket connection failed: ${reason}. Giving up.`);
-          setState('error');
-          if (typeof onFallback === 'function') {
-            onFallback(evt, { attempts: retryRef.current, globalAttempts: globalRetryRef.current });
+          setState("error");
+          if (typeof onFallback === "function") {
+            onFallback(evt, {
+              attempts: retryRef.current,
+              globalAttempts: globalRetryRef.current,
+            });
           }
         }
       };
 
       ws.onerror = (evt) => {
-        console.error(`WebSocket error: url=${ws?.url}, readyState=${ws?.readyState}`, evt);
-        setState('error');
+        console.error(
+          `WebSocket error: url=${ws?.url}, readyState=${ws?.readyState}`,
+          evt,
+        );
+        setState("error");
       };
     }
 
@@ -345,7 +367,11 @@ export function useWebSocketChannel({
       //  • the requested path actually changes.
       // This prevents the “null → valid → null” oscillation during the initial
       // render from immediately closing the socket before it finishes opening.
-      if (path && lastSuccessfulPath.current && path !== lastSuccessfulPath.current) {
+      if (
+        path &&
+        lastSuccessfulPath.current &&
+        path !== lastSuccessfulPath.current
+      ) {
         aborted = true;
         clearTimeout(timerRef.current);
         connectionStable.current = false;
@@ -362,6 +388,6 @@ export function useWebSocketChannel({
 if (import.meta.hot) {
   import.meta.hot.accept();
   import.meta.hot.dispose(() => {
-    console.log('[HMR] Disposing WebSocket hook module');
+    console.log("[HMR] Disposing WebSocket hook module");
   });
 }

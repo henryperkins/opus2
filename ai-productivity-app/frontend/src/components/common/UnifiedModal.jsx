@@ -1,19 +1,19 @@
-import { useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
-import { BREAKPOINTS } from '../../constants/navigation';
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { X } from "lucide-react";
+import { BREAKPOINTS } from "../../constants/navigation";
 
 export default function UnifiedModal({
   isOpen,
   onClose,
   title,
   children,
-  size = 'md',
+  size = "md",
   closeOnOverlay = true,
   closeOnEscape = true,
   showCloseButton = true,
   actions,
-  className = ''
+  className = "",
 }) {
   const modalRef = useRef(null);
   const previousFocus = useRef(null);
@@ -23,14 +23,14 @@ export default function UnifiedModal({
     if (isOpen) {
       previousFocus.current = document.activeElement;
       modalRef.current?.focus();
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = '';
+      document.body.style.overflow = "";
       previousFocus.current?.focus();
     }
 
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = "";
     };
   }, [isOpen]);
 
@@ -39,25 +39,25 @@ export default function UnifiedModal({
     if (!isOpen) return;
 
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && closeOnEscape) {
+      if (e.key === "Escape" && closeOnEscape) {
         onClose();
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, closeOnEscape, onClose]);
 
   if (!isOpen) return null;
 
   const sizes = {
-    sm: 'max-w-sm',
-    md: 'max-w-md',
-    lg: 'max-w-lg',
-    xl: 'max-w-xl',
-    '2xl': 'max-w-2xl',
-    '3xl': 'max-w-3xl',
-    full: 'max-w-full mx-4'
+    sm: "max-w-sm",
+    md: "max-w-md",
+    lg: "max-w-lg",
+    xl: "max-w-xl",
+    "2xl": "max-w-2xl",
+    "3xl": "max-w-3xl",
+    full: "max-w-full mx-4",
   };
 
   return createPortal(
@@ -79,14 +79,17 @@ export default function UnifiedModal({
           className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl ${sizes[size]} w-full ${className}`}
           role="dialog"
           aria-modal="true"
-          aria-labelledby={title ? 'modal-title' : undefined}
+          aria-labelledby={title ? "modal-title" : undefined}
           tabIndex={-1}
         >
           {/* Header */}
           {(title || showCloseButton) && (
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               {title && (
-                <h3 id="modal-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                <h3
+                  id="modal-title"
+                  className="text-lg font-semibold text-gray-900 dark:text-gray-100"
+                >
                   {title}
                 </h3>
               )}
@@ -116,7 +119,7 @@ export default function UnifiedModal({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 
@@ -125,16 +128,16 @@ export function ConfirmModal({
   isOpen,
   onClose,
   onConfirm,
-  title = 'Confirm Action',
+  title = "Confirm Action",
   message,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
-  variant = 'danger'
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  variant = "danger",
 }) {
   const buttonClasses = {
-    danger: 'bg-red-600 hover:bg-red-700 text-white',
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
-    secondary: 'bg-gray-600 hover:bg-gray-700 text-white'
+    danger: "bg-red-600 hover:bg-red-700 text-white",
+    primary: "bg-blue-600 hover:bg-blue-700 text-white",
+    secondary: "bg-gray-600 hover:bg-gray-700 text-white",
   };
 
   return (

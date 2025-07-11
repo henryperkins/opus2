@@ -12,8 +12,8 @@
  * for user preferences that should survive page reloads.
  */
 
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 const useAuthStore = create(
   persist(
@@ -21,9 +21,9 @@ const useAuthStore = create(
       // Persistent user preferences
       preferences: {
         rememberMe: false,
-        lastUsername: '',
-        theme: 'light',
-        language: 'en',
+        lastUsername: "",
+        theme: "light",
+        language: "en",
         sidebarPinned: false,
         sidebarWidth: 280, // Default sidebar width in pixels
         // Use Map-like object for flexible section state management
@@ -85,7 +85,7 @@ const useAuthStore = create(
       getDeviceId: () => {
         const state = get();
         if (!state.sessionMetadata.deviceId) {
-          const deviceId = 'device_' + Math.random().toString(36).substr(2, 9);
+          const deviceId = "device_" + Math.random().toString(36).substr(2, 9);
           set((state) => ({
             sessionMetadata: {
               ...state.sessionMetadata,
@@ -156,9 +156,9 @@ const useAuthStore = create(
         set({
           preferences: {
             rememberMe: false,
-            lastUsername: '',
-            theme: 'light',
-            language: 'en',
+            lastUsername: "",
+            theme: "light",
+            language: "en",
             sidebarPinned: false,
             collapsedSections: {},
           },
@@ -180,7 +180,7 @@ const useAuthStore = create(
       },
     }),
     {
-      name: 'ai-productivity-auth',
+      name: "ai-productivity-auth",
       version: 1,
       // Only persist preferences and session metadata, not sensitive data
       partialize: (state) => ({
@@ -191,8 +191,8 @@ const useAuthStore = create(
           // Don't persist sessionStartTime - that should be fresh each session
         },
       }),
-    }
-  )
+    },
+  ),
 );
 
 export default useAuthStore;

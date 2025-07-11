@@ -4,6 +4,7 @@ This worker continuously processes CodeEmbedding records that don't have
 embeddings yet, generates embeddings via the EmbeddingGenerator, and
 stores them in both the database and Qdrant vector store.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -67,6 +68,7 @@ class EmbeddingWorker:
         # Initialize vector service if not provided
         if self.vector_store is None:
             from app.services.vector_service import vector_service
+
             self.vector_store = vector_service
             await self.vector_store.initialize()
 
@@ -111,11 +113,15 @@ class EmbeddingWorker:
                         logger.info("Running vector store garbage collection")
                         # Only run GC if the backend supports it
                         backend = await self.vector_store.get_backend()
-                        if hasattr(backend, 'gc_dangling_points'):
+                        if hasattr(backend, "gc_dangling_points"):
                             removed = await backend.gc_dangling_points()
-                            logger.info("GC completed: removed %s dangling points", removed)
+                            logger.info(
+                                "GC completed: removed %s dangling points", removed
+                            )
                         else:
-                            logger.info("Vector store backend doesn't support garbage collection")
+                            logger.info(
+                                "Vector store backend doesn't support garbage collection"
+                            )
                         last_gc_time = current_time
                     except Exception as gc_exc:
                         logger.warning("Vector store GC failed: %s", gc_exc)
@@ -126,7 +132,9 @@ class EmbeddingWorker:
 
                 # Don't use exponential backoff for oversized errors (handled by circuit breaker)
                 if _is_oversize_error(exc):
-                    logger.info("Oversized error handled by circuit breaker, continuing immediately")
+                    logger.info(
+                        "Oversized error handled by circuit breaker, continuing immediately"
+                    )
                     continue
 
                 # Exponential backoff for other transient errors
@@ -135,7 +143,8 @@ class EmbeddingWorker:
 
                 logger.warning(
                     "Backing off for %d seconds after %d consecutive errors",
-                    delay, consecutive_errors
+                    delay,
+                    consecutive_errors,
                 )
                 await asyncio.sleep(delay)
 
@@ -146,7 +155,7 @@ class EmbeddingWorker:
         if current_time < self.circuit_breaker_until:
             logger.info(
                 "Circuit breaker active for %.1f more seconds",
-                self.circuit_breaker_until - current_time
+                self.circuit_breaker_until - current_time,
             )
             await asyncio.sleep(5)
             return 0
@@ -154,8 +163,7 @@ class EmbeddingWorker:
         async with self.session_maker() as db:
             # Adaptive batch sizing - reduce batch size if we've had oversized failures
             current_batch_size = max(
-                self.min_rows,
-                self.max_rows // (2 ** self.consecutive_oversize_failures)
+                self.min_rows, self.max_rows // (2**self.consecutive_oversize_failures)
             )
 
             # Find embeddings that need to be generated
@@ -180,7 +188,9 @@ class EmbeddingWorker:
 
             logger.info(
                 "Found %d chunks needing embeddings (batch size: %d, circuit breaker failures: %d)",
-                len(chunks), current_batch_size, self.consecutive_oversize_failures
+                len(chunks),
+                current_batch_size,
+                self.consecutive_oversize_failures,
             )
 
             # Update queue metrics
@@ -188,7 +198,9 @@ class EmbeddingWorker:
 
             try:
                 # Generate embeddings with token-aware batching
-                await self.generator.generate_and_store(chunks, db, vector_store=self.vector_store)
+                await self.generator.generate_and_store(
+                    chunks, db, vector_store=self.vector_store
+                )
 
                 # Store in vector store
                 await self._store_in_vector_store(chunks)
@@ -210,7 +222,8 @@ class EmbeddingWorker:
                     logger.error(
                         "Non-retryable oversized batch error: %s. "
                         "Marking %d chunks as failed to prevent retry loop",
-                        exc, len(chunks)
+                        exc,
+                        len(chunks),
                     )
 
                     # Record metrics
@@ -223,10 +236,13 @@ class EmbeddingWorker:
                     # Update circuit breaker state
                     self.consecutive_oversize_failures += 1
                     if self.consecutive_oversize_failures >= self.max_oversize_failures:
-                        self.circuit_breaker_until = current_time + self.circuit_breaker_delay
+                        self.circuit_breaker_until = (
+                            current_time + self.circuit_breaker_delay
+                        )
                         logger.error(
                             "Circuit breaker activated for %d seconds after %d consecutive oversized failures",
-                            self.circuit_breaker_delay, self.consecutive_oversize_failures
+                            self.circuit_breaker_delay,
+                            self.consecutive_oversize_failures,
                         )
 
                     # Mark chunks as failed to prevent re-queuing
@@ -235,11 +251,20 @@ class EmbeddingWorker:
                     return 0
 
                 # For other errors, record metrics and re-raise to trigger retry logic
-                if "rate limit" in str(exc).lower() or "RateLimitError" in type(exc).__name__:
+                if (
+                    "rate limit" in str(exc).lower()
+                    or "RateLimitError" in type(exc).__name__
+                ):
                     record_retry_error("rate_limit")
-                elif "timeout" in str(exc).lower() or "TimeoutError" in type(exc).__name__:
+                elif (
+                    "timeout" in str(exc).lower()
+                    or "TimeoutError" in type(exc).__name__
+                ):
                     record_retry_error("timeout")
-                elif "auth" in str(exc).lower() or "AuthenticationError" in type(exc).__name__:
+                elif (
+                    "auth" in str(exc).lower()
+                    or "AuthenticationError" in type(exc).__name__
+                ):
                     record_fatal_error("authentication")
                 else:
                     record_retry_error("unknown")
@@ -270,7 +295,7 @@ class EmbeddingWorker:
                     "symbol_type": chunk.symbol_type,
                     "start_line": chunk.start_line,
                     "end_line": chunk.end_line,
-                }
+                },
             }
             embeddings_to_insert.append(embedding_data)
 
@@ -325,14 +350,18 @@ class EmbeddingWorker:
             failed_chunk_ids.append(chunk.id)
             logger.warning(
                 "Marked chunk %d (content length: %d chars) as failed due to: %s",
-                chunk.id, len(chunk.chunk_content), reason
+                chunk.id,
+                len(chunk.chunk_content),
+                reason,
             )
 
         # Optionally, update a separate failed_chunks table or add metadata
         # For now, we rely on the empty embedding list as the failure indicator
         logger.error(
             "Marked %d chunks as failed due to %s. Chunk IDs: %s",
-            len(chunks), reason, failed_chunk_ids[:10]  # Log first 10 IDs
+            len(chunks),
+            reason,
+            failed_chunk_ids[:10],  # Log first 10 IDs
         )
 
 

@@ -17,7 +17,7 @@ class KeywordSearch:
 
     def __init__(self, db: Session):
         self.db = db
-        self.is_postgresql = db.bind.dialect.name == 'postgresql'
+        self.is_postgresql = db.bind.dialect.name == "postgresql"
 
     async def search(
         self,
@@ -32,9 +32,15 @@ class KeywordSearch:
         # Try PostgreSQL FTS or SQLite FTS5 search first
         try:
             if self.is_postgresql:
-                results.extend(await self._postgresql_fts_search(query, project_ids, filters, limit))
+                results.extend(
+                    await self._postgresql_fts_search(
+                        query, project_ids, filters, limit
+                    )
+                )
             else:
-                results.extend(await self._fts_search(query, project_ids, filters, limit))
+                results.extend(
+                    await self._fts_search(query, project_ids, filters, limit)
+                )
         except Exception as e:
             logger.warning(f"Full-text search failed: {e}")
             # Reset broken connection state so that subsequent LIKE queries
@@ -73,9 +79,10 @@ class KeywordSearch:
         """PostgreSQL full-text search with ranking."""
         # Prepare query for PostgreSQL FTS
         pg_query = self._prepare_postgresql_query(query)
-        
+
         # Search across multiple content types
-        sql = text("""
+        sql = text(
+            """
             SELECT 
                 m.rowid,
                 m.document_id,
@@ -89,24 +96,23 @@ class KeywordSearch:
                 AND m.project_id = ANY(:project_ids)
             ORDER BY rank DESC, m.created_at DESC
             LIMIT :limit
-        """)
-        
-        result = self.db.execute(sql, {
-            'query': pg_query,
-            'project_ids': project_ids,
-            'limit': limit
-        })
-        
+        """
+        )
+
+        result = self.db.execute(
+            sql, {"query": pg_query, "project_ids": project_ids, "limit": limit}
+        )
+
         return [
             {
-                'rowid': row.rowid,
-                'document_id': row.document_id,
-                'chunk_id': row.chunk_id,
-                'project_id': row.project_id,
-                'content': row.content,
-                'metadata': row.embedding_metadata,
-                'score': float(row.rank),
-                'search_type': 'postgresql_fts'
+                "rowid": row.rowid,
+                "document_id": row.document_id,
+                "chunk_id": row.chunk_id,
+                "project_id": row.project_id,
+                "content": row.content,
+                "metadata": row.embedding_metadata,
+                "score": float(row.rank),
+                "search_type": "postgresql_fts",
             }
             for row in result
         ]
@@ -234,13 +240,13 @@ class KeywordSearch:
         fts_terms = [f'"{term}"*' for term in terms if term]
 
         return " ".join(fts_terms)
-    
+
     def _prepare_postgresql_query(self, query: str) -> str:
         """Prepare query for PostgreSQL full-text search."""
         # Clean query for PostgreSQL FTS
         query = re.sub(r"[^\w\s]", " ", query)
-        
+
         # Remove extra whitespace
         query = " ".join(query.split())
-        
+
         return query

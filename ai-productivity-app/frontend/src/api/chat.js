@@ -1,11 +1,11 @@
-import client from './client';
+import client from "./client";
 
 // Create a stable API client factory
 function createChatAPI() {
   return {
     // Create a new chat session
     createSession: (data = {}) => {
-      return client.post('/api/chat/sessions', data);
+      return client.post("/api/chat/sessions", data);
     },
 
     // Get session details
@@ -20,17 +20,15 @@ function createChatAPI() {
 
     // Get session history (same endpoint) – return normalised array
     getSessionHistory: async (params = {}) => {
-      const { data } = await client.get('/api/chat/sessions', { params });
-      return Array.isArray(data) ? data
-        : data?.items ?? data?.sessions ?? [];
+      const { data } = await client.get("/api/chat/sessions", { params });
+      return Array.isArray(data) ? data : (data?.items ?? data?.sessions ?? []);
     },
 
     // Get chat sessions (alias for getSessionHistory for backward compatibility)
     // Always resolve to an array for safer call-sites
     getChatSessions: async (params = {}) => {
-      const { data } = await client.get('/api/chat/sessions', { params });
-      return Array.isArray(data) ? data
-        : data?.items ?? data?.sessions ?? [];
+      const { data } = await client.get("/api/chat/sessions", { params });
+      return Array.isArray(data) ? data : (data?.items ?? data?.sessions ?? []);
     },
 
     // Update a session
@@ -64,7 +62,7 @@ function createChatAPI() {
         if (err.response?.status === 404) return { status: 404 }; // idempotent
         throw err;
       }
-    }
+    },
   };
 }
 
@@ -73,7 +71,7 @@ const chatAPI = createChatAPI();
 
 // Debug: Log available methods during development
 if (import.meta.env.DEV) {
-  console.log('[Chat API] Available methods:', Object.keys(chatAPI));
+  console.log("[Chat API] Available methods:", Object.keys(chatAPI));
 }
 
 // Export as default
@@ -92,6 +90,6 @@ if (import.meta.hot) {
   import.meta.hot.accept();
   import.meta.hot.dispose(() => {
     // Clean up any timers, auth tokens, etc. if needed
-    console.log('[HMR] Disposing chat API module');
+    console.log("[HMR] Disposing chat API module");
   });
 }

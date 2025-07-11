@@ -1,52 +1,52 @@
-import { useState } from 'react';
-import PropTypes from 'prop-types';
-import UnifiedModal from '../common/UnifiedModal';
-import { authAPI } from '../../api/auth';
-import { toast } from '../common/Toast';
+import { useState } from "react";
+import PropTypes from "prop-types";
+import UnifiedModal from "../common/UnifiedModal";
+import { authAPI } from "../../api/auth";
+import { toast } from "../common/Toast";
 
 const ChangePasswordModal = ({ isOpen, onClose }) => {
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    
+    setError("");
+
     if (newPassword !== confirmPassword) {
-      setError('New passwords do not match.');
+      setError("New passwords do not match.");
       return;
     }
 
     if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters long.');
+      setError("New password must be at least 8 characters long.");
       return;
     }
 
     setIsLoading(true);
-    
+
     try {
       // Use authAPI.updateProfile to change password
       await authAPI.updateProfile({
         current_password: currentPassword,
-        password: newPassword
+        password: newPassword,
       });
-      
-      toast.success('Password changed successfully');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+
+      toast.success("Password changed successfully");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
       onClose();
     } catch (error) {
-      console.error('Failed to change password:', error);
+      console.error("Failed to change password:", error);
       if (error.response?.status === 400) {
-        setError('Current password is incorrect.');
+        setError("Current password is incorrect.");
       } else if (error.response?.status === 422) {
-        setError('New password does not meet requirements.');
+        setError("New password does not meet requirements.");
       } else {
-        setError('Failed to change password. Please try again.');
+        setError("Failed to change password. Please try again.");
       }
     } finally {
       setIsLoading(false);
@@ -54,29 +54,39 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
   };
 
   return (
-    <UnifiedModal 
-      isOpen={isOpen} 
-      onClose={onClose} 
+    <UnifiedModal
+      isOpen={isOpen}
+      onClose={onClose}
       title="Change Password"
       actions={
         <>
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
             Cancel
           </button>
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             form="change-password-form"
             disabled={isLoading}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? 'Changing...' : 'Change Password'}
+            {isLoading ? "Changing..." : "Change Password"}
           </button>
         </>
       }
     >
-      <form id="change-password-form" onSubmit={handleSubmit} className="space-y-4">
+      <form
+        id="change-password-form"
+        onSubmit={handleSubmit}
+        className="space-y-4"
+      >
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Current Password</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Current Password
+          </label>
           <input
             type="password"
             value={currentPassword}
@@ -86,7 +96,9 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">New Password</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            New Password
+          </label>
           <input
             type="password"
             value={newPassword}
@@ -96,7 +108,9 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirm New Password</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Confirm New Password
+          </label>
           <input
             type="password"
             value={confirmPassword}
@@ -105,7 +119,9 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
             required
           />
         </div>
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && (
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        )}
       </form>
     </UnifiedModal>
   );

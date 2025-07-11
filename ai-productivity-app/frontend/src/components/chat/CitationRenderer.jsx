@@ -1,14 +1,21 @@
-import { useState } from 'react';
-import { copyToClipboard } from '../../utils/clipboard';
+import { useState } from "react";
+import { copyToClipboard } from "../../utils/clipboard";
 // eslint-disable-next-line no-unused-vars
-import { FileText, ExternalLink, ChevronDown, Check, Copy, Bookmark } from 'lucide-react';
-import PropTypes from 'prop-types';
+import {
+  FileText,
+  ExternalLink,
+  ChevronDown,
+  Check,
+  Copy,
+  Bookmark,
+} from "lucide-react";
+import PropTypes from "prop-types";
 
 // Confidence level utilities
 const getConfidenceClass = (confidence) => {
-  if (confidence >= 0.8) return 'bg-blue-100 text-blue-800';
-  if (confidence >= 0.6) return 'bg-yellow-100 text-yellow-800';
-  return 'bg-red-100 text-red-800';
+  if (confidence >= 0.8) return "bg-blue-100 text-blue-800";
+  if (confidence >= 0.6) return "bg-yellow-100 text-yellow-800";
+  return "bg-red-100 text-red-800";
 };
 
 const getConfidenceText = (confidence) => `${Math.round(confidence * 100)}%`;
@@ -35,16 +42,18 @@ function Tooltip({ children, citation }) {
                 {citation.source.title}
               </h4>
             </div>
-            <div className={`px-2 py-0.5 rounded-full text-xs flex-shrink-0 ml-2 ${getConfidenceClass(citation.confidence)}`}>
+            <div
+              className={`px-2 py-0.5 rounded-full text-xs flex-shrink-0 ml-2 ${getConfidenceClass(citation.confidence)}`}
+            >
               {getConfidenceText(citation.confidence)}
             </div>
           </div>
 
           <p className="text-xs text-gray-600 mb-2">{citation.source.path}</p>
-          
+
           {citation.source_type && (
             <p className="text-xs text-blue-600 mb-2 capitalize">
-              Type: {citation.source_type.replace(/_/g, ' ')}
+              Type: {citation.source_type.replace(/_/g, " ")}
             </p>
           )}
 
@@ -67,17 +76,18 @@ Tooltip.propTypes = {
     source: PropTypes.shape({
       title: PropTypes.string.isRequired,
       path: PropTypes.string.isRequired,
-      author: PropTypes.string
+      author: PropTypes.string,
     }).isRequired,
     confidence: PropTypes.number.isRequired,
     content: PropTypes.string.isRequired,
-    source_type: PropTypes.string
-  }).isRequired
+    source_type: PropTypes.string,
+  }).isRequired,
 };
 
 // Citation badge component
 function CitationBadge({ citation, onClick }) {
-  const baseClass = "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium cursor-pointer transition-colors";
+  const baseClass =
+    "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium cursor-pointer transition-colors";
   const colorClass = getConfidenceClass(citation.confidence);
 
   return (
@@ -99,12 +109,12 @@ CitationBadge.propTypes = {
     source: PropTypes.shape({
       title: PropTypes.string.isRequired,
       path: PropTypes.string.isRequired,
-      author: PropTypes.string
+      author: PropTypes.string,
     }).isRequired,
     content: PropTypes.string.isRequired,
-    source_type: PropTypes.string
+    source_type: PropTypes.string,
   }).isRequired,
-  onClick: PropTypes.func
+  onClick: PropTypes.func,
 };
 
 // Text parser for citations
@@ -120,7 +130,7 @@ function parseTextWithCitations(text, citations, onCitationClick) {
     }
 
     const citationNumber = parseInt(match[1]);
-    const citation = citations.find(c => c.number === citationNumber);
+    const citation = citations.find((c) => c.number === citationNumber);
 
     if (citation) {
       parts.push(
@@ -128,7 +138,7 @@ function parseTextWithCitations(text, citations, onCitationClick) {
           key={`citation-${match.index}`}
           citation={citation}
           onClick={() => onCitationClick?.(citation)}
-        />
+        />,
       );
     } else {
       parts.push(match[0]);
@@ -144,7 +154,6 @@ function parseTextWithCitations(text, citations, onCitationClick) {
   return parts;
 }
 
-
 function formatCitation(citation) {
   return `[${citation.number}] ${citation.source.title}. ${citation.source.path}`;
 }
@@ -155,7 +164,7 @@ function CitationList({ citations, onCitationClick }) {
   const [copied, setCopied] = useState(null);
 
   const toggleExpanded = (id) => {
-    setExpanded(prev => {
+    setExpanded((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
         newSet.delete(id);
@@ -183,12 +192,15 @@ function CitationList({ citations, onCitationClick }) {
       </h4>
 
       <div className="space-y-2">
-        {citations.map(citation => {
+        {citations.map((citation) => {
           const isExpanded = expanded.has(citation.id);
           const isCopied = copied === citation.id;
 
           return (
-            <div key={citation.id} className="border border-gray-200 rounded-lg overflow-hidden">
+            <div
+              key={citation.id}
+              className="border border-gray-200 rounded-lg overflow-hidden"
+            >
               <div
                 className="px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => toggleExpanded(citation.id)}
@@ -209,12 +221,14 @@ function CitationList({ citations, onCitationClick }) {
                   </div>
 
                   <div className="flex items-center space-x-2 flex-shrink-0">
-                    <span className={`text-xs px-2 py-1 rounded-full ${getConfidenceClass(citation.confidence)}`}>
+                    <span
+                      className={`text-xs px-2 py-1 rounded-full ${getConfidenceClass(citation.confidence)}`}
+                    >
                       {getConfidenceText(citation.confidence)}
                     </span>
                     <ChevronDown
                       className={`w-4 h-4 text-gray-500 transition-transform ${
-                        isExpanded ? 'rotate-180' : ''
+                        isExpanded ? "rotate-180" : ""
                       }`}
                     />
                   </div>
@@ -226,19 +240,29 @@ function CitationList({ citations, onCitationClick }) {
                   {citation.context && (
                     <div className="text-sm text-gray-700 mb-3">
                       {citation.context.before && (
-                        <span className="text-gray-500">...{citation.context.before}</span>
+                        <span className="text-gray-500">
+                          ...{citation.context.before}
+                        </span>
                       )}
-                      <span className="bg-yellow-100 px-1">{citation.content}</span>
+                      <span className="bg-yellow-100 px-1">
+                        {citation.content}
+                      </span>
                       {citation.context.after && (
-                        <span className="text-gray-500">{citation.context.after}...</span>
+                        <span className="text-gray-500">
+                          {citation.context.after}...
+                        </span>
                       )}
                     </div>
                   )}
 
                   <div className="flex items-center justify-between pt-2">
                     <div className="text-xs text-gray-500">
-                      {citation.source.author && <span>By {citation.source.author} • </span>}
-                      {citation.source.lastModified && <span>Modified {citation.source.lastModified}</span>}
+                      {citation.source.author && (
+                        <span>By {citation.source.author} • </span>
+                      )}
+                      {citation.source.lastModified && (
+                        <span>Modified {citation.source.lastModified}</span>
+                      )}
                     </div>
 
                     <div className="flex items-center space-x-2">
@@ -280,24 +304,26 @@ function CitationList({ citations, onCitationClick }) {
 }
 
 CitationList.propTypes = {
-  citations: PropTypes.arrayOf(PropTypes.shape({
-    id: PropTypes.string.isRequired,
-    number: PropTypes.number.isRequired,
-    source: PropTypes.shape({
-      title: PropTypes.string.isRequired,
-      path: PropTypes.string.isRequired,
-      author: PropTypes.string,
-      lastModified: PropTypes.string
-    }).isRequired,
-    content: PropTypes.string.isRequired,
-    confidence: PropTypes.number.isRequired,
-    source_type: PropTypes.string,
-    context: PropTypes.shape({
-      before: PropTypes.string,
-      after: PropTypes.string
-    })
-  })).isRequired,
-  onCitationClick: PropTypes.func
+  citations: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      number: PropTypes.number.isRequired,
+      source: PropTypes.shape({
+        title: PropTypes.string.isRequired,
+        path: PropTypes.string.isRequired,
+        author: PropTypes.string,
+        lastModified: PropTypes.string,
+      }).isRequired,
+      content: PropTypes.string.isRequired,
+      confidence: PropTypes.number.isRequired,
+      source_type: PropTypes.string,
+      context: PropTypes.shape({
+        before: PropTypes.string,
+        after: PropTypes.string,
+      }),
+    }),
+  ).isRequired,
+  onCitationClick: PropTypes.func,
 };
 
 // Main component
@@ -305,7 +331,7 @@ export default function CitationRenderer({
   text,
   citations = [],
   inline = true,
-  onCitationClick
+  onCitationClick,
 }) {
   if (inline) {
     return (
@@ -322,10 +348,7 @@ export default function CitationRenderer({
       </div>
 
       {citations.length > 0 && (
-        <CitationList
-          citations={citations}
-          onCitationClick={onCitationClick}
-        />
+        <CitationList citations={citations} onCitationClick={onCitationClick} />
       )}
     </div>
   );
@@ -333,18 +356,20 @@ export default function CitationRenderer({
 
 CitationRenderer.propTypes = {
   text: PropTypes.string.isRequired,
-  citations: PropTypes.arrayOf(PropTypes.shape({
-    id: PropTypes.string.isRequired,
-    number: PropTypes.number.isRequired,
-    source: PropTypes.shape({
-      title: PropTypes.string.isRequired,
-      path: PropTypes.string.isRequired,
-      author: PropTypes.string
-    }).isRequired,
-    content: PropTypes.string.isRequired,
-    confidence: PropTypes.number.isRequired,
-    source_type: PropTypes.string
-  })),
+  citations: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      number: PropTypes.number.isRequired,
+      source: PropTypes.shape({
+        title: PropTypes.string.isRequired,
+        path: PropTypes.string.isRequired,
+        author: PropTypes.string,
+      }).isRequired,
+      content: PropTypes.string.isRequired,
+      confidence: PropTypes.number.isRequired,
+      source_type: PropTypes.string,
+    }),
+  ),
   inline: PropTypes.bool,
-  onCitationClick: PropTypes.func
+  onCitationClick: PropTypes.func,
 };

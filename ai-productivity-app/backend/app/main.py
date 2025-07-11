@@ -1,6 +1,7 @@
 """
 FastAPI application entry point with middleware and lifespan management.
 """
+
 # Standard library
 import logging
 from contextlib import asynccontextmanager
@@ -10,7 +11,9 @@ from contextlib import asynccontextmanager
 # them emit log records.
 # ---------------------------------------------------------------------------
 
-from .logging_config import configure_library_loggers  # noqa: E402 – after sys path setup
+from .logging_config import (
+    configure_library_loggers,
+)  # noqa: E402 – after sys path setup
 
 configure_library_loggers()
 
@@ -42,6 +45,7 @@ from .routers import prompts as prompts_router
 from .routers import repositories as repositories_router
 from .routers import project_search as project_search_router
 from .routers import feedback as feedback_router
+
 # AI config websocket router
 from .routers import config_ws as config_ws_router
 from .chat import admin_routes as admin_router
@@ -63,19 +67,28 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
 
     # Start embedding worker background loop
     from app.embeddings.worker import start_background_loop
+
     start_background_loop()
 
     # Initialize vector store based on configuration
     from app.services.vector_service import vector_service
+
     try:
         await vector_service.initialize()
-        logger.info("Vector store (%s) initialized successfully", settings.vector_store_type)
+        logger.info(
+            "Vector store (%s) initialized successfully", settings.vector_store_type
+        )
     except Exception as exc:
-        logger.error("Failed to initialize vector store (%s): %s", settings.vector_store_type, exc)
+        logger.error(
+            "Failed to initialize vector store (%s): %s",
+            settings.vector_store_type,
+            exc,
+        )
 
     # Initialize unified configuration
     from app.services.unified_config_service import UnifiedConfigService
     from app.database import SessionLocal
+
     with SessionLocal() as db:
         service = UnifiedConfigService(db)
         service.initialize_defaults()
@@ -101,6 +114,7 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
 
     # Stop embedding worker
     from app.embeddings.worker import stop_background_loop
+
     await stop_background_loop()
 
 
@@ -112,11 +126,8 @@ app = FastAPI(
     lifespan=lifespan,
     # Add WebSocket origins support for cross-origin connections
     # This is needed for WebSocket connections from frontend to backend
-    websocket_origins=settings.cors_origins_list + [
-        "ws://localhost:5173",
-        "ws://localhost:8000",
-        "wss://lakefrontdigital.io"
-    ]
+    websocket_origins=settings.cors_origins_list
+    + ["ws://localhost:5173", "ws://localhost:8000", "wss://lakefrontdigital.io"],
 )
 
 # ---------------------------------------------------------------------------
@@ -129,10 +140,8 @@ app = FastAPI(
 # 1. CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list + [
-        "http://localhost:5173",
-        "https://lakefrontdigital.io"
-    ],
+    allow_origins=settings.cors_origins_list
+    + ["http://localhost:5173", "https://lakefrontdigital.io"],
     allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
@@ -182,4 +191,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

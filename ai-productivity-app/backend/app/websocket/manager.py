@@ -111,7 +111,9 @@ class ConnectionManager:
             try:
                 await websocket.send_json(message)
             except Exception as e:
-                logger.error("Failed to send message to WebSocket %s: %s", id(websocket), e)
+                logger.error(
+                    "Failed to send message to WebSocket %s: %s", id(websocket), e
+                )
                 disconnected.append(websocket)
 
         # Clean up disconnected sockets
@@ -131,7 +133,9 @@ class ConnectionManager:
 
     async def broadcast_to_user(self, message: dict, user_id: int):
         """Send message to all sessions for a user."""
-        logger.debug("Broadcasting message to user %s across all sessions: %s", user_id, message)
+        logger.debug(
+            "Broadcasting message to user %s across all sessions: %s", user_id, message
+        )
 
         async with self._lock:
             if user_id not in self.user_sessions:
@@ -155,9 +159,9 @@ class ConnectionManager:
            instant updates.
         """
         message = {
-            'type': 'config_update',
-            'config': config_data,
-            'timestamp': asyncio.get_event_loop().time(),
+            "type": "config_update",
+            "config": config_data,
+            "timestamp": asyncio.get_event_loop().time(),
         }
 
         logger.info("Broadcasting config update to chat sessions and notify channel")
@@ -172,7 +176,9 @@ class ConnectionManager:
         # 2) Global user-level broadcast (notification sockets)
         try:
             # Local import to avoid potential circular dependency
-            from app.websocket.notify_manager import notify_manager  # pylint: disable=import-error
+            from app.websocket.notify_manager import (
+                notify_manager,
+            )  # pylint: disable=import-error
 
             # Fire-and-forget; failures are logged but do not break the caller
             await notify_manager.broadcast(message)

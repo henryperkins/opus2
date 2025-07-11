@@ -1,4 +1,4 @@
-import Timeline from './Timeline';
+import Timeline from "./Timeline";
 
 export default function ActivityTimeline({ projectId }) {
   return (

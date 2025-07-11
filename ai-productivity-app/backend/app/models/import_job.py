@@ -27,15 +27,19 @@ class ImportJob(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True)
 
-    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(
+        Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
     project = relationship("Project", back_populates="import_jobs")
 
-    requested_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    requested_by = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     repo_url = Column(String, nullable=False)
     branch = Column(String, default="main", nullable=False)
     commit_sha = Column(String, nullable=True)
-    
+
     # File filtering patterns
     include_patterns = Column(JSON, nullable=True)
     exclude_patterns = Column(JSON, nullable=True)
@@ -52,4 +56,6 @@ class ImportJob(Base, TimestampMixin):
 
     # readable repr for logs / tests
     def __repr__(self) -> str:  # noqa: D401
-        return f"<ImportJob id={self.id} project={self.project_id} status={self.status}>"
+        return (
+            f"<ImportJob id={self.id} project={self.project_id} status={self.status}>"
+        )

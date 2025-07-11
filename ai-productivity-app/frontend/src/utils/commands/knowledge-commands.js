@@ -1,5 +1,5 @@
 // utils/commands/knowledge-commands.js
-import { searchAPI } from '../../api/search';
+import { searchAPI } from "../../api/search";
 
 /**
  * Command context interface for knowledge commands
@@ -59,7 +59,7 @@ export class KnowledgeCommand {
     const _args = args;
     // eslint-disable-next-line no-unused-vars
     const _context = context;
-    throw new Error('Execute method must be implemented');
+    throw new Error("Execute method must be implemented");
   }
 
   /**
@@ -74,11 +74,11 @@ export class KnowledgeCommand {
     const parts = args.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
 
     for (const part of parts) {
-      if (part.startsWith('--')) {
-        const [key, value] = part.substring(2).split('=');
+      if (part.startsWith("--")) {
+        const [key, value] = part.substring(2).split("=");
         flags[key] = value || true;
       } else {
-        positional.push(part.replace(/^"|"$/g, ''));
+        positional.push(part.replace(/^"|"$/g, ""));
       }
     }
 
@@ -92,24 +92,24 @@ export class KnowledgeCommand {
 export class FindSimilarCommand extends KnowledgeCommand {
   constructor() {
     super(
-      '/find-similar',
-      'Find content similar to the provided text or current selection',
-      '/find-similar [text] [--type=all|code|docs] [--limit=10] [--threshold=0.7]',
-      ['/similar', '/fs']
+      "/find-similar",
+      "Find content similar to the provided text or current selection",
+      "/find-similar [text] [--type=all|code|docs] [--limit=10] [--threshold=0.7]",
+      ["/similar", "/fs"],
     );
   }
 
   async execute(args, context) {
     const { flags, positional } = this.parseArgs(args);
-    const content = positional.join(' ') || context.selectedText;
-    const type = flags.type || 'all';
+    const content = positional.join(" ") || context.selectedText;
+    const type = flags.type || "all";
     const limit = parseInt(flags.limit) || 10;
     const threshold = parseFloat(flags.threshold) || 0.7;
 
     if (!content) {
       return {
         success: false,
-        message: 'Please provide text or select text to find similar content.'
+        message: "Please provide text or select text to find similar content.",
       };
     }
 
@@ -118,13 +118,13 @@ export class FindSimilarCommand extends KnowledgeCommand {
         content,
         type,
         limit,
-        threshold
+        threshold,
       });
 
       if (results.items.length === 0) {
         return {
           success: true,
-          message: 'No similar content found with the specified criteria.'
+          message: "No similar content found with the specified criteria.",
         };
       }
 
@@ -134,12 +134,12 @@ export class FindSimilarCommand extends KnowledgeCommand {
         success: true,
         message: `Found ${results.items.length} similar items. See citations for details.`,
         citations,
-        data: { similarItems: results.items }
+        data: { similarItems: results.items },
       };
     } catch (error) {
       return {
         success: false,
-        message: `Error finding similar content: ${error.message}`
+        message: `Error finding similar content: ${error.message}`,
       };
     }
   }
@@ -150,12 +150,12 @@ export class FindSimilarCommand extends KnowledgeCommand {
       number: index + 1,
       source: {
         id: item.id,
-        title: item.title || 'Code snippet',
-        path: item.path || item.file_path || 'unknown',
-        type: item.type || 'document'
+        title: item.title || "Code snippet",
+        path: item.path || item.file_path || "unknown",
+        type: item.type || "document",
       },
       content: item.content.slice(0, 200),
-      confidence: item.score || 0.8
+      confidence: item.score || 0.8,
     }));
   }
 }
@@ -166,36 +166,36 @@ export class FindSimilarCommand extends KnowledgeCommand {
 export class CitationCommand extends KnowledgeCommand {
   constructor() {
     super(
-      '/cite',
-      'Create citations from search results or specific documents',
-      '/cite <query> [--format=apa|mla|chicago] [--max-items=5]',
-      ['/citation', '/ref']
+      "/cite",
+      "Create citations from search results or specific documents",
+      "/cite <query> [--format=apa|mla|chicago] [--max-items=5]",
+      ["/citation", "/ref"],
     );
   }
 
   async execute(args, context) {
     const { flags, positional } = this.parseArgs(args);
-    const query = positional.join(' ');
-    const format = flags.format || 'apa';
-    const maxItems = parseInt(flags['max-items']) || 5;
+    const query = positional.join(" ");
+    const format = flags.format || "apa";
+    const maxItems = parseInt(flags["max-items"]) || 5;
 
     if (!query) {
       return {
         success: false,
-        message: 'Please provide a search query to create citations.'
+        message: "Please provide a search query to create citations.",
       };
     }
 
     try {
       const results = await searchAPI.hybridSearch(context.projectId, {
         query,
-        limit: maxItems
+        limit: maxItems,
       });
 
       if (results.results.length === 0) {
         return {
           success: true,
-          message: 'No relevant content found for citation.'
+          message: "No relevant content found for citation.",
         };
       }
 
@@ -205,12 +205,12 @@ export class CitationCommand extends KnowledgeCommand {
         success: true,
         message: `Created ${citations.length} citations in ${format.toUpperCase()} format.`,
         citations,
-        data: { formattedCitations: citations.map(c => c.formatted) }
+        data: { formattedCitations: citations.map((c) => c.formatted) },
       };
     } catch (error) {
       return {
         success: false,
-        message: `Error creating citations: ${error.message}`
+        message: `Error creating citations: ${error.message}`,
       };
     }
   }
@@ -222,23 +222,23 @@ export class CitationCommand extends KnowledgeCommand {
         number: index + 1,
         source: {
           id: item.id,
-          title: item.title || 'Code snippet',
-          path: item.path || item.file_path || 'unknown',
-          type: item.type || 'document'
+          title: item.title || "Code snippet",
+          path: item.path || item.file_path || "unknown",
+          type: item.type || "document",
         },
         content: item.content.slice(0, 200),
-        confidence: item.score || 0.8
+        confidence: item.score || 0.8,
       };
 
       // Add formatted citation based on style
       switch (format.toLowerCase()) {
-        case 'apa':
+        case "apa":
           citation.formatted = `${citation.source.title}. Retrieved from ${citation.source.path}`;
           break;
-        case 'mla':
+        case "mla":
           citation.formatted = `"${citation.source.title}." ${citation.source.path}.`;
           break;
-        case 'chicago':
+        case "chicago":
           citation.formatted = `${citation.source.title}, ${citation.source.path}.`;
           break;
         default:
@@ -256,24 +256,25 @@ export class CitationCommand extends KnowledgeCommand {
 export class CrossReferenceCommand extends KnowledgeCommand {
   constructor() {
     super(
-      '/xref',
-      'Find cross-references and connections between code and documentation',
-      '/xref <term> [--include-docs] [--include-code] [--depth=2]',
-      ['/cross-ref', '/connections']
+      "/xref",
+      "Find cross-references and connections between code and documentation",
+      "/xref <term> [--include-docs] [--include-code] [--depth=2]",
+      ["/cross-ref", "/connections"],
     );
   }
 
   async execute(args, context) {
     const { flags, positional } = this.parseArgs(args);
-    const term = positional.join(' ') || context.selectedText;
-    const includeDocs = flags['include-docs'] || true;
-    const includeCode = flags['include-code'] || true;
+    const term = positional.join(" ") || context.selectedText;
+    const includeDocs = flags["include-docs"] || true;
+    const includeCode = flags["include-code"] || true;
     // const depth = parseInt(flags.depth) || 2; // TODO: Implement depth-based search
 
     if (!term) {
       return {
         success: false,
-        message: 'Please provide a term or select text to find cross-references.'
+        message:
+          "Please provide a term or select text to find cross-references.",
       };
     }
 
@@ -284,8 +285,8 @@ export class CrossReferenceCommand extends KnowledgeCommand {
         searches.push(
           searchAPI.searchDocuments(context.projectId, {
             query: term,
-            limit: 15
-          })
+            limit: 15,
+          }),
         );
       }
 
@@ -293,18 +294,18 @@ export class CrossReferenceCommand extends KnowledgeCommand {
         searches.push(
           searchAPI.searchCode(context.projectId, {
             query: term,
-            limit: 15
-          })
+            limit: 15,
+          }),
         );
       }
 
       const results = await Promise.all(searches);
-      const allItems = results.flatMap(r => r.results || []);
+      const allItems = results.flatMap((r) => r.results || []);
 
       if (allItems.length === 0) {
         return {
           success: true,
-          message: 'No cross-references found.'
+          message: "No cross-references found.",
         };
       }
 
@@ -315,12 +316,12 @@ export class CrossReferenceCommand extends KnowledgeCommand {
         success: true,
         message: `Found ${allItems.length} cross-references with ${connections.length} connections.`,
         citations,
-        data: { connections, crossReferences: allItems }
+        data: { connections, crossReferences: allItems },
       };
     } catch (error) {
       return {
         success: false,
-        message: `Error finding cross-references: ${error.message}`
+        message: `Error finding cross-references: ${error.message}`,
       };
     }
   }
@@ -336,15 +337,15 @@ export class CrossReferenceCommand extends KnowledgeCommand {
         const item2 = items[j];
 
         // Check for common terms, similar paths, or content overlap
-        const content1 = (item1.content || '').toLowerCase();
-        const content2 = (item2.content || '').toLowerCase();
+        const content1 = (item1.content || "").toLowerCase();
+        const content2 = (item2.content || "").toLowerCase();
 
         if (content1.includes(termLower) && content2.includes(termLower)) {
           connections.push({
             from: item1.id,
             to: item2.id,
-            type: 'term_reference',
-            strength: this.calculateConnectionStrength(item1, item2, term)
+            type: "term_reference",
+            strength: this.calculateConnectionStrength(item1, item2, term),
           });
         }
       }
@@ -361,8 +362,8 @@ export class CrossReferenceCommand extends KnowledgeCommand {
     if (item1.type === item2.type) strength += 0.2;
 
     // Similar paths bonus
-    const path1 = item1.path || item1.file_path || '';
-    const path2 = item2.path || item2.file_path || '';
+    const path1 = item1.path || item1.file_path || "";
+    const path2 = item2.path || item2.file_path || "";
     if (path1 && path2) {
       const commonDirs = this.getCommonDirectories(path1, path2);
       strength += commonDirs * 0.1;
@@ -378,8 +379,8 @@ export class CrossReferenceCommand extends KnowledgeCommand {
   }
 
   getCommonDirectories(path1, path2) {
-    const dirs1 = path1.split('/').slice(0, -1);
-    const dirs2 = path2.split('/').slice(0, -1);
+    const dirs1 = path1.split("/").slice(0, -1);
+    const dirs2 = path2.split("/").slice(0, -1);
     let common = 0;
 
     for (let i = 0; i < Math.min(dirs1.length, dirs2.length); i++) {
@@ -399,12 +400,12 @@ export class CrossReferenceCommand extends KnowledgeCommand {
       number: index + 1,
       source: {
         id: item.id,
-        title: item.title || 'Code snippet',
-        path: item.path || item.file_path || 'unknown',
-        type: item.type || 'document'
+        title: item.title || "Code snippet",
+        path: item.path || item.file_path || "unknown",
+        type: item.type || "document",
       },
       content: item.content.slice(0, 200),
-      confidence: item.score || 0.8
+      confidence: item.score || 0.8,
     }));
   }
 }
@@ -415,47 +416,52 @@ export class CrossReferenceCommand extends KnowledgeCommand {
 export class KnowledgeSummaryCommand extends KnowledgeCommand {
   constructor() {
     super(
-      '/knowledge-summary',
-      'Summarize relevant knowledge base content',
-      '/knowledge-summary <topic> [--max-items=10] [--include-stats]',
-      ['/ks', '/summary']
+      "/knowledge-summary",
+      "Summarize relevant knowledge base content",
+      "/knowledge-summary <topic> [--max-items=10] [--include-stats]",
+      ["/ks", "/summary"],
     );
   }
 
   async execute(args, context) {
     const { flags, positional } = this.parseArgs(args);
-    const topic = positional.join(' ') || context.selectedText;
-    const maxItems = parseInt(flags['max-items']) || 10;
-    const includeStats = flags['include-stats'] || false;
+    const topic = positional.join(" ") || context.selectedText;
+    const maxItems = parseInt(flags["max-items"]) || 10;
+    const includeStats = flags["include-stats"] || false;
 
     if (!topic) {
       return {
         success: false,
-        message: 'Please provide a topic or select text to summarize knowledge about.'
+        message:
+          "Please provide a topic or select text to summarize knowledge about.",
       };
     }
 
     try {
       const results = await searchAPI.hybridSearch(context.projectId, {
         query: topic,
-        limit: maxItems
+        limit: maxItems,
       });
 
-      const prompt = this.buildSummaryPrompt(topic, results.results, includeStats);
+      const prompt = this.buildSummaryPrompt(
+        topic,
+        results.results,
+        includeStats,
+      );
       const citations = this.createCitationsFromResults(results.results);
 
       return {
         success: true,
-        message: 'Knowledge summary prepared. Processing with AI...',
+        message: "Knowledge summary prepared. Processing with AI...",
         requiresLLM: true,
         prompt,
         citations,
-        data: { topic, results: results.results }
+        data: { topic, results: results.results },
       };
     } catch (error) {
       return {
         success: false,
-        message: `Error creating knowledge summary: ${error.message}`
+        message: `Error creating knowledge summary: ${error.message}`,
       };
     }
   }
@@ -464,7 +470,7 @@ export class KnowledgeSummaryCommand extends KnowledgeCommand {
     let prompt = `Please provide a comprehensive summary of the knowledge available about "${topic}" based on the following sources:\n\n`;
 
     results.forEach((item, index) => {
-      const title = item.title || `${item.type || 'Content'} ${index + 1}`;
+      const title = item.title || `${item.type || "Content"} ${index + 1}`;
       prompt += `**Source ${index + 1}: ${title}**\n`;
       if (item.path || item.file_path) {
         prompt += `Path: ${item.path || item.file_path}\n`;
@@ -493,12 +499,12 @@ export class KnowledgeSummaryCommand extends KnowledgeCommand {
       number: index + 1,
       source: {
         id: item.id,
-        title: item.title || 'Knowledge source',
-        path: item.path || item.file_path || 'unknown',
-        type: item.type || 'document'
+        title: item.title || "Knowledge source",
+        path: item.path || item.file_path || "unknown",
+        type: item.type || "document",
       },
       content: item.content.slice(0, 200),
-      confidence: item.score || 0.8
+      confidence: item.score || 0.8,
     }));
   }
 }
@@ -517,17 +523,17 @@ export class KnowledgeCommandRegistry {
       new FindSimilarCommand(),
       new CitationCommand(),
       new CrossReferenceCommand(),
-      new KnowledgeSummaryCommand()
+      new KnowledgeSummaryCommand(),
     ];
 
-    defaultCommands.forEach(cmd => {
+    defaultCommands.forEach((cmd) => {
       this.register(cmd);
     });
   }
 
   register(command) {
     this.commands.set(command.name, command);
-    command.aliases.forEach(alias => {
+    command.aliases.forEach((alias) => {
       this.commands.set(alias, command);
     });
   }
@@ -538,7 +544,7 @@ export class KnowledgeCommandRegistry {
 
   getAll() {
     const unique = new Map();
-    this.commands.forEach(cmd => {
+    this.commands.forEach((cmd) => {
       unique.set(cmd.name, cmd);
     });
     return Array.from(unique.values());
@@ -546,13 +552,15 @@ export class KnowledgeCommandRegistry {
 
   async execute(commandLine, context) {
     const [commandName, ...argParts] = commandLine.trim().split(/\s+/);
-    const args = argParts.join(' ');
+    const args = argParts.join(" ");
 
     const command = this.get(commandName);
     if (!command) {
       return {
         success: false,
-        message: `Unknown command: ${commandName}. Available commands: ${this.getAll().map(c => c.name).join(', ')}`
+        message: `Unknown command: ${commandName}. Available commands: ${this.getAll()
+          .map((c) => c.name)
+          .join(", ")}`,
       };
     }
 

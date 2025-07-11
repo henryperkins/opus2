@@ -75,7 +75,11 @@ except ModuleNotFoundError:  # dialect not installed
 def _check_sqlite(element, _comp, **_) -> str:  # type: ignore
     """Strip PG-specific operators/functions from CHECK for SQLite."""
     unsupported = ("~", "jsonb_typeof", "char_length")
-    expr = "1" if any(tok in str(element.sqltext) for tok in unsupported) else element.sqltext
+    expr = (
+        "1"
+        if any(tok in str(element.sqltext) for tok in unsupported)
+        else element.sqltext
+    )
     name = f"CONSTRAINT {element.name} " if element.name else ""
     return f"{name}CHECK ({expr})"
 
@@ -89,6 +93,7 @@ def _autoselect_postgres_driver(url: str) -> str:
         return url
     try:
         import psycopg2  # noqa: F401
+
         return url
     except ModuleNotFoundError:
         try:
@@ -106,7 +111,11 @@ def _build_async_url(url: str) -> str:
     if url.startswith("postgresql"):
         async_url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         parsed = urlparse(async_url)
-        qs = {k: v for k, v in parse_qsl(parsed.query) if k not in {"sslmode", "channel_binding"}}
+        qs = {
+            k: v
+            for k, v in parse_qsl(parsed.query)
+            if k not in {"sslmode", "channel_binding"}
+        }
         return urlunparse(parsed._replace(query=urlencode(qs)))  # pyright: ignore
 
     return url
@@ -145,16 +154,20 @@ try:
     if _async_url.startswith("sqlite+aiosqlite"):
         __import__("aiosqlite")
 
-    connect_args: dict[str, object] = {"ssl": True} if _async_url.startswith(
-        "postgresql+asyncpg"
-    ) else {}
+    connect_args: dict[str, object] = (
+        {"ssl": True} if _async_url.startswith("postgresql+asyncpg") else {}
+    )
 
     async_engine = create_async_engine(
-        _async_url, echo=settings.database_echo, pool_pre_ping=True, connect_args=connect_args
+        _async_url,
+        echo=settings.database_echo,
+        pool_pre_ping=True,
+        connect_args=connect_args,
     )
     AsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)  # type: ignore[arg-type]
 
 except ModuleNotFoundError:  # driver missing – expose stub
+
     class _AsyncStub(types.ModuleType):
         def __getattr__(self, _):
             raise RuntimeError("Async DB support unavailable – missing driver")

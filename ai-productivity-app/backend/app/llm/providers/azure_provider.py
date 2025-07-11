@@ -41,10 +41,8 @@ class AzureOpenAIProvider(LLMProvider):
 
         super().__init__(**merged_cfg)
         from app.config import settings
-        self.api_version = kwargs.get(
-            "api_version",
-            settings.azure_openai_api_version
-        )
+
+        self.api_version = kwargs.get("api_version", settings.azure_openai_api_version)
 
     # ------------------------------------------------------------------
     # Helper shortcuts – kept for backward compatibility only
@@ -111,7 +109,7 @@ class AzureOpenAIProvider(LLMProvider):
         tool_choice: Optional[str | Dict[str, Any]] = None,
         parallel_tool_calls: bool = True,
         reasoning: Optional[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ) -> Any:
         """Execute Azure OpenAI completion."""
 
@@ -120,7 +118,9 @@ class AzureOpenAIProvider(LLMProvider):
         # *model* requires the Responses API (o3/o4 or GPT-4o family).  This
         # avoids silent 400 errors when callers forgot to set the flag.
 
-        auto_responses = self._is_reasoning_model(model) or self._requires_responses_api(model)
+        auto_responses = self._is_reasoning_model(
+            model
+        ) or self._requires_responses_api(model)
 
         # Auto-enable Responses API mode when the selected *model* mandates it
         # (e.g. GPT-4o or reasoning family).  Persist the decision so that
@@ -165,22 +165,21 @@ class AzureOpenAIProvider(LLMProvider):
         tools: Optional[List[Dict[str, Any]]],
         tool_choice: Optional[str | Dict[str, Any]],
         parallel_tool_calls: bool,
-        **kwargs
+        **kwargs,
     ) -> Any:
         """Use standard Chat Completions API."""
         is_reasoning = self._is_reasoning_model(model)
-        
+
         # Convert system messages to developer messages for reasoning models
         processed_messages = []
         for msg in messages:
             if is_reasoning and msg.get("role") == "system":
-                processed_messages.append({
-                    "role": "developer",
-                    "content": msg["content"]
-                })
+                processed_messages.append(
+                    {"role": "developer", "content": msg["content"]}
+                )
             else:
                 processed_messages.append(msg)
-        
+
         if is_reasoning:
             params = {
                 "model": model,
@@ -201,9 +200,9 @@ class AzureOpenAIProvider(LLMProvider):
                 tools=tools,
                 tool_choice=tool_choice,
                 parallel_tool_calls=parallel_tool_calls,
-                **kwargs
+                **kwargs,
             )
-        
+
         return await self.client.chat.completions.create(**params)
 
     async def _complete_responses_api(
@@ -216,7 +215,7 @@ class AzureOpenAIProvider(LLMProvider):
         tools: Optional[List[Dict[str, Any]]],
         tool_choice: Optional[str | Dict[str, Any]],
         reasoning: Optional[Dict[str, Any]],
-        **kwargs
+        **kwargs,
     ) -> Any:
         """Use Azure Responses API."""
         is_reasoning = self._is_reasoning_model(model)
@@ -231,34 +230,30 @@ class AzureOpenAIProvider(LLMProvider):
                     instructions += "\n\n" + msg["content"]
                 else:
                     instructions = msg["content"]
-            elif msg["role"] == "developer" or (is_reasoning and msg["role"] == "system"):
+            elif msg["role"] == "developer" or (
+                is_reasoning and msg["role"] == "system"
+            ):
                 # For reasoning models, handle developer messages properly
-                input_messages.append({
-                    "role": "developer",
-                    "content": msg["content"],
-                    "type": "message"
-                })
+                input_messages.append(
+                    {"role": "developer", "content": msg["content"], "type": "message"}
+                )
             else:
-                input_messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"],
-                    "type": "message"
-                })
+                input_messages.append(
+                    {"role": msg["role"], "content": msg["content"], "type": "message"}
+                )
 
         # For reasoning models, use simple input format as shown in the docs
-        if is_reasoning and len(input_messages) == 1 and input_messages[0]["role"] == "user":
+        if (
+            is_reasoning
+            and len(input_messages) == 1
+            and input_messages[0]["role"] == "user"
+        ):
             # Use simple string input format for single user messages
-            params = {
-                "model": model,
-                "input": input_messages[0]["content"]
-            }
+            params = {"model": model, "input": input_messages[0]["content"]}
         else:
             # Use message array format for complex conversations
-            params = {
-                "model": model,
-                "input": input_messages
-            }
-            
+            params = {"model": model, "input": input_messages}
+
         # Reasoning models don't support temperature or streaming
         if not is_reasoning:
             params["temperature"] = temperature
@@ -330,61 +325,70 @@ class AzureOpenAIProvider(LLMProvider):
         else:
             # Standard Chat API streaming with tool call support
             tool_call_buffer = {}  # Buffer for accumulating tool call deltas
-            
+
             async for chunk in response:
                 if not chunk.choices:
                     continue
-                    
+
                 delta = chunk.choices[0].delta
-                
+
                 # Handle content streaming
                 if delta.content:
                     yield delta.content
-                
+
                 # Handle tool call streaming
                 if delta.tool_calls:
                     for tool_call_delta in delta.tool_calls:
                         index = tool_call_delta.index
-                        
+
                         # Initialize tool call buffer for this index if needed
                         if index not in tool_call_buffer:
                             tool_call_buffer[index] = {
                                 "id": "",
                                 "type": "function",
-                                "function": {"name": "", "arguments": ""}
+                                "function": {"name": "", "arguments": ""},
                             }
-                        
+
                         # Accumulate deltas
                         if tool_call_delta.id:
                             tool_call_buffer[index]["id"] += tool_call_delta.id
-                        
+
                         if tool_call_delta.function:
                             if tool_call_delta.function.name:
-                                tool_call_buffer[index]["function"]["name"] += tool_call_delta.function.name
+                                tool_call_buffer[index]["function"][
+                                    "name"
+                                ] += tool_call_delta.function.name
                             if tool_call_delta.function.arguments:
-                                tool_call_buffer[index]["function"]["arguments"] += tool_call_delta.function.arguments
-                        
+                                tool_call_buffer[index]["function"][
+                                    "arguments"
+                                ] += tool_call_delta.function.arguments
+
                         # Yield tool call updates as formatted text
                         tool_call = tool_call_buffer[index]
-                        if tool_call["function"]["name"] and tool_call["function"]["arguments"]:
+                        if (
+                            tool_call["function"]["name"]
+                            and tool_call["function"]["arguments"]
+                        ):
                             # Only yield when we have complete function info
                             function_name = tool_call["function"]["name"]
                             try:
                                 import json
+
                                 args = json.loads(tool_call["function"]["arguments"])
                                 tool_text = f"\n[Calling {function_name} with {args}]\n"
                             except json.JSONDecodeError:
                                 # Arguments still being streamed
                                 tool_text = f"\n[Calling {function_name}...]\n"
-                            
+
                             yield tool_text
-                            
+
                 # Handle finish reason for tool calls
-                if hasattr(chunk.choices[0], "finish_reason") and chunk.choices[0].finish_reason == "tool_calls":
+                if (
+                    hasattr(chunk.choices[0], "finish_reason")
+                    and chunk.choices[0].finish_reason == "tool_calls"
+                ):
                     if tool_call_buffer:
                         yield "\n[Tool calls completed]\n"
-
-    
 
     def extract_content(self, response: Any) -> str:
         """Extract content from Azure response."""
@@ -404,30 +408,33 @@ class AzureOpenAIProvider(LLMProvider):
             if hasattr(response, "output") and response.output:
                 for item in response.output:
                     if getattr(item, "type", None) == "function_call":
-                        tool_calls.append({
-                            "id": getattr(item, "id", getattr(item, "call_id", None)),
-                            "name": item.name,
-                            "arguments": item.arguments
-                        })
+                        tool_calls.append(
+                            {
+                                "id": getattr(
+                                    item, "id", getattr(item, "call_id", None)
+                                ),
+                                "name": item.name,
+                                "arguments": item.arguments,
+                            }
+                        )
             return tool_calls
         else:
             return OpenAIProvider.extract_tool_calls(self, response)
 
     def format_tool_result(
-        self,
-        tool_call_id: str,
-        tool_name: str,
-        result: str
+        self, tool_call_id: str, tool_name: str, result: str
     ) -> Dict[str, Any]:
         """Format tool result for Azure."""
         if self.use_responses_api:
             return {
                 "type": "function_call_output",
                 "call_id": tool_call_id,
-                "output": result
+                "output": result,
             }
         else:
-            return OpenAIProvider.format_tool_result(self, tool_call_id, tool_name, result)
+            return OpenAIProvider.format_tool_result(
+                self, tool_call_id, tool_name, result
+            )
 
     def get_supported_features(self) -> set[str]:
         """Azure supports additional features."""
@@ -443,7 +450,7 @@ class AzureOpenAIProvider(LLMProvider):
     def get_model_info(self, model: str) -> Dict[str, Any]:
         """Get information about a specific model."""
         is_reasoning = self._is_reasoning_model(model)
-        
+
         if is_reasoning:
             return {
                 "supports_tools": False,
@@ -452,7 +459,7 @@ class AzureOpenAIProvider(LLMProvider):
                 "max_tokens": 200000,  # Large context window for reasoning models
                 "supports_reasoning": True,
                 "supports_json_mode": False,
-                "model_type": "reasoning"
+                "model_type": "reasoning",
             }
         else:
             return {
@@ -463,5 +470,5 @@ class AzureOpenAIProvider(LLMProvider):
                 "supports_reasoning": False,
                 "supports_json_mode": True,
                 "supports_parallel_tools": True,
-                "model_type": "chat"
+                "model_type": "chat",
             }

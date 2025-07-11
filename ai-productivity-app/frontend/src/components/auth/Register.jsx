@@ -1,37 +1,37 @@
-import { useState } from 'react';
-import PropTypes from 'prop-types';
-import { useAuth } from '../../hooks/useAuth';
+import { useState } from "react";
+import PropTypes from "prop-types";
+import { useAuth } from "../../hooks/useAuth";
 
 function Register({ onLoginSwitch }) {
   const { login } = useAuth();
   const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: ''
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setError("Passwords do not match");
       setLoading(false);
       return;
     }
 
     try {
       // Import and use auth API directly for registration
-      const { authAPI } = await import('../../api/auth');
+      const { authAPI } = await import("../../api/auth");
       await authAPI.register({
         username: formData.username,
         email: formData.email,
-        password: formData.password
+        password: formData.password,
       });
       // Backend returns a token and sets the auth cookie, so we can immediately
       // call the global login helper to populate user state and redirect.
@@ -44,10 +44,10 @@ function Register({ onLoginSwitch }) {
         onLoginSwitch?.();
       }, 500);
     } catch (err) {
-      console.error('Registration error:', err);
-      console.error('Response data:', err.response?.data);
-      console.error('Response status:', err.response?.status);
-      setError(err.response?.data?.detail || 'Registration failed');
+      console.error("Registration error:", err);
+      console.error("Response data:", err.response?.data);
+      console.error("Response status:", err.response?.status);
+      setError(err.response?.data?.detail || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ function Register({ onLoginSwitch }) {
   const handleChange = (e) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 
@@ -64,12 +64,26 @@ function Register({ onLoginSwitch }) {
     return (
       <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
         <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-green-100 rounded-full">
-          <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          <svg
+            className="w-6 h-6 text-green-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 13l4 4L19 7"
+            />
           </svg>
         </div>
-        <h3 className="text-lg font-medium text-green-800 mb-2">Registration Successful!</h3>
-        <p className="text-green-700">You can now log in with your credentials.</p>
+        <h3 className="text-lg font-medium text-green-800 mb-2">
+          Registration Successful!
+        </h3>
+        <p className="text-green-700">
+          You can now log in with your credentials.
+        </p>
       </div>
     );
   }
@@ -78,7 +92,10 @@ function Register({ onLoginSwitch }) {
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4">
         <div>
-          <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor="username"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
             Username
           </label>
           <input
@@ -96,7 +113,10 @@ function Register({ onLoginSwitch }) {
         </div>
 
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor="email"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
             Email
           </label>
           <input
@@ -114,7 +134,10 @@ function Register({ onLoginSwitch }) {
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor="password"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
             Password
           </label>
           <input
@@ -134,7 +157,10 @@ function Register({ onLoginSwitch }) {
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor="confirmPassword"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
             Confirm Password
           </label>
           <input
@@ -156,8 +182,18 @@ function Register({ onLoginSwitch }) {
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center">
-            <svg className="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              className="w-5 h-5 text-red-500 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             <p className="text-red-700 text-sm">{error}</p>
           </div>
@@ -171,20 +207,36 @@ function Register({ onLoginSwitch }) {
       >
         {loading ? (
           <>
-            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <svg
+              className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
             </svg>
             Creating Account...
           </>
         ) : (
-          'Create Account'
+          "Create Account"
         )}
       </button>
 
       <div className="text-center">
         <span className="text-sm text-gray-600">
-          Already have an account?{' '}
+          Already have an account?{" "}
           <button
             type="button"
             onClick={onLoginSwitch}

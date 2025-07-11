@@ -38,6 +38,7 @@ from app.code_processing.chunker import SemanticChunker
 from app.code_processing.language_detector import detect_language
 from app.code_processing.parser import CodeParser
 from app.database import get_db
+
 # Use the new authentication dependency style.
 # ``get_current_user`` enforces authentication and returns the User.
 from app.dependencies import get_current_user
@@ -82,9 +83,7 @@ def _process_code_file(
             session.query(CodeDocument).filter_by(id=doc_id).first()
         )
         if not doc:
-            logger.warning(
-                "CodeDocument %s vanished before processing", doc_id
-            )
+            logger.warning("CodeDocument %s vanished before processing", doc_id)
             return
 
         # ── Parse ────────────────────────────────────────────────────────────
@@ -114,9 +113,7 @@ def _process_code_file(
         doc.is_indexed = False
         session.commit()
 
-        logger.info(
-            "Processed file %s (%d chunks)", doc.file_path, len(chunks)
-        )
+        logger.info("Processed file %s (%d chunks)", doc.file_path, len(chunks))
     except Exception:  # pragma: no cover – log unexpected errors
         logger.exception("Failed to process code file (doc_id=%s)", doc_id)
         session.rollback()
@@ -183,11 +180,13 @@ async def upload_code_files(  # noqa: D401, WPS211
         try:
             # ── MIME type validation ──────────────────────────────────────────
             if upload.content_type not in ALLOWED_MIME_TYPES:
-                results.append({
-                    "file": upload.filename or "unknown",
-                    "status": "rejected",
-                    "reason": f"Unsupported MIME type: {upload.content_type}"
-                })
+                results.append(
+                    {
+                        "file": upload.filename or "unknown",
+                        "status": "rejected",
+                        "reason": f"Unsupported MIME type: {upload.content_type}",
+                    }
+                )
                 continue
 
             # ── Size validation with streaming ────────────────────────────────
@@ -207,15 +206,17 @@ async def upload_code_files(  # noqa: D401, WPS211
 
                 # Check size limit
                 if total_size > settings.max_upload_size:
-                    results.append({
-                        "file": upload.filename or "unknown",
-                        "status": "rejected",
-                        "reason": f"File too large: {total_size} > {settings.max_upload_size}"
-                    })
+                    results.append(
+                        {
+                            "file": upload.filename or "unknown",
+                            "status": "rejected",
+                            "reason": f"File too large: {total_size} > {settings.max_upload_size}",
+                        }
+                    )
                     break
             else:
                 # File size is acceptable, reconstruct content
-                raw = b''.join(content_chunks)
+                raw = b"".join(content_chunks)
                 content_hash_hex = content_hash.hexdigest()
 
                 # ── Duplicate detection by content hash only ──────────────────
@@ -226,11 +227,13 @@ async def upload_code_files(  # noqa: D401, WPS211
                 )
 
                 if existing:
-                    results.append({
-                        "file": upload.filename or "unknown",
-                        "status": "duplicate",
-                        "existing_file": existing.file_path
-                    })
+                    results.append(
+                        {
+                            "file": upload.filename or "unknown",
+                            "status": "duplicate",
+                            "existing_file": existing.file_path,
+                        }
+                    )
                     continue
 
                 # ── Store file to disk securely ───────────────────────────────
@@ -239,7 +242,9 @@ async def upload_code_files(  # noqa: D401, WPS211
                     language = detect_language(upload.filename, content_decoded)
 
                     # Create safe filename and path
-                    safe_filename = upload.filename or f"upload_{content_hash_hex[:8]}.{language}"
+                    safe_filename = (
+                        upload.filename or f"upload_{content_hash_hex[:8]}.{language}"
+                    )
                     file_path = safe_filename
 
                     doc = CodeDocument(
@@ -255,13 +260,13 @@ async def upload_code_files(  # noqa: D401, WPS211
                     # Save file to uploads directory
                     upload_dir = Path(settings.upload_root)
                     upload_dir.mkdir(parents=True, exist_ok=True)
-                    
+
                     full_file_path = upload_dir / file_path
                     # Create parent directories if needed
                     full_file_path.parent.mkdir(parents=True, exist_ok=True)
-                    
+
                     # Write file content to disk
-                    with open(full_file_path, 'wb') as f:
+                    with open(full_file_path, "wb") as f:
                         f.write(raw)
 
                     # Kick background processing
@@ -270,27 +275,33 @@ async def upload_code_files(  # noqa: D401, WPS211
                             _process_code_file, db, doc.id, content_decoded, language
                         )
 
-                    results.append({
-                        "file": upload.filename or "unknown",
-                        "status": "queued",
-                        "document_id": doc.id
-                    })
+                    results.append(
+                        {
+                            "file": upload.filename or "unknown",
+                            "status": "queued",
+                            "document_id": doc.id,
+                        }
+                    )
 
                 except Exception as storage_exc:
                     logger.error("Failed to store file: %s", storage_exc)
-                    results.append({
-                        "file": upload.filename or "unknown",
-                        "status": "error",
-                        "reason": "Storage failure"
-                    })
+                    results.append(
+                        {
+                            "file": upload.filename or "unknown",
+                            "status": "error",
+                            "reason": "Storage failure",
+                        }
+                    )
 
         except Exception as exc:
             logger.error("Upload processing failed for %s: %s", upload.filename, exc)
-            results.append({
-                "file": upload.filename or "unknown",
-                "status": "error",
-                "reason": "Processing failure"
-            })
+            results.append(
+                {
+                    "file": upload.filename or "unknown",
+                    "status": "error",
+                    "reason": "Processing failure",
+                }
+            )
 
     return {"results": results}
 
@@ -323,12 +334,7 @@ def list_project_files(
         q = q.filter(CodeDocument.file_path.ilike(like))
 
     total = q.count()
-    docs = (
-        q.order_by(CodeDocument.file_path)
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    docs = q.order_by(CodeDocument.file_path).offset(offset).limit(limit).all()
 
     return {
         "total": total,
@@ -354,9 +360,7 @@ def list_project_files(
 def delete_file(file_id: int, db: Session = Depends(get_db)):
     """Delete a single CodeDocument (and cascade embeddings)."""
 
-    doc: CodeDocument | None = (
-        db.query(CodeDocument).filter_by(id=file_id).first()
-    )
+    doc: CodeDocument | None = db.query(CodeDocument).filter_by(id=file_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -370,34 +374,35 @@ def delete_file(file_id: int, db: Session = Depends(get_db)):
 # Get file content by path
 # ---------------------------------------------------------------------------
 
+
 @router.get("/files/content")
 def get_file_content(
     file_path: str,
     project_id: int | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Get file content by path."""
     query = db.query(CodeDocument).filter(CodeDocument.file_path == file_path)
-    
+
     if project_id:
         query = query.filter(CodeDocument.project_id == project_id)
-    
+
     doc: CodeDocument | None = query.first()
     if not doc:
         raise HTTPException(status_code=404, detail="File not found")
-    
+
     # Check if user has access to this project
     project = db.query(Project).filter_by(id=doc.project_id).first()
     if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     # Read file content from disk
     try:
         file_full_path = os.path.join(settings.upload_root, doc.file_path)
-        with open(file_full_path, 'r', encoding='utf-8') as f:
+        with open(file_full_path, "r", encoding="utf-8") as f:
             content = f.read()
-        
+
         return {
             "content": content,
             "language": doc.language,
@@ -405,32 +410,34 @@ def get_file_content(
             "size": doc.file_size,
         }
     except FileNotFoundError:
-        logger.warning(f"File exists in database but missing on disk: {doc.file_path} (expected at {file_full_path})")
-        
+        logger.warning(
+            f"File exists in database but missing on disk: {doc.file_path} (expected at {file_full_path})"
+        )
+
         # Try to find the file in the original codebase structure as fallback
         # Remove the leading project name from path if present
         potential_path = doc.file_path
-        if '/' in potential_path:
+        if "/" in potential_path:
             # Try without the first directory component
-            path_parts = potential_path.split('/', 1)
+            path_parts = potential_path.split("/", 1)
             if len(path_parts) > 1:
                 fallback_path = path_parts[1]  # Skip the "ai-productivity-app" prefix
                 try:
-                    with open(fallback_path, 'r', encoding='utf-8') as f:
+                    with open(fallback_path, "r", encoding="utf-8") as f:
                         content = f.read()
                     logger.info(f"Found file at fallback location: {fallback_path}")
                     return {
                         "content": content,
                         "language": doc.language,
                         "file_path": doc.file_path,
-                        "size": len(content.encode('utf-8')),
+                        "size": len(content.encode("utf-8")),
                     }
                 except FileNotFoundError:
                     pass
-        
+
         raise HTTPException(
-            status_code=404, 
-            detail=f"File found in database but missing from disk: {doc.file_path}. This may indicate a synchronization issue."
+            status_code=404,
+            detail=f"File found in database but missing from disk: {doc.file_path}. This may indicate a synchronization issue.",
         )
     except Exception as e:
         logger.error(f"Error reading file {doc.file_path}: {e}")
@@ -441,53 +448,59 @@ def get_file_content(
 # Database maintenance endpoint for identifying orphaned files
 # ---------------------------------------------------------------------------
 
+
 @router.get("/files/integrity-check")
 def check_file_integrity(
     fix_orphaned: bool = False,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Check database-filesystem integrity and optionally fix orphaned entries.
-    
+
     This endpoint helps identify files that exist in the database but are missing from disk.
     """
     # Only allow admins or during development
     if not settings.debug:
         raise HTTPException(status_code=403, detail="Only available in debug mode")
-    
+
     # Get user's documents or all if admin check is implemented
-    query = db.query(CodeDocument).filter(
-        db.query(Project).filter(Project.id == CodeDocument.project_id).filter(Project.owner_id == current_user.id).exists()
-    ).limit(limit)
-    
+    query = (
+        db.query(CodeDocument)
+        .filter(
+            db.query(Project)
+            .filter(Project.id == CodeDocument.project_id)
+            .filter(Project.owner_id == current_user.id)
+            .exists()
+        )
+        .limit(limit)
+    )
+
     docs = query.all()
-    results = {
-        "checked": 0,
-        "missing_files": [],
-        "fixed": 0
-    }
-    
+    results = {"checked": 0, "missing_files": [], "fixed": 0}
+
     for doc in docs:
         results["checked"] += 1
         file_full_path = os.path.join(settings.upload_root, doc.file_path)
-        
+
         if not os.path.exists(file_full_path):
-            results["missing_files"].append({
-                "id": doc.id,
-                "file_path": doc.file_path,
-                "project_id": doc.project_id,
-                "expected_path": file_full_path
-            })
-            
+            results["missing_files"].append(
+                {
+                    "id": doc.id,
+                    "file_path": doc.file_path,
+                    "project_id": doc.project_id,
+                    "expected_path": file_full_path,
+                }
+            )
+
             if fix_orphaned:
                 db.delete(doc)
                 results["fixed"] += 1
-    
+
     if fix_orphaned and results["fixed"] > 0:
         db.commit()
         logger.info(f"Removed {results['fixed']} orphaned file entries")
-    
+
     return results
 
 
@@ -503,6 +516,7 @@ def check_file_integrity(
 
 class UsageRequest(BaseModel):
     """Request body for finding symbol usages."""
+
     file_path: str
     line: int
     column: int
@@ -510,6 +524,7 @@ class UsageRequest(BaseModel):
 
 class CodeExecRequest(BaseModel):
     """Request body for /api/code/execute."""
+
     code: str
     language: str = "python"
     project_id: int | None = None  # reserved for future
@@ -517,6 +532,7 @@ class CodeExecRequest(BaseModel):
 
 class CodeExecResponse(BaseModel):
     """Response body for /api/code/execute."""
+
     stdout: str
     stderr: str
     result_repr: str | None = None
@@ -528,22 +544,22 @@ async def find_symbol_usages(
     project_id: int,
     request: UsageRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Find all usages of a symbol at a given location."""
     # Verify project access
-    project = db.query(Project).filter_by(id=project_id, owner_id=current_user.id).first()
+    project = (
+        db.query(Project).filter_by(id=project_id, owner_id=current_user.id).first()
+    )
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     # Get project repository path
     project_path = f"repos/project_{project_id}"
-    
+
     usage_searcher = UsageSearcher(project_path)
     results = usage_searcher.find_usages(
-        file_path=request.file_path,
-        line=request.line,
-        column=request.column
+        file_path=request.file_path, line=request.line, column=request.column
     )
     return results
 
@@ -558,12 +574,13 @@ async def execute_code(req: CodeExecRequest) -> CodeExecResponse:  # noqa: D401
     """
     # SECURITY: Disable code execution by default - extremely dangerous
     from app.config import settings
-    if not getattr(settings, 'allow_code_execution', False):
+
+    if not getattr(settings, "allow_code_execution", False):
         raise HTTPException(
-            status_code=403, 
-            detail="Code execution is disabled for security reasons. Set ALLOW_CODE_EXECUTION=true to enable."
+            status_code=403,
+            detail="Code execution is disabled for security reasons. Set ALLOW_CODE_EXECUTION=true to enable.",
         )
-    
+
     if req.language.lower() not in {"python", "py"}:
         raise HTTPException(status_code=400, detail="Only Python execution supported")
 
@@ -571,7 +588,9 @@ async def execute_code(req: CodeExecRequest) -> CodeExecResponse:  # noqa: D401
     local_vars: dict[str, object] = {}
 
     try:
-        with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+        with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(
+            stderr_buf
+        ):
             exec(textwrap.dedent(req.code), {}, local_vars)  # pylint: disable=exec-used
         # Conventional REPL result variable (“_”) if provided
         result_repr = repr(local_vars.get("_", None))

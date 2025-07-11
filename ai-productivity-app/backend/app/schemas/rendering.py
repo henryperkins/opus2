@@ -1,6 +1,7 @@
 """
 Rendering API schemas for response processing and rendering.
 """
+
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
@@ -8,6 +9,7 @@ from pydantic import BaseModel, Field
 
 class FormatDetectionResult(BaseModel):
     """Format detection result."""
+
     has_code: bool = False
     has_math: bool = False
     has_diagrams: bool = False
@@ -20,6 +22,7 @@ class FormatDetectionResult(BaseModel):
 
 class ChunkRenderRequest(BaseModel):
     """Chunk rendering request."""
+
     chunk: str
     format_info: Optional[FormatDetectionResult] = None
     syntax_theme: Optional[str] = "github"
@@ -29,6 +32,7 @@ class ChunkRenderRequest(BaseModel):
 
 class InteractiveElement(BaseModel):
     """Interactive element definition."""
+
     id: str
     type: str = Field(..., pattern=r"^(code|decision_tree|form|button|chart)$")
     content: str
@@ -39,6 +43,7 @@ class InteractiveElement(BaseModel):
 
 class RenderedChunk(BaseModel):
     """Rendered chunk result."""
+
     content: str
     formatted: bool = True
     interactive_elements: Optional[List[InteractiveElement]] = None
@@ -49,17 +54,20 @@ class RenderedChunk(BaseModel):
 
 class InteractiveInjectionRequest(BaseModel):
     """Interactive elements injection request."""
+
     chunks: List[RenderedChunk]
     format_info: FormatDetectionResult
 
 
 class ActionBindingRequest(BaseModel):
     """Action binding request."""
+
     elements: List[InteractiveElement]
 
 
 class StreamingOptions(BaseModel):
     """Streaming configuration options."""
+
     chunk_size: Optional[int] = Field(5, ge=1, le=50)
     delay_ms: Optional[int] = Field(100, ge=0, le=1000)
     enable_progressive: Optional[bool] = True
@@ -67,18 +75,21 @@ class StreamingOptions(BaseModel):
 
 class MathRenderRequest(BaseModel):
     """Math rendering request."""
+
     expression: str
     renderer: str = Field("katex", pattern=r"^(katex|mathjax)$")
 
 
 class DiagramRenderRequest(BaseModel):
     """Diagram rendering request."""
+
     code: str
     type: str = Field("mermaid", pattern=r"^(mermaid|d3|graphviz)$")
 
 
 class ContentValidationRequest(BaseModel):
     """Content validation request."""
+
     content: str
     check_xss: Optional[bool] = True
     check_scripts: Optional[bool] = True
@@ -87,6 +98,7 @@ class ContentValidationRequest(BaseModel):
 
 class ValidationResult(BaseModel):
     """Content validation result."""
+
     is_safe: bool
     issues: Optional[List[str]] = None
     sanitized_content: Optional[str] = None
@@ -95,6 +107,7 @@ class ValidationResult(BaseModel):
 
 class RenderingCapabilities(BaseModel):
     """Rendering capabilities and supported formats."""
+
     supported_formats: List[str]
     syntax_themes: List[str]
     math_renderers: List[str]
@@ -105,6 +118,7 @@ class RenderingCapabilities(BaseModel):
 
 class RenderingResponse(BaseModel):
     """Standard rendering API response."""
+
     success: bool
     message: Optional[str] = None
     data: Optional[Any] = None

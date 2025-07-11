@@ -10,7 +10,7 @@ class AppException(Exception):
         self,
         message: str,
         error_code: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(message)
         self.error_code = error_code
@@ -19,6 +19,7 @@ class AppException(Exception):
 
 class LLMException(AppException):
     """Exceptions related to LLM operations."""
+
     pass
 
 
@@ -29,7 +30,7 @@ class ModelNotFoundException(LLMException):
         super().__init__(
             f"Model '{model}' not found for provider '{provider}'",
             error_code="MODEL_NOT_FOUND",
-            details={"model": model, "provider": provider}
+            details={"model": model, "provider": provider},
         )
 
 
@@ -40,7 +41,7 @@ class LLMRateLimitException(LLMException):
         super().__init__(
             "LLM rate limit exceeded",
             error_code="LLM_RATE_LIMIT",
-            details={"retry_after": retry_after}
+            details={"retry_after": retry_after},
         )
 
 
@@ -51,12 +52,13 @@ class LLMTimeoutException(LLMException):
         super().__init__(
             f"LLM request timed out after {timeout} seconds",
             error_code="LLM_TIMEOUT",
-            details={"timeout": timeout}
+            details={"timeout": timeout},
         )
 
 
 class EmbeddingException(AppException):
     """Exceptions related to embedding operations."""
+
     pass
 
 
@@ -67,5 +69,5 @@ class VectorDimensionMismatchException(EmbeddingException):
         super().__init__(
             f"Embedding dimension mismatch: expected {expected}, got {actual}",
             error_code="DIMENSION_MISMATCH",
-            details={"expected": expected, "actual": actual}
+            details={"expected": expected, "actual": actual},
         )

@@ -88,7 +88,9 @@ async def detect_formats(content: str) -> RenderingResponse:
         )
         return RenderingResponse(success=True, data=result.dict())
     except Exception as exc:  # pragma: no cover
-        raise HTTPException(status_code=500, detail=f"Format detection failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Format detection failed: {exc}"
+        ) from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -105,16 +107,18 @@ async def render_chunk(
 
         if request.format_info and request.format_info.has_code:
             # Prefer explicit code renderer when the chunk was fenced
-            lang = (request.format_info.detected_languages[0]
-                    if request.format_info.detected_languages else "text")
+            lang = (
+                request.format_info.detected_languages[0]
+                if request.format_info.detected_languages
+                else "text"
+            )
             rendered = await renderer.render_code(
                 code=request.chunk,
                 language=lang,
                 theme=request.syntax_theme or "github",
             )
         else:
-            has_math = (request.format_info.has_math
-                        if request.format_info else False)
+            has_math = request.format_info.has_math if request.format_info else False
             rendered = await renderer.render_markdown(
                 content=request.chunk,
                 options={
@@ -129,8 +133,9 @@ async def render_chunk(
             "content": rendered["html"],
             "formatted": True,
             "render_time": render_time,
-            "format_used": (request.format_info.primary_format
-                            if request.format_info else "text"),
+            "format_used": (
+                request.format_info.primary_format if request.format_info else "text"
+            ),
             "metadata": {
                 "theme": request.syntax_theme,
                 "fallback": rendered.get("fallback", False),
@@ -188,7 +193,9 @@ async def inject_interactive_elements(
             data={"enhanced_chunks": [c.dict() for c in enhanced]},
         )
     except Exception as exc:  # pragma: no cover
-        raise HTTPException(status_code=500, detail=f"Interactive injection failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Interactive injection failed: {exc}"
+        ) from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -203,9 +210,13 @@ async def bind_actions(request: ActionBindingRequest) -> RenderingResponse:
             handlers = {act: f"handle{act.capitalize()}" for act in elem.actions}
             elem.metadata = {**(elem.metadata or {}), "handlers": handlers}
             bound.append(elem)
-        return RenderingResponse(success=True, data={"bound_elements": [e.dict() for e in bound]})
+        return RenderingResponse(
+            success=True, data={"bound_elements": [e.dict() for e in bound]}
+        )
     except Exception as exc:  # pragma: no cover
-        raise HTTPException(status_code=500, detail=f"Action binding failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Action binding failed: {exc}"
+        ) from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -215,13 +226,15 @@ async def bind_actions(request: ActionBindingRequest) -> RenderingResponse:
 async def render_math(request: MathRenderRequest) -> RenderingResponse:
     """Render mathematical expressions."""
     html = f'<span class="math-{request.renderer}">{request.expression}</span>'
-    return RenderingResponse(success=True, data={"html": html, "renderer": request.renderer})
+    return RenderingResponse(
+        success=True, data={"html": html, "renderer": request.renderer}
+    )
 
 
 @router.post("/diagram", response_model=RenderingResponse)
 async def render_diagram(request: DiagramRenderRequest) -> RenderingResponse:
     """Render diagrams."""
-    svg = f'<svg><!-- {request.type} diagram --></svg>'
+    svg = f"<svg><!-- {request.type} diagram --></svg>"
     return RenderingResponse(success=True, data={"svg": svg, "type": request.type})
 
 
@@ -255,6 +268,6 @@ async def validate_content(request: ContentValidationRequest) -> RenderingRespon
         is_safe=not issues,
         issues=issues or None,
         sanitized_content=request.content,
-        warnings=warns or None
+        warnings=warns or None,
     )
     return RenderingResponse(success=True, data=result.dict())

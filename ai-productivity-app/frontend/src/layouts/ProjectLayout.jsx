@@ -1,7 +1,7 @@
-import { Outlet, useParams } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { projectAPI } from '../api/projects';
-import { Loader, AlertCircle } from 'lucide-react';
+import { Outlet, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { projectAPI } from "../api/projects";
+import { Loader, AlertCircle } from "lucide-react";
 
 export default function ProjectLayout() {
   const { projectId } = useParams();
@@ -22,8 +22,8 @@ export default function ProjectLayout() {
       const projectData = await projectAPI.get(projectId);
       setProject(projectData);
     } catch (err) {
-      setError('Failed to load project');
-      console.error('Failed to load project:', err);
+      setError("Failed to load project");
+      console.error("Failed to load project:", err);
     } finally {
       setLoading(false);
     }

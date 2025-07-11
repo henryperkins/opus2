@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import SkeletonLoader from '../components/common/SkeletonLoader';
-import ErrorBoundary from '../components/common/ErrorBoundary';
-import EmptyState from '../components/common/EmptyState';
-import ResponsiveSplitPane from '../components/common/ResponsiveSplitPane';
-import MobileBottomSheet from '../components/common/MobileBottomSheet';
-import useMediaQuery from '../hooks/useMediaQuery';
+import React, { useState } from "react";
+import SkeletonLoader from "../components/common/SkeletonLoader";
+import ErrorBoundary from "../components/common/ErrorBoundary";
+import EmptyState from "../components/common/EmptyState";
+import ResponsiveSplitPane from "../components/common/ResponsiveSplitPane";
+import MobileBottomSheet from "../components/common/MobileBottomSheet";
+import useMediaQuery from "../hooks/useMediaQuery";
 
 /**
  * Demo page showcasing all the enhanced Phase 1 components
@@ -12,26 +12,28 @@ import useMediaQuery from '../hooks/useMediaQuery';
  */
 export default function Phase1Demo() {
   const { isMobile, isTablet, breakpoint } = useMediaQuery();
-  const [activeDemo, setActiveDemo] = useState('skeleton');
+  const [activeDemo, setActiveDemo] = useState("skeleton");
   const [bottomSheetOpen, setBottomSheetOpen] = useState(false);
   const [errorBoundaryKey, setErrorBoundaryKey] = useState(0);
 
   const triggerError = () => {
-    setErrorBoundaryKey(prev => prev + 1);
-    throw new Error('WebSocket connection failed - demo error');
+    setErrorBoundaryKey((prev) => prev + 1);
+    throw new Error("WebSocket connection failed - demo error");
   };
 
   const ErrorComponent = () => {
     const [shouldError, setShouldError] = useState(false);
 
     if (shouldError) {
-      throw new Error('Demo WebSocket error');
+      throw new Error("Demo WebSocket error");
     }
 
     return (
       <div className="p-6 space-y-4">
         <h3 className="text-lg font-semibold">Error Boundary Demo</h3>
-        <p className="text-gray-600">Click the button below to trigger a demo error:</p>
+        <p className="text-gray-600">
+          Click the button below to trigger a demo error:
+        </p>
         <button
           onClick={() => setShouldError(true)}
           className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
@@ -44,7 +46,7 @@ export default function Phase1Demo() {
 
   const demos = {
     skeleton: {
-      title: 'Loading States',
+      title: "Loading States",
       component: (
         <div className="p-6 space-y-6">
           <div>
@@ -77,18 +79,18 @@ export default function Phase1Demo() {
             <SkeletonLoader type="knowledge-panel" />
           </div>
         </div>
-      )
+      ),
     },
     errors: {
-      title: 'Error Handling',
+      title: "Error Handling",
       component: (
         <ErrorBoundary key={errorBoundaryKey}>
           <ErrorComponent />
         </ErrorBoundary>
-      )
+      ),
     },
     empty: {
-      title: 'Empty States',
+      title: "Empty States",
       component: (
         <div className="p-6 space-y-8">
           <div>
@@ -97,13 +99,15 @@ export default function Phase1Demo() {
           </div>
 
           <div>
-            <h3 className="text-lg font-semibold mb-4">WebSocket Disconnected</h3>
+            <h3 className="text-lg font-semibold mb-4">
+              WebSocket Disconnected
+            </h3>
             <EmptyState
               type="websocket-disconnected"
               action={{
-                text: 'Reconnect',
-                onClick: () => alert('Reconnecting...'),
-                variant: 'primary'
+                text: "Reconnect",
+                onClick: () => alert("Reconnecting..."),
+                variant: "primary",
               }}
             />
           </div>
@@ -118,17 +122,17 @@ export default function Phase1Demo() {
             <EmptyState
               type="model-unavailable"
               action={{
-                text: 'Switch Model',
-                onClick: () => alert('Opening model selector...'),
-                variant: 'primary'
+                text: "Switch Model",
+                onClick: () => alert("Opening model selector..."),
+                variant: "primary",
               }}
             />
           </div>
         </div>
-      )
+      ),
     },
     responsive: {
-      title: 'Responsive Layout',
+      title: "Responsive Layout",
       component: (
         <div className="h-96">
           <ResponsiveSplitPane
@@ -152,12 +156,12 @@ export default function Phase1Demo() {
               <div className="p-4 bg-green-50 h-full">
                 <h3 className="font-semibold mb-2">Editor Panel</h3>
                 <p className="text-sm text-gray-600">
-                  The right panel maintains focus while the left panel
-                  becomes contextual on smaller screens.
+                  The right panel maintains focus while the left panel becomes
+                  contextual on smaller screens.
                 </p>
                 <div className="mt-4 space-y-2 text-xs">
-                  <div>Mobile: {isMobile ? '✅' : '❌'}</div>
-                  <div>Tablet: {isTablet ? '✅' : '❌'}</div>
+                  <div>Mobile: {isMobile ? "✅" : "❌"}</div>
+                  <div>Tablet: {isTablet ? "✅" : "❌"}</div>
                   <div>Screen: {window.innerWidth}px</div>
                 </div>
               </div>
@@ -166,10 +170,10 @@ export default function Phase1Demo() {
             rightTitle="Editor"
           />
         </div>
-      )
+      ),
     },
     mobile: {
-      title: 'Mobile Features',
+      title: "Mobile Features",
       component: (
         <div className="p-6 space-y-6">
           <div>
@@ -203,15 +207,26 @@ export default function Phase1Demo() {
           <div>
             <h3 className="text-lg font-semibold mb-4">Device Info</h3>
             <div className="bg-gray-100 p-4 rounded-lg text-sm space-y-1">
-              <div>Breakpoint: <strong>{breakpoint}</strong></div>
-              <div>Mobile: <strong>{isMobile ? 'Yes' : 'No'}</strong></div>
-              <div>Tablet: <strong>{isTablet ? 'Yes' : 'No'}</strong></div>
-              <div>Screen: <strong>{window.innerWidth}×{window.innerHeight}</strong></div>
+              <div>
+                Breakpoint: <strong>{breakpoint}</strong>
+              </div>
+              <div>
+                Mobile: <strong>{isMobile ? "Yes" : "No"}</strong>
+              </div>
+              <div>
+                Tablet: <strong>{isTablet ? "Yes" : "No"}</strong>
+              </div>
+              <div>
+                Screen:{" "}
+                <strong>
+                  {window.innerWidth}×{window.innerHeight}
+                </strong>
+              </div>
             </div>
           </div>
         </div>
-      )
-    }
+      ),
+    },
   };
 
   return (
@@ -240,8 +255,8 @@ export default function Phase1Demo() {
                 onClick={() => setActiveDemo(key)}
                 className={`py-2 px-1 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   activeDemo === key
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
                 {demo.title}
@@ -269,17 +284,21 @@ export default function Phase1Demo() {
         <div className="p-4 space-y-4">
           <h3 className="font-semibold">Knowledge Panel Content</h3>
           <p className="text-gray-600">
-            This is how knowledge panels appear on mobile devices.
-            You can drag the handle to resize or swipe down to dismiss.
+            This is how knowledge panels appear on mobile devices. You can drag
+            the handle to resize or swipe down to dismiss.
           </p>
           <div className="space-y-2">
             <div className="p-3 bg-blue-50 rounded-lg">
               <div className="font-medium text-sm">Code Context</div>
-              <div className="text-xs text-gray-600">Active functions and variables</div>
+              <div className="text-xs text-gray-600">
+                Active functions and variables
+              </div>
             </div>
             <div className="p-3 bg-green-50 rounded-lg">
               <div className="font-medium text-sm">Documentation</div>
-              <div className="text-xs text-gray-600">Relevant docs and examples</div>
+              <div className="text-xs text-gray-600">
+                Relevant docs and examples
+              </div>
             </div>
             <div className="p-3 bg-purple-50 rounded-lg">
               <div className="font-medium text-sm">Related Files</div>

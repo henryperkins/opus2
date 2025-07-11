@@ -8,9 +8,14 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.services.prompt_service import PromptService
 from app.schemas.prompt import (
-    PromptTemplateCreate, PromptTemplateUpdate, PromptTemplateResponse,
-    PromptTemplateList, PromptDuplicateRequest, PromptExecuteRequest,
-    PromptExecuteResponse, PromptStatsResponse
+    PromptTemplateCreate,
+    PromptTemplateUpdate,
+    PromptTemplateResponse,
+    PromptTemplateList,
+    PromptDuplicateRequest,
+    PromptExecuteRequest,
+    PromptExecuteResponse,
+    PromptStatsResponse,
 )
 from app.auth.security import limiter
 import logging
@@ -28,7 +33,7 @@ async def create_template(
     request: Request,
     template_data: PromptTemplateCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Create a new prompt template"""
     service = PromptService(db)
@@ -40,39 +45,37 @@ async def create_template(
 async def get_templates(
     category: Optional[str] = Query(None, description="Filter by category"),
     is_public: Optional[bool] = Query(None, description="Filter by public/private"),
-    search: Optional[str] = Query(None, description="Search templates by name or description"),
+    search: Optional[str] = Query(
+        None, description="Search templates by name or description"
+    ),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get prompt templates with filtering and pagination"""
     service = PromptService(db)
     skip = (page - 1) * page_size
-    
+
     templates, total = await service.get_templates(
         user_id=current_user.id,
         category=category,
         is_public=is_public,
         search=search,
         skip=skip,
-        limit=page_size
+        limit=page_size,
     )
-    
+
     template_responses = [PromptTemplateResponse.from_orm(t) for t in templates]
-    
+
     return PromptTemplateList(
-        templates=template_responses,
-        total=total,
-        page=page,
-        page_size=page_size
+        templates=template_responses, total=total, page=page, page_size=page_size
     )
 
 
 @router.get("/categories", response_model=List[str])
 async def get_categories(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get all available template categories"""
     service = PromptService(db)
@@ -83,7 +86,7 @@ async def get_categories(
 async def get_template(
     template_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get a specific template by ID"""
     service = PromptService(db)
@@ -98,11 +101,13 @@ async def update_template(
     template_id: int,
     template_data: PromptTemplateUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Update an existing template"""
     service = PromptService(db)
-    template = await service.update_template(template_id, template_data, current_user.id)
+    template = await service.update_template(
+        template_id, template_data, current_user.id
+    )
     return PromptTemplateResponse.from_orm(template)
 
 
@@ -110,7 +115,7 @@ async def update_template(
 async def delete_template(
     template_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Delete a template"""
     service = PromptService(db)
@@ -125,11 +130,13 @@ async def duplicate_template(
     template_id: int,
     duplicate_data: PromptDuplicateRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Duplicate an existing template"""
     service = PromptService(db)
-    template = await service.duplicate_template(template_id, duplicate_data, current_user.id)
+    template = await service.duplicate_template(
+        template_id, duplicate_data, current_user.id
+    )
     return PromptTemplateResponse.from_orm(template)
 
 
@@ -140,7 +147,7 @@ async def execute_template(
     template_id: int,
     execute_data: PromptExecuteRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Execute a template with provided variables"""
     service = PromptService(db)
@@ -151,7 +158,7 @@ async def execute_template(
 async def get_template_stats(
     template_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get statistics for a template"""
     service = PromptService(db)
@@ -161,8 +168,7 @@ async def get_template_stats(
 
 @router.post("/seed-defaults")
 async def seed_default_templates(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Seed default templates (admin only)"""
     # Note: In a real application, you'd want to restrict this to admin users

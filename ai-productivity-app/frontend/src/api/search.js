@@ -1,11 +1,11 @@
 // api/search.js
-import client from './client';
+import client from "./client";
 // Type imports removed (SearchOptions, SearchResults, DocumentMatch, KnowledgeSource)
 
 class SearchAPI {
   constructor() {
     // Base URL is already set in client.js, we just need the API path
-    this._baseURL = 'api';
+    this._baseURL = "api";
   }
 
   /**
@@ -19,7 +19,7 @@ class SearchAPI {
     const response = await client.post(
       `${this._baseURL}/projects/${projectId}/search/documents`,
       options,
-      { signal }
+      { signal },
     );
     return response.data;
   }
@@ -35,7 +35,7 @@ class SearchAPI {
     const response = await client.post(
       `${this._baseURL}/projects/${projectId}/search/code`,
       options,
-      { signal }
+      { signal },
     );
     return response.data;
   }
@@ -51,7 +51,7 @@ class SearchAPI {
     const response = await client.post(
       `${this._baseURL}/projects/${projectId}/search/hybrid`,
       options,
-      { signal }
+      { signal },
     );
     return response.data;
   }
@@ -67,7 +67,7 @@ class SearchAPI {
     const response = await client.post(
       `${this._baseURL}/projects/${projectId}/search/similar`,
       options,
-      { signal }
+      { signal },
     );
     return response.data;
   }
@@ -80,7 +80,7 @@ class SearchAPI {
    */
   async getDocument(projectId, documentId) {
     const response = await client.get(
-      `${this._baseURL}/projects/${projectId}/documents/${documentId}`
+      `${this._baseURL}/projects/${projectId}/documents/${documentId}`,
     );
     return response.data;
   }
@@ -94,7 +94,7 @@ class SearchAPI {
   async indexContent(projectId, content) {
     const response = await client.post(
       `${this._baseURL}/projects/${projectId}/knowledge/index`,
-      content
+      content,
     );
     return response.data;
   }
@@ -109,7 +109,7 @@ class SearchAPI {
   async updateDocument(projectId, documentId, updates) {
     const response = await client.patch(
       `${this._baseURL}/projects/${projectId}/documents/${documentId}`,
-      updates
+      updates,
     );
     return response.data;
   }
@@ -122,7 +122,7 @@ class SearchAPI {
    */
   async deleteDocument(projectId, documentId) {
     await client.delete(
-      `${this._baseURL}/projects/${projectId}/documents/${documentId}`
+      `${this._baseURL}/projects/${projectId}/documents/${documentId}`,
     );
   }
 
@@ -136,7 +136,7 @@ class SearchAPI {
   async getSuggestions(projectId, query, limit = 5) {
     const response = await client.get(
       `${this._baseURL}/projects/${projectId}/search/suggestions`,
-      { params: { q: query, limit } }
+      { params: { q: query, limit } },
     );
     return response.data.suggestions;
   }
@@ -148,7 +148,7 @@ class SearchAPI {
    */
   async getFacets(projectId) {
     const response = await client.get(
-      `${this._baseURL}/projects/${projectId}/search/facets`
+      `${this._baseURL}/projects/${projectId}/search/facets`,
     );
     return response.data;
   }
@@ -159,7 +159,7 @@ class SearchAPI {
    * @returns {Promise<Array<{ id: string, query: string, ts: string }>>}
    */
   async getHistory(limit = 100) {
-    const response = await client.get('/api/search/history', {
+    const response = await client.get("/api/search/history", {
       params: { limit },
     });
     return response.data;
@@ -172,7 +172,7 @@ class SearchAPI {
    */
   async reindexProject(projectId) {
     const response = await client.post(
-      `${this._baseURL}/projects/${projectId}/knowledge/reindex`
+      `${this._baseURL}/projects/${projectId}/knowledge/reindex`,
     );
     return response.data;
   }
@@ -186,7 +186,7 @@ class SearchAPI {
   async getIndexingStatus(projectId, jobId) {
     const response = await client.get(
       `${this._baseURL}/projects/${projectId}/knowledge/status`,
-      { params: { jobId } }
+      { params: { jobId } },
     );
     return response.data;
   }
@@ -199,12 +199,12 @@ class SearchAPI {
   async getSearchHistory(projectId) {
     try {
       // Use global search history since project-specific doesn't exist yet
-      const response = await client.get('/api/search/history', {
-        params: { limit: 10 }
+      const response = await client.get("/api/search/history", {
+        params: { limit: 10 },
       });
       return response.data.history || [];
     } catch (error) {
-      console.warn('Search history not available:', error);
+      console.warn("Search history not available:", error);
       return [];
     }
   }
@@ -217,11 +217,11 @@ class SearchAPI {
   async getPopularQueries(projectId) {
     // Return mock popular queries for now since backend endpoint doesn't exist
     return [
-      { query: 'function definitions', count: 15 },
-      { query: 'API endpoints', count: 12 },
-      { query: 'error handling', count: 8 },
-      { query: 'database models', count: 6 },
-      { query: 'authentication', count: 4 }
+      { query: "function definitions", count: 15 },
+      { query: "API endpoints", count: 12 },
+      { query: "error handling", count: 8 },
+      { query: "database models", count: 6 },
+      { query: "authentication", count: 4 },
     ];
   }
 
@@ -265,23 +265,23 @@ class SearchAPI {
       limit: options.max_results || 20,
       filters: {
         language: options.language,
-        file_type: options.type !== 'all' ? options.type : undefined
+        file_type: options.type !== "all" ? options.type : undefined,
       },
-      search_types: ['hybrid']
+      search_types: ["hybrid"],
     };
 
     const response = await this.search(searchOptions);
-    
+
     // Map backend field names to frontend expectations
-    const mappedResults = response.results.map(result => ({
+    const mappedResults = response.results.map((result) => ({
       ...result,
       path: result.file_path, // Map file_path to path
-      highlights: result.content ? [result.content] : []
+      highlights: result.content ? [result.content] : [],
     }));
 
     return {
       ...response,
-      results: mappedResults
+      results: mappedResults,
     };
   }
 
@@ -293,7 +293,7 @@ class SearchAPI {
    */
   async addToHistory(projectId, query) {
     // For now, just log - could be implemented to save local history
-    console.log('Adding to search history:', { projectId, query });
+    console.log("Adding to search history:", { projectId, query });
   }
 
   /**
@@ -308,19 +308,19 @@ class SearchAPI {
       query,
       limit: options.max_results || 10,
       threshold: options.min_score || 0.5,
-      ...options
+      ...options,
     };
 
     try {
       // Use hybrid search as fallback
       return await this.hybridSearch(projectId, searchOptions);
     } catch (error) {
-      console.error('Search failed:', error);
+      console.error("Search failed:", error);
       return {
         documents: [],
         code_snippets: [],
         total: 0,
-        results: []
+        results: [],
       };
     }
   }

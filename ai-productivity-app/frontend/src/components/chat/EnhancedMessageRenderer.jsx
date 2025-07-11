@@ -1,14 +1,14 @@
 // components/chat/EnhancedMessageRenderer.jsx
 /* eslint-env browser */
-import React, { useState, useMemo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter/dist/cjs/prism';
-import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import mermaid from 'mermaid';
-import 'katex/dist/katex.min.css';
+import React, { useState, useMemo } from "react";
+import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter/dist/cjs/prism";
+import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import mermaid from "mermaid";
+import "katex/dist/katex.min.css";
 
 import {
   Copy,
@@ -22,18 +22,23 @@ import {
   Table,
   BarChart2,
   Hash,
-  RotateCcw
-} from 'lucide-react';
+  RotateCcw,
+} from "lucide-react";
 
-import CitationRenderer from './CitationRenderer';
+import CitationRenderer from "./CitationRenderer";
 
 // Fallback icon component
 const FallbackIcon = ({ className }) => (
-  <span className={className} style={{ display: 'inline-block', width: '1rem', height: '1rem' }}>⚫</span>
+  <span
+    className={className}
+    style={{ display: "inline-block", width: "1rem", height: "1rem" }}
+  >
+    ⚫
+  </span>
 );
 
 // Initialize mermaid
-mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+mermaid.initialize({ startOnLoad: false, theme: "dark" });
 
 /* ───────────────────────────────────────────────────────────
  * Inline helpers
@@ -43,7 +48,8 @@ function ContextBanner({ summary }) {
     <div className="flex items-center gap-2 text-sm text-gray-600 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
       <FileText className="w-4 h-4" />
       <span>
-        Using {summary.documentsFound} documents and {summary.codeSnippetsFound} code snippets
+        Using {summary.documentsFound} documents and {summary.codeSnippetsFound}{" "}
+        code snippets
       </span>
       <span className="text-xs text-gray-500 dark:text-gray-400">
         ({Math.round(summary.confidence * 100)}% confidence)
@@ -60,7 +66,11 @@ function MetadataPanel({ metadata, open, onToggle }) {
         className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
       >
         <span>Metadata</span>
-        {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        {open ? (
+          <ChevronUp className="w-4 h-4" />
+        ) : (
+          <ChevronDown className="w-4 h-4" />
+        )}
       </button>
 
       {open && (
@@ -71,10 +81,13 @@ function MetadataPanel({ metadata, open, onToggle }) {
           )}
           {metadata.tokens && (
             <div>
-              Tokens: {metadata.tokens.prompt} prompt, {metadata.tokens.completion} completion
+              Tokens: {metadata.tokens.prompt} prompt,{" "}
+              {metadata.tokens.completion} completion
             </div>
           )}
-          {metadata.citations && <div>Citations: {metadata.citations.length}</div>}
+          {metadata.citations && (
+            <div>Citations: {metadata.citations.length}</div>
+          )}
         </div>
       )}
     </div>
@@ -86,7 +99,7 @@ function MetadataPanel({ metadata, open, onToggle }) {
  * ─────────────────────────────────────────────────────────── */
 // Mermaid diagram renderer
 const MermaidDiagram = ({ chart, onClick }) => {
-  const [svg, setSvg] = useState('');
+  const [svg, setSvg] = useState("");
   const [error, setError] = useState(null);
 
   React.useEffect(() => {
@@ -96,8 +109,8 @@ const MermaidDiagram = ({ chart, onClick }) => {
         const { svg } = await mermaid.render(id, chart);
         setSvg(svg);
       } catch (err) {
-        setError('Failed to render diagram');
-        console.error('Mermaid error:', err);
+        setError("Failed to render diagram");
+        console.error("Mermaid error:", err);
       }
     };
 
@@ -124,7 +137,7 @@ const MermaidDiagram = ({ chart, onClick }) => {
 // Interactive table component
 const InteractiveTable = ({ data }) => {
   const [sortColumn, setSortColumn] = useState(null);
-  const [sortDirection, setSortDirection] = useState('asc');
+  const [sortDirection, setSortDirection] = useState("asc");
 
   const sortedData = useMemo(() => {
     if (sortColumn === null || data.length < 2) return data;
@@ -134,11 +147,11 @@ const InteractiveTable = ({ data }) => {
       const aVal = a[sortColumn];
       const bVal = b[sortColumn];
 
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
       }
 
-      return sortDirection === 'asc'
+      return sortDirection === "asc"
         ? String(aVal).localeCompare(String(bVal))
         : String(bVal).localeCompare(String(aVal));
     });
@@ -148,10 +161,10 @@ const InteractiveTable = ({ data }) => {
 
   const handleSort = (columnIndex) => {
     if (sortColumn === columnIndex) {
-      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortColumn(columnIndex);
-      setSortDirection('asc');
+      setSortDirection("asc");
     }
   };
 
@@ -180,9 +193,15 @@ const InteractiveTable = ({ data }) => {
         </thead>
         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
           {rows.map((row, rowIdx) => (
-            <tr key={rowIdx} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+            <tr
+              key={rowIdx}
+              className="hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
               {row.map((cell, cellIdx) => (
-                <td key={cellIdx} className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+                <td
+                  key={cellIdx}
+                  className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100"
+                >
                   {cell}
                 </td>
               ))}
@@ -211,16 +230,16 @@ const ChartRenderer = ({ type, data }) => {
  * ─────────────────────────────────────────────────────────── */
 export default function EnhancedMessageRenderer({
   message,
-  content,  // Support both message.content and direct content
+  content, // Support both message.content and direct content
   metadata, // Support both message.metadata and direct metadata
   onCodeRun,
   onCodeApply,
   onDiagramClick,
   onCitationClick,
   onRetry,
-  showMetadata = false
+  showMetadata = false,
 }) {
-  const [activeTab, setActiveTab] = useState('rendered');
+  const [activeTab, setActiveTab] = useState("rendered");
   const [copiedBlocks, setCopiedBlocks] = useState(new Set());
   const [expandedBlocks, setExpandedBlocks] = useState(new Set());
   const [showFullMetadata, setShowFullMetadata] = useState(false);
@@ -263,7 +282,7 @@ export default function EnhancedMessageRenderer({
   // Handle both message object style and direct content style
   const messageContent = message?.content || content;
   const messageMetadata = message?.metadata || metadata;
-  const messageId = message?.id || 'msg';
+  const messageId = message?.id || "msg";
 
   // Parse special content blocks with optimized regex processing
   const { processedContent, specialBlocks } = useMemo(() => {
@@ -278,38 +297,47 @@ export default function EnhancedMessageRenderer({
     // Batch regex operations for better performance
     try {
       // Extract mermaid diagrams
-      if (processed.includes('```mermaid')) {
+      if (processed.includes("```mermaid")) {
         const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
         processed = processed.replace(mermaidRegex, (match, diagram) => {
           const id = `mermaid-${blocks.length}`;
-          blocks.push({ type: 'mermaid', id, content: diagram.trim() });
+          blocks.push({ type: "mermaid", id, content: diagram.trim() });
           return `<div id="${id}"></div>`;
         });
       }
 
       // Extract tables (simple markdown tables) - only if contains table markers
-      if (processed.includes('|') && processed.includes('\n')) {
+      if (processed.includes("|") && processed.includes("\n")) {
         const tableRegex = /\|(.+)\|[\s\S]*?\n\|(.+)\|/g;
         const tables = processed.match(tableRegex);
         if (tables && tables.length > 0) {
           tables.forEach((table, idx) => {
             try {
-              const rows = table.trim().split('\n')
-                .filter(row => row.includes('|') && !row.match(/^\|[-:\s|]+\|$/))
-                .map(row => row.split('|').slice(1, -1).map(cell => cell.trim()));
+              const rows = table
+                .trim()
+                .split("\n")
+                .filter(
+                  (row) => row.includes("|") && !row.match(/^\|[-:\s|]+\|$/),
+                )
+                .map((row) =>
+                  row
+                    .split("|")
+                    .slice(1, -1)
+                    .map((cell) => cell.trim()),
+                );
 
               if (rows.length > 1) {
                 const id = `table-${idx}`;
-                blocks.push({ type: 'table', id, content: rows });
+                blocks.push({ type: "table", id, content: rows });
               }
             } catch (e) {
-              console.warn('Table parsing error:', e);
+              console.warn("Table parsing error:", e);
             }
           });
         }
       }
     } catch (error) {
-      console.warn('Content processing error:', error);
+      console.warn("Content processing error:", error);
       return { processedContent: messageContent, specialBlocks: [] };
     }
 
@@ -321,9 +349,9 @@ export default function EnhancedMessageRenderer({
    * -------------------------------------------------------- */
   const components = {
     code({ node, inline, className, children, ...props }) {
-      const match = /language-(\w+)/.exec(className || '');
-      const language = match ? match[1] : '';
-      const codeString = String(children).replace(/\n$/, '');
+      const match = /language-(\w+)/.exec(className || "");
+      const language = match ? match[1] : "";
+      const codeString = String(children).replace(/\n$/, "");
 
       // 🔑 stable identifier = message.id + starting position of the node
       const position = node.position || { start: { line: 0, column: 0 } };
@@ -343,12 +371,12 @@ export default function EnhancedMessageRenderer({
       }
 
       /* ---------- FENCED BLOCK ---------- */
-      const lines = codeString.split('\n');
+      const lines = codeString.split("\n");
       const needsTruncate = lines.length > 20;
       const isExpanded = expandedBlocks.has(blockId);
       const displayCode =
         needsTruncate && !isExpanded
-          ? [...lines.slice(0, 20), '// …'].join('\n')
+          ? [...lines.slice(0, 20), "// …"].join("\n")
           : codeString;
 
       return (
@@ -356,20 +384,29 @@ export default function EnhancedMessageRenderer({
           {/* header */}
           <div className="flex justify-between items-center bg-gray-800 text-gray-300 px-4 py-2 rounded-t-lg">
             <span className="flex items-center gap-2 font-mono text-sm">
-              {CodeIcon ? <CodeIcon className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />}
+              {CodeIcon ? (
+                <CodeIcon className="w-4 h-4" />
+              ) : (
+                <FallbackIcon className="w-4 h-4" />
+              )}
               {language}
             </span>
 
             <span className="flex items-center gap-2">
-              {['python', 'javascript', 'typescript'].includes(language) && onCodeRun && (
-                <button
-                  onClick={() => onCodeRun(codeString, language)}
-                  className="p-1 hover:bg-green-600 bg-green-700 rounded"
-                  title="Run code"
-                >
-                  {Play ? <Play className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />}
-                </button>
-              )}
+              {["python", "javascript", "typescript"].includes(language) &&
+                onCodeRun && (
+                  <button
+                    onClick={() => onCodeRun(codeString, language)}
+                    className="p-1 hover:bg-green-600 bg-green-700 rounded"
+                    title="Run code"
+                  >
+                    {Play ? (
+                      <Play className="w-4 h-4" />
+                    ) : (
+                      <FallbackIcon className="w-4 h-4" />
+                    )}
+                  </button>
+                )}
 
               {onCodeApply && (
                 <button
@@ -377,7 +414,11 @@ export default function EnhancedMessageRenderer({
                   className="p-1 hover:bg-blue-600 bg-blue-700 rounded"
                   title="Apply to editor"
                 >
-                  {ExternalLink ? <ExternalLink className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />}
+                  {ExternalLink ? (
+                    <ExternalLink className="w-4 h-4" />
+                  ) : (
+                    <FallbackIcon className="w-4 h-4" />
+                  )}
                 </button>
               )}
 
@@ -387,9 +428,15 @@ export default function EnhancedMessageRenderer({
                 title="Copy code"
               >
                 {copiedBlocks.has(blockId) ? (
-                  Check ? <Check className="w-4 h-4 text-green-400" /> : <FallbackIcon className="w-4 h-4 text-green-400" />
+                  Check ? (
+                    <Check className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <FallbackIcon className="w-4 h-4 text-green-400" />
+                  )
+                ) : Copy ? (
+                  <Copy className="w-4 h-4" />
                 ) : (
-                  Copy ? <Copy className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />
+                  <FallbackIcon className="w-4 h-4" />
                 )}
               </button>
 
@@ -397,12 +444,18 @@ export default function EnhancedMessageRenderer({
                 <button
                   onClick={() => toggleBlockExpansion(blockId)}
                   className="p-1 hover:bg-gray-700 rounded"
-                  title={isExpanded ? 'Collapse' : 'Expand'}
+                  title={isExpanded ? "Collapse" : "Expand"}
                 >
                   {isExpanded ? (
-                    ChevronUp ? <ChevronUp className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />
+                    ChevronUp ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <FallbackIcon className="w-4 h-4" />
+                    )
+                  ) : ChevronDown ? (
+                    <ChevronDown className="w-4 h-4" />
                   ) : (
-                    ChevronDown ? <ChevronDown className="w-4 h-4" /> : <FallbackIcon className="w-4 h-4" />
+                    <FallbackIcon className="w-4 h-4" />
                   )}
                 </button>
               )}
@@ -418,7 +471,7 @@ export default function EnhancedMessageRenderer({
                 margin: 0,
                 borderTopLeftRadius: 0,
                 borderTopRightRadius: 0,
-                fontSize: '0.875rem'
+                fontSize: "0.875rem",
               }}
               {...props}
             >
@@ -431,13 +484,13 @@ export default function EnhancedMessageRenderer({
           )}
         </div>
       );
-    }
+    },
   };
 
   // Render special blocks
   const renderSpecialBlock = (block) => {
     switch (block.type) {
-      case 'mermaid':
+      case "mermaid":
         return (
           <MermaidDiagram
             key={block.id}
@@ -445,14 +498,9 @@ export default function EnhancedMessageRenderer({
             onClick={() => onDiagramClick?.(block.content)}
           />
         );
-      case 'table':
-        return (
-          <InteractiveTable
-            key={block.id}
-            data={block.content}
-          />
-        );
-      case 'chart':
+      case "table":
+        return <InteractiveTable key={block.id} data={block.content} />;
+      case "chart":
         return (
           <ChartRenderer
             key={block.id}
@@ -478,22 +526,22 @@ export default function EnhancedMessageRenderer({
       {/* Tab switcher for raw/rendered view */}
       <div className="flex items-center justify-end mb-2 space-x-2">
         <button
-          onClick={() => setActiveTab('rendered')}
+          onClick={() => setActiveTab("rendered")}
           className={`text-xs px-2 py-1 rounded ${
-            activeTab === 'rendered'
-              ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
-              : 'text-gray-500 hover:text-gray-700'
+            activeTab === "rendered"
+              ? "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              : "text-gray-500 hover:text-gray-700"
           }`}
         >
           <FileText className="w-3 h-3 inline mr-1" />
           Rendered
         </button>
         <button
-          onClick={() => setActiveTab('raw')}
+          onClick={() => setActiveTab("raw")}
           className={`text-xs px-2 py-1 rounded ${
-            activeTab === 'raw'
-              ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
-              : 'text-gray-500 hover:text-gray-700'
+            activeTab === "raw"
+              ? "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              : "text-gray-500 hover:text-gray-700"
           }`}
         >
           {CodeIcon ? (
@@ -505,7 +553,7 @@ export default function EnhancedMessageRenderer({
         </button>
       </div>
 
-      {activeTab === 'rendered' ? (
+      {activeTab === "rendered" ? (
         <div>
           {/* Content (with inline citations if present) */}
           {messageMetadata?.citations?.length ? (
@@ -528,7 +576,7 @@ export default function EnhancedMessageRenderer({
           )}
 
           {/* Render special blocks */}
-          {specialBlocks.map(block => renderSpecialBlock(block))}
+          {specialBlocks.map((block) => renderSpecialBlock(block))}
 
           {/* Render metadata charts/tables if any */}
           {messageMetadata?.charts?.map((chart, idx) => (
@@ -540,10 +588,7 @@ export default function EnhancedMessageRenderer({
           ))}
 
           {messageMetadata?.tables?.map((table, idx) => (
-            <InteractiveTable
-              key={`meta-table-${idx}`}
-              data={table}
-            />
+            <InteractiveTable key={`meta-table-${idx}`} data={table} />
           ))}
         </div>
       ) : (
@@ -555,7 +600,7 @@ export default function EnhancedMessageRenderer({
       {/* Action buttons */}
       <div className="mt-3 flex justify-end gap-2">
         {/* Retry button for assistant messages */}
-        {message?.role === 'assistant' && onRetry && (
+        {message?.role === "assistant" && onRetry && (
           <button
             onClick={() => onRetry(message.id)}
             className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -565,7 +610,7 @@ export default function EnhancedMessageRenderer({
             <span>Retry</span>
           </button>
         )}
-        
+
         {/* Copy message button */}
         <button
           onClick={handleCopyMessage}

@@ -6,20 +6,20 @@
  * to authenticate the user. Redirects to dashboard (/) on success.
  */
 
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { useNavigate, Navigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { toast } from '../components/common/Toast';
-import Register from '../components/auth/Register';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { useNavigate, Navigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
+import { toast } from "../components/common/Toast";
+import Register from "../components/auth/Register";
+import LoadingSpinner from "../components/common/LoadingSpinner";
 
 export default function LoginPage() {
   const { register, handleSubmit, formState } = useForm();
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
   const { errors, isSubmitting } = formState;
-  const [submitError, setSubmitError] = useState('');
+  const [submitError, setSubmitError] = useState("");
   const [showRegister, setShowRegister] = useState(false);
 
   if (user) {
@@ -27,23 +27,23 @@ export default function LoginPage() {
   }
 
   async function onSubmit(values) {
-    setSubmitError('');
+    setSubmitError("");
 
     // Temporarily disable browser password-manager autofill that may interfere
-    const formEl = document.querySelector('form');
-    formEl?.setAttribute('autocomplete', 'off');
+    const formEl = document.querySelector("form");
+    formEl?.setAttribute("autocomplete", "off");
     try {
       await login(values.username_or_email, values.password);
-      navigate('/', { replace: true });
+      navigate("/", { replace: true });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error(err);
-      const msg = err?.response?.data?.detail || 'Login failed';
+      const msg = err?.response?.data?.detail || "Login failed";
       setSubmitError(msg);
       toast.error(msg);
     } finally {
       // Re-enable autocomplete
-      formEl?.setAttribute('autocomplete', 'on');
+      formEl?.setAttribute("autocomplete", "on");
     }
   }
 
@@ -54,12 +54,26 @@ export default function LoginPage() {
           {/* App Branding */}
           <div className="text-center mb-8">
             <div className="mx-auto w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              <svg
+                className="w-8 h-8 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
-            <p className="text-gray-600">Join AI Productivity and boost your workflow.</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Create Account
+            </h1>
+            <p className="text-gray-600">
+              Join AI Productivity and boost your workflow.
+            </p>
           </div>
 
           {/* Register Form */}
@@ -77,12 +91,26 @@ export default function LoginPage() {
         {/* App Branding */}
         <div className="text-center mb-8">
           <div className="mx-auto w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            <svg
+              className="w-8 h-8 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Productivity</h1>
-          <p className="text-gray-600">Welcome back! Please sign in to your account.</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            AI Productivity
+          </h1>
+          <p className="text-gray-600">
+            Welcome back! Please sign in to your account.
+          </p>
         </div>
 
         {/* Login Form */}
@@ -92,7 +120,10 @@ export default function LoginPage() {
         >
           <div className="space-y-4">
             <div>
-              <label htmlFor="username_or_email" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="username_or_email"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Username or Email
               </label>
               <input
@@ -100,7 +131,9 @@ export default function LoginPage() {
                 className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 disabled:bg-gray-50 disabled:opacity-50"
                 autoComplete="username"
                 placeholder="Enter your username or email"
-                {...register('username_or_email', { required: 'Username or email required' })}
+                {...register("username_or_email", {
+                  required: "Username or email required",
+                })}
                 disabled={isSubmitting || loading}
               />
               {errors.username_or_email && (
@@ -111,7 +144,10 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Password
               </label>
               <input
@@ -120,7 +156,7 @@ export default function LoginPage() {
                 className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 disabled:bg-gray-50 disabled:opacity-50"
                 autoComplete="current-password"
                 placeholder="Enter your password"
-                {...register('password', { required: 'Password required' })}
+                {...register("password", { required: "Password required" })}
                 disabled={isSubmitting || loading}
               />
               {errors.password && (
@@ -134,8 +170,18 @@ export default function LoginPage() {
           {submitError && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-center">
-                <svg className="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="w-5 h-5 text-red-500 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <p className="text-red-700 text-sm">{submitError}</p>
               </div>
@@ -149,16 +195,23 @@ export default function LoginPage() {
           >
             {isSubmitting || loading ? (
               <>
-                <LoadingSpinner size="sm" showLabel={false} className="-ml-1 mr-3 text-white" />
+                <LoadingSpinner
+                  size="sm"
+                  showLabel={false}
+                  className="-ml-1 mr-3 text-white"
+                />
                 Signing in...
               </>
             ) : (
-              'Sign In'
+              "Sign In"
             )}
           </button>
 
           <div className="flex items-center justify-center space-x-4 text-sm">
-            <a href="/forgot" className="text-blue-600 hover:text-blue-700 hover:underline transition-colors duration-200">
+            <a
+              href="/forgot"
+              className="text-blue-600 hover:text-blue-700 hover:underline transition-colors duration-200"
+            >
               Forgot password?
             </a>
             <span className="text-gray-300">•</span>

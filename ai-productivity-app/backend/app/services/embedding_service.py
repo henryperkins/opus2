@@ -112,18 +112,20 @@ class EmbeddingService:
                 "end_line": chunk.end_line,
             }
 
-            vector_data.append({
-                "id": chunk.id,  # Add required id field for Qdrant
-                "vector": embedding,
-                "document_id": document.id,
-                "chunk_id": chunk.id,
-                "project_id": document.project_id,
-                "content": chunk.chunk_content,
-                "content_hash": hashlib.sha256(
-                    chunk.chunk_content.encode()
-                ).hexdigest(),
-                **metadata
-            })
+            vector_data.append(
+                {
+                    "id": chunk.id,  # Add required id field for Qdrant
+                    "vector": embedding,
+                    "document_id": document.id,
+                    "chunk_id": chunk.id,
+                    "project_id": document.project_id,
+                    "content": chunk.chunk_content,
+                    "content_hash": hashlib.sha256(
+                        chunk.chunk_content.encode()
+                    ).hexdigest(),
+                    **metadata,
+                }
+            )
 
         # Insert into vector store
         await self.vector_store.insert_embeddings(vector_data)

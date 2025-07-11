@@ -52,7 +52,9 @@ class GitManager:
             return
 
         # Write key to a secure temporary file
-        with tempfile.NamedTemporaryFile("w", delete=False, prefix="ssh_key_", suffix=".pem") as tmp:
+        with tempfile.NamedTemporaryFile(
+            "w", delete=False, prefix="ssh_key_", suffix=".pem"
+        ) as tmp:
             tmp.write(key_material)
             key_path = tmp.name
 
@@ -60,9 +62,9 @@ class GitManager:
         os.chmod(key_path, stat.S_IRUSR | stat.S_IWUSR)
 
         original_git_ssh_cmd = os.environ.get("GIT_SSH_COMMAND")
-        os.environ[
-            "GIT_SSH_COMMAND"
-        ] = f"ssh -i {key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+        os.environ["GIT_SSH_COMMAND"] = (
+            f"ssh -i {key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+        )
 
         try:
             yield key_path  # expose in case callers need it
@@ -106,7 +108,9 @@ class GitManager:
 
         from uuid import uuid4
 
-        repo_path = self.base_path / f"project_{project_id}" / f"tmp_{uuid4().hex}" / repo_name
+        repo_path = (
+            self.base_path / f"project_{project_id}" / f"tmp_{uuid4().hex}" / repo_name
+        )
 
         try:
             # Use provided SSH private key for the entire git operation block
@@ -121,14 +125,18 @@ class GitManager:
                     origin = await asyncio.to_thread(repo.remote, "origin")
 
                     # Fetch shallow history to keep clone small
-                    await asyncio.to_thread(origin.fetch, depth=1, prune=True, tags=False)
+                    await asyncio.to_thread(
+                        origin.fetch, depth=1, prune=True, tags=False
+                    )
 
                     # Checkout requested branch – fail loudly if missing
                     try:
                         await asyncio.to_thread(repo.git.checkout, branch)
                         await asyncio.to_thread(origin.pull)
                     except git.exc.GitCommandError as exc:
-                        raise ValueError(f"Branch '{branch}' not found in repository") from exc
+                        raise ValueError(
+                            f"Branch '{branch}' not found in repository"
+                        ) from exc
                 else:
                     # New clone: first try with specified branch, then fall back
                     repo_path.parent.mkdir(parents=True, exist_ok=True)
@@ -175,7 +183,13 @@ class GitManager:
                 await asyncio.to_thread(shutil.rmtree, repo_path, ignore_errors=True)
             raise
 
-    async def _get_repo_files(self, repo: git.Repo, repo_path: Path, include_patterns: List[str] = None, exclude_patterns: List[str] = None) -> List[Dict]:
+    async def _get_repo_files(
+        self,
+        repo: git.Repo,
+        repo_path: Path,
+        include_patterns: List[str] = None,
+        exclude_patterns: List[str] = None,
+    ) -> List[Dict]:
         """Get list of processable files from repository."""
         files = []
 
@@ -191,19 +205,25 @@ class GitManager:
                         file_path = str(item.path)
 
                         full_path = repo_path / file_path
-                        if self._should_process_file(file_path, full_path, include_patterns, exclude_patterns):
+                        if self._should_process_file(
+                            file_path, full_path, include_patterns, exclude_patterns
+                        ):
                             try:
                                 stat = full_path.stat()
                                 collected.append(
                                     {
                                         "path": file_path,
                                         "size": stat.st_size,
-                                        "modified": datetime.fromtimestamp(stat.st_mtime),
+                                        "modified": datetime.fromtimestamp(
+                                            stat.st_mtime
+                                        ),
                                         "sha": item.binsha.hex(),
                                     }
                                 )
                             except OSError as e:
-                                logger.warning("Failed to stat file %s: %s", file_path, e)
+                                logger.warning(
+                                    "Failed to stat file %s: %s", file_path, e
+                                )
                 return collected
 
             files = await asyncio.to_thread(_traverse_and_collect)
@@ -213,9 +233,15 @@ class GitManager:
 
         return files
 
-    def _should_process_file(self, file_path: str, full_path: Path, include_patterns: List[str] = None, exclude_patterns: List[str] = None) -> bool:
+    def _should_process_file(
+        self,
+        file_path: str,
+        full_path: Path,
+        include_patterns: List[str] = None,
+        exclude_patterns: List[str] = None,
+    ) -> bool:
         """Check if file should be processed based on extension, path, and content."""
-        
+
         # ------------------------------------------------------------------
         # 0. User-supplied include / exclude patterns
         # ------------------------------------------------------------------
@@ -223,12 +249,16 @@ class GitManager:
         #   1. If a file matches *include_patterns* → always keep it.
         #   2. Otherwise, if it matches *exclude_patterns* → drop it.
 
-        if include_patterns and any(fnmatch.fnmatch(file_path, p) for p in include_patterns):
+        if include_patterns and any(
+            fnmatch.fnmatch(file_path, p) for p in include_patterns
+        ):
             return True
 
-        if exclude_patterns and any(fnmatch.fnmatch(file_path, p) for p in exclude_patterns):
+        if exclude_patterns and any(
+            fnmatch.fnmatch(file_path, p) for p in exclude_patterns
+        ):
             return False
-        
+
         # 1. File size limit (e.g., 2 MB)
         try:
             if full_path.stat().st_size > 2 * 1024 * 1024:
@@ -249,7 +279,17 @@ class GitManager:
         path = Path(file_path)
 
         # 3. Supported extensions
-        extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".mjs", ".md", ".rst", ".txt"}
+        extensions = {
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".mjs",
+            ".md",
+            ".rst",
+            ".txt",
+        }
 
         # 4. Skip common non-code directories.
         # `path.parents` returns a sequence of Path objects, not their string

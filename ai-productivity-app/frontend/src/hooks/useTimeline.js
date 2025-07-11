@@ -3,9 +3,9 @@
 // (pages) don’t import API modules directly, satisfying the
 // no-restricted-imports ESLint rule.
 
-import { useEffect, useState } from 'react';
-import { timelineAPI } from '../api/timeline';
-import { useAuth } from './useAuth';
+import { useEffect, useState } from "react";
+import { timelineAPI } from "../api/timeline";
+import { useAuth } from "./useAuth";
 
 /**
  * Fetch a list of recent timeline events for the current user.

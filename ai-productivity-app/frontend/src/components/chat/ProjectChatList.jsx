@@ -1,27 +1,36 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import PropTypes from 'prop-types';
-import { format } from 'date-fns';
-import chatAPI from '../../api/chat';
-import LoadingSpinner from '../common/LoadingSpinner';
-import EmptyState from '../common/EmptyState';
-import { MessageSquare, Plus, Clock, ChevronRight, Pencil, Trash2, Check, X } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import PropTypes from "prop-types";
+import { format } from "date-fns";
+import chatAPI from "../../api/chat";
+import LoadingSpinner from "../common/LoadingSpinner";
+import EmptyState from "../common/EmptyState";
+import {
+  MessageSquare,
+  Plus,
+  Clock,
+  ChevronRight,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+} from "lucide-react";
 
 export default function ProjectChatList({ projectId, project }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const LIMIT = 20;                  // page size – keep in sync with backend default
+  const LIMIT = 20; // page size – keep in sync with backend default
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(0);           // zero-based page index
+  const [page, setPage] = useState(0); // zero-based page index
   const [creating, setCreating] = useState(false);
-  const [editingId, setEditingId] = useState(null);   // id being renamed
-  const [newTitle, setNewTitle] = useState('');
-  const [busyId, setBusyId] = useState(null);   // spinner for save/del
+  const [editingId, setEditingId] = useState(null); // id being renamed
+  const [newTitle, setNewTitle] = useState("");
+  const [busyId, setBusyId] = useState(null); // spinner for save/del
 
   // Load first page whenever project changes
   useEffect(() => {
@@ -64,8 +73,8 @@ export default function ProjectChatList({ projectId, project }) {
 
       setPage(pageIndex + 1);
     } catch (err) {
-      console.error('Failed to load chat sessions:', err);
-      setError('Failed to load chat sessions');
+      console.error("Failed to load chat sessions:", err);
+      setError("Failed to load chat sessions");
       setHasMore(false);
     } finally {
       if (reset) {
@@ -87,13 +96,13 @@ export default function ProjectChatList({ projectId, project }) {
       setCreating(true);
       const response = await chatAPI.createSession({
         project_id: Number(projectId),
-        title: `Chat - ${new Date().toLocaleDateString()}`
+        title: `Chat - ${new Date().toLocaleDateString()}`,
       });
       const newSession = response.data;
       navigate(`/projects/${projectId}/chat/${newSession.id}`);
     } catch (err) {
-      console.error('Failed to create chat session:', err);
-      setError('Failed to create new chat');
+      console.error("Failed to create chat session:", err);
+      setError("Failed to create new chat");
     } finally {
       setCreating(false);
     }
@@ -109,13 +118,16 @@ export default function ProjectChatList({ projectId, project }) {
     try {
       setBusyId(editingId);
       await chatAPI.updateSession(editingId, { title: newTitle.trim() });
-      setSessions(s => s.map(sess =>
-        sess.id === editingId ? { ...sess, title: newTitle.trim() } : sess));
+      setSessions((s) =>
+        s.map((sess) =>
+          sess.id === editingId ? { ...sess, title: newTitle.trim() } : sess,
+        ),
+      );
 
       // Invalidate sidebar recent chats cache to update titles immediately
-      queryClient.invalidateQueries(['recentChats']);
+      queryClient.invalidateQueries(["recentChats"]);
     } catch (err) {
-      setError('Failed to rename chat session');
+      setError("Failed to rename chat session");
     } finally {
       setBusyId(null);
       setEditingId(null);
@@ -124,7 +136,7 @@ export default function ProjectChatList({ projectId, project }) {
 
   // Ask & delete
   const confirmDelete = (id) => {
-    if (!window.confirm('Delete this conversation?')) return;
+    if (!window.confirm("Delete this conversation?")) return;
     deleteSession(id);
   };
 
@@ -132,9 +144,9 @@ export default function ProjectChatList({ projectId, project }) {
     try {
       setBusyId(id);
       await chatAPI.deleteSession(id);
-      setSessions(s => s.filter(sess => sess.id !== id));
+      setSessions((s) => s.filter((sess) => sess.id !== id));
     } catch (err) {
-      setError('Failed to delete chat session');
+      setError("Failed to delete chat session");
     } finally {
       setBusyId(null);
     }
@@ -174,7 +186,7 @@ export default function ProjectChatList({ projectId, project }) {
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Plus className="w-4 h-4" />
-          {creating ? 'Creating...' : 'New Chat'}
+          {creating ? "Creating..." : "New Chat"}
         </button>
       </div>
 
@@ -185,8 +197,8 @@ export default function ProjectChatList({ projectId, project }) {
           title="No chats yet"
           description="Start a new chat to begin collaborating with AI on this project"
           action={{
-            label: 'Start First Chat',
-            onClick: createNewChat
+            label: "Start First Chat",
+            onClick: createNewChat,
           }}
         />
       ) : (
@@ -215,7 +227,7 @@ export default function ProjectChatList({ projectId, project }) {
                   <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-500">
                     <div className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {format(new Date(session.updated_at), 'MMM d, h:mm a')}
+                      {format(new Date(session.updated_at), "MMM d, h:mm a")}
                     </div>
                     {session.message_count > 0 && (
                       <div className="flex items-center gap-1">
@@ -235,18 +247,20 @@ export default function ProjectChatList({ projectId, project }) {
                 <div
                   className="flex items-center gap-1 text-gray-400 group-hover:text-gray-600
                              dark:text-gray-500 dark:group-hover:text-gray-300"
-                  onClick={(e) => e.stopPropagation()}   /* keep card from navigating */
+                  onClick={(e) =>
+                    e.stopPropagation()
+                  } /* keep card from navigating */
                 >
                   {editingId === session.id ? (
                     <>
                       <input
                         value={newTitle}
-                        onChange={e => setNewTitle(e.target.value)}
+                        onChange={(e) => setNewTitle(e.target.value)}
                         className="w-40 px-1 py-0.5 text-sm rounded border
                                    dark:bg-gray-700 dark:border-gray-600"
                       />
                       <Check
-                        className={`w-4 h-4 cursor-pointer ${busyId===session.id&&'animate-spin'}`}
+                        className={`w-4 h-4 cursor-pointer ${busyId === session.id && "animate-spin"}`}
                         aria-label="Save"
                         onClick={saveTitle}
                       />
@@ -261,10 +275,13 @@ export default function ProjectChatList({ projectId, project }) {
                       <Pencil
                         className="w-4 h-4 cursor-pointer"
                         aria-label="Edit title"
-                        onClick={() => { setEditingId(session.id); setNewTitle(session.title || ''); }}
+                        onClick={() => {
+                          setEditingId(session.id);
+                          setNewTitle(session.title || "");
+                        }}
                       />
                       <Trash2
-                        className={`w-4 h-4 cursor-pointer ${busyId===session.id&&'animate-spin'}`}
+                        className={`w-4 h-4 cursor-pointer ${busyId === session.id && "animate-spin"}`}
                         aria-label="Delete conversation"
                         onClick={() => confirmDelete(session.id)}
                       />
@@ -281,7 +298,7 @@ export default function ProjectChatList({ projectId, project }) {
               disabled={loadingMore}
               className="px-4 py-2 mx-auto my-2 text-sm text-blue-600 dark:text-blue-400 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loadingMore ? 'Loading…' : 'Load More'}
+              {loadingMore ? "Loading…" : "Load More"}
             </button>
           )}
         </div>
@@ -292,5 +309,5 @@ export default function ProjectChatList({ projectId, project }) {
 
 ProjectChatList.propTypes = {
   projectId: PropTypes.string.isRequired,
-  project: PropTypes.object // Optional project object for additional metadata
+  project: PropTypes.object, // Optional project object for additional metadata
 };

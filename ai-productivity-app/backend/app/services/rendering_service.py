@@ -48,6 +48,7 @@ except ModuleNotFoundError:  # pragma: no cover – lightweight shim
     def retry_if_exception_type(_):  # noqa: D401
         return lambda _: True
 
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -132,7 +133,9 @@ def _get_client(base_url: str) -> httpx.AsyncClient:
     global _http_client  # noqa: PLW0603
 
     if _http_client is None:
-        _http_client = httpx.AsyncClient(base_url=base_url, timeout=_DEFAULT_TIMEOUT, limits=_LIMITS)
+        _http_client = httpx.AsyncClient(
+            base_url=base_url, timeout=_DEFAULT_TIMEOUT, limits=_LIMITS
+        )
     return _http_client
 
 
@@ -176,7 +179,9 @@ class RenderingServiceClient:
         return response
 
     # ------------ Public rendering helpers ------------- #
-    async def render_markdown(self, content: str, options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def render_markdown(
+        self, content: str, options: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         if not self.enabled:
             return self._fallback_markdown(content, options)
 
@@ -192,7 +197,9 @@ class RenderingServiceClient:
             logger.warning("Markdown render failed – fallback (%s)", exc)
             return self._fallback_markdown(content, options)
 
-    async def render_code(self, code: str, language: str, theme: str = "github") -> Dict[str, Any]:
+    async def render_code(
+        self, code: str, language: str, theme: str = "github"
+    ) -> Dict[str, Any]:
         if not self.enabled:
             return self._fallback_code(code, language, theme)
         try:
@@ -207,7 +214,9 @@ class RenderingServiceClient:
             logger.warning("Code render failed – fallback (%s)", exc)
             return self._fallback_code(code, language, theme)
 
-    async def render_math(self, expression: str, renderer: str = "katex") -> Dict[str, Any]:
+    async def render_math(
+        self, expression: str, renderer: str = "katex"
+    ) -> Dict[str, Any]:
         if not self.enabled:
             return self._fallback_math(expression, renderer)
         try:
@@ -222,7 +231,9 @@ class RenderingServiceClient:
             logger.warning("Math render failed – fallback (%s)", exc)
             return self._fallback_math(expression, renderer)
 
-    async def render_diagram(self, code: str, diagram_type: str = "mermaid") -> Dict[str, Any]:
+    async def render_diagram(
+        self, code: str, diagram_type: str = "mermaid"
+    ) -> Dict[str, Any]:
         if not self.enabled:
             return self._fallback_diagram(code, diagram_type)
         try:
@@ -239,16 +250,24 @@ class RenderingServiceClient:
 
     # ---------------- Fallbacks ---------------- #
     @staticmethod
-    def _fallback_markdown(content: str, options: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _fallback_markdown(
+        content: str, options: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         try:
             import markdown
 
-            html = markdown.markdown(content, extensions=["tables", "fenced_code", "codehilite"])
+            html = markdown.markdown(
+                content, extensions=["tables", "fenced_code", "codehilite"]
+            )
             return {"html": html, "format": "markdown", "fallback": True}
         except ImportError:
             import html as _html
 
-            return {"html": f"<pre>{_html.escape(content)}</pre>", "format": "text", "fallback": True}
+            return {
+                "html": f"<pre>{_html.escape(content)}</pre>",
+                "format": "text",
+                "fallback": True,
+            }
 
     @staticmethod
     def _fallback_code(code: str, language: str, theme: str) -> Dict[str, Any]:
@@ -267,11 +286,19 @@ class RenderingServiceClient:
         import html as _html
 
         escaped = _html.escape(expression)
-        return {"html": f'<span class="math-{renderer}">{escaped}</span>', "renderer": renderer, "fallback": True}
+        return {
+            "html": f'<span class="math-{renderer}">{escaped}</span>',
+            "renderer": renderer,
+            "fallback": True,
+        }
 
     @staticmethod
     def _fallback_diagram(code: str, diagram_type: str) -> Dict[str, Any]:
-        return {"svg": '<svg><text>Diagram rendering unavailable</text></svg>', "type": diagram_type, "fallback": True}
+        return {
+            "svg": "<svg><text>Diagram rendering unavailable</text></svg>",
+            "type": diagram_type,
+            "fallback": True,
+        }
 
 
 # --------------------------------------------------------------------------- #

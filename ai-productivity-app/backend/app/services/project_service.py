@@ -2,6 +2,7 @@
 
 Handles complex project operations, timeline tracking, and statistics.
 """
+
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 from typing import List, Optional
@@ -9,8 +10,11 @@ from typing import List, Optional
 from app.models.project import Project, ProjectStatus
 from app.models.timeline import TimelineEvent
 from app.schemas.project import (
-    ProjectCreate, ProjectUpdate, ProjectFilters,
-    ProjectStats, TimelineEventCreate
+    ProjectCreate,
+    ProjectUpdate,
+    ProjectFilters,
+    ProjectStats,
+    TimelineEventCreate,
 )
 
 
@@ -21,9 +25,7 @@ class ProjectService:
         self.db = db
 
     def create_project_with_timeline(
-        self,
-        project_data: ProjectCreate,
-        user_id: int
+        self, project_data: ProjectCreate, user_id: int
     ) -> Project:
         """Create a new project with initial timeline event."""
         # Create project
@@ -34,7 +36,7 @@ class ProjectService:
             color=project_data.color,
             emoji=project_data.emoji,
             tags=project_data.tags,
-            owner_id=user_id
+            owner_id=user_id,
         )
         self.db.add(project)
         self.db.flush()  # Get project ID
@@ -44,7 +46,7 @@ class ProjectService:
             project_id=project.id,
             event_type=TimelineEvent.EVENT_CREATED,
             title=f"Project '{project.title}' created",
-            user_id=user_id
+            user_id=user_id,
         )
         self.db.add(event)
         self.db.commit()
@@ -52,10 +54,7 @@ class ProjectService:
         return project
 
     def update_project(
-        self,
-        project_id: int,
-        update_data: ProjectUpdate,
-        user_id: int
+        self, project_id: int, update_data: ProjectUpdate, user_id: int
     ) -> Optional[Project]:
         """Update project and track changes in timeline."""
         project = self.db.query(Project).filter(Project.id == project_id).first()
@@ -67,17 +66,24 @@ class ProjectService:
 
         # Update fields
         if update_data.title is not None and update_data.title != project.title:
-            changes.append(f"title changed from '{project.title}' to '{update_data.title}'")
+            changes.append(
+                f"title changed from '{project.title}' to '{update_data.title}'"
+            )
             project.title = update_data.title
 
         if update_data.description is not None:
             project.description = update_data.description
             changes.append("description updated")
 
-        if update_data.status is not None and update_data.status != project.status.value:
+        if (
+            update_data.status is not None
+            and update_data.status != project.status.value
+        ):
             old_status = project.status.value
             project.status = ProjectStatus(update_data.status)
-            changes.append(f"status changed from '{old_status}' to '{update_data.status}'")
+            changes.append(
+                f"status changed from '{old_status}' to '{update_data.status}'"
+            )
 
             # Create status change event
             if isinstance(update_data.status, ProjectStatus):
@@ -85,13 +91,18 @@ class ProjectService:
             else:
                 # Convert Enum string representation ("ProjectStatus.COMPLETED")
                 new_status_val = str(update_data.status).split(".")[-1].lower()
-            self.db.add(TimelineEvent(
-                project_id=project.id,
-                event_type=TimelineEvent.EVENT_STATUS_CHANGED,
-                title=f"Status changed to {new_status_val}",
-                event_metadata={"old_status": old_status, "new_status": new_status_val},
-                user_id=user_id
-            ))
+            self.db.add(
+                TimelineEvent(
+                    project_id=project.id,
+                    event_type=TimelineEvent.EVENT_STATUS_CHANGED,
+                    title=f"Status changed to {new_status_val}",
+                    event_metadata={
+                        "old_status": old_status,
+                        "new_status": new_status_val,
+                    },
+                    user_id=user_id,
+                )
+            )
 
         if update_data.color is not None:
             project.color = update_data.color
@@ -105,20 +116,21 @@ class ProjectService:
 
         # Create update event if there were changes
         if changes:
-            self.db.add(TimelineEvent(
-                project_id=project.id,
-                event_type=TimelineEvent.EVENT_UPDATED,
-                title="Project updated",
-                description=", ".join(changes),
-                user_id=user_id
-            ))
+            self.db.add(
+                TimelineEvent(
+                    project_id=project.id,
+                    event_type=TimelineEvent.EVENT_UPDATED,
+                    title="Project updated",
+                    description=", ".join(changes),
+                    user_id=user_id,
+                )
+            )
 
         self.db.commit()
         return project
 
     def get_projects_with_stats(
-        self,
-        filters: ProjectFilters
+        self, filters: ProjectFilters
     ) -> tuple[List[Project], int]:
         """Get filtered projects with statistics."""
         query = self.db.query(Project).options(joinedload(Project.owner))
@@ -136,7 +148,7 @@ class ProjectService:
             # serialized tag string to avoid DB-specific JSON operators.
             tag_filters = []
             for tag in filters.tags:
-                tag_filters.append(Project.tags.like(f"%\"{tag}\"%"))
+                tag_filters.append(Project.tags.like(f'%"{tag}"%'))
             query = query.filter(or_(*tag_filters))
 
         if filters.search:
@@ -144,7 +156,7 @@ class ProjectService:
             query = query.filter(
                 or_(
                     Project.title.ilike(search_term),
-                    Project.description.ilike(search_term)
+                    Project.description.ilike(search_term),
                 )
             )
 
@@ -164,26 +176,28 @@ class ProjectService:
     def _get_project_stats(self, project_id: int) -> ProjectStats:
         """Calculate statistics for a project."""
         # Count timeline events
-        event_count = self.db.query(func.count(TimelineEvent.id)).filter(
-            TimelineEvent.project_id == project_id
-        ).scalar()
+        event_count = (
+            self.db.query(func.count(TimelineEvent.id))
+            .filter(TimelineEvent.project_id == project_id)
+            .scalar()
+        )
 
         # Get last activity
-        last_event = self.db.query(TimelineEvent.created_at).filter(
-            TimelineEvent.project_id == project_id
-        ).order_by(TimelineEvent.created_at.desc()).first()
+        last_event = (
+            self.db.query(TimelineEvent.created_at)
+            .filter(TimelineEvent.project_id == project_id)
+            .order_by(TimelineEvent.created_at.desc())
+            .first()
+        )
 
         return ProjectStats(
             files=0,  # Will be implemented in Phase 4
             timeline_events=event_count or 0,
-            last_activity=last_event[0] if last_event else None
+            last_activity=last_event[0] if last_event else None,
         )
 
     def add_timeline_event(
-        self,
-        project_id: int,
-        event_data: TimelineEventCreate,
-        user_id: int
+        self, project_id: int, event_data: TimelineEventCreate, user_id: int
     ) -> Optional[TimelineEvent]:
         """Add a custom timeline event to a project."""
         # Verify project exists
@@ -197,7 +211,7 @@ class ProjectService:
             title=event_data.title,
             description=event_data.description,
             event_metadata=event_data.metadata,
-            user_id=user_id
+            user_id=user_id,
         )
         self.db.add(event)
         self.db.commit()
@@ -212,13 +226,15 @@ class ProjectService:
 
         project.status = ProjectStatus.ARCHIVED
 
-        self.db.add(TimelineEvent(
-            project_id=project.id,
-            event_type=TimelineEvent.EVENT_STATUS_CHANGED,
-            title="Project archived",
-            event_metadata={"old_status": "active", "new_status": "archived"},
-            user_id=user_id
-        ))
+        self.db.add(
+            TimelineEvent(
+                project_id=project.id,
+                event_type=TimelineEvent.EVENT_STATUS_CHANGED,
+                title="Project archived",
+                event_metadata={"old_status": "active", "new_status": "archived"},
+                user_id=user_id,
+            )
+        )
 
         self.db.commit()
         return project
@@ -241,6 +257,7 @@ class ProjectService:
             try:
                 import sentry_sdk  # type: ignore  # pragma: no cover
             except ModuleNotFoundError:  # pragma: no cover
+
                 class _S:  # pylint: disable=too-few-public-methods
                     @staticmethod
                     def capture_exception(_exc):
@@ -260,11 +277,7 @@ class ProjectService:
             span_cm.__enter__()
 
         try:
-            project = (
-                self.db.query(Project)
-                .filter(Project.id == project_id)
-                .first()
-            )
+            project = self.db.query(Project).filter(Project.id == project_id).first()
             if not project:
                 return None
 

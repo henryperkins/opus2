@@ -7,7 +7,15 @@ import logging
 import re
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status, Header
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Body,
+    Depends,
+    HTTPException,
+    status,
+    Header,
+)
 
 from app.dependencies import CurrentUserRequired, DatabaseDep
 from app.models.import_job import ImportJob, ImportStatus
@@ -97,30 +105,38 @@ async def get_repository_status(
     db: DatabaseDep,
 ):
     """Get repository connection status and stats for a project."""
-    
+
     # Verify project access
     project = db.query(Project).filter_by(id=project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     if project.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied: You don't own this project")
-    
+        raise HTTPException(
+            status_code=403, detail="Access denied: You don't own this project"
+        )
+
     # Get latest import job for this project
-    latest_job = db.query(ImportJob).filter_by(project_id=project_id).order_by(ImportJob.created_at.desc()).first()
-    
+    latest_job = (
+        db.query(ImportJob)
+        .filter_by(project_id=project_id)
+        .order_by(ImportJob.created_at.desc())
+        .first()
+    )
+
     if not latest_job:
         return {
             "connected": False,
             "status": "not_connected",
             "repo_info": None,
-            "stats": {"total_files": 0, "documents_added": 0}
+            "stats": {"total_files": 0, "documents_added": 0},
         }
-    
+
     # Get document count for this project
     from app.models.code import CodeDocument
+
     document_count = db.query(CodeDocument).filter_by(project_id=project_id).count()
-    
+
     return {
         "connected": latest_job.status == ImportStatus.COMPLETED,
         "status": latest_job.status.value,
@@ -128,16 +144,15 @@ async def get_repository_status(
             "repo_url": latest_job.repo_url,
             "branch": latest_job.branch,
             "commit_sha": latest_job.commit_sha,
-            "last_sync": latest_job.updated_at.isoformat() if latest_job.updated_at else None,
+            "last_sync": (
+                latest_job.updated_at.isoformat() if latest_job.updated_at else None
+            ),
         },
-        "stats": {
-            "total_files": document_count,
-            "documents_added": document_count
-        },
+        "stats": {"total_files": document_count, "documents_added": document_count},
         "progress": {
             "phase": latest_job.status.value,
-            "percent": latest_job.progress_pct
-        }
+            "percent": latest_job.progress_pct,
+        },
     }
 
 
@@ -166,9 +181,11 @@ async def start_import(
     project = db.query(Project).filter_by(id=project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     if project.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied: You don't own this project")
+        raise HTTPException(
+            status_code=403, detail="Access denied: You don't own this project"
+        )
 
     # Create job
     job = ImportJob(
@@ -231,11 +248,11 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
 
         try:
             clone_info = await _GIT_MANAGER.clone_repository(
-                job.repo_url, 
-                project_id=job.project_id, 
+                job.repo_url,
+                project_id=job.project_id,
                 branch=job.branch,
                 include_patterns=job.include_patterns,
-                exclude_patterns=job.exclude_patterns
+                exclude_patterns=job.exclude_patterns,
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Clone failed")
@@ -269,9 +286,7 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
 
                 try:
                     # Reading file content is blocking, move to thread
-                    content = await asyncio.to_thread(
-                        _read_file_content, full_path
-                    )
+                    content = await asyncio.to_thread(_read_file_content, full_path)
                     if content is None:
                         continue
                 except Exception as exc:  # noqa: BLE001
@@ -303,7 +318,7 @@ async def _run_import_job(job_id: int) -> None:  # noqa: D401, WPS231, WPS210
                     job.progress_pct = pct
                     job.touch()
                     await _notify(phase="indexing", percent=job.progress_pct)
-        
+
         # Await all parsing tasks ------------------------------------------------
         try:
             await asyncio.gather(*tasks)

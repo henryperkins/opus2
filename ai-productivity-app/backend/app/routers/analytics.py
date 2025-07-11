@@ -105,7 +105,9 @@ async def ingest_batch(payload: BatchPayload):
         logger.warning("Failed to buffer analytics metrics: %s", exc, exc_info=True)
 
     logger.info(
-        "Analytics batch received – metrics=%s, meta=%s", received_count, payload.metadata
+        "Analytics batch received – metrics=%s, meta=%s",
+        received_count,
+        payload.metadata,
     )
 
     return {"success": True, "received": received_count}
@@ -169,6 +171,8 @@ async def get_usage_stats(
         errorRate=None,
         lastUsed=datetime.now(timezone.utc),
     )
+
+
 # ---------------------------------------------------------------------------
 # NOTE:
 # If you later need more granular or date-range-filtered usage statistics,
@@ -272,7 +276,10 @@ async def track_quality(metric: QualityMetric):
         bucket[:] = bucket[-5000:]
 
     logger.debug(
-        "Quality metric received – project=%s overall=%.3f model=%s", metric.project_id, metric.overall, metric.model
+        "Quality metric received – project=%s overall=%.3f model=%s",
+        metric.project_id,
+        metric.overall,
+        metric.model,
     )
 
     return {"success": True}
@@ -291,7 +298,11 @@ async def get_project_quality(project_id: int):
     scores = _QUALITY_BY_PROJECT.get(project_id) or []
     if not scores:
         # Graceful empty response instead of 404 so UI shows 0
-        return ProjectQualitySummary(project_id=project_id, sample_size=0, average_score=0.0)
+        return ProjectQualitySummary(
+            project_id=project_id, sample_size=0, average_score=0.0
+        )
 
     avg = sum(scores) / len(scores)
-    return ProjectQualitySummary(project_id=project_id, sample_size=len(scores), average_score=avg)
+    return ProjectQualitySummary(
+        project_id=project_id, sample_size=len(scores), average_score=avg
+    )

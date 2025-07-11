@@ -14,7 +14,7 @@
 
 function normaliseApiUrl(value) {
   // Default when env var is missing
-  const fallback = 'http://localhost:8000';
+  const fallback = "http://localhost:8000";
 
   // Use provided env var or fallback
   let urlInput = value || fallback;
@@ -24,21 +24,24 @@ function normaliseApiUrl(value) {
     const urlObj = new URL(urlInput, window.location.origin);
 
     // If frontend is HTTPS but backend URL is HTTP, upgrade to HTTPS only when safe
-    if (window.location.protocol === 'https:' && urlObj.protocol === 'http:') {
-      const sameHost = ['localhost', window.location.hostname].includes(
-        urlObj.hostname
+    if (window.location.protocol === "https:" && urlObj.protocol === "http:") {
+      const sameHost = ["localhost", window.location.hostname].includes(
+        urlObj.hostname,
       );
       if (sameHost) {
-        urlObj.protocol = 'https:';
+        urlObj.protocol = "https:";
       } else {
-        return '/'; // fall back to same-origin base
+        return "/"; // fall back to same-origin base
       }
     }
     return urlObj.toString();
   } catch {
     // Gracefully handle non-URL strings / relative paths
-    if (window.location.protocol === 'https:' && urlInput.startsWith('http://')) {
-      return urlInput.replace(/^http:/, 'https:');
+    if (
+      window.location.protocol === "https:" &&
+      urlInput.startsWith("http://")
+    ) {
+      return urlInput.replace(/^http:/, "https:");
     }
     return urlInput;
   }
@@ -54,9 +57,9 @@ export const API_URL = normaliseApiUrl(import.meta.env.VITE_API_URL);
 export async function validateEnvironment() {
   try {
     const res = await fetch(`${API_URL}/health/ready`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
     });
     return res.ok;
   } catch {

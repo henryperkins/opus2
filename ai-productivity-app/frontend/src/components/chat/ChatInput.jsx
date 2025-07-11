@@ -1,23 +1,48 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Hash, Plus, X } from 'lucide-react';
-import PropTypes from 'prop-types';
-import ThinkingModeSelector from './ThinkingModeSelector';
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Send, Hash, Plus, X } from "lucide-react";
+import PropTypes from "prop-types";
+import ThinkingModeSelector from "./ThinkingModeSelector";
 
 // Simple command suggestions component
 function CommandSuggestions({ query, onSelect, onClose }) {
   const commonCommands = [
-    { name: '/explain', description: 'Explain code functionality', usage: '/explain [code or file]' },
-    { name: '/generate-tests', description: 'Generate unit tests', usage: '/generate-tests [function name]' },
-    { name: '/summarize-pr', description: 'Summarize changes', usage: '/summarize-pr [pr number]' },
-    { name: '/grep', description: 'Search codebase', usage: '/grep [search term]' },
-    { name: '/refactor', description: 'Suggest refactoring', usage: '/refactor [code or file]' },
-    { name: '/docs', description: 'Generate documentation', usage: '/docs [function or class]' }
+    {
+      name: "/explain",
+      description: "Explain code functionality",
+      usage: "/explain [code or file]",
+    },
+    {
+      name: "/generate-tests",
+      description: "Generate unit tests",
+      usage: "/generate-tests [function name]",
+    },
+    {
+      name: "/summarize-pr",
+      description: "Summarize changes",
+      usage: "/summarize-pr [pr number]",
+    },
+    {
+      name: "/grep",
+      description: "Search codebase",
+      usage: "/grep [search term]",
+    },
+    {
+      name: "/refactor",
+      description: "Suggest refactoring",
+      usage: "/refactor [code or file]",
+    },
+    {
+      name: "/docs",
+      description: "Generate documentation",
+      usage: "/docs [function or class]",
+    },
   ];
 
   const filteredCommands = query
-    ? commonCommands.filter(cmd =>
-        cmd.name.includes(query.toLowerCase()) ||
-        cmd.description.toLowerCase().includes(query.toLowerCase())
+    ? commonCommands.filter(
+        (cmd) =>
+          cmd.name.includes(query.toLowerCase()) ||
+          cmd.description.toLowerCase().includes(query.toLowerCase()),
       )
     : commonCommands;
 
@@ -26,7 +51,9 @@ function CommandSuggestions({ query, onSelect, onClose }) {
   return (
     <div className="absolute bottom-full mb-2 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-2 z-50">
       <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-700">
-        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Commands</span>
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          Commands
+        </span>
         <button
           onClick={onClose}
           className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -93,15 +120,15 @@ export default function ChatInput({
   projectId,
   placeholder = "Type a message...",
   disabled = false,
-  maxLength = 4000
+  maxLength = 4000,
 }) {
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [showCommands, setShowCommands] = useState(false);
-  const [commandQuery, setCommandQuery] = useState('');
+  const [commandQuery, setCommandQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [thinkingMode, setThinkingMode] = useState('off');
-  const [thinkingDepth, setThinkingDepth] = useState('detailed');
+  const [thinkingMode, setThinkingMode] = useState("off");
+  const [thinkingDepth, setThinkingDepth] = useState("detailed");
 
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -110,7 +137,7 @@ export default function ChatInput({
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
     if (textarea) {
-      textarea.style.height = 'auto';
+      textarea.style.height = "auto";
       const newHeight = Math.min(textarea.scrollHeight, 200); // Max 200px
       textarea.style.height = `${newHeight}px`;
     }
@@ -135,46 +162,46 @@ export default function ChatInput({
     adjustTextareaHeight();
 
     // Check for command mode
-    const isCommand = value.startsWith('/');
+    const isCommand = value.startsWith("/");
     if (isCommand) {
       const query = value.slice(1);
       setCommandQuery(query);
       setShowCommands(true);
     } else {
       setShowCommands(false);
-      setCommandQuery('');
+      setCommandQuery("");
     }
   };
 
   // Handle command selection
   const handleCommandSelect = (command) => {
-    setMessage(command.name + ' ');
+    setMessage(command.name + " ");
     setShowCommands(false);
-    setCommandQuery('');
+    setCommandQuery("");
     textareaRef.current?.focus();
   };
 
   // Handle file attachment
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || []);
-    const newAttachments = files.map(file => ({
+    const newAttachments = files.map((file) => ({
       name: file.name,
       size: file.size,
       type: file.type,
-      file
+      file,
     }));
 
-    setAttachments(prev => [...prev, ...newAttachments]);
+    setAttachments((prev) => [...prev, ...newAttachments]);
 
     // Clear file input
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
   // Remove attachment
   const removeAttachment = (index) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Handle form submission
@@ -190,25 +217,24 @@ export default function ChatInput({
         content: message.trim(),
         attachments: attachments.length > 0 ? attachments : undefined,
         projectId,
-        thinkingMode: thinkingMode !== 'off' ? thinkingMode : undefined,
-        thinkingDepth: thinkingMode !== 'off' ? thinkingDepth : undefined
+        thinkingMode: thinkingMode !== "off" ? thinkingMode : undefined,
+        thinkingDepth: thinkingMode !== "off" ? thinkingDepth : undefined,
       };
 
       await onSend(messageData);
 
       // Clear form
-      setMessage('');
+      setMessage("");
       setAttachments([]);
       setShowCommands(false);
-      setCommandQuery('');
+      setCommandQuery("");
 
       // Reset textarea height
       if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = "auto";
       }
-
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error("Failed to send message:", error);
     } finally {
       setIsSending(false);
     }
@@ -216,12 +242,12 @@ export default function ChatInput({
 
   // Handle keyboard shortcuts
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
 
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       setShowCommands(false);
     }
   };
@@ -286,7 +312,7 @@ export default function ChatInput({
                   disabled:opacity-50 disabled:cursor-not-allowed
                   transition-colors"
                 rows={1}
-                style={{ minHeight: '44px' }}
+                style={{ minHeight: "44px" }}
                 maxLength={maxLength}
               />
 
@@ -318,11 +344,21 @@ export default function ChatInput({
           {/* Helper text */}
           <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex justify-between">
             <span>
-              Type <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded font-mono">/</kbd> for commands
+              Type{" "}
+              <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded font-mono">
+                /
+              </kbd>{" "}
+              for commands
             </span>
             <span>
-              <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded font-mono">Enter</kbd> to send,
-              <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded font-mono ml-1">Shift+Enter</kbd> for new line
+              <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded font-mono">
+                Enter
+              </kbd>{" "}
+              to send,
+              <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded font-mono ml-1">
+                Shift+Enter
+              </kbd>{" "}
+              for new line
             </span>
           </div>
         </div>
@@ -347,21 +383,23 @@ ChatInput.propTypes = {
   projectId: PropTypes.string.isRequired,
   placeholder: PropTypes.string,
   disabled: PropTypes.bool,
-  maxLength: PropTypes.number
+  maxLength: PropTypes.number,
 };
 
 CommandSuggestions.propTypes = {
   query: PropTypes.string.isRequired,
   onSelect: PropTypes.func.isRequired,
-  onClose: PropTypes.func.isRequired
+  onClose: PropTypes.func.isRequired,
 };
 
 AttachmentPreview.propTypes = {
-  attachments: PropTypes.arrayOf(PropTypes.shape({
-    name: PropTypes.string.isRequired,
-    size: PropTypes.number,
-    type: PropTypes.string,
-    file: PropTypes.object
-  })),
-  onRemove: PropTypes.func.isRequired
+  attachments: PropTypes.arrayOf(
+    PropTypes.shape({
+      name: PropTypes.string.isRequired,
+      size: PropTypes.number,
+      type: PropTypes.string,
+      file: PropTypes.object,
+    }),
+  ),
+  onRemove: PropTypes.func.isRequired,
 };

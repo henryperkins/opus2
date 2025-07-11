@@ -1,5 +1,14 @@
 # User model for authentication and ownership
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index, CheckConstraint
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Boolean,
+    DateTime,
+    Index,
+    CheckConstraint,
+)
+
 # SQLAlchemy exposes the *TSVECTOR* column type under the ``postgresql``
 # dialect module.  The original code relied on *sqlalchemy-utils* which
 # provides a convenience alias named *TSVectorType*.  To remove the hard
@@ -29,24 +38,38 @@ class User(Base, TimestampMixin):
 
     __table_args__ = (
         # PostgreSQL-specific optimizations
-        Index("idx_users_username_trgm", "username", postgresql_using="gin",
-              postgresql_ops={"username": "gin_trgm_ops"}),
-        Index("idx_users_email_trgm", "email", postgresql_using="gin",
-              postgresql_ops={"email": "gin_trgm_ops"}),
+        Index(
+            "idx_users_username_trgm",
+            "username",
+            postgresql_using="gin",
+            postgresql_ops={"username": "gin_trgm_ops"},
+        ),
+        Index(
+            "idx_users_email_trgm",
+            "email",
+            postgresql_using="gin",
+            postgresql_ops={"email": "gin_trgm_ops"},
+        ),
         Index("idx_users_search_gin", "search_vector", postgresql_using="gin"),
         Index("idx_users_preferences_gin", "preferences", postgresql_using="gin"),
-        Index("idx_users_active_login", "is_active", "last_login",
-              postgresql_where=text("is_active = true")),
-        
+        Index(
+            "idx_users_active_login",
+            "is_active",
+            "last_login",
+            postgresql_where=text("is_active = true"),
+        ),
         # Check constraints for data validation
         CheckConstraint("char_length(username) >= 1", name="username_min_length"),
         CheckConstraint("char_length(username) <= 50", name="username_max_length"),
         CheckConstraint("username ~ '^[a-zA-Z0-9_-]+$'", name="username_format"),
         CheckConstraint("email ~ '^[^@]+@[^@]+\\.[^@]+$'", name="email_format"),
         CheckConstraint("char_length(email) <= 100", name="email_max_length"),
-        CheckConstraint("jsonb_typeof(preferences) = 'object'", name="preferences_is_object"),
-        CheckConstraint("jsonb_typeof(user_metadata) = 'object'", name="user_metadata_is_object"),
-        
+        CheckConstraint(
+            "jsonb_typeof(preferences) = 'object'", name="preferences_is_object"
+        ),
+        CheckConstraint(
+            "jsonb_typeof(user_metadata) = 'object'", name="user_metadata_is_object"
+        ),
         {
             "extend_existing": True,
         },
@@ -69,31 +92,33 @@ class User(Base, TimestampMixin):
         nullable=True,
         comment="Most recent successful login (UTC)",
     )
-    
+
     # User preferences and metadata as JSONB
     preferences = Column(
-        JSONB,
-        default=dict,
-        nullable=False,
-        comment="User preferences and settings"
+        JSONB, default=dict, nullable=False, comment="User preferences and settings"
     )
     user_metadata = Column(
         JSONB,
         default=dict,
         nullable=False,
-        comment="Additional user metadata and profile information"
+        comment="Additional user metadata and profile information",
     )
-    
+
     # Full-text search vector for PostgreSQL
     search_vector = Column(
-        TSVectorType,
-        comment="Full-text search vector for username and email"
+        TSVectorType, comment="Full-text search vector for username and email"
     )
 
     # Relationships
-    projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
-    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
-    prompt_templates = relationship("PromptTemplate", back_populates="user", cascade="all, delete-orphan")
+    projects = relationship(
+        "Project", back_populates="owner", cascade="all, delete-orphan"
+    )
+    sessions = relationship(
+        "Session", back_populates="user", cascade="all, delete-orphan"
+    )
+    prompt_templates = relationship(
+        "PromptTemplate", back_populates="user", cascade="all, delete-orphan"
+    )
 
     # Search history relationship – loaded only when explicitly queried.
     search_history = relationship(

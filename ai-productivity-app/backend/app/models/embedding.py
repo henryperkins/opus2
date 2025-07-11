@@ -11,9 +11,7 @@ class EmbeddingMetadata(Base, TimestampMixin):
     """Metadata for embeddings stored in VSS."""
 
     __tablename__ = "embedding_metadata"
-    __table_args__ = (
-        {"extend_existing": True},
-    )
+    __table_args__ = ({"extend_existing": True},)
 
     rowid = Column(Integer, primary_key=True)
     document_id = Column(Integer, ForeignKey("code_documents.id"), nullable=False)
@@ -21,7 +19,9 @@ class EmbeddingMetadata(Base, TimestampMixin):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     content = Column(Text, nullable=False)
     content_hash = Column(String(64), nullable=False)
-    embedding_metadata = Column(MutableDict.as_mutable(JSON), nullable=False, default=dict)
+    embedding_metadata = Column(
+        MutableDict.as_mutable(JSON), nullable=False, default=dict
+    )
 
     # Relationships
     document = relationship("CodeDocument")

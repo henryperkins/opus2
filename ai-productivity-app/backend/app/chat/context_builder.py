@@ -34,7 +34,9 @@ class ContextBuilder:
         r"(?:^|[\s`\"])([a-zA-Z0-9_\-./]+\.[a-zA-Z]+)(?:[:,]?\s*(?:line\s*)?(\d+))?"
     )
     CODE_BLOCK_PATTERN = re.compile(r"```(\w+)?\n(.*?)```", re.DOTALL)
-    SYMBOL_PATTERN = re.compile(r"(?:function|class|def|interface|type)\s+([a-zA-Z_]\w*)")
+    SYMBOL_PATTERN = re.compile(
+        r"(?:function|class|def|interface|type)\s+([a-zA-Z_]\w*)"
+    )
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -78,13 +80,17 @@ class ContextBuilder:
                 uniq.append(ch)
 
         # Apply final content filtering to all chunks
-        filtered_chunks, final_warnings = content_filter.filter_and_validate_chunks(uniq)
-        
+        filtered_chunks, final_warnings = content_filter.filter_and_validate_chunks(
+            uniq
+        )
+
         if final_warnings:
-            logger.info(f"Final content filtering warnings: {'; '.join(final_warnings)}")
+            logger.info(
+                f"Final content filtering warnings: {'; '.join(final_warnings)}"
+            )
             # Store warnings in context for potential user notification
             ctx["content_filter_warnings"] = final_warnings
-            
+
         ctx["chunks"] = filtered_chunks
         return ctx
 
@@ -112,7 +118,9 @@ class ContextBuilder:
         for m in self.CODE_BLOCK_PATTERN.finditer(text):
             language = m.group(1) or "text"
             code = m.group(2).strip()
-            blocks.append({"language": language, "code": code, "length": len(code.split("\n"))})
+            blocks.append(
+                {"language": language, "code": code, "length": len(code.split("\n"))}
+            )
         return blocks
 
     def extract_symbols(self, text: str) -> List[str]:
@@ -172,20 +180,27 @@ class ContextBuilder:
 
         chunks = (await self.db.execute(c_stmt)).scalars().all()
         formatted_chunks = [self._format_chunk(ch) for ch in chunks]
-        
+
         # Filter chunks for sensitive content
-        filtered_chunks, warnings = content_filter.filter_and_validate_chunks(formatted_chunks)
-        
+        filtered_chunks, warnings = content_filter.filter_and_validate_chunks(
+            formatted_chunks
+        )
+
         if warnings:
-            logger.info(f"Content filtering warnings for file context: {'; '.join(warnings)}")
-            
+            logger.info(
+                f"Content filtering warnings for file context: {'; '.join(warnings)}"
+            )
+
         return filtered_chunks
 
     async def search_symbol(self, project_id: int, symbol: str) -> List[Dict[str, Any]]:
         stmt = (
             select(CodeEmbedding)
             .join(CodeDocument, CodeDocument.id == CodeEmbedding.document_id)
-            .where(CodeDocument.project_id == project_id, CodeEmbedding.symbol_name == symbol)
+            .where(
+                CodeDocument.project_id == project_id,
+                CodeEmbedding.symbol_name == symbol,
+            )
         )
         result = await self.db.execute(stmt)
         chunks = result.scalars().all()
@@ -204,13 +219,17 @@ class ContextBuilder:
             chunks = result.scalars().all()
 
         formatted_chunks = [self._format_chunk(ch) for ch in chunks]
-        
+
         # Filter chunks for sensitive content
-        filtered_chunks, warnings = content_filter.filter_and_validate_chunks(formatted_chunks)
-        
+        filtered_chunks, warnings = content_filter.filter_and_validate_chunks(
+            formatted_chunks
+        )
+
         if warnings:
-            logger.info(f"Content filtering warnings for symbol search: {'; '.join(warnings)}")
-            
+            logger.info(
+                f"Content filtering warnings for symbol search: {'; '.join(warnings)}"
+            )
+
         return filtered_chunks
 
     async def build_conversation_context(
@@ -222,7 +241,9 @@ class ContextBuilder:
     ) -> List[Dict[str, Any]]:
         stmt = (
             select(ChatMessage)
-            .where(ChatMessage.session_id == session_id, ChatMessage.is_deleted.is_(False))
+            .where(
+                ChatMessage.session_id == session_id, ChatMessage.is_deleted.is_(False)
+            )
             .order_by(ChatMessage.created_at.desc())
             .limit(max_messages)
         )
@@ -262,7 +283,9 @@ class ContextBuilder:
     ) -> Optional[str]:
         stmt = (
             select(ChatMessage)
-            .where(ChatMessage.session_id == session_id, ChatMessage.is_deleted.is_(False))
+            .where(
+                ChatMessage.session_id == session_id, ChatMessage.is_deleted.is_(False)
+            )
             .order_by(ChatMessage.created_at)
         )
         if up_to_message_id:
@@ -278,7 +301,9 @@ class ContextBuilder:
             elif msg.role == "assistant" and msg.referenced_files:
                 files = ", ".join(msg.referenced_files[:3])
                 topics.append(f"Discussed files: {files}")
-        return f"Earlier conversation context: {'; '.join(topics[:5])}" if topics else None
+        return (
+            f"Earlier conversation context: {'; '.join(topics[:5])}" if topics else None
+        )
 
     async def create_timeline_event(
         self,

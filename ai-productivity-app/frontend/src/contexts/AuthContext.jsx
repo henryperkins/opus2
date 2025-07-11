@@ -8,17 +8,11 @@
  *  • broadcast logout event (listens for `auth:logout` custom event from api/client.js)
  */
 
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-} from 'react';
-import PropTypes from 'prop-types';
-import { authAPI } from '../api/auth';
-import useAuthStore from '../stores/authStore';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-
+import React, { createContext, useContext, useState, useCallback } from "react";
+import PropTypes from "prop-types";
+import { authAPI } from "../api/auth";
+import useAuthStore from "../stores/authStore";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 // -----------------------------------------------------------------------------
 // Types
@@ -33,9 +27,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 const AuthContextInstance = createContext({
   user: /** @type {User|null} */ (null),
   loading: true,
-  login: /** @type {(username_or_email: string, password: string) => Promise<void>} */ (
-    async () => {}
-  ),
+  login:
+    /** @type {(username_or_email: string, password: string) => Promise<void>} */ (
+      async () => {}
+    ),
   logout: /** @type {() => Promise<void>} */ (async () => {}),
   refresh: /** @type {() => Promise<void>} */ (async () => {}),
 });
@@ -76,7 +71,7 @@ export function AuthProvider({ children }) {
     error,
     refetch: refetchMe,
   } = useQuery({
-    queryKey: ['me'],
+    queryKey: ["me"],
     queryFn: fetchMe,
     // 5-minute cache, no retry on 4xx
     staleTime: 5 * 60 * 1000,
@@ -90,10 +85,10 @@ export function AuthProvider({ children }) {
   // Listen for global logout events triggered by Axios interceptor
   React.useEffect(() => {
     const handler = () => {
-      queryClient.setQueryData(['me'], null);
+      queryClient.setQueryData(["me"], null);
     };
-    window.addEventListener('auth:logout', handler);
-    return () => window.removeEventListener('auth:logout', handler);
+    window.addEventListener("auth:logout", handler);
+    return () => window.removeEventListener("auth:logout", handler);
   }, [queryClient]);
 
   // -----------------------------------------------------------
@@ -104,7 +99,7 @@ export function AuthProvider({ children }) {
   const login = useCallback(
     async (username_or_email, password) => {
       if (isAuthenticating) {
-        throw new Error('Authentication already in progress');
+        throw new Error("Authentication already in progress");
       }
       setIsAuthenticating(true);
       try {
@@ -119,7 +114,7 @@ export function AuthProvider({ children }) {
         setIsAuthenticating(false);
       }
     },
-    [isAuthenticating, refetchMe, startSession]
+    [isAuthenticating, refetchMe, startSession],
   );
 
   const logout = useCallback(async () => {
@@ -137,17 +132,17 @@ export function AuthProvider({ children }) {
   const updateProfile = useCallback(
     async (changes) => {
       const prev = user;
-      queryClient.setQueryData(['me'], { ...user, ...changes });
+      queryClient.setQueryData(["me"], { ...user, ...changes });
 
       try {
         const data = await authAPI.updateProfile(changes);
-        queryClient.setQueryData(['me'], data);
+        queryClient.setQueryData(["me"], data);
       } catch (err) {
-        queryClient.setQueryData(['me'], prev);
+        queryClient.setQueryData(["me"], prev);
         throw err;
       }
     },
-    [user, queryClient]
+    [user, queryClient],
   );
 
   const value = {
@@ -163,15 +158,15 @@ export function AuthProvider({ children }) {
     return (
       <div
         style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#f8fafc',
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#f8fafc",
         }}
       >
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mr-3" />
-        <span style={{ fontSize: 24, color: '#3b82f6', letterSpacing: 2 }}>
+        <span style={{ fontSize: 24, color: "#3b82f6", letterSpacing: 2 }}>
           Checking authentication…
         </span>
       </div>
@@ -185,11 +180,12 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContextInstance.Provider value={value}>{children}</AuthContextInstance.Provider>
+    <AuthContextInstance.Provider value={value}>
+      {children}
+    </AuthContextInstance.Provider>
   );
 }
 
 AuthProvider.propTypes = {
   children: PropTypes.node.isRequired,
 };
-

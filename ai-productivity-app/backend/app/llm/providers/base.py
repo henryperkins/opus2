@@ -70,10 +70,7 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    async def stream(
-        self,
-        response: Any
-    ) -> AsyncIterator[str]:
+    async def stream(self, response: Any) -> AsyncIterator[str]:
         """Convert provider response to unified streaming format."""
         pass
 
@@ -85,7 +82,9 @@ class LLMProvider(ABC):
     # override this method – but everyone else now automatically inherits a
     # robust implementation and we avoid the previous code duplication.
 
-    def validate_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:  # noqa: D401 – simple description
+    def validate_tools(
+        self, tools: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:  # noqa: D401 – simple description
         """Return *tools* converted to the canonical OpenAI format.
 
         This default implementation acts as a thin wrapper around
@@ -115,10 +114,7 @@ class LLMProvider(ABC):
 
     @abstractmethod
     def format_tool_result(
-        self,
-        tool_call_id: str,
-        tool_name: str,
-        result: str
+        self, tool_call_id: str, tool_name: str, result: str
     ) -> Dict[str, Any]:
         """Format tool result for provider."""
         pass
@@ -137,5 +133,5 @@ class LLMProvider(ABC):
             "supports_tools": True,
             "supports_streaming": True,
             "max_tokens": 4096,
-            "supports_json_mode": False
+            "supports_json_mode": False,
         }

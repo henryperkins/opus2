@@ -1,7 +1,18 @@
 """Configuration models for storing runtime application settings."""
+
 # pylint: disable=not-callable
 
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Text, Index, CheckConstraint
+from sqlalchemy import (
+    Column,
+    String,
+    Float,
+    Integer,
+    Boolean,
+    DateTime,
+    Text,
+    Index,
+    CheckConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, ENUM
 from sqlalchemy.sql import func, text
 from .base import Base
@@ -34,7 +45,9 @@ class RuntimeConfig(Base):
     requires_restart = Column(Boolean, default=False)
 
     # When this configuration was last updated
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Who/what updated this configuration (for audit trail)
     updated_by = Column(String(100), nullable=True)
@@ -42,24 +55,21 @@ class RuntimeConfig(Base):
     # PostgreSQL-specific table configuration
     __table_args__ = (
         # GIN index for JSONB value queries
-        Index('idx_runtime_config_value_gin', 'value', postgresql_using='gin'),
-
+        Index("idx_runtime_config_value_gin", "value", postgresql_using="gin"),
         # Partial index for specific config types
-        Index('idx_runtime_config_model_configs', 'key', 'value',
-              postgresql_where=text("key LIKE '%model%' OR key LIKE '%provider%'")),
-
+        Index(
+            "idx_runtime_config_model_configs",
+            "key",
+            "value",
+            postgresql_where=text("key LIKE '%model%' OR key LIKE '%provider%'"),
+        ),
         # Check constraints for data validation
         CheckConstraint(
             "value_type IN ('string', 'number', 'boolean', 'object', 'array')",
-            name='valid_value_type'
+            name="valid_value_type",
         ),
-
         # Ensure model configuration keys follow naming convention
-        CheckConstraint(
-            "key ~ '^[a-z][a-z0-9_]*$'",
-            name='valid_config_key_format'
-        ),
-
+        CheckConstraint("key ~ '^[a-z][a-z0-9_]*$'", name="valid_config_key_format"),
         {"extend_existing": True},
     )
 
@@ -95,15 +105,12 @@ class ConfigHistory(Base):
     # PostgreSQL-specific optimizations
     __table_args__ = (
         # Composite index for config history queries
-        Index('idx_config_history_key_time', 'config_key', 'changed_at'),
-
+        Index("idx_config_history_key_time", "config_key", "changed_at"),
         # GIN indexes for JSONB value searches
-        Index('idx_config_history_old_value_gin', 'old_value', postgresql_using='gin'),
-        Index('idx_config_history_new_value_gin', 'new_value', postgresql_using='gin'),
-
+        Index("idx_config_history_old_value_gin", "old_value", postgresql_using="gin"),
+        Index("idx_config_history_new_value_gin", "new_value", postgresql_using="gin"),
         # Simple index for recent changes lookup
-        Index('idx_config_history_key_date', 'config_key', 'changed_at'),
-
+        Index("idx_config_history_key_date", "config_key", "changed_at"),
         {"extend_existing": True},
     )
 
@@ -113,17 +120,27 @@ class ConfigHistory(Base):
 
 # PostgreSQL Enum for model providers
 model_provider_enum = ENUM(
-    'openai', 'azure', 'anthropic', 'local', 'ollama',
-    name='model_provider_enum',
-    create_type=True
+    "openai",
+    "azure",
+    "anthropic",
+    "local",
+    "ollama",
+    name="model_provider_enum",
+    create_type=True,
 )
 
 # PostgreSQL Enum for model capabilities
 model_capability_enum = ENUM(
-    'chat', 'completion', 'embedding', 'vision', 'function_calling',
-    'code_generation', 'reasoning', 'multimodal',
-    name='model_capability_enum',
-    create_type=True
+    "chat",
+    "completion",
+    "embedding",
+    "vision",
+    "function_calling",
+    "code_generation",
+    "reasoning",
+    "multimodal",
+    name="model_capability_enum",
+    create_type=True,
 )
 
 
@@ -152,10 +169,17 @@ class ModelConfiguration(Base):
     version = Column(String(100), nullable=True)
 
     # Model capabilities as JSON object
-    capabilities = Column(JSONB, nullable=False, default=dict, comment="Model capabilities as key-value pairs")
+    capabilities = Column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        comment="Model capabilities as key-value pairs",
+    )
 
     # Configuration parameters as JSONB
-    default_params = Column(JSONB, nullable=False, default=dict, comment="Default parameters for the model")
+    default_params = Column(
+        JSONB, nullable=False, default=dict, comment="Default parameters for the model"
+    )
 
     # Model limits and specifications
     max_tokens = Column(Integer, nullable=False, default=4096)
@@ -163,7 +187,9 @@ class ModelConfiguration(Base):
 
     # Cost information (per 1K tokens)
     cost_input_per_1k = Column(Float, nullable=True, comment="Cost per 1K input tokens")
-    cost_output_per_1k = Column(Float, nullable=True, comment="Cost per 1K output tokens")
+    cost_output_per_1k = Column(
+        Float, nullable=True, comment="Cost per 1K output tokens"
+    )
 
     # ------------------------------------------------------------------
     # Compatibility shim for legacy **tier** column
@@ -183,50 +209,68 @@ class ModelConfiguration(Base):
     tier = column_property(literal("balanced"))  # type: ignore  # noqa: A001
 
     # Performance characteristics
-    avg_response_time_ms = Column(Integer, nullable=True, comment="Average response time in milliseconds")
-    throughput_tokens_per_sec = Column(Float, nullable=True, comment="Average tokens per second")
+    avg_response_time_ms = Column(
+        Integer, nullable=True, comment="Average response time in milliseconds"
+    )
+    throughput_tokens_per_sec = Column(
+        Float, nullable=True, comment="Average tokens per second"
+    )
 
     # Availability and status
     is_available = Column(Boolean, default=True, nullable=False)
     is_deprecated = Column(Boolean, default=False, nullable=False)
 
     # Model metadata as JSONB
-    model_metadata = Column(JSONB, nullable=False, default=dict, comment="Additional model metadata and specifications")
+    model_metadata = Column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        comment="Additional model metadata and specifications",
+    )
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     deprecated_at = Column(DateTime(timezone=True), nullable=True)
 
     # PostgreSQL-specific optimizations
     __table_args__ = (
         # GIN index for capabilities array
-        Index('idx_model_config_capabilities_gin', 'capabilities', postgresql_using='gin'),
-
+        Index(
+            "idx_model_config_capabilities_gin", "capabilities", postgresql_using="gin"
+        ),
         # GIN index for default parameters
-        Index('idx_model_config_params_gin', 'default_params', postgresql_using='gin'),
-
+        Index("idx_model_config_params_gin", "default_params", postgresql_using="gin"),
         # GIN index for metadata
-        Index('idx_model_config_metadata_gin', 'model_metadata', postgresql_using='gin'),
-
+        Index(
+            "idx_model_config_metadata_gin", "model_metadata", postgresql_using="gin"
+        ),
         # Composite index for provider and family
-        Index('idx_model_config_provider_family', 'provider', 'model_family'),
-
+        Index("idx_model_config_provider_family", "provider", "model_family"),
         # Partial index for available models only
-        Index('idx_model_config_available', 'provider', 'model_family', 'is_available',
-              postgresql_where=text("is_available = true AND is_deprecated = false")),
-
+        Index(
+            "idx_model_config_available",
+            "provider",
+            "model_family",
+            "is_available",
+            postgresql_where=text("is_available = true AND is_deprecated = false"),
+        ),
         # Simple index for cost columns
-        Index('idx_model_config_cost_efficiency', 'cost_input_per_1k', 'cost_output_per_1k', 'throughput_tokens_per_sec'),
-
+        Index(
+            "idx_model_config_cost_efficiency",
+            "cost_input_per_1k",
+            "cost_output_per_1k",
+            "throughput_tokens_per_sec",
+        ),
         # Check constraints
-        CheckConstraint('max_tokens > 0', name='positive_max_tokens'),
-        CheckConstraint('context_window > 0', name='positive_context_window'),
-        CheckConstraint('cost_input_per_1k >= 0', name='non_negative_input_cost'),
-        CheckConstraint('cost_output_per_1k >= 0', name='non_negative_output_cost'),
-        CheckConstraint('avg_response_time_ms > 0', name='positive_response_time'),
-        CheckConstraint('throughput_tokens_per_sec > 0', name='positive_throughput'),
-
+        CheckConstraint("max_tokens > 0", name="positive_max_tokens"),
+        CheckConstraint("context_window > 0", name="positive_context_window"),
+        CheckConstraint("cost_input_per_1k >= 0", name="non_negative_input_cost"),
+        CheckConstraint("cost_output_per_1k >= 0", name="non_negative_output_cost"),
+        CheckConstraint("avg_response_time_ms > 0", name="positive_response_time"),
+        CheckConstraint("throughput_tokens_per_sec > 0", name="positive_throughput"),
         {"extend_existing": True},
     )
 
@@ -278,7 +322,12 @@ class ModelUsageMetrics(Base):
     period_end = Column(DateTime(timezone=True), nullable=False)
 
     # Detailed metrics as JSONB
-    detailed_metrics = Column(JSONB, nullable=False, default=dict, comment="Detailed performance and usage metrics")
+    detailed_metrics = Column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        comment="Detailed performance and usage metrics",
+    )
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -286,26 +335,27 @@ class ModelUsageMetrics(Base):
     # PostgreSQL-specific optimizations
     __table_args__ = (
         # Composite index for model and time period
-        Index('idx_model_usage_model_period', 'model_id', 'period_start', 'period_end'),
-
+        Index("idx_model_usage_model_period", "model_id", "period_start", "period_end"),
         # GIN index for detailed metrics
-        Index('idx_model_usage_metrics_gin', 'detailed_metrics', postgresql_using='gin'),
-
+        Index(
+            "idx_model_usage_metrics_gin", "detailed_metrics", postgresql_using="gin"
+        ),
         # Simple index for recent metrics lookup
-        Index('idx_model_usage_recent', 'model_id', 'period_end'),
-
+        Index("idx_model_usage_recent", "model_id", "period_end"),
         # Simple index for efficiency metrics
-        Index('idx_model_usage_efficiency', 'total_cost', 'total_requests'),
-
+        Index("idx_model_usage_efficiency", "total_cost", "total_requests"),
         # Check constraints
-        CheckConstraint('total_requests >= 0', name='non_negative_requests'),
-        CheckConstraint('total_tokens_input >= 0', name='non_negative_input_tokens'),
-        CheckConstraint('total_tokens_output >= 0', name='non_negative_output_tokens'),
-        CheckConstraint('success_rate >= 0 AND success_rate <= 100', name='valid_success_rate'),
-        CheckConstraint('avg_user_rating >= 1 AND avg_user_rating <= 5', name='valid_user_rating'),
-        CheckConstraint('period_start < period_end', name='valid_time_period'),
-        CheckConstraint('total_cost >= 0', name='non_negative_cost'),
-
+        CheckConstraint("total_requests >= 0", name="non_negative_requests"),
+        CheckConstraint("total_tokens_input >= 0", name="non_negative_input_tokens"),
+        CheckConstraint("total_tokens_output >= 0", name="non_negative_output_tokens"),
+        CheckConstraint(
+            "success_rate >= 0 AND success_rate <= 100", name="valid_success_rate"
+        ),
+        CheckConstraint(
+            "avg_user_rating >= 1 AND avg_user_rating <= 5", name="valid_user_rating"
+        ),
+        CheckConstraint("period_start < period_end", name="valid_time_period"),
+        CheckConstraint("total_cost >= 0", name="non_negative_cost"),
         {"extend_existing": True},
     )
 

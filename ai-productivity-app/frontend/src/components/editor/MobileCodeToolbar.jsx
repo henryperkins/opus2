@@ -1,133 +1,149 @@
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  RotateCcw, 
-  Copy, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+  Copy,
   Type,
   Indent,
   Outdent,
-  Search
-} from 'lucide-react';
+  Search,
+} from "lucide-react";
 
 /**
  * Mobile-optimized toolbar for code editing
  * Provides common actions for touch interfaces
  */
-const MobileCodeToolbar = ({ 
-  editorRef, 
-  language, 
+const MobileCodeToolbar = ({
+  editorRef,
+  language,
   onLanguageChange,
   onFormat,
-  className = "" 
+  className = "",
 }) => {
   const insertText = (text) => {
     if (!editorRef.current) return;
-    
+
     // Safely check for monaco global
     const monaco = window.monaco;
     if (!monaco) {
-      console.warn('Monaco Editor not available');
+      console.warn("Monaco Editor not available");
       return;
     }
-    
+
     const editor = editorRef.current;
     const selection = editor.getSelection();
     const range = new monaco.Range(
       selection.startLineNumber,
       selection.startColumn,
       selection.endLineNumber,
-      selection.endColumn
+      selection.endColumn,
     );
-    
-    editor.executeEdits('mobile-toolbar', [{
-      range: range,
-      text: text,
-      forceMoveMarkers: true
-    }]);
-    
+
+    editor.executeEdits("mobile-toolbar", [
+      {
+        range: range,
+        text: text,
+        forceMoveMarkers: true,
+      },
+    ]);
+
     editor.focus();
   };
 
   const indentSelection = () => {
     if (!editorRef.current) return;
-    editorRef.current.trigger('mobile-toolbar', 'editor.action.indentLines', null);
+    editorRef.current.trigger(
+      "mobile-toolbar",
+      "editor.action.indentLines",
+      null,
+    );
     editorRef.current.focus();
   };
 
   const outdentSelection = () => {
     if (!editorRef.current) return;
-    editorRef.current.trigger('mobile-toolbar', 'editor.action.outdentLines', null);
+    editorRef.current.trigger(
+      "mobile-toolbar",
+      "editor.action.outdentLines",
+      null,
+    );
     editorRef.current.focus();
   };
 
   const undo = () => {
     if (!editorRef.current) return;
-    editorRef.current.trigger('mobile-toolbar', 'undo', null);
+    editorRef.current.trigger("mobile-toolbar", "undo", null);
     editorRef.current.focus();
   };
 
   const copyContent = async () => {
     if (!editorRef.current) return;
-    
+
     const selection = editorRef.current.getSelection();
     const model = editorRef.current.getModel();
-    const text = selection.isEmpty() 
-      ? model.getValue() 
+    const text = selection.isEmpty()
+      ? model.getValue()
       : model.getValueInRange(selection);
-    
+
     try {
       await navigator.clipboard.writeText(text);
     } catch (err) {
-      console.warn('Copy failed:', err);
+      console.warn("Copy failed:", err);
     }
   };
 
   const showQuickActions = () => {
     if (!editorRef.current) return;
-    editorRef.current.trigger('mobile-toolbar', 'editor.action.quickCommand', null);
+    editorRef.current.trigger(
+      "mobile-toolbar",
+      "editor.action.quickCommand",
+      null,
+    );
   };
 
   const showFind = () => {
     if (!editorRef.current) return;
-    editorRef.current.trigger('mobile-toolbar', 'actions.find', null);
+    editorRef.current.trigger("mobile-toolbar", "actions.find", null);
   };
 
   return (
-    <div className={`flex items-center gap-1 p-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-x-auto ${className}`}>
+    <div
+      className={`flex items-center gap-1 p-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-x-auto ${className}`}
+    >
       {/* Common symbols for coding */}
       <div className="flex items-center gap-1 pr-2 border-r border-gray-300 dark:border-gray-600">
         <button
-          onClick={() => insertText('{')}
+          onClick={() => insertText("{")}
           className="p-2 text-sm font-mono bg-white dark:bg-gray-700 rounded border touch-manipulation"
         >
-          {'{'}
+          {"{"}
         </button>
         <button
-          onClick={() => insertText('}')}
+          onClick={() => insertText("}")}
           className="p-2 text-sm font-mono bg-white dark:bg-gray-700 rounded border touch-manipulation"
         >
-          {'}'}
+          {"}"}
         </button>
         <button
-          onClick={() => insertText('(')}
+          onClick={() => insertText("(")}
           className="p-2 text-sm font-mono bg-white dark:bg-gray-700 rounded border touch-manipulation"
         >
-          {'('}
+          {"("}
         </button>
         <button
-          onClick={() => insertText(')')}
+          onClick={() => insertText(")")}
           className="p-2 text-sm font-mono bg-white dark:bg-gray-700 rounded border touch-manipulation"
         >
-          {')'}
+          {")"}
         </button>
         <button
-          onClick={() => insertText('=')}
+          onClick={() => insertText("=")}
           className="p-2 text-sm font-mono bg-white dark:bg-gray-700 rounded border touch-manipulation"
         >
           =
         </button>
         <button
-          onClick={() => insertText(';')}
+          onClick={() => insertText(";")}
           className="p-2 text-sm font-mono bg-white dark:bg-gray-700 rounded border touch-manipulation"
         >
           ;

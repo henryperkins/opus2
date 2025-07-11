@@ -1,7 +1,7 @@
 // ProjectCard.jsx: visual card with status, emoji, tags, and quick actions.
 
-import { useNavigate } from 'react-router-dom';
-import Badge from '../common/Badge';
+import { useNavigate } from "react-router-dom";
+import Badge from "../common/Badge";
 
 export default function ProjectCard({ project, onClick }) {
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ export default function ProjectCard({ project, onClick }) {
         {project.description}
       </div>
       <div className="mt-3 flex flex-wrap gap-1">
-        {(project.tags || []).map(tag => (
+        {(project.tags || []).map((tag) => (
           <span
             key={tag}
             className="inline-flex items-center bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -57,8 +57,18 @@ export default function ProjectCard({ project, onClick }) {
             title="Analytics"
             className="text-gray-500 hover:text-blue-600"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3v18M5 12h6m8-6H5m10 6h4" />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M11 3v18M5 12h6m8-6H5m10 6h4"
+              />
             </svg>
           </button>
           <button
@@ -69,14 +79,29 @@ export default function ProjectCard({ project, onClick }) {
             title="Files"
             className="text-gray-500 hover:text-blue-600"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16V4a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2H6a2 2 0 01-2-2z" />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16V4a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2H6a2 2 0 01-2-2z"
+              />
             </svg>
           </button>
-          <div className={`w-2 h-2 rounded-full ${
-            project.status === 'active' ? 'bg-green-400' :
-            project.status === 'completed' ? 'bg-blue-400' : 'bg-gray-400'
-          }`} />
+          <div
+            className={`w-2 h-2 rounded-full ${
+              project.status === "active"
+                ? "bg-green-400"
+                : project.status === "completed"
+                  ? "bg-blue-400"
+                  : "bg-gray-400"
+            }`}
+          />
         </div>
       </div>
     </div>

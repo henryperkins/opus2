@@ -1,4 +1,3 @@
-
 """Seed the **model catalogue** table with built-in fixtures.
 
 This script is intentionally *self-contained* so it can be executed on a
@@ -117,12 +116,18 @@ def seed_models() -> None:  # noqa: D401 (simple name fine)
         sqlite_path.parent.mkdir(parents=True, exist_ok=True)
         sqlite_url = f"sqlite:///{sqlite_path}"
 
-        target_engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
-        target_session_factory = sessionmaker(bind=target_engine, autocommit=False, autoflush=False)
+        target_engine = create_engine(
+            sqlite_url, connect_args={"check_same_thread": False}
+        )
+        target_session_factory = sessionmaker(
+            bind=target_engine, autocommit=False, autoflush=False
+        )
 
     # Create only the *model_configurations* table to avoid PG-specific DDL
     # that SQLite cannot parse.
-    ModelConfiguration.metadata.create_all(bind=target_engine, tables=[ModelConfiguration.__table__])
+    ModelConfiguration.metadata.create_all(
+        bind=target_engine, tables=[ModelConfiguration.__table__]
+    )
 
     # Open session against the *selected* engine (PostgreSQL or fallback
     # SQLite) and perform the actual seeding work.

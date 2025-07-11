@@ -1,15 +1,15 @@
-import PropTypes from 'prop-types';
+import PropTypes from "prop-types";
 import UnifiedModal from "../../components/common/UnifiedModal";
 
 const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
   const shortcuts = [
-    { key: '⌘ + /', description: 'Open keyboard shortcuts' },
-    { key: '⌘ + K', description: 'Open command palette' },
-    { key: 'N', description: 'New chat' },
-    { key: '⌘ + J', description: 'Focus chat input' },
-    { key: '⌘ + Shift + E', description: 'Export chat' },
-    { key: '⌘ + Shift + P', description: 'Toggle project sidebar' },
-    { key: '⌘ + Shift + S', description: 'Toggle system prompt' },
+    { key: "⌘ + /", description: "Open keyboard shortcuts" },
+    { key: "⌘ + K", description: "Open command palette" },
+    { key: "N", description: "New chat" },
+    { key: "⌘ + J", description: "Focus chat input" },
+    { key: "⌘ + Shift + E", description: "Export chat" },
+    { key: "⌘ + Shift + P", description: "Toggle project sidebar" },
+    { key: "⌘ + Shift + S", description: "Toggle system prompt" },
   ];
 
   return (
@@ -20,7 +20,9 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
             <kbd className="px-2 py-1.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">
               {shortcut.key}
             </kbd>
-            <span className="text-sm text-gray-600">{shortcut.description}</span>
+            <span className="text-sm text-gray-600">
+              {shortcut.description}
+            </span>
           </div>
         ))}
       </div>

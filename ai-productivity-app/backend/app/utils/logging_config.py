@@ -20,7 +20,9 @@ class RequestIdFilter(logging.Filter):
         return True
 
 
-def setup_logging(*, json_logs: bool = False, log_level: str = "INFO") -> logging.Logger:
+def setup_logging(
+    *, json_logs: bool = False, log_level: str = "INFO"
+) -> logging.Logger:
     """Configure root logger with optional JSON output and request-ID enrichment.
 
     Args:
@@ -63,8 +65,8 @@ def setup_logging(*, json_logs: bool = False, log_level: str = "INFO") -> loggin
     # 4. Request-ID correlation across *all* handlers
     # ------------------------------------------------------------------ #
     request_id_filter = RequestIdFilter()
-    root_logger.addFilter(request_id_filter)           # root-level
-    console_handler.addFilter(request_id_filter)       # explicit (optional)
+    root_logger.addFilter(request_id_filter)  # root-level
+    console_handler.addFilter(request_id_filter)  # explicit (optional)
 
     # ------------------------------------------------------------------ #
     # 5. Tame noisy third-party loggers

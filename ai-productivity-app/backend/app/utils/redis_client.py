@@ -59,6 +59,7 @@ except ModuleNotFoundError:  # pragma: no cover – CI fallback
     class RedisError(Exception):
         """Placeholder for redis.exceptions.RedisError."""
 
+
 from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
@@ -110,7 +111,9 @@ async def close_redis() -> None:
 # --------------------------------------------------------------------------- #
 
 # language=Lua
-_LUA_SLIDING_WINDOW: Final[str] = """
+_LUA_SLIDING_WINDOW: Final[
+    str
+] = """
 -- KEYS[1] = key
 -- ARGV[1] = limit
 -- ARGV[2] = window (secs)
@@ -147,10 +150,10 @@ async def rate_limit(
 
         count: int = await redis_client.eval(
             _LUA_SLIDING_WINDOW,
-            1,          # numkeys
-            key,        # KEYS[1]
-            limit,      # ARGV[1]
-            window,     # ARGV[2]
+            1,  # numkeys
+            key,  # KEYS[1]
+            limit,  # ARGV[1]
+            window,  # ARGV[2]
         )
 
         if count > limit:
@@ -188,6 +191,7 @@ async def rate_limit(
 # --------------------------------------------------------------------------- #
 # Deprecated alias
 # --------------------------------------------------------------------------- #
+
 
 async def enforce_redis_rate_limit(
     key: str,

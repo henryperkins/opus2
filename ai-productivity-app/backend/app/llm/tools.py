@@ -216,7 +216,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                         "type": "string",
                         "description": "Type of analysis to run",
                         "enum": ["linting", "security", "complexity", "all"],
-                        "default": "linting"
+                        "default": "linting",
                     },
                 },
                 "required": ["file_path", "project_id"],
@@ -245,15 +245,15 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                         "type": "string",
                         "description": "Expected format of the documentation",
                         "enum": ["markdown", "html", "json", "text", "auto"],
-                        "default": "auto"
+                        "default": "auto",
                     },
                     "max_length": {
                         "type": "integer",
                         "description": "Maximum content length to process (in characters)",
                         "default": 50000,
                         "minimum": 1000,
-                        "maximum": 200000
-                    }
+                        "maximum": 200000,
+                    },
                 },
                 "required": ["url", "query"],
                 "additionalProperties": False,
@@ -262,7 +262,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         "strict": True,
     },
     {
-        "type": "function", 
+        "type": "function",
         "function": {
             "name": "comprehensive_analysis",
             "description": "Perform deep, multi-step analysis of code, documentation, or complex problems using structured thinking approaches. This tool enables Chain-of-Thought, Tree-of-Thought, and reflection-based reasoning.",
@@ -280,26 +280,33 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                     "thinking_mode": {
                         "type": "string",
                         "description": "Type of comprehensive thinking to apply",
-                        "enum": ["chain_of_thought", "tree_of_thought", "reflection", "step_by_step", "pros_cons", "root_cause"],
-                        "default": "chain_of_thought"
+                        "enum": [
+                            "chain_of_thought",
+                            "tree_of_thought",
+                            "reflection",
+                            "step_by_step",
+                            "pros_cons",
+                            "root_cause",
+                        ],
+                        "default": "chain_of_thought",
                     },
                     "depth": {
                         "type": "string",
                         "description": "Depth of analysis required",
                         "enum": ["surface", "detailed", "comprehensive", "exhaustive"],
-                        "default": "detailed"
+                        "default": "detailed",
                     },
                     "project_id": {
                         "type": "integer",
                         "description": "Current project identifier for context",
-                    }
+                    },
                 },
                 "required": ["task", "project_id"],
                 "additionalProperties": False,
             },
         },
         "strict": True,
-    }
+    },
 ]
 
 
@@ -467,32 +474,33 @@ async def _tool_search_commits(
     """Search commit history for a project."""
     from app.models.project import Project
     from app.services.git_history_searcher import GitHistorySearcher
-    
+
     query: str = args["query"]
     project_id: int = int(args["project_id"])
     limit: int = int(args.get("limit", 10))
-    
+
     try:
         # Get project to find repository path
         if isinstance(db, AsyncSession):
             from sqlalchemy import select
+
             project_stmt = select(Project).where(Project.id == project_id)
             result = await db.execute(project_stmt)
             project = result.scalar_one_or_none()
         else:
             project = db.query(Project).filter_by(id=project_id).first()
-            
+
         if not project:
             return {"error": "Project not found"}
-            
+
         # Construct repository path - this would typically be stored in project metadata
         repo_path = f"repos/project_{project_id}"
-        
+
         git_searcher = GitHistorySearcher(repo_path)
         commits = git_searcher.search_commits(query, limit)
-        
+
         return {"commits": commits}
-        
+
     except Exception as e:
         logger.error(f"Commit search failed: {e}")
         return {"error": f"Failed to search commits: {str(e)}"}
@@ -504,36 +512,37 @@ async def _tool_git_blame(
     """Get git blame information for a file and line."""
     from app.models.project import Project
     from app.services.git_history_searcher import GitHistorySearcher
-    
+
     file_path: str = args["file_path"]
     project_id: int = int(args["project_id"])
     line_number: int = args.get("line_number")
-    
+
     try:
         # Get project to find repository path
         if isinstance(db, AsyncSession):
             from sqlalchemy import select
+
             project_stmt = select(Project).where(Project.id == project_id)
             result = await db.execute(project_stmt)
             project = result.scalar_one_or_none()
         else:
             project = db.query(Project).filter_by(id=project_id).first()
-            
+
         if not project:
             return {"error": "Project not found"}
-            
+
         repo_path = f"repos/project_{project_id}"
-        
+
         git_searcher = GitHistorySearcher(repo_path)
-        
+
         if line_number:
             blame_info = git_searcher.get_blame(file_path, line_number)
         else:
             # Get blame for entire file (first 50 lines)
             blame_info = git_searcher.get_blame(file_path, 1, context_lines=50)
-            
+
         return {"blame": blame_info}
-        
+
     except Exception as e:
         logger.error(f"Git blame failed: {e}")
         return {"error": f"Failed to get blame information: {str(e)}"}
@@ -545,28 +554,29 @@ async def _tool_analyze_code_quality(
     """Run static analysis on code."""
     from app.models.project import Project
     from app.services.static_analysis_searcher import StaticAnalysisSearcher
-    
+
     file_path: str = args["file_path"]
     project_id: int = int(args["project_id"])
     analysis_type: str = args.get("analysis_type", "linting")
-    
+
     try:
         # Get project to find repository path
         if isinstance(db, AsyncSession):
             from sqlalchemy import select
+
             project_stmt = select(Project).where(Project.id == project_id)
             result = await db.execute(project_stmt)
             project = result.scalar_one_or_none()
         else:
             project = db.query(Project).filter_by(id=project_id).first()
-            
+
         if not project:
             return {"error": "Project not found"}
-            
+
         repo_path = f"repos/project_{project_id}"
-        
+
         analyzer = StaticAnalysisSearcher(repo_path)
-        
+
         if analysis_type == "linting":
             results = analyzer.run_pylint(file_path)
         elif analysis_type == "security":
@@ -578,17 +588,17 @@ async def _tool_analyze_code_quality(
             lint_results = analyzer.run_pylint(file_path)
             security_results = analyzer.run_security_analysis(file_path)
             complexity_results = analyzer.analyze_complexity(file_path)
-            
+
             results = {
                 "linting": lint_results,
                 "security": security_results,
-                "complexity": complexity_results
+                "complexity": complexity_results,
             }
         else:
             return {"error": f"Unknown analysis type: {analysis_type}"}
-            
+
         return {"analysis": results}
-        
+
     except Exception as e:
         logger.error(f"Code analysis failed: {e}")
         return {"error": f"Failed to analyze code: {str(e)}"}
@@ -603,35 +613,35 @@ async def _tool_fetch_documentation(
     from urllib.parse import urlparse
     from bs4 import BeautifulSoup
     import markdownify
-    
+
     url: str = args["url"]
     query: str = args["query"]
     format_type: str = args.get("format", "auto")
     max_length: int = int(args.get("max_length", 50000))
-    
+
     try:
         # Validate URL
         parsed_url = urlparse(url)
         if not parsed_url.scheme or not parsed_url.netloc:
             return {"error": "Invalid URL provided"}
-        
+
         # Fetch content with timeout
         timeout = aiohttp.ClientTimeout(total=30)
-        headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; AI Documentation Fetcher)"
-        }
-        
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; AI Documentation Fetcher)"}
+
         async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
             async with session.get(url) as response:
                 if response.status != 200:
-                    return {"error": f"HTTP {response.status}: Unable to fetch documentation"}
-                
+                    return {
+                        "error": f"HTTP {response.status}: Unable to fetch documentation"
+                    }
+
                 content_type = response.headers.get("content-type", "").lower()
                 raw_content = await response.text()
-        
+
         # Process content based on format
         processed_content = ""
-        
+
         if format_type == "auto":
             # Auto-detect format based on content type and URL
             if "application/json" in content_type:
@@ -642,37 +652,40 @@ async def _tool_fetch_documentation(
                 format_type = "html"
             else:
                 format_type = "text"
-        
+
         if format_type == "html":
             # Parse HTML and convert to markdown for better processing
-            soup = BeautifulSoup(raw_content, 'html.parser')
-            
+            soup = BeautifulSoup(raw_content, "html.parser")
+
             # Remove script and style elements
             for script in soup(["script", "style", "nav", "header", "footer"]):
                 script.decompose()
-            
+
             # Convert to markdown
             processed_content = markdownify.markdownify(str(soup), heading_style="ATX")
-            
+
         elif format_type == "json":
             # Pretty format JSON for analysis
             import json
+
             try:
                 json_data = json.loads(raw_content)
                 processed_content = json.dumps(json_data, indent=2)
             except json.JSONDecodeError:
                 processed_content = raw_content
-                
+
         elif format_type == "markdown":
             processed_content = raw_content
-            
+
         else:  # text
             processed_content = raw_content
-        
+
         # Truncate if too long
         if len(processed_content) > max_length:
-            processed_content = processed_content[:max_length] + "\n\n[Content truncated...]"
-        
+            processed_content = (
+                processed_content[:max_length] + "\n\n[Content truncated...]"
+            )
+
         # Use LLM to analyze the documentation based on the query
         analysis_prompt = f"""Analyze the following documentation and answer this specific query: {query}
 
@@ -684,21 +697,24 @@ Documentation from {url}:
 Please provide a comprehensive analysis focusing on the query. Extract relevant information, code examples, configuration details, and any important notes or warnings."""
 
         response = await llm_client.complete(
-            messages=[{"role": "user", "content": analysis_prompt}], 
-            stream=False
+            messages=[{"role": "user", "content": analysis_prompt}], stream=False
         )
-        
+
         analysis = _extract_llm_response_content(response)
-        
+
         return {
             "url": url,
             "query": query,
             "content_length": len(processed_content),
             "format": format_type,
             "analysis": analysis,
-            "raw_content": processed_content[:2000] + "..." if len(processed_content) > 2000 else processed_content
+            "raw_content": (
+                processed_content[:2000] + "..."
+                if len(processed_content) > 2000
+                else processed_content
+            ),
         }
-        
+
     except asyncio.TimeoutError:
         return {"error": "Request timed out while fetching documentation"}
     except Exception as e:
@@ -710,13 +726,13 @@ async def _tool_comprehensive_analysis(
     args: Dict[str, Any], db: Session | AsyncSession
 ) -> Dict[str, Any]:
     """Perform comprehensive analysis using structured thinking approaches."""
-    
+
     task: str = args["task"]
     context: str = args.get("context", "")
     thinking_mode: str = args.get("thinking_mode", "chain_of_thought")
     depth: str = args.get("depth", "detailed")
     project_id: int = int(args["project_id"])
-    
+
     try:
         # Build comprehensive analysis prompt based on thinking mode
         if thinking_mode == "chain_of_thought":
@@ -843,47 +859,51 @@ Comprehensive solution addressing root causes:"""
         # Adjust detail level based on depth parameter
         if depth == "surface":
             thinking_prompt += "\n\nProvide a concise analysis focusing on key points."
-        elif depth == "comprehensive": 
+        elif depth == "comprehensive":
             thinking_prompt += "\n\nProvide an in-depth analysis covering all aspects, edge cases, and implications."
         elif depth == "exhaustive":
             thinking_prompt += "\n\nProvide an exhaustive analysis covering every possible angle, alternative, and consideration."
-        
+
         # Get relevant project context if available
         if project_id:
             ctx_builder = ContextBuilder(db)  # type: ignore[arg-type]
             project_context = await ctx_builder.extract_context(task, project_id)
             if project_context.get("chunks"):
-                context_summary = "\n".join([
-                    f"File: {chunk.get('file_path', 'unknown')}\n{chunk.get('content', '')[:500]}..."
-                    for chunk in project_context["chunks"][:3]
-                ])
+                context_summary = "\n".join(
+                    [
+                        f"File: {chunk.get('file_path', 'unknown')}\n{chunk.get('content', '')[:500]}..."
+                        for chunk in project_context["chunks"][:3]
+                    ]
+                )
                 thinking_prompt += f"\n\nRelevant project context:\n{context_summary}"
-        
+
         # Execute the analysis with appropriate thinking configuration
         if settings.claude_extended_thinking and settings.claude_thinking_mode != "off":
             # Use Claude's extended thinking for this analysis
             response = await llm_client.complete(
-                messages=[{"role": "user", "content": thinking_prompt}],
-                stream=False
+                messages=[{"role": "user", "content": thinking_prompt}], stream=False
             )
         else:
             # Use regular completion
             response = await llm_client.complete(
-                messages=[{"role": "user", "content": thinking_prompt}], 
-                stream=False
+                messages=[{"role": "user", "content": thinking_prompt}], stream=False
             )
-        
+
         analysis_result = _extract_llm_response_content(response)
-        
+
         return {
             "task": task,
             "thinking_mode": thinking_mode,
             "depth": depth,
             "analysis": analysis_result,
             "context_used": bool(context),
-            "project_context_available": bool(project_id and project_context.get("chunks")) if project_id else False
+            "project_context_available": (
+                bool(project_id and project_context.get("chunks"))
+                if project_id
+                else False
+            ),
         }
-        
+
     except Exception as e:
         logger.error(f"Comprehensive analysis failed: {e}")
         return {"error": f"Failed to perform analysis: {str(e)}"}

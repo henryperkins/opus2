@@ -1,10 +1,18 @@
 // components/chat/InteractiveElements.jsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback } from "react";
 import {
-  Play, Code, FileText, Download, ChevronRight,
-  ChevronDown, Check, X, AlertCircle, Loader
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+  Play,
+  Code,
+  FileText,
+  Download,
+  ChevronRight,
+  ChevronDown,
+  Check,
+  X,
+  AlertCircle,
+  Loader,
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Executable Code Block
 const ExecutableCode = ({ element, onComplete }) => {
@@ -18,15 +26,15 @@ const ExecutableCode = ({ element, onComplete }) => {
     setError(null);
 
     try {
-      const result = await element.onInteraction('run', {
+      const result = await element.onInteraction("run", {
         code: element.data.code,
-        language: element.data.language
+        language: element.data.language,
       });
 
       setOutput(result.output);
       onComplete?.(result);
     } catch (err) {
-      setError(err.message || 'Execution failed');
+      setError(err.message || "Execution failed");
     } finally {
       setIsRunning(false);
     }
@@ -49,7 +57,7 @@ const ExecutableCode = ({ element, onComplete }) => {
           ) : (
             <Play className="w-4 h-4" />
           )}
-          <span>{isRunning ? 'Running...' : 'Run'}</span>
+          <span>{isRunning ? "Running..." : "Run"}</span>
         </button>
       </div>
 
@@ -61,11 +69,13 @@ const ExecutableCode = ({ element, onComplete }) => {
         {(output || error) && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
+            animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             className="border-t"
           >
-            <div className={`p-4 ${error ? 'bg-red-50 dark:bg-red-900/20' : 'bg-green-50 dark:bg-green-900/20'}`}>
+            <div
+              className={`p-4 ${error ? "bg-red-50 dark:bg-red-900/20" : "bg-green-50 dark:bg-green-900/20"}`}
+            >
               <div className="flex items-start space-x-2">
                 {error ? (
                   <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
@@ -86,7 +96,7 @@ const ExecutableCode = ({ element, onComplete }) => {
 
 // Interactive Query Builder
 const QueryBuilder = ({ element, onComplete }) => {
-  const [query, setQuery] = useState(element.data.initialQuery || '');
+  const [query, setQuery] = useState(element.data.initialQuery || "");
   const [filters, setFilters] = useState(element.data.filters || {});
   const [isExecuting, setIsExecuting] = useState(false);
   const [results, setResults] = useState(null);
@@ -94,11 +104,11 @@ const QueryBuilder = ({ element, onComplete }) => {
   const handleExecute = async () => {
     setIsExecuting(true);
     try {
-      const result = await element.onInteraction('execute', { query, filters });
+      const result = await element.onInteraction("execute", { query, filters });
       setResults(result.data);
       onComplete?.(result);
     } catch (error) {
-      console.error('Query execution failed:', error);
+      console.error("Query execution failed:", error);
     } finally {
       setIsExecuting(false);
     }
@@ -119,15 +129,17 @@ const QueryBuilder = ({ element, onComplete }) => {
         />
       </div>
 
-      {Object.keys(element.data.availableFilters || {}).map(filterKey => (
+      {Object.keys(element.data.availableFilters || {}).map((filterKey) => (
         <div key={filterKey}>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {element.data.availableFilters[filterKey].label}
           </label>
           <input
-            type={element.data.availableFilters[filterKey].type || 'text'}
-            value={filters[filterKey] || ''}
-            onChange={(e) => setFilters({ ...filters, [filterKey]: e.target.value })}
+            type={element.data.availableFilters[filterKey].type || "text"}
+            value={filters[filterKey] || ""}
+            onChange={(e) =>
+              setFilters({ ...filters, [filterKey]: e.target.value })
+            }
             className="w-full px-3 py-2 border rounded-lg text-sm"
             placeholder={element.data.availableFilters[filterKey].placeholder}
           />
@@ -139,12 +151,14 @@ const QueryBuilder = ({ element, onComplete }) => {
         disabled={isExecuting || !query}
         className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
       >
-        {isExecuting ? 'Executing...' : 'Execute Query'}
+        {isExecuting ? "Executing..." : "Execute Query"}
       </button>
 
       {results && (
         <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-          <h4 className="text-sm font-medium mb-2">Results ({results.length})</h4>
+          <h4 className="text-sm font-medium mb-2">
+            Results ({results.length})
+          </h4>
           <pre className="text-xs overflow-x-auto">
             {JSON.stringify(results, null, 2)}
           </pre>
@@ -166,10 +180,10 @@ const DecisionTree = ({ element, onComplete }) => {
     setPath(newPath);
 
     try {
-      const result = await element.onInteraction('choose', {
+      const result = await element.onInteraction("choose", {
         nodeId: currentNode.id,
         choice: choice.value,
-        path: newPath
+        path: newPath,
       });
 
       if (result.nextNode) {
@@ -178,7 +192,7 @@ const DecisionTree = ({ element, onComplete }) => {
         onComplete?.(result);
       }
     } catch (error) {
-      console.error('Decision processing failed:', error);
+      console.error("Decision processing failed:", error);
     } finally {
       setIsProcessing(false);
     }
@@ -204,7 +218,7 @@ const DecisionTree = ({ element, onComplete }) => {
             Back
           </button>
           <div className="mt-2 text-xs text-gray-600">
-            Path: {path.join(' → ')}
+            Path: {path.join(" → ")}
           </div>
         </div>
       )}
@@ -228,7 +242,9 @@ const DecisionTree = ({ element, onComplete }) => {
                 <div>
                   <div className="font-medium text-sm">{choice.label}</div>
                   {choice.description && (
-                    <div className="text-xs text-gray-600 mt-1">{choice.description}</div>
+                    <div className="text-xs text-gray-600 mt-1">
+                      {choice.description}
+                    </div>
                   )}
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400" />
@@ -253,13 +269,13 @@ const DynamicForm = ({ element, onComplete }) => {
     setErrors({});
 
     try {
-      const result = await element.onInteraction('submit', formData);
+      const result = await element.onInteraction("submit", formData);
       onComplete?.(result);
     } catch (error) {
       if (error.validationErrors) {
         setErrors(error.validationErrors);
       } else {
-        console.error('Form submission failed:', error);
+        console.error("Form submission failed:", error);
       }
     } finally {
       setIsSubmitting(false);
@@ -270,7 +286,7 @@ const DynamicForm = ({ element, onComplete }) => {
     setFormData({ ...formData, [fieldName]: value });
     // Clear error for this field
     if (errors[fieldName]) {
-      setErrors({ ...errors, [fieldName]: '' });
+      setErrors({ ...errors, [fieldName]: "" });
     }
   };
 
@@ -285,9 +301,9 @@ const DynamicForm = ({ element, onComplete }) => {
             {field.required && <span className="text-red-500 ml-1">*</span>}
           </label>
 
-          {field.type === 'select' ? (
+          {field.type === "select" ? (
             <select
-              value={formData[field.name] || ''}
+              value={formData[field.name] || ""}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}
               className="w-full px-3 py-2 border rounded-lg text-sm"
               required={field.required}
@@ -299,9 +315,9 @@ const DynamicForm = ({ element, onComplete }) => {
                 </option>
               ))}
             </select>
-          ) : field.type === 'textarea' ? (
+          ) : field.type === "textarea" ? (
             <textarea
-              value={formData[field.name] || ''}
+              value={formData[field.name] || ""}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}
               className="w-full px-3 py-2 border rounded-lg text-sm"
               rows={field.rows || 3}
@@ -310,8 +326,8 @@ const DynamicForm = ({ element, onComplete }) => {
             />
           ) : (
             <input
-              type={field.type || 'text'}
-              value={formData[field.name] || ''}
+              type={field.type || "text"}
+              value={formData[field.name] || ""}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}
               className="w-full px-3 py-2 border rounded-lg text-sm"
               required={field.required}
@@ -330,7 +346,7 @@ const DynamicForm = ({ element, onComplete }) => {
         disabled={isSubmitting}
         className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
       >
-        {isSubmitting ? 'Submitting...' : element.data.submitLabel || 'Submit'}
+        {isSubmitting ? "Submitting..." : element.data.submitLabel || "Submit"}
       </button>
     </form>
   );
@@ -343,13 +359,13 @@ const ActionButtons = ({ element, onComplete }) => {
   const handleAction = async (action) => {
     setProcessing(action.id);
     try {
-      const result = await element.onInteraction('action', {
+      const result = await element.onInteraction("action", {
         actionId: action.id,
-        params: action.params
+        params: action.params,
       });
       onComplete?.(result);
     } catch (error) {
-      console.error('Action failed:', error);
+      console.error("Action failed:", error);
     } finally {
       setProcessing(null);
     }
@@ -363,11 +379,11 @@ const ActionButtons = ({ element, onComplete }) => {
           onClick={() => handleAction(action)}
           disabled={processing !== null}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            action.variant === 'primary'
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : action.variant === 'danger'
-              ? 'bg-red-600 text-white hover:bg-red-700'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            action.variant === "primary"
+              ? "bg-blue-600 text-white hover:bg-blue-700"
+              : action.variant === "danger"
+                ? "bg-red-600 text-white hover:bg-red-700"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           } disabled:opacity-50`}
         >
           {processing === action.id ? (
@@ -381,29 +397,37 @@ const ActionButtons = ({ element, onComplete }) => {
   );
 };
 
-export default function InteractiveElements({ elements, onElementComplete, codeExecutor }) {
+export default function InteractiveElements({
+  elements,
+  onElementComplete,
+  codeExecutor,
+}) {
   // Create interaction handler for elements
   const createInteractionHandler = (elementId) => async (action, data) => {
     try {
       // Handle different interaction types
       switch (action) {
-        case 'run':
+        case "run":
           // For code execution, use the real code executor if provided
           if (data.code && data.language && codeExecutor) {
             try {
-              const result = await codeExecutor(data.code, data.language, elementId);
+              const result = await codeExecutor(
+                data.code,
+                data.language,
+                elementId,
+              );
               return {
-                output: result.output || '',
+                output: result.output || "",
                 error: result.error || null,
                 execution_time: result.execution_time || 0,
-                type: 'code_execution'
+                type: "code_execution",
               };
             } catch (error) {
               return {
-                output: '',
-                error: error.message || 'Code execution failed',
+                output: "",
+                error: error.message || "Code execution failed",
                 execution_time: 0,
-                type: 'code_execution'
+                type: "code_execution",
               };
             }
           } else if (data.code && data.language) {
@@ -412,59 +436,59 @@ export default function InteractiveElements({ elements, onElementComplete, codeE
               output: `// Code execution not configured\n// Code: ${data.code.substring(0, 100)}...`,
               error: null,
               execution_time: 0.1,
-              type: 'code_execution'
+              type: "code_execution",
             };
           }
           break;
-          
-        case 'submit':
+
+        case "submit":
           // For form submissions
           return {
             success: true,
-            message: 'Form submitted successfully',
-            type: 'form_submission',
-            data: data
+            message: "Form submitted successfully",
+            type: "form_submission",
+            data: data,
           };
-          
-        case 'select':
+
+        case "select":
           // For decision tree selections
           return {
             success: true,
             selection: data.selectedOption,
-            type: 'decision_made',
-            data: data
+            type: "decision_made",
+            data: data,
           };
-          
-        case 'build':
+
+        case "build":
           // For query builder
           return {
             success: true,
             query: data.query,
-            type: 'query_built',
-            data: data
+            type: "query_built",
+            data: data,
           };
-          
-        case 'action':
+
+        case "action":
           // For action buttons
           return {
             success: true,
             actionId: data.actionId,
-            type: 'action_triggered',
-            data: data
+            type: "action_triggered",
+            data: data,
           };
-          
+
         default:
           return {
             success: true,
             message: `Action ${action} completed`,
-            type: 'generic_interaction',
+            type: "generic_interaction",
             action: action,
-            data: data
+            data: data,
           };
       }
     } catch (error) {
       return {
-        error: error.message || 'Interaction failed'
+        error: error.message || "Interaction failed",
       };
     }
   };
@@ -473,39 +497,39 @@ export default function InteractiveElements({ elements, onElementComplete, codeE
     // Inject the interaction handler into the element
     const elementWithInteraction = {
       ...element,
-      onInteraction: createInteractionHandler(element.id)
+      onInteraction: createInteractionHandler(element.id),
     };
 
     switch (element.type) {
-      case 'code':
+      case "code":
         return (
           <ExecutableCode
             element={elementWithInteraction}
             onComplete={(result) => onElementComplete?.(element.id, result)}
           />
         );
-      case 'query':
+      case "query":
         return (
           <QueryBuilder
             element={elementWithInteraction}
             onComplete={(result) => onElementComplete?.(element.id, result)}
           />
         );
-      case 'decision':
+      case "decision":
         return (
           <DecisionTree
             element={elementWithInteraction}
             onComplete={(result) => onElementComplete?.(element.id, result)}
           />
         );
-      case 'form':
+      case "form":
         return (
           <DynamicForm
             element={elementWithInteraction}
             onComplete={(result) => onElementComplete?.(element.id, result)}
           />
         );
-      case 'action':
+      case "action":
         return (
           <ActionButtons
             element={elementWithInteraction}
@@ -519,7 +543,7 @@ export default function InteractiveElements({ elements, onElementComplete, codeE
 
   return (
     <div className="space-y-4">
-      {elements.map(element => (
+      {elements.map((element) => (
         <motion.div
           key={element.id}
           initial={{ opacity: 0, y: 20 }}

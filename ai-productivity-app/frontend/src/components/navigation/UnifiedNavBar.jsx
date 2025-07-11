@@ -1,18 +1,18 @@
-import { Link } from 'react-router-dom';
-import { Menu, ChevronRight, Home, Settings } from 'lucide-react';
-import * as Icons from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
-import { useNavigation } from '../../contexts/NavigationContext';
-import UserMenu from '../auth/UserMenu';
-import AIProviderStatus from '../common/AIProviderStatus';
-import ThemeToggle from '../common/ThemeToggle';
-import ConnectionIndicator from '../common/ConnectionIndicator';
+import { Link } from "react-router-dom";
+import { Menu, ChevronRight, Home, Settings } from "lucide-react";
+import * as Icons from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
+import { useNavigation } from "../../contexts/NavigationContext";
+import UserMenu from "../auth/UserMenu";
+import AIProviderStatus from "../common/AIProviderStatus";
+import ThemeToggle from "../common/ThemeToggle";
+import ConnectionIndicator from "../common/ConnectionIndicator";
 
 export default function UnifiedNavBar({
   onMenuClick,
   showMenuButton = false,
   sidebarOpen = false,
-  onContextAction
+  onContextAction,
 }) {
   const { user, loading } = useAuth();
   const { breadcrumbs, project, contextActions, routeParams } = useNavigation();
@@ -36,14 +36,22 @@ export default function UnifiedNavBar({
               )}
 
               {/* Breadcrumbs */}
-              <nav aria-label="Breadcrumb" className="flex items-center space-x-1 text-sm min-w-0">
+              <nav
+                aria-label="Breadcrumb"
+                className="flex items-center space-x-1 text-sm min-w-0"
+              >
                 {breadcrumbs.map((crumb, index) => {
                   const Icon = Icons[crumb.icon] || Home;
                   const isLast = index === breadcrumbs.length - 1;
 
                   return (
-                    <div key={`${crumb.path}-${index}`} className="flex items-center min-w-0">
-                      {index > 0 && <ChevronRight className="w-4 h-4 text-gray-400 mx-1 flex-shrink-0" />}
+                    <div
+                      key={`${crumb.path}-${index}`}
+                      className="flex items-center min-w-0"
+                    >
+                      {index > 0 && (
+                        <ChevronRight className="w-4 h-4 text-gray-400 mx-1 flex-shrink-0" />
+                      )}
 
                       {isLast ? (
                         <span className="flex items-center space-x-1.5 text-gray-900 dark:text-gray-100 font-medium min-w-0">
@@ -106,11 +114,13 @@ export default function UnifiedNavBar({
                     {project.title}
                   </h2>
                   {project.status && (
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0 ${
-                      project.status === 'active'
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
-                    }`}>
+                    <span
+                      className={`px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0 ${
+                        project.status === "active"
+                          ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                          : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
+                      }`}
+                    >
                       {project.status}
                     </span>
                   )}
@@ -121,7 +131,7 @@ export default function UnifiedNavBar({
             {/* Context Actions */}
             {contextActions.length > 0 && (
               <div className="flex items-center space-x-1">
-                {contextActions.map(action => {
+                {contextActions.map((action) => {
                   const Icon = Icons[action.icon] || Settings;
                   return (
                     <button

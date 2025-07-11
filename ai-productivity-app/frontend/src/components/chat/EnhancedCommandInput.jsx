@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import MonacoEditor from '@monaco-editor/react';
-import * as monaco from 'monaco-editor';
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import MonacoEditor from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
 import {
   Search,
   Command,
@@ -9,32 +9,32 @@ import {
   Paperclip,
   Mic,
   Square,
-  Send
-} from 'lucide-react';
-import { debounce } from 'lodash';
-import { useProjectTimeline } from '../../hooks/useProjects';
-import { KnowledgeCommandRegistry } from '../../utils/commands/knowledge-commands';
-import PropTypes from 'prop-types';
-import { toast } from '../common/Toast';
+  Send,
+} from "lucide-react";
+import { debounce } from "lodash";
+import { useProjectTimeline } from "../../hooks/useProjects";
+import { KnowledgeCommandRegistry } from "../../utils/commands/knowledge-commands";
+import PropTypes from "prop-types";
+import { toast } from "../common/Toast";
 
 // Command registry + static commands
 const commandRegistry = new KnowledgeCommandRegistry();
 
 const standardCommands = [
-  { name: '/explain', description: 'Explain code functionality' },
-  { name: '/generate-tests', description: 'Generate unit tests' },
-  { name: '/summarize-pr', description: 'Summarize changes' },
-  { name: '/grep', description: 'Search codebase' }
+  { name: "/explain", description: "Explain code functionality" },
+  { name: "/generate-tests", description: "Generate unit tests" },
+  { name: "/summarize-pr", description: "Summarize changes" },
+  { name: "/grep", description: "Search codebase" },
 ];
 
 const allCommands = [
   ...standardCommands,
-  ...commandRegistry.getAll().map(c => ({
+  ...commandRegistry.getAll().map((c) => ({
     name: c.name,
     description: c.description,
     usage: c.usage,
-    aliases: c.aliases
-  }))
+    aliases: c.aliases,
+  })),
 ];
 
 export default function EnhancedCommandInput({
@@ -44,15 +44,15 @@ export default function EnhancedCommandInput({
   editorContent,
   selectedText,
   currentFile,
-  userId
+  userId,
 }) {
   const { addEvent } = useProjectTimeline(projectId);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [inputMode, setInputMode] = useState('simple');
+  const [inputMode, setInputMode] = useState("simple");
   const [editorHeight, setEditorHeight] = useState(200);
   const [isSending, setIsSending] = useState(false);
   const [commandProcessing, setCommandProcessing] = useState(false);
@@ -69,16 +69,17 @@ export default function EnhancedCommandInput({
     debounce((typing) => {
       onTyping?.(typing);
     }, 300),
-    [onTyping]
+    [onTyping],
   );
 
   // Slash-command suggestions
   useEffect(() => {
-    if (message.startsWith('/')) {
-      const partial = message.split(' ')[0].toLowerCase();
-      const matches = allCommands.filter(cmd =>
-        cmd.name.toLowerCase().startsWith(partial) ||
-        cmd.aliases?.some(a => a.toLowerCase().startsWith(partial))
+    if (message.startsWith("/")) {
+      const partial = message.split(" ")[0].toLowerCase();
+      const matches = allCommands.filter(
+        (cmd) =>
+          cmd.name.toLowerCase().startsWith(partial) ||
+          cmd.aliases?.some((a) => a.toLowerCase().startsWith(partial)),
       );
       setSuggestions(matches);
       setShowSuggestions(matches.length > 0);
@@ -108,23 +109,20 @@ export default function EnhancedCommandInput({
     editorRef.current = editor;
 
     // Add keyboard shortcut for send
-    editor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
-      () => {
-        handleSubmit({ preventDefault: () => {} });
-      }
-    );
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      handleSubmit({ preventDefault: () => {} });
+    });
   };
 
   // Utils
   const insertCitation = (citation) =>
-    setMessage(prev => `${prev}[${citation.number}] `);
+    setMessage((prev) => `${prev}[${citation.number}] `);
 
   // Clear citations - also removes citation numbers from message
   const clearCitations = () => {
     setCitations([]);
     // Remove all citation numbers from the message
-    setMessage(prev => prev.replace(/\[\d+\]/g, '').trim());
+    setMessage((prev) => prev.replace(/\[\d+\]/g, "").trim());
   };
 
   // Knowledge command runner
@@ -134,7 +132,7 @@ export default function EnhancedCommandInput({
       currentFile,
       selectedText,
       editorContent,
-      userId
+      userId,
     };
 
     const result = await commandRegistry.execute(cmdLine, context);
@@ -146,14 +144,14 @@ export default function EnhancedCommandInput({
         payload: result.prompt ?? cmdLine,
         meta: {
           isCommand: true,
-          commandType: 'knowledge',
-          citations: result.citations ?? undefined
+          commandType: "knowledge",
+          citations: result.citations ?? undefined,
         },
-        shouldSend: true
+        shouldSend: true,
       };
     }
 
-    toast.success(result.message || 'Command executed successfully');
+    toast.success(result.message || "Command executed successfully");
     return { shouldSend: false };
   };
 
@@ -169,7 +167,7 @@ export default function EnhancedCommandInput({
       const meta = citations.length ? { citations } : {};
 
       // Handle slash commands
-      if (message.startsWith('/')) {
+      if (message.startsWith("/")) {
         const result = await runKnowledgeCommand(message);
         if (result.shouldSend) {
           await onSend(result.payload, { ...meta, ...result.meta });
@@ -179,21 +177,21 @@ export default function EnhancedCommandInput({
       }
 
       // Clear state after successful send
-      setMessage('');
+      setMessage("");
       setCitations([]);
       setShowSuggestions(false);
-      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
 
       // Add to project timeline for activity tracking
       addEvent({
-        event_type: 'chat_message',
-        title: 'Chat message sent',
+        event_type: "chat_message",
+        title: "Chat message sent",
         description: `Sent message: ${message.substring(0, 50)}...`,
-        metadata: { hasAttachments: attachments.length > 0 }
+        metadata: { hasAttachments: attachments.length > 0 },
       });
     } catch (error) {
-      console.error('Failed to send message:', error);
-      toast.error('Failed to send message');
+      console.error("Failed to send message:", error);
+      toast.error("Failed to send message");
     } finally {
       setIsSending(false);
       setCommandProcessing(false);
@@ -203,11 +201,11 @@ export default function EnhancedCommandInput({
   // Handle file attachments
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
-    setAttachments(prev => [...prev, ...files]);
+    setAttachments((prev) => [...prev, ...files]);
   };
 
   const removeAttachment = (index) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Auto-resize textarea
@@ -216,7 +214,7 @@ export default function EnhancedCommandInput({
     setMessage(textarea.value);
 
     // Auto-resize
-    textarea.style.height = 'auto';
+    textarea.style.height = "auto";
     textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
   };
 
@@ -225,26 +223,26 @@ export default function EnhancedCommandInput({
     if (!showSuggestions) return;
 
     switch (e.key) {
-      case 'ArrowDown':
+      case "ArrowDown":
         e.preventDefault();
-        setSelectedIndex(prev =>
-          prev < suggestions.length - 1 ? prev + 1 : prev
+        setSelectedIndex((prev) =>
+          prev < suggestions.length - 1 ? prev + 1 : prev,
         );
         break;
-      case 'ArrowUp':
+      case "ArrowUp":
         e.preventDefault();
-        setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
         break;
-      case 'Enter':
+      case "Enter":
         if (selectedIndex >= 0) {
           e.preventDefault();
           const selected = suggestions[selectedIndex];
-          setMessage(selected.name + ' ');
+          setMessage(selected.name + " ");
           setShowSuggestions(false);
           setSelectedIndex(-1);
         }
         break;
-      case 'Escape':
+      case "Escape":
         setShowSuggestions(false);
         setSelectedIndex(-1);
         break;
@@ -260,16 +258,18 @@ export default function EnhancedCommandInput({
             <div
               key={cmd.name}
               className={`px-4 py-2 cursor-pointer ${
-                idx === selectedIndex ? 'bg-blue-50' : 'hover:bg-gray-50'
+                idx === selectedIndex ? "bg-blue-50" : "hover:bg-gray-50"
               }`}
               onMouseDown={() => {
-                setMessage(cmd.name + ' ');
+                setMessage(cmd.name + " ");
                 setShowSuggestions(false);
               }}
             >
               <div className="font-mono text-blue-600">{cmd.name}</div>
               <div className="text-gray-600 text-xs">{cmd.description}</div>
-              {cmd.usage && <div className="text-gray-400 text-xs">{cmd.usage}</div>}
+              {cmd.usage && (
+                <div className="text-gray-400 text-xs">{cmd.usage}</div>
+              )}
             </div>
           ))}
         </div>
@@ -279,10 +279,10 @@ export default function EnhancedCommandInput({
       {citations.length > 0 && (
         <div className="px-4 py-2 bg-blue-50 border-b flex justify-between items-center">
           <span className="text-sm text-blue-700">
-            {citations.length} citation{citations.length > 1 ? 's' : ''} ready
+            {citations.length} citation{citations.length > 1 ? "s" : ""} ready
           </span>
           <div className="flex gap-1">
-            {citations.map(c => (
+            {citations.map((c) => (
               <button
                 key={c.id}
                 onClick={() => insertCitation(c)}
@@ -304,12 +304,12 @@ export default function EnhancedCommandInput({
       {/* Mode / help bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b">
         <div className="flex gap-2">
-          {['simple', 'editor'].map(mode => (
+          {["simple", "editor"].map((mode) => (
             <button
               key={mode}
               onClick={() => setInputMode(mode)}
               className={`px-2 py-1 rounded text-xs ${
-                inputMode === mode ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                inputMode === mode ? "bg-blue-500 text-white" : "bg-gray-200"
               }`}
             >
               {mode}
@@ -317,7 +317,7 @@ export default function EnhancedCommandInput({
           ))}
 
           <button
-            onClick={() => setShowCommandHelp(h => !h)}
+            onClick={() => setShowCommandHelp((h) => !h)}
             className="p-1 text-gray-500 hover:text-gray-700"
             title="Command help"
           >
@@ -325,15 +325,15 @@ export default function EnhancedCommandInput({
           </button>
         </div>
 
-        {inputMode === 'editor' && (
+        {inputMode === "editor" && (
           <select
             value={editorHeight}
-            onChange={e => setEditorHeight(+e.target.value)}
+            onChange={(e) => setEditorHeight(+e.target.value)}
             className="text-xs border rounded px-1"
           >
-            {[100, 200, 300].map(h => (
+            {[100, 200, 300].map((h) => (
               <option key={h} value={h}>
-                {h === 100 ? 'Small' : h === 200 ? 'Medium' : 'Large'} ({h}px)
+                {h === 100 ? "Small" : h === 200 ? "Medium" : "Large"} ({h}px)
               </option>
             ))}
           </select>
@@ -345,9 +345,10 @@ export default function EnhancedCommandInput({
         <div className="px-4 py-2 bg-gray-50 border-b text-xs">
           <div className="font-semibold mb-1">Available Commands:</div>
           <div className="grid grid-cols-2 gap-1">
-            {allCommands.slice(0, 6).map(cmd => (
+            {allCommands.slice(0, 6).map((cmd) => (
               <div key={cmd.name} className="text-gray-600">
-                <span className="font-mono text-blue-600">{cmd.name}</span> - {cmd.description}
+                <span className="font-mono text-blue-600">{cmd.name}</span> -{" "}
+                {cmd.description}
               </div>
             ))}
           </div>
@@ -360,7 +361,10 @@ export default function EnhancedCommandInput({
         {attachments.length > 0 && (
           <div className="mb-2 flex flex-nowrap sm:flex-wrap gap-2 overflow-x-auto pb-1">
             {attachments.map((file, idx) => (
-              <div key={idx} className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1 text-sm">
+              <div
+                key={idx}
+                className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1 text-sm"
+              >
                 <Paperclip className="w-3 h-3" />
                 <span className="truncate max-w-[150px]">{file.name}</span>
                 <button
@@ -390,7 +394,7 @@ export default function EnhancedCommandInput({
 
           {/* Input area */}
           <div className="flex-1 min-w-0">
-            {inputMode === 'simple' ? (
+            {inputMode === "simple" ? (
               <textarea
                 ref={textareaRef}
                 value={message}
@@ -404,7 +408,7 @@ export default function EnhancedCommandInput({
             ) : (
               <div
                 className="border rounded-lg overflow-hidden dynamic-height"
-                style={{ '--dynamic-height': editorHeight }}
+                style={{ "--dynamic-height": editorHeight }}
               >
                 <MonacoEditor
                   value={message}
@@ -414,20 +418,20 @@ export default function EnhancedCommandInput({
                   theme="vs-light"
                   options={{
                     minimap: { enabled: false },
-                    lineNumbers: 'off',
+                    lineNumbers: "off",
                     glyphMargin: false,
                     folding: false,
                     lineDecorationsWidth: 0,
                     lineNumbersMinChars: 0,
-                    renderLineHighlight: 'none',
+                    renderLineHighlight: "none",
                     scrollBeyondLastLine: false,
-                    wordWrap: 'on',
-                    wrappingStrategy: 'advanced',
+                    wordWrap: "on",
+                    wrappingStrategy: "advanced",
                     overviewRulerLanes: 0,
                     hideCursorInOverviewRuler: true,
                     scrollbar: {
-                      vertical: 'hidden'
-                    }
+                      vertical: "hidden",
+                    },
                   }}
                 />
               </div>
@@ -440,8 +444,8 @@ export default function EnhancedCommandInput({
             disabled={isSending || !message.trim()}
             className={`p-2 sm:p-3 rounded-lg shrink-0 transition motion-safe:hover:scale-110 motion-safe:active:scale-95 ${
               isSending || !message.trim()
-                ? 'bg-gray-200 text-gray-400'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                ? "bg-gray-200 text-gray-400"
+                : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
           >
             <Send className="w-5 h-5" />
@@ -459,5 +463,5 @@ EnhancedCommandInput.propTypes = {
   editorContent: PropTypes.string,
   selectedText: PropTypes.string,
   currentFile: PropTypes.string,
-  userId: PropTypes.string
+  userId: PropTypes.string,
 };

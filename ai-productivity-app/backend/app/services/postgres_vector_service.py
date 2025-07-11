@@ -74,8 +74,10 @@ from pgvector.sqlalchemy import Vector
 
 from app.config import settings
 from app.database import get_engine_sync
+
 # Avoid circular import - define protocol locally or use TYPE_CHECKING
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from app.services.vector_service import VectorServiceProtocol
 
@@ -97,6 +99,7 @@ class PostgresVectorService:
 
     async def initialize(self) -> None:
         """Create extension / table / indexes idempotently."""
+
         def _setup_schema():
             with self.engine.begin() as conn:
                 conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector;")
@@ -135,8 +138,12 @@ class PostgresVectorService:
                     logger.info("Created ivfflat index for embeddings")
                 except Exception as e:
                     if "cannot have more than 2000 dimensions" in str(e):
-                        logger.warning("Skipping ivfflat index creation - vector dimensions exceed 2000 limit")
-                        logger.info("Vector searches will use sequential scan (slower but functional)")
+                        logger.warning(
+                            "Skipping ivfflat index creation - vector dimensions exceed 2000 limit"
+                        )
+                        logger.info(
+                            "Vector searches will use sequential scan (slower but functional)"
+                        )
                     else:
                         logger.error(f"Failed to create vector index: {e}")
                         # Don't raise - allow system to continue without index
@@ -216,21 +223,25 @@ class PostgresVectorService:
 
         def _search():
             where_fragments: List[str] = []
-            params: Dict[str, Any] = {"query_vec": self._to_pgvector(query_vector), "limit": limit}
+            params: Dict[str, Any] = {
+                "query_vec": self._to_pgvector(query_vector),
+                "limit": limit,
+            }
 
             if project_ids:
                 where_fragments.append("project_id = ANY(:pids)")
                 params["pids"] = project_ids
-            
+
             if filters:
                 for key, value in filters.items():
                     if value is not None:
                         where_fragments.append(f"metadata->>'{key}' = :{key}")
                         params[key] = str(value)
 
-            sql_where = ("WHERE " + " AND ".join(where_fragments)) if where_fragments else ""
-            sql = (
-                f"""SELECT id,
+            sql_where = (
+                ("WHERE " + " AND ".join(where_fragments)) if where_fragments else ""
+            )
+            sql = f"""SELECT id,
                              document_id,
                              chunk_id,
                              project_id,
@@ -241,7 +252,6 @@ class PostgresVectorService:
                       {sql_where}
                       ORDER BY embedding <#> :query_vec
                       LIMIT :limit;"""
-            )
 
             results: List[Dict[str, Any]] = []
             with self.engine.begin() as conn:
@@ -280,10 +290,13 @@ class PostgresVectorService:
 
     async def delete_by_project(self, project_id: int) -> None:
         """Delete all embeddings for a project."""
+
         def _delete():
             with self.engine.begin() as conn:
                 conn.execute(
-                    sa.text(f"DELETE FROM {self.table_name} WHERE project_id = :project_id"),
+                    sa.text(
+                        f"DELETE FROM {self.table_name} WHERE project_id = :project_id"
+                    ),
                     {"project_id": project_id},
                 )
 

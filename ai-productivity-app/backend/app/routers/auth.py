@@ -17,6 +17,7 @@ All endpoints follow guardrails defined in Phase 2:
 • Rate-limit: 5 auth attempts/minute/IP
 • CSRF validation on state-changing endpoints
 """
+
 # ---------------------------------------------------------------------------
 # Router for authentication related endpoints (Phase 2).
 # ---------------------------------------------------------------------------
@@ -76,9 +77,9 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 # ---------------------------------------------------------------------------
 # Configuration constants
 # ---------------------------------------------------------------------------
-AUTH_RATE_LIMIT = 5                     # attempts
-AUTH_RATE_WINDOW = 60                   # seconds
-ACCESS_TOKEN_TTL_MINUTES = 60 * 24      # 24 h
+AUTH_RATE_LIMIT = 5  # attempts
+AUTH_RATE_WINDOW = 60  # seconds
+ACCESS_TOKEN_TTL_MINUTES = 60 * 24  # 24 h
 
 # Rate-limiting spec string understood by SlowAPI (@limiter.limit decorator)
 # Example: "5/minute" (matches AUTH_RATE_LIMIT/AUTH_RATE_WINDOW above).
@@ -134,7 +135,7 @@ async def register(
         key=f"register:{client_ip}",
         limit=AUTH_RATE_LIMIT,
         window=AUTH_RATE_WINDOW,
-        error_detail="Too many registration attempts. Please try again later."
+        error_detail="Too many registration attempts. Please try again later.",
     )
     response.headers.update(headers)
 
@@ -144,29 +145,33 @@ async def register(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Registration requires an invite code",
-            headers={"X-Error-Code": "INVITE_REQUIRED"}
+            headers={"X-Error-Code": "INVITE_REQUIRED"},
         )
 
     # Check username/email uniqueness
-    existing = db.query(User).filter(
-        or_(
-            User.username == payload.username.lower(),
-            User.email == payload.email.lower()
+    existing = (
+        db.query(User)
+        .filter(
+            or_(
+                User.username == payload.username.lower(),
+                User.email == payload.email.lower(),
+            )
         )
-    ).first()
+        .first()
+    )
 
     if existing:
         if existing.username == payload.username.lower():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Username already taken",
-                headers={"X-Error-Code": "USERNAME_EXISTS"}
+                headers={"X-Error-Code": "USERNAME_EXISTS"},
             )
         else:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Email already registered",
-                headers={"X-Error-Code": "EMAIL_EXISTS"}
+                headers={"X-Error-Code": "EMAIL_EXISTS"},
             )
 
     try:
@@ -175,15 +180,13 @@ async def register(
             db,
             username=payload.username,
             email=payload.email,
-            password=payload.password
+            password=payload.password,
         )
 
         # Send welcome email asynchronously
         if not settings.debug:
             background_tasks.add_task(
-                utils.send_welcome_email,
-                user.email,
-                user.username
+                utils.send_welcome_email, user.email, user.username
             )
 
         # Issue token and set cookie
@@ -194,9 +197,8 @@ async def register(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Registration failed due to conflict",
-            headers={"X-Error-Code": "REGISTRATION_CONFLICT"}
+            headers={"X-Error-Code": "REGISTRATION_CONFLICT"},
         )
-
 
 
 ###############################################################################
@@ -219,7 +221,7 @@ async def login(
         key=f"login:{client_ip}",
         limit=AUTH_RATE_LIMIT,
         window=AUTH_RATE_WINDOW,
-        error_detail="Too many login attempts. Please try again later."
+        error_detail="Too many login attempts. Please try again later.",
     )
     response.headers.update(headers)
 
@@ -228,7 +230,7 @@ async def login(
         key=f"login:account:{payload.username_or_email.lower()}",
         limit=AUTH_RATE_LIMIT * 2,  # Slightly more lenient per-account
         window=AUTH_RATE_WINDOW * 5,  # Longer window for account-specific
-        error_detail="Too many login attempts for this account."
+        error_detail="Too many login attempts for this account.",
     )
     response.headers.update(account_headers)
 
@@ -239,32 +241,36 @@ async def login(
 
     if not user:
         # Check if user exists to provide better error codes
-        existing_user = db.query(User).filter(
-            or_(
-                User.username == payload.username_or_email.lower(),
-                User.email == payload.username_or_email.lower(),
+        existing_user = (
+            db.query(User)
+            .filter(
+                or_(
+                    User.username == payload.username_or_email.lower(),
+                    User.email == payload.username_or_email.lower(),
+                )
             )
-        ).first()
+            .first()
+        )
 
         if existing_user:
             if not existing_user.is_active:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Account is inactive. Please contact support.",
-                    headers={"X-Error-Code": "INACTIVE_ACCOUNT"}
+                    headers={"X-Error-Code": "INACTIVE_ACCOUNT"},
                 )
             else:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid credentials",
-                    headers={"X-Error-Code": "BAD_CREDENTIALS"}
+                    headers={"X-Error-Code": "BAD_CREDENTIALS"},
                 )
         else:
             # Same error as bad password to prevent enumeration
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
-                headers={"X-Error-Code": "BAD_CREDENTIALS"}
+                headers={"X-Error-Code": "BAD_CREDENTIALS"},
             )
 
     # Issue token and cookie
@@ -274,6 +280,7 @@ async def login(
 ###############################################################################
 # Logout
 ###############################################################################
+
 
 @router.post("/logout", dependencies=[Depends(enforce_csrf)])
 @limiter.limit("10/minute")  # less restrictive – session clearing
@@ -301,6 +308,7 @@ def logout(
             jti = payload.get("jti")
             if jti:
                 from app.auth.utils import revoke_session
+
                 revoke_session(db, jti)
         except Exception:
             # If invalid/expired token: continue to clear cookie anyway
@@ -321,7 +329,6 @@ def logout(
     response.status_code = status.HTTP_204_NO_CONTENT
 
 
-
 ###############################################################################
 # Current user
 ###############################################################################
@@ -337,7 +344,9 @@ def me(current_user: CurrentUserRequired) -> UserResponse:
     # ------------------------------------------------------------------
 
     logger = logging.getLogger(__name__)
-    logger.info("/api/auth/me – user_id=%s username=%s", current_user.id, current_user.username)
+    logger.info(
+        "/api/auth/me – user_id=%s username=%s", current_user.id, current_user.username
+    )
 
     return UserResponse.from_orm(current_user)
 
@@ -364,31 +373,41 @@ def update_profile(
     if not data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No changes provided. Please specify username, email, or password to update."
+            detail="No changes provided. Please specify username, email, or password to update.",
         )
 
     # Username
     if (username := data.get("username")) and username != current_user.username:
-        conflict = db.query(User).filter(User.username == username).filter(User.id != current_user.id).first()
+        conflict = (
+            db.query(User)
+            .filter(User.username == username)
+            .filter(User.id != current_user.id)
+            .first()
+        )
         if conflict:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Username '{username}' is already taken. Please choose a different username."
+                detail=f"Username '{username}' is already taken. Please choose a different username.",
             )
         current_user.username = username
 
     # Email
     if (email := data.get("email")) and email != current_user.email:
-        conflict = db.query(User).filter(User.email == email).filter(User.id != current_user.id).first()
+        conflict = (
+            db.query(User)
+            .filter(User.email == email)
+            .filter(User.id != current_user.id)
+            .first()
+        )
         if conflict:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Email '{email}' is already registered to another account."
+                detail=f"Email '{email}' is already registered to another account.",
             )
         current_user.email = email
 
     # Password
-    if (password := data.get("password")):
+    if password := data.get("password"):
         current_user.password_hash = security.hash_password(password)
 
     db.add(current_user)
@@ -421,6 +440,7 @@ def update_preferences(
 
         # Mark as modified for SQLAlchemy to pick up the change in JSONB
         from sqlalchemy.orm.attributes import flag_modified
+
         flag_modified(current_user, "preferences")
 
     db.add(current_user)
@@ -463,11 +483,12 @@ def _send_reset_email(email: str, token: str) -> None:  # placeholder
 #       This adheres to the requirements spec naming – `/reset-request`.
 #       Both routes execute the same handler to simplify maintenance.
 
+
 # Public route preferred going forward
 @router.post(
     "/reset-request",
     status_code=status.HTTP_202_ACCEPTED,
-    dependencies=[Depends(enforce_csrf)]
+    dependencies=[Depends(enforce_csrf)],
 )
 async def request_password_reset(
     request: Request,
@@ -500,7 +521,7 @@ async def request_password_reset(
 @router.post(
     "/reset-password/submit",
     include_in_schema=False,
-    dependencies=[Depends(enforce_csrf)]
+    dependencies=[Depends(enforce_csrf)],
 )
 # New spec-compliant path consumed by the frontend
 @router.post("/reset", dependencies=[Depends(enforce_csrf)])
@@ -523,7 +544,7 @@ def submit_password_reset(
     if data.get("purpose") != "reset":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid reset token. This token is not for password reset."
+            detail="Invalid reset token. This token is not for password reset.",
         )
 
     email = data.get("sub", "")
@@ -531,7 +552,7 @@ def submit_password_reset(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No account found with this email address."
+            detail="No account found with this email address.",
         )
 
     user.password_hash = security.hash_password(payload.new_password)

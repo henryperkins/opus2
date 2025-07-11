@@ -3,6 +3,7 @@
 Records all significant events in a project's lifecycle including
 creation, updates, file additions, and custom milestones.
 """
+
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, JSON, Index
 from sqlalchemy.orm import relationship, validates
 from .base import Base, TimestampMixin
@@ -25,42 +26,26 @@ class TimelineEvent(Base, TimestampMixin):
     # first table object instead of raising, making the declaration idempotent
     # and safe under repeated imports.
     #
-    __table_args__ = (
-        {"extend_existing": True},
-    )
+    __table_args__ = ({"extend_existing": True},)
 
     id = Column(Integer, primary_key=True)
     project_id = Column(
         Integer,
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
-        comment="Associated project"
+        comment="Associated project",
     )
-    event_type = Column(
-        String(50),
-        nullable=False,
-        comment="Type of event"
-    )
-    title = Column(
-        String(200),
-        nullable=False,
-        comment="Event title"
-    )
-    description = Column(
-        Text,
-        comment="Detailed event description"
-    )
+    event_type = Column(String(50), nullable=False, comment="Type of event")
+    title = Column(String(200), nullable=False, comment="Event title")
+    description = Column(Text, comment="Detailed event description")
     event_metadata = Column(
-        "metadata",
-        JSON,
-        default=dict,
-        comment="Event-specific data"
+        "metadata", JSON, default=dict, comment="Event-specific data"
     )
     user_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        comment="User who triggered the event"
+        comment="User who triggered the event",
     )
 
     # Relationships
@@ -107,9 +92,7 @@ class TimelineEvent(Base, TimestampMixin):
         if not title or len(title.strip()) == 0:
             raise ValueError("Event title cannot be empty")
         if len(title) > 200:
-            raise ValueError(
-                "Event title cannot exceed 200 characters"
-            )
+            raise ValueError("Event title cannot exceed 200 characters")
         return title.strip()
 
     def __repr__(self):

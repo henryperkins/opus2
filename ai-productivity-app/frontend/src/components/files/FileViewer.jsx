@@ -1,14 +1,23 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { tomorrow, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { 
-  ChevronLeft, 
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import {
+  tomorrow,
+  oneLight,
+} from "react-syntax-highlighter/dist/esm/styles/prism";
+import {
+  ChevronLeft,
   ChevronRight,
-  Search, 
-  Copy, 
-  ZoomIn, 
-  ZoomOut, 
+  Search,
+  Copy,
+  ZoomIn,
+  ZoomOut,
   Smartphone,
   Monitor,
   Eye,
@@ -22,24 +31,24 @@ import {
   Info,
   Hash,
   Download,
-  Printer
-} from 'lucide-react';
-import LoadingSpinner from '../common/LoadingSpinner';
-import { useMediaQuery } from '../../hooks/useMediaQuery';
-import useTextSelection from '../../hooks/useTextSelection';
+  Printer,
+} from "lucide-react";
+import LoadingSpinner from "../common/LoadingSpinner";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import useTextSelection from "../../hooks/useTextSelection";
 
 // ------------------------------------------------------------
 // Small helpers
 // ------------------------------------------------------------
 
 function Breadcrumbs({ path, onNavigate }) {
-  const parts = path.split('/');
+  const parts = path.split("/");
   const assembled = [];
   return (
     <nav className="file-breadcrumbs" aria-label="Breadcrumb">
       {parts.map((part, idx) => {
         assembled.push(part);
-        const subPath = assembled.join('/');
+        const subPath = assembled.join("/");
         const isLast = idx === parts.length - 1;
         return (
           <span key={idx} className="flex items-center">
@@ -47,7 +56,12 @@ function Breadcrumbs({ path, onNavigate }) {
               <ChevronRight className="w-3 h-3 text-gray-400 mx-0.5" />
             )}
             {isLast ? (
-              <span className="breadcrumb-item font-medium truncate max-w-[8rem]" title={part}>{part}</span>
+              <span
+                className="breadcrumb-item font-medium truncate max-w-[8rem]"
+                title={part}
+              >
+                {part}
+              </span>
             ) : (
               <button
                 className="breadcrumb-item text-blue-600 hover:underline truncate max-w-[8rem]"
@@ -67,36 +81,36 @@ function Breadcrumbs({ path, onNavigate }) {
 export default function FileViewer() {
   const { path } = useParams();
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get('project_id');
-  const [fileContent, setFileContent] = useState('');
+  const projectId = searchParams.get("project_id");
+  const [fileContent, setFileContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [language, setLanguage] = useState('text');
-  
+  const [language, setLanguage] = useState("text");
+
   // Mobile-specific state
   const [fontSize, setFontSize] = useState(14);
   const [showLineNumbers, setShowLineNumbers] = useState(true);
   const [wrapLines, setWrapLines] = useState(false);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState("dark");
 
   // Enhanced features state (Phase 1)
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [currentMatch, setCurrentMatch] = useState(0);
   const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
   const [searchRegex, setSearchRegex] = useState(false);
 
   const [gotoLineOpen, setGotoLineOpen] = useState(false);
-  const [gotoLineNumber, setGotoLineNumber] = useState('');
+  const [gotoLineNumber, setGotoLineNumber] = useState("");
 
   const [showInfo, setShowInfo] = useState(false);
 
   // New for Phase-2 -------------------------------------------
   const [performanceMode, setPerformanceMode] = useState(false);
-  
+
   const { isMobile } = useMediaQuery();
   const navigate = useNavigate();
 
@@ -111,14 +125,17 @@ export default function FileViewer() {
 
   // selection tracking for context-menu with throttling
   const { selectionText, position: selectionPos } = useTextSelection();
-  const [throttledSelectionText, setThrottledSelectionText] = useState('');
-  const [throttledSelectionPos, setThrottledSelectionPos] = useState({ x: 0, y: 0 });
+  const [throttledSelectionText, setThrottledSelectionText] = useState("");
+  const [throttledSelectionPos, setThrottledSelectionPos] = useState({
+    x: 0,
+    y: 0,
+  });
   const containerRef = useRef(null);
   const syntaxHighlighterRef = useRef(null);
 
-  const targetLine = parseInt(searchParams.get('line')) || 1;
+  const targetLine = parseInt(searchParams.get("line")) || 1;
   const decodedPath = decodeURIComponent(path);
-  
+
   // Responsive font size
   const responsiveFontSize = isMobile ? Math.max(fontSize, 12) : fontSize;
 
@@ -138,7 +155,7 @@ export default function FileViewer() {
       setFontSize(16);
       setWrapLines(true);
       setHeaderCollapsed(true);
-      setTheme('light'); // Better for mobile reading
+      setTheme("light"); // Better for mobile reading
     }
   }, [isMobile]);
 
@@ -154,7 +171,7 @@ export default function FileViewer() {
         setLoading(true);
         setError(null);
 
-        console.log('FileViewer: Fetching file content', {
+        console.log("FileViewer: Fetching file content", {
           decodedPath,
           projectId,
           originalPath: path,
@@ -163,26 +180,30 @@ export default function FileViewer() {
         // Dynamically import the API client so the bundler does not complain
         // about unused imports in environments where the component is not
         // rendered (e.g. server-side rendering or static analysis tools).
-        const { codeAPI } = await import('../../api/code');
+        const { codeAPI } = await import("../../api/code");
 
-        const apiResponse = await codeAPI.getFileContent(decodedPath, projectId);
+        const apiResponse = await codeAPI.getFileContent(
+          decodedPath,
+          projectId,
+        );
 
-        console.log('FileViewer: API response received');
+        console.log("FileViewer: API response received");
 
         // Axios is configured with an interceptor that unwraps `response.data`,
         // therefore *apiResponse* already contains the JSON payload returned
         // by the backend → { content, language, file_path, size }.
-        const content = apiResponse?.content ?? '';
-        const detectedLanguage = apiResponse?.language || detectLanguage(decodedPath);
+        const content = apiResponse?.content ?? "";
+        const detectedLanguage =
+          apiResponse?.language || detectLanguage(decodedPath);
 
         // Guard against unexpected payloads so that we fail loudly instead of
         // rendering "[object Object]" in the UI.
-        if (typeof content !== 'string') {
-          console.error('FileViewer: Invalid content type:', typeof content);
-          throw new Error('Invalid file content format received from server');
+        if (typeof content !== "string") {
+          console.error("FileViewer: Invalid content type:", typeof content);
+          throw new Error("Invalid file content format received from server");
         }
 
-        console.log('FileViewer: Setting content', {
+        console.log("FileViewer: Setting content", {
           contentLength: content.length,
           hasContent: Boolean(content),
           language: detectedLanguage,
@@ -193,24 +214,27 @@ export default function FileViewer() {
 
         // Performance heuristics – disable heavy features for very large files
         const large =
-          content.length > 1_000_000 || content.split('\n').length > 10_000;
+          content.length > 1_000_000 || content.split("\n").length > 10_000;
         setPerformanceMode(large);
         if (large) {
           setShowLineNumbers(false);
         }
       } catch (err) {
-        console.error('FileViewer: Failed to load file', decodedPath, err);
+        console.error("FileViewer: Failed to load file", decodedPath, err);
 
         // Craft a meaningful error message for common HTTP status codes.  We
         // fall back to the error's message or a generic string otherwise.
-        let errorMessage = 'Failed to load file';
+        let errorMessage = "Failed to load file";
         // eslint-disable-next-line no-unsafe-optional-chaining -- runtime guard above
         if (err?.response?.status === 401) {
-          errorMessage = 'Authentication required. Please log in to view this file.';
+          errorMessage =
+            "Authentication required. Please log in to view this file.";
         } else if (err?.response?.status === 403) {
-          errorMessage = 'Access denied. You do not have permission to view this file.';
+          errorMessage =
+            "Access denied. You do not have permission to view this file.";
         } else if (err?.response?.status === 404) {
-          errorMessage = 'File not found. The file may have been moved or deleted.';
+          errorMessage =
+            "File not found. The file may have been moved or deleted.";
         } else if (err?.response?.data?.detail) {
           errorMessage = err.response.data.detail;
         } else if (err?.message) {
@@ -222,23 +246,26 @@ export default function FileViewer() {
         // outdated link after the file was moved to another project.
         if (projectId && err?.response?.status === 404) {
           try {
-            console.log('FileViewer: Retrying without project_id');
-            const { codeAPI: fallbackCodeAPI } = await import('../../api/code');
-            const fallbackResponse = await fallbackCodeAPI.getFileContent(decodedPath);
+            console.log("FileViewer: Retrying without project_id");
+            const { codeAPI: fallbackCodeAPI } = await import("../../api/code");
+            const fallbackResponse =
+              await fallbackCodeAPI.getFileContent(decodedPath);
 
-            const fallbackContent = fallbackResponse?.content ?? '';
-            if (typeof fallbackContent !== 'string') {
-              throw new Error('Invalid file content format in fallback response');
+            const fallbackContent = fallbackResponse?.content ?? "";
+            if (typeof fallbackContent !== "string") {
+              throw new Error(
+                "Invalid file content format in fallback response",
+              );
             }
 
             setFileContent(fallbackContent);
             setLanguage(
-              fallbackResponse?.language || detectLanguage(decodedPath)
+              fallbackResponse?.language || detectLanguage(decodedPath),
             );
             setLoading(false);
             return; // ✅ success – skip the error handling below
           } catch (fallbackErr) {
-            console.error('FileViewer: Fallback also failed', fallbackErr);
+            console.error("FileViewer: Fallback also failed", fallbackErr);
           }
         }
 
@@ -258,7 +285,7 @@ export default function FileViewer() {
       const timer = setTimeout(() => {
         const lineElement = document.getElementById(`line-${targetLine}`);
         if (lineElement) {
-          lineElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          lineElement.scrollIntoView({ behavior: "smooth", block: "center" });
         }
       }, 100);
       return () => clearTimeout(timer);
@@ -266,42 +293,42 @@ export default function FileViewer() {
   }, [loading, fileContent, targetLine]);
 
   const detectLanguage = (filePath) => {
-    const ext = filePath.split('.').pop()?.toLowerCase();
+    const ext = filePath.split(".").pop()?.toLowerCase();
     const languageMap = {
-      'js': 'javascript',
-      'jsx': 'jsx',
-      'ts': 'typescript',
-      'tsx': 'tsx',
-      'py': 'python',
-      'java': 'java',
-      'cpp': 'cpp',
-      'c': 'c',
-      'cs': 'csharp',
-      'php': 'php',
-      'rb': 'ruby',
-      'go': 'go',
-      'rs': 'rust',
-      'swift': 'swift',
-      'kt': 'kotlin',
-      'scala': 'scala',
-      'sh': 'bash',
-      'sql': 'sql',
-      'json': 'json',
-      'xml': 'xml',
-      'html': 'html',
-      'css': 'css',
-      'scss': 'scss',
-      'sass': 'sass',
-      'less': 'less',
-      'md': 'markdown',
-      'yaml': 'yaml',
-      'yml': 'yaml',
-      'toml': 'toml',
-      'ini': 'ini',
-      'conf': 'ini',
-      'dockerfile': 'dockerfile',
+      js: "javascript",
+      jsx: "jsx",
+      ts: "typescript",
+      tsx: "tsx",
+      py: "python",
+      java: "java",
+      cpp: "cpp",
+      c: "c",
+      cs: "csharp",
+      php: "php",
+      rb: "ruby",
+      go: "go",
+      rs: "rust",
+      swift: "swift",
+      kt: "kotlin",
+      scala: "scala",
+      sh: "bash",
+      sql: "sql",
+      json: "json",
+      xml: "xml",
+      html: "html",
+      css: "css",
+      scss: "scss",
+      sass: "sass",
+      less: "less",
+      md: "markdown",
+      yaml: "yaml",
+      yml: "yaml",
+      toml: "toml",
+      ini: "ini",
+      conf: "ini",
+      dockerfile: "dockerfile",
     };
-    return languageMap[ext] || 'text';
+    return languageMap[ext] || "text";
   };
 
   // compute lines needing highlight (target line & current search match)
@@ -321,7 +348,9 @@ export default function FileViewer() {
     }
 
     // Find if this line has matches
-    const lineResult = searchResults.find(result => result.lineNumber === lineNumber);
+    const lineResult = searchResults.find(
+      (result) => result.lineNumber === lineNumber,
+    );
     if (!lineResult) {
       return lineText;
     }
@@ -329,18 +358,21 @@ export default function FileViewer() {
     try {
       let regex;
       if (searchRegex) {
-        const flags = searchCaseSensitive ? 'g' : 'gi';
+        const flags = searchCaseSensitive ? "g" : "gi";
         regex = new RegExp(searchText, flags);
       } else {
-        const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const flags = searchCaseSensitive ? 'g' : 'gi';
+        const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const flags = searchCaseSensitive ? "g" : "gi";
         regex = new RegExp(escaped, flags);
       }
 
       return lineText.replace(regex, (match) => {
         // Determine if this is the current match line
-        const isCurrentMatch = searchResults[currentMatch]?.lineNumber === lineNumber;
-        const className = isCurrentMatch ? 'search-highlight current' : 'search-highlight';
+        const isCurrentMatch =
+          searchResults[currentMatch]?.lineNumber === lineNumber;
+        const className = isCurrentMatch
+          ? "search-highlight current"
+          : "search-highlight";
         return `<span class="${className}">${match}</span>`;
       });
     } catch (error) {
@@ -350,11 +382,11 @@ export default function FileViewer() {
 
   // Mobile-specific functions
   const increaseFontSize = () => {
-    setFontSize(prev => Math.min(prev + 2, 24));
+    setFontSize((prev) => Math.min(prev + 2, 24));
   };
 
   const decreaseFontSize = () => {
-    setFontSize(prev => Math.max(prev - 2, 10));
+    setFontSize((prev) => Math.max(prev - 2, 10));
   };
 
   const copyContent = async () => {
@@ -362,7 +394,7 @@ export default function FileViewer() {
       await navigator.clipboard.writeText(fileContent);
       // Could add toast notification here
     } catch (err) {
-      console.warn('Copy failed:', err);
+      console.warn("Copy failed:", err);
     }
   };
 
@@ -371,7 +403,7 @@ export default function FileViewer() {
     try {
       await navigator.clipboard.writeText(text);
     } catch (err) {
-      console.warn('copySelection failed', err);
+      console.warn("copySelection failed", err);
     }
   };
 
@@ -387,10 +419,10 @@ export default function FileViewer() {
         await navigator.share({
           title: `Code: ${decodedPath}`,
           text: fileContent,
-          url: window.location.href
+          url: window.location.href,
         });
       } catch (err) {
-        console.warn('Share failed:', err);
+        console.warn("Share failed:", err);
       }
     } else {
       // Fallback to copy link
@@ -400,11 +432,11 @@ export default function FileViewer() {
 
   // Download file helper
   const downloadFile = () => {
-    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([fileContent], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = decodedPath.split('/').pop() || 'file.txt';
+    a.download = decodedPath.split("/").pop() || "file.txt";
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -412,9 +444,9 @@ export default function FileViewer() {
   };
 
   const printFile = () => {
-    const printWindow = window.open('', '_blank');
-    const fileName = decodedPath.split('/').pop() || 'file.txt';
-    
+    const printWindow = window.open("", "_blank");
+    const fileName = decodedPath.split("/").pop() || "file.txt";
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -448,17 +480,21 @@ export default function FileViewer() {
             <div class="meta">
               Path: ${decodedPath}<br>
               Language: ${language}<br>
-              Lines: ${fileContent.split('\n').length}<br>
+              Lines: ${fileContent.split("\n").length}<br>
               Printed: ${new Date().toLocaleString()}
             </div>
           </div>
-          <pre>${fileContent.split('\n').map((line, i) => 
-            `<span class="line-number">${(i + 1).toString().padStart(4, ' ')}</span>${line}`
-          ).join('\n')}</pre>
+          <pre>${fileContent
+            .split("\n")
+            .map(
+              (line, i) =>
+                `<span class="line-number">${(i + 1).toString().padStart(4, " ")}</span>${line}`,
+            )
+            .join("\n")}</pre>
         </body>
       </html>
     `);
-    
+
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => {
@@ -468,15 +504,15 @@ export default function FileViewer() {
   };
 
   const toggleLineNumbers = () => {
-    setShowLineNumbers(prev => !prev);
+    setShowLineNumbers((prev) => !prev);
   };
 
   const toggleLineWrap = () => {
-    setWrapLines(prev => !prev);
+    setWrapLines((prev) => !prev);
   };
 
   const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
   // ---------------------------------------------------------------------
@@ -488,12 +524,15 @@ export default function FileViewer() {
     if (!throttledSelectionText || searchOpen || gotoLineOpen) return null;
 
     // Clamp inside viewport a bit
-    const left = Math.min(window.innerWidth - 120, Math.max(60, throttledSelectionPos.x));
+    const left = Math.min(
+      window.innerWidth - 120,
+      Math.max(60, throttledSelectionPos.x),
+    );
     const top = Math.max(50, throttledSelectionPos.y);
 
     return (
       <div
-        style={{ left, top, transform: 'translate(-50%, -100%)' }}
+        style={{ left, top, transform: "translate(-50%, -100%)" }}
         className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg flex divide-x divide-gray-200 dark:divide-gray-700 select-none"
       >
         <button
@@ -517,13 +556,14 @@ export default function FileViewer() {
   // -----------------------
   const getFileInfo = () => {
     const bytes = new Blob([fileContent]).size;
-    const kbSizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const kbSizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes || 1) / Math.log(1024));
-    const sizeReadable = (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + kbSizes[i];
+    const sizeReadable =
+      (bytes / Math.pow(1024, i)).toFixed(2) + " " + kbSizes[i];
 
     return {
       size: sizeReadable,
-      lines: fileContent.split('\n').length,
+      lines: fileContent.split("\n").length,
       words: fileContent.split(/\s+/).filter(Boolean).length,
       characters: fileContent.length,
       language,
@@ -536,7 +576,7 @@ export default function FileViewer() {
   const jumpToLine = (line) => {
     const el = document.getElementById(`line-${line}`);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   };
 
@@ -555,25 +595,25 @@ export default function FileViewer() {
       let regex;
       if (searchRegex) {
         // Use regex as-is if regex mode is enabled
-        const flags = searchCaseSensitive ? 'g' : 'gi';
+        const flags = searchCaseSensitive ? "g" : "gi";
         regex = new RegExp(text, flags);
       } else {
         // Escape special characters for literal search
-        const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const flags = searchCaseSensitive ? 'g' : 'gi';
+        const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const flags = searchCaseSensitive ? "g" : "gi";
         regex = new RegExp(escaped, flags);
       }
 
-      const lines = fileContent.split('\n');
+      const lines = fileContent.split("\n");
       const matches = [];
 
       lines.forEach((line, idx) => {
         const lineMatches = [...line.matchAll(regex)];
         if (lineMatches.length > 0) {
-          matches.push({ 
+          matches.push({
             lineNumber: idx + 1,
             matchCount: lineMatches.length,
-            matches: lineMatches.map(m => ({ index: m.index, text: m[0] }))
+            matches: lineMatches.map((m) => ({ index: m.index, text: m[0] })),
           });
         }
       });
@@ -591,16 +631,19 @@ export default function FileViewer() {
     }
   };
 
-  const navigateSearch = useCallback((direction) => {
-    if (!searchResults.length) return;
-    setCurrentMatch((prev) => {
-      const len = searchResults.length;
-      let idx = prev;
-      idx = direction === 'next' ? (idx + 1) % len : (idx - 1 + len) % len;
-      jumpToLine(searchResults[idx].lineNumber);
-      return idx;
-    });
-  }, [searchResults]);
+  const navigateSearch = useCallback(
+    (direction) => {
+      if (!searchResults.length) return;
+      setCurrentMatch((prev) => {
+        const len = searchResults.length;
+        let idx = prev;
+        idx = direction === "next" ? (idx + 1) % len : (idx - 1 + len) % len;
+        jumpToLine(searchResults[idx].lineNumber);
+        return idx;
+      });
+    },
+    [searchResults],
+  );
 
   // Run search when text or options change
   useEffect(() => {
@@ -617,47 +660,47 @@ export default function FileViewer() {
       const metaOrCtrl = e.metaKey || e.ctrlKey;
 
       // Cmd/Ctrl + F => open search
-      if (metaOrCtrl && e.key === 'f') {
+      if (metaOrCtrl && e.key === "f") {
         e.preventDefault();
         setSearchOpen(true);
         return;
       }
 
       // Cmd/Ctrl + G => goto line
-      if (metaOrCtrl && e.key === 'g') {
+      if (metaOrCtrl && e.key === "g") {
         e.preventDefault();
         setGotoLineOpen(true);
         return;
       }
 
       // Esc closes overlays
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setSearchOpen(false);
         setGotoLineOpen(false);
         setShowMobileMenu(false);
       }
 
       // Cmd/Ctrl + C with no selection => copy file
-      if (metaOrCtrl && e.key === 'c' && !window.getSelection()?.toString()) {
+      if (metaOrCtrl && e.key === "c" && !window.getSelection()?.toString()) {
         e.preventDefault();
         copyContent();
       }
 
       // Search navigation: F3 / Enter navigate next
       if (searchOpen) {
-        if (e.key === 'Enter' || e.key === 'F3') {
+        if (e.key === "Enter" || e.key === "F3") {
           e.preventDefault();
-          navigateSearch('next');
+          navigateSearch("next");
         }
-        if (metaOrCtrl && e.shiftKey && e.key.toLowerCase() === 'g') {
+        if (metaOrCtrl && e.shiftKey && e.key.toLowerCase() === "g") {
           e.preventDefault();
-          navigateSearch('prev');
+          navigateSearch("prev");
         }
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [searchOpen, navigateSearch]);
 
   // Mobile toolbar component
@@ -682,7 +725,7 @@ export default function FileViewer() {
           <ZoomIn className="w-4 h-4" />
         </button>
       </div>
-      
+
       <div className="flex items-center space-x-2">
         {/* Search (mobile) */}
         <button
@@ -696,15 +739,19 @@ export default function FileViewer() {
         <button
           onClick={toggleLineNumbers}
           className={`p-2 rounded-lg border touch-manipulation ${
-            showLineNumbers 
-              ? 'bg-blue-100 border-blue-300 text-blue-700' 
-              : 'bg-white border-gray-300'
+            showLineNumbers
+              ? "bg-blue-100 border-blue-300 text-blue-700"
+              : "bg-white border-gray-300"
           }`}
           title="Toggle line numbers"
         >
-          {showLineNumbers ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+          {showLineNumbers ? (
+            <Eye className="w-4 h-4" />
+          ) : (
+            <EyeOff className="w-4 h-4" />
+          )}
         </button>
-        
+
         <button
           onClick={copyContent}
           className="p-2 bg-white rounded-lg border border-gray-300 touch-manipulation"
@@ -712,7 +759,7 @@ export default function FileViewer() {
         >
           <Copy className="w-4 h-4" />
         </button>
-        
+
         <button
           onClick={() => setShowMobileMenu(!showMobileMenu)}
           className="p-2 bg-white rounded-lg border border-gray-300 touch-manipulation"
@@ -724,7 +771,7 @@ export default function FileViewer() {
   );
 
   // Mobile menu component
-  const MobileMenu = () => (
+  const MobileMenu = () =>
     showMobileMenu && (
       <div className="absolute top-full right-2 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 lg:hidden">
         <div className="py-2">
@@ -736,11 +783,13 @@ export default function FileViewer() {
             className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center justify-between"
           >
             <span>Wrap Lines</span>
-            <span className={`text-xs ${wrapLines ? 'text-green-600' : 'text-gray-400'}`}>
-              {wrapLines ? 'ON' : 'OFF'}
+            <span
+              className={`text-xs ${wrapLines ? "text-green-600" : "text-gray-400"}`}
+            >
+              {wrapLines ? "ON" : "OFF"}
             </span>
           </button>
-          
+
           <button
             onClick={() => {
               toggleTheme();
@@ -751,7 +800,7 @@ export default function FileViewer() {
             <span>Theme</span>
             <span className="text-xs text-gray-600 capitalize">{theme}</span>
           </button>
-          
+
           <button
             onClick={() => {
               setGotoLineOpen(true);
@@ -762,7 +811,7 @@ export default function FileViewer() {
             <Hash className="w-4 h-4" />
             <span>Go to Line</span>
           </button>
-          
+
           <button
             onClick={() => {
               setShowInfo(true);
@@ -773,9 +822,9 @@ export default function FileViewer() {
             <Info className="w-4 h-4" />
             <span>File Info</span>
           </button>
-          
+
           <hr className="my-1" />
-          
+
           <button
             onClick={() => {
               downloadFile();
@@ -797,7 +846,7 @@ export default function FileViewer() {
             <Printer className="w-4 h-4" />
             <span>Print</span>
           </button>
-          
+
           <button
             onClick={() => {
               shareFile();
@@ -808,7 +857,7 @@ export default function FileViewer() {
             <Share className="w-4 h-4" />
             <span>Share</span>
           </button>
-          
+
           <button
             onClick={() => {
               // Could implement bookmarking
@@ -821,8 +870,7 @@ export default function FileViewer() {
           </button>
         </div>
       </div>
-    )
-  );
+    );
 
   if (loading) {
     return (
@@ -837,12 +885,24 @@ export default function FileViewer() {
       <div className="bg-red-50 border border-red-200 rounded-md p-4 m-4">
         <div className="flex">
           <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              className="h-5 w-5 text-red-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
           </div>
           <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800">Error loading file</h3>
+            <h3 className="text-sm font-medium text-red-800">
+              Error loading file
+            </h3>
             <p className="text-sm text-red-700 mt-1">{error}</p>
           </div>
         </div>
@@ -851,9 +911,9 @@ export default function FileViewer() {
   }
 
   return (
-    <div 
+    <div
       ref={containerRef}
-      className={`h-full flex flex-col relative ${isMobile ? 'pb-safe' : ''}`}
+      className={`h-full flex flex-col relative ${isMobile ? "pb-safe" : ""}`}
       onClick={() => showMobileMenu && setShowMobileMenu(false)}
     >
       {/* Search overlay */}
@@ -864,7 +924,9 @@ export default function FileViewer() {
               autoFocus
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              placeholder={searchRegex ? "Search with regex…" : "Search in file…"}
+              placeholder={
+                searchRegex ? "Search with regex…" : "Search in file…"
+              }
               className="flex-1 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
             />
             {searchResults.length > 0 && (
@@ -873,7 +935,7 @@ export default function FileViewer() {
               </span>
             )}
             <button
-              onClick={() => navigateSearch('prev')}
+              onClick={() => navigateSearch("prev")}
               disabled={!searchResults.length}
               className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
               title="Previous match"
@@ -881,7 +943,7 @@ export default function FileViewer() {
               <ChevronUp className="w-4 h-4" />
             </button>
             <button
-              onClick={() => navigateSearch('next')}
+              onClick={() => navigateSearch("next")}
               disabled={!searchResults.length}
               className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
               title="Next match"
@@ -891,7 +953,7 @@ export default function FileViewer() {
             <button
               onClick={() => {
                 setSearchOpen(false);
-                setSearchText('');
+                setSearchText("");
                 setSearchResults([]);
               }}
               className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -908,7 +970,9 @@ export default function FileViewer() {
                 onChange={(e) => setSearchCaseSensitive(e.target.checked)}
                 className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-gray-700 dark:text-gray-300">Case sensitive</span>
+              <span className="text-gray-700 dark:text-gray-300">
+                Case sensitive
+              </span>
             </label>
             <label className="flex items-center space-x-1 cursor-pointer">
               <input
@@ -917,36 +981,42 @@ export default function FileViewer() {
                 onChange={(e) => setSearchRegex(e.target.checked)}
                 className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-gray-700 dark:text-gray-300">Regular expression</span>
+              <span className="text-gray-700 dark:text-gray-300">
+                Regular expression
+              </span>
             </label>
           </div>
         </div>
       )}
       {/* Enhanced Header */}
-      <div className={`bg-white border-b border-gray-200 transition-all duration-200 ${
-        headerCollapsed && isMobile ? 'px-2 py-2' : 'px-4 py-3'
-      }`}>
+      <div
+        className={`bg-white border-b border-gray-200 transition-all duration-200 ${
+          headerCollapsed && isMobile ? "px-2 py-2" : "px-4 py-3"
+        }`}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 min-w-0 flex-1">
             <button
               onClick={() => window.history.back()}
               className={`flex-shrink-0 p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 touch-manipulation ${
-                isMobile ? 'text-gray-600' : 'text-gray-700'
+                isMobile ? "text-gray-600" : "text-gray-700"
               }`}
             >
-              <ChevronLeft className={`${isMobile ? 'w-5 h-5' : 'w-4 h-4'}`} />
+              <ChevronLeft className={`${isMobile ? "w-5 h-5" : "w-4 h-4"}`} />
             </button>
-            
+
             <div className="min-w-0 flex-1">
               {!headerCollapsed && (
                 <Breadcrumbs
                   path={decodedPath}
-                  onNavigate={(sub) => debouncedNavigate(`/viewer/${encodeURIComponent(sub)}`)}
+                  onNavigate={(sub) =>
+                    debouncedNavigate(`/viewer/${encodeURIComponent(sub)}`)
+                  }
                 />
               )}
               {headerCollapsed && isMobile && (
                 <span className="text-sm text-gray-600 truncate">
-                  {decodedPath.split('/').pop()}
+                  {decodedPath.split("/").pop()}
                 </span>
               )}
               {targetLine > 1 && !headerCollapsed && (
@@ -956,29 +1026,35 @@ export default function FileViewer() {
               )}
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-2 flex-shrink-0">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 ${
-              isMobile && headerCollapsed ? 'hidden' : ''
-            }`}>
+            <span
+              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 ${
+                isMobile && headerCollapsed ? "hidden" : ""
+              }`}
+            >
               {language}
             </span>
-            
+
             {/* Desktop controls */}
             {!isMobile && (
               <>
                 <button
                   onClick={toggleLineNumbers}
                   className={`p-2 rounded-lg border touch-manipulation ${
-                    showLineNumbers 
-                      ? 'bg-blue-100 border-blue-300 text-blue-700' 
-                      : 'bg-white border-gray-300'
+                    showLineNumbers
+                      ? "bg-blue-100 border-blue-300 text-blue-700"
+                      : "bg-white border-gray-300"
                   }`}
                   title="Toggle line numbers"
                 >
-                  {showLineNumbers ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  {showLineNumbers ? (
+                    <Eye className="w-4 h-4" />
+                  ) : (
+                    <EyeOff className="w-4 h-4" />
+                  )}
                 </button>
-                
+
                 <button
                   onClick={copyContent}
                   className="p-2 bg-white rounded-lg border border-gray-300 hover:bg-gray-50"
@@ -1012,14 +1088,18 @@ export default function FileViewer() {
                 </button>
               </>
             )}
-            
+
             {/* Mobile header collapse toggle */}
             {isMobile && (
               <button
                 onClick={() => setHeaderCollapsed(!headerCollapsed)}
                 className="p-2 bg-white rounded-lg border border-gray-300 touch-manipulation"
               >
-                {headerCollapsed ? <Monitor className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
+                {headerCollapsed ? (
+                  <Monitor className="w-4 h-4" />
+                ) : (
+                  <Smartphone className="w-4 h-4" />
+                )}
               </button>
             )}
           </div>
@@ -1028,14 +1108,18 @@ export default function FileViewer() {
 
       {/* Mobile Toolbar */}
       <MobileToolbar />
-      
+
       {/* Mobile Menu */}
       <MobileMenu />
 
       {/* Keyboard hint */}
       {!isMobile && !searchOpen && (
         <div className="absolute bottom-4 right-4 text-xs text-gray-500 dark:text-gray-400 bg-white/80 dark:bg-gray-800/80 backdrop-blur px-3 py-1.5 rounded-md shadow-md select-none">
-          Press <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">⌘F</kbd> to search
+          Press{" "}
+          <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">
+            ⌘F
+          </kbd>{" "}
+          to search
         </div>
       )}
 
@@ -1043,16 +1127,20 @@ export default function FileViewer() {
       <SelectionMenu />
 
       {/* File Content */}
-      <div className={`flex-1 min-h-0 overflow-auto ${
-        theme === 'light' ? 'bg-white' : 'bg-gray-900'
-      }`} style={{ 
-        backgroundColor: theme === 'light' ? '#ffffff' : '#1f2937',
-        minHeight: '200px'
-      }}>
+      <div
+        className={`flex-1 min-h-0 overflow-auto ${
+          theme === "light" ? "bg-white" : "bg-gray-900"
+        }`}
+        style={{
+          backgroundColor: theme === "light" ? "#ffffff" : "#1f2937",
+          minHeight: "200px",
+        }}
+      >
         {/* Debug info - remove in production */}
-        {process.env.NODE_ENV === 'development' && (
+        {process.env.NODE_ENV === "development" && (
           <div className="p-2 bg-yellow-100 text-yellow-800 text-xs">
-            Debug: Content length: {fileContent.length}, Language: {language}, Theme: {theme}
+            Debug: Content length: {fileContent.length}, Language: {language},
+            Theme: {theme}
           </div>
         )}
         <style>
@@ -1070,118 +1158,171 @@ export default function FileViewer() {
         </style>
         <SyntaxHighlighter
           ref={syntaxHighlighterRef}
-          language={language || 'text'}
-          style={theme === 'light' ? oneLight : tomorrow}
+          language={language || "text"}
+          style={theme === "light" ? oneLight : tomorrow}
           showLineNumbers={showLineNumbers}
           wrapLines={wrapLines || isMobile}
-          lineNumberStyle={{ 
-            minWidth: isMobile ? '2.5em' : '3em',
-            paddingRight: '1em',
-            color: theme === 'light' ? '#6b7280' : '#9ca3af',
-            fontSize: isMobile ? `${Math.max(responsiveFontSize - 2, 10)}px` : `${responsiveFontSize - 2}px`
+          lineNumberStyle={{
+            minWidth: isMobile ? "2.5em" : "3em",
+            paddingRight: "1em",
+            color: theme === "light" ? "#6b7280" : "#9ca3af",
+            fontSize: isMobile
+              ? `${Math.max(responsiveFontSize - 2, 10)}px`
+              : `${responsiveFontSize - 2}px`,
           }}
           lineProps={(lineNumber) => ({
             style: {
-              display: 'block',
-              backgroundColor: getHighlightedLines().includes(lineNumber) 
-                ? (theme === 'light' ? '#fef3c7' : '#451a03')
-                : 'transparent',
-              paddingLeft: isMobile ? '0.5rem' : '1rem',
-              paddingRight: isMobile ? '0.5rem' : '1rem',
-              minHeight: isMobile ? '1.5rem' : 'auto',
+              display: "block",
+              backgroundColor: getHighlightedLines().includes(lineNumber)
+                ? theme === "light"
+                  ? "#fef3c7"
+                  : "#451a03"
+                : "transparent",
+              paddingLeft: isMobile ? "0.5rem" : "1rem",
+              paddingRight: isMobile ? "0.5rem" : "1rem",
+              minHeight: isMobile ? "1.5rem" : "auto",
             },
             id: `line-${lineNumber}`,
           })}
           customStyle={{
             margin: 0,
-            padding: '1rem',
+            padding: "1rem",
             fontSize: `${responsiveFontSize}px`,
-            lineHeight: isMobile ? '1.4' : '1.5',
-            background: theme === 'light' ? '#ffffff' : '#1f2937',
-            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
-            minHeight: '100%',
-            width: '100%',
+            lineHeight: isMobile ? "1.4" : "1.5",
+            background: theme === "light" ? "#ffffff" : "#1f2937",
+            fontFamily:
+              'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+            minHeight: "100%",
+            width: "100%",
           }}
           codeTagProps={{
             style: {
               fontSize: `${responsiveFontSize}px`,
-              lineHeight: isMobile ? '1.4' : '1.5',
-            }
+              lineHeight: isMobile ? "1.4" : "1.5",
+            },
           }}
           renderer={({ rows, stylesheet, useInlineStyles }) => {
             return rows.map((row, i) => {
               const lineNumber = i + 1;
               let lineContent;
-              
+
               if (Array.isArray(row)) {
                 lineContent = row.map((node, j) => {
-                  if (node.type === 'text') {
+                  if (node.type === "text") {
                     // Apply search highlighting to text nodes
-                    const highlightedText = highlightSearchMatches(node.value, lineNumber);
+                    const highlightedText = highlightSearchMatches(
+                      node.value,
+                      lineNumber,
+                    );
                     if (highlightedText !== node.value) {
-                      return <span key={j} dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+                      return (
+                        <span
+                          key={j}
+                          dangerouslySetInnerHTML={{ __html: highlightedText }}
+                        />
+                      );
                     }
                   }
-                  return <span key={j} style={useInlineStyles ? node.properties?.style : undefined} className={node.properties?.className}>
-                    {node.children ? node.children.map((child, k) => {
-                      if (child.type === 'text') {
-                        const highlightedText = highlightSearchMatches(child.value, lineNumber);
-                        if (highlightedText !== child.value) {
-                          return <span key={k} dangerouslySetInnerHTML={{ __html: highlightedText }} />;
-                        }
+                  return (
+                    <span
+                      key={j}
+                      style={
+                        useInlineStyles ? node.properties?.style : undefined
                       }
-                      return child.value;
-                    }) : node.value}
-                  </span>;
+                      className={node.properties?.className}
+                    >
+                      {node.children
+                        ? node.children.map((child, k) => {
+                            if (child.type === "text") {
+                              const highlightedText = highlightSearchMatches(
+                                child.value,
+                                lineNumber,
+                              );
+                              if (highlightedText !== child.value) {
+                                return (
+                                  <span
+                                    key={k}
+                                    dangerouslySetInnerHTML={{
+                                      __html: highlightedText,
+                                    }}
+                                  />
+                                );
+                              }
+                            }
+                            return child.value;
+                          })
+                        : node.value}
+                    </span>
+                  );
                 });
               } else {
                 // Handle case where row is not an array (fallback to simple text)
-                const rowText = typeof row === 'string' ? row : (row?.value || '');
-                const highlightedText = highlightSearchMatches(rowText, lineNumber);
-                lineContent = highlightedText !== rowText ? 
-                  <span dangerouslySetInnerHTML={{ __html: highlightedText }} /> : 
-                  rowText;
+                const rowText =
+                  typeof row === "string" ? row : row?.value || "";
+                const highlightedText = highlightSearchMatches(
+                  rowText,
+                  lineNumber,
+                );
+                lineContent =
+                  highlightedText !== rowText ? (
+                    <span
+                      dangerouslySetInnerHTML={{ __html: highlightedText }}
+                    />
+                  ) : (
+                    rowText
+                  );
               }
 
               return (
-                <div key={i} style={{
-                  display: 'block',
-                  backgroundColor: getHighlightedLines().includes(lineNumber) 
-                    ? (theme === 'light' ? '#fef3c7' : '#451a03')
-                    : 'transparent',
-                  paddingLeft: isMobile ? '0.5rem' : '1rem',
-                  paddingRight: isMobile ? '0.5rem' : '1rem',
-                  minHeight: isMobile ? '1.5rem' : 'auto',
-                }} id={`line-${lineNumber}`}>
+                <div
+                  key={i}
+                  style={{
+                    display: "block",
+                    backgroundColor: getHighlightedLines().includes(lineNumber)
+                      ? theme === "light"
+                        ? "#fef3c7"
+                        : "#451a03"
+                      : "transparent",
+                    paddingLeft: isMobile ? "0.5rem" : "1rem",
+                    paddingRight: isMobile ? "0.5rem" : "1rem",
+                    minHeight: isMobile ? "1.5rem" : "auto",
+                  }}
+                  id={`line-${lineNumber}`}
+                >
                   {lineContent}
                 </div>
               );
             });
           }}
         >
-          {fileContent || '// No content to display'}
+          {fileContent || "// No content to display"}
         </SyntaxHighlighter>
       </div>
 
       {/* Goto line dialog */}
       {gotoLineOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 p-4" onClick={() => setGotoLineOpen(false)}>
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 p-4"
+          onClick={() => setGotoLineOpen(false)}
+        >
           <div
             className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-sm font-medium mb-4 text-gray-900 dark:text-gray-100">Go to line</h2>
+            <h2 className="text-sm font-medium mb-4 text-gray-900 dark:text-gray-100">
+              Go to line
+            </h2>
             <input
               type="number"
               min={1}
               value={gotoLineNumber}
               onChange={(e) => setGotoLineNumber(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === "Enter") {
                   const line = parseInt(gotoLineNumber, 10);
                   if (line) jumpToLine(line);
                   setGotoLineOpen(false);
-                  setGotoLineNumber('');
+                  setGotoLineNumber("");
                 }
               }}
               placeholder="Line number"
@@ -1192,7 +1333,7 @@ export default function FileViewer() {
               <button
                 onClick={() => {
                   setGotoLineOpen(false);
-                  setGotoLineNumber('');
+                  setGotoLineNumber("");
                 }}
                 className="px-3 py-1.5 text-sm rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
               >
@@ -1203,7 +1344,7 @@ export default function FileViewer() {
                   const line = parseInt(gotoLineNumber, 10);
                   if (line) jumpToLine(line);
                   setGotoLineOpen(false);
-                  setGotoLineNumber('');
+                  setGotoLineNumber("");
                 }}
                 className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
               >
@@ -1216,7 +1357,10 @@ export default function FileViewer() {
 
       {/* File info modal */}
       {showInfo && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 p-4" onClick={() => setShowInfo(false)}>
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 p-4"
+          onClick={() => setShowInfo(false)}
+        >
           <div
             className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-lg"
             onClick={(e) => e.stopPropagation()}
@@ -1231,7 +1375,12 @@ export default function FileViewer() {
                 <dl className="text-sm divide-y divide-gray-200 dark:divide-gray-700">
                   <div className="flex justify-between py-2">
                     <dt className="text-gray-500 dark:text-gray-400">Path</dt>
-                    <dd className="font-mono truncate max-w-[12rem]" title={decodedPath}>{decodedPath}</dd>
+                    <dd
+                      className="font-mono truncate max-w-[12rem]"
+                      title={decodedPath}
+                    >
+                      {decodedPath}
+                    </dd>
                   </div>
                   <div className="flex justify-between py-2">
                     <dt className="text-gray-500 dark:text-gray-400">Size</dt>
@@ -1246,11 +1395,15 @@ export default function FileViewer() {
                     <dd>{info.words}</dd>
                   </div>
                   <div className="flex justify-between py-2">
-                    <dt className="text-gray-500 dark:text-gray-400">Characters</dt>
+                    <dt className="text-gray-500 dark:text-gray-400">
+                      Characters
+                    </dt>
                     <dd>{info.characters}</dd>
                   </div>
                   <div className="flex justify-between py-2">
-                    <dt className="text-gray-500 dark:text-gray-400">Language</dt>
+                    <dt className="text-gray-500 dark:text-gray-400">
+                      Language
+                    </dt>
                     <dd className="capitalize">{info.language}</dd>
                   </div>
                 </dl>

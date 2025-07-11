@@ -1,4 +1,5 @@
 """Enhanced WebSocket notification manager with task cleanup."""
+
 import asyncio
 from typing import Any, Dict, List, Optional, Set
 from collections import defaultdict
@@ -62,8 +63,7 @@ class TaskManager:
         # Wait for cancellation with timeout
         try:
             await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=5.0
+                asyncio.gather(*tasks, return_exceptions=True), timeout=5.0
             )
         except asyncio.TimeoutError:
             logger.warning(
@@ -92,13 +92,13 @@ class TaskManager:
                 user_stats[user_id] = {
                     "total": len(tasks),
                     "active": active,
-                    "completed": len(tasks) - active
+                    "completed": len(tasks) - active,
                 }
 
         return {
             "total_tasks": total_tasks,
             "active_users": active_users,
-            "user_stats": user_stats
+            "user_stats": user_stats,
         }
 
 
@@ -111,9 +111,7 @@ class EnhancedNotifyManager:
         self._connection_lock = asyncio.Lock()
 
         # Track WebSocket task control
-        self.task_tracking_enabled = getattr(
-            settings, "ws_task_tracking", True
-        )
+        self.task_tracking_enabled = getattr(settings, "ws_task_tracking", True)
 
     async def connect(self, websocket: WebSocket, user_id: int):
         """Accept WebSocket connection with per-user connection cap.
@@ -187,17 +185,12 @@ class EnhancedNotifyManager:
     async def send_async(self, user_id: int, message: dict) -> None:
         """Send message asynchronously with task tracking."""
         if self.task_tracking_enabled:
-            await self.task_manager.spawn(
-                user_id,
-                self.send(user_id, message)
-            )
+            await self.task_manager.spawn(user_id, self.send(user_id, message))
         else:
             # Fallback to simple fire-and-forget
             asyncio.create_task(self.send(user_id, message))
 
-    async def broadcast(
-        self, message: dict, user_ids: Optional[List[int]] = None
-    ):
+    async def broadcast(self, message: dict, user_ids: Optional[List[int]] = None):
         """Broadcast message to multiple users."""
         if user_ids is None:
             async with self._connection_lock:
@@ -208,8 +201,7 @@ class EnhancedNotifyManager:
         for user_id in user_ids:
             if self.task_tracking_enabled:
                 task = await self.task_manager.spawn(
-                    user_id,
-                    self.send(user_id, message)
+                    user_id, self.send(user_id, message)
                 )
                 tasks.append(task)
             else:
@@ -228,8 +220,7 @@ class EnhancedNotifyManager:
                     len(conns) for conns in self.connections.values()
                 ),
                 "users": {
-                    user_id: len(conns)
-                    for user_id, conns in self.connections.items()
+                    user_id: len(conns) for user_id, conns in self.connections.items()
                 },
             }
 
@@ -241,7 +232,7 @@ class EnhancedNotifyManager:
         return {
             "connections": connection_stats,
             "tasks": task_stats,
-            "task_tracking_enabled": self.task_tracking_enabled
+            "task_tracking_enabled": self.task_tracking_enabled,
         }
 
 

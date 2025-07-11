@@ -1,9 +1,8 @@
-
 /**
  * SkeletonLines – animated placeholder rows.
  * @param {number} rows  Number of grey bars to render (default 6)
  */
-export default function SkeletonLines({ rows = 6, className = '' }) {
+export default function SkeletonLines({ rows = 6, className = "" }) {
   return (
     <div className={`space-y-2 ${className}`} data-testid="skeleton-lines">
       {Array.from({ length: rows }).map((_, i) => (

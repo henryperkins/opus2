@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 
 /**
  * Hook that tracks the current user text selection and returns both the text
@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
  * relative to the viewport.
  */
 export function useTextSelection() {
-  const [selectionText, setSelectionText] = useState('');
+  const [selectionText, setSelectionText] = useState("");
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export function useTextSelection() {
 
       const text = sel.toString();
       if (!text) {
-        setSelectionText('');
+        setSelectionText("");
         return;
       }
 
@@ -36,8 +36,9 @@ export function useTextSelection() {
       setSelectionText(text);
     }
 
-    document.addEventListener('selectionchange', handleSelectionChange);
-    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () =>
+      document.removeEventListener("selectionchange", handleSelectionChange);
   }, []);
 
   return { selectionText, position };

@@ -5,7 +5,7 @@
 // same singleton instance with `import { queryClient } from 'src/queryClient'`.
 // ----------------------------------------------------------------------------
 
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient } from "@tanstack/react-query";
 
 export const queryClient = new QueryClient({
   defaultOptions: {

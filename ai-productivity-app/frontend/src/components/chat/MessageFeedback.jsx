@@ -1,21 +1,21 @@
-import React, { useState } from 'react';
-import { ThumbsUp, ThumbsDown, Star, MessageSquare, X } from 'lucide-react';
-import { Button } from '../common/Button';
+import React, { useState } from "react";
+import { ThumbsUp, ThumbsDown, Star, MessageSquare, X } from "lucide-react";
+import { Button } from "../common/Button";
 
-const MessageFeedback = ({ 
-  messageId, 
-  onFeedbackSubmit, 
+const MessageFeedback = ({
+  messageId,
+  onFeedbackSubmit,
   initialFeedback = null,
-  className = ''
+  className = "",
 }) => {
   const [showDetailedForm, setShowDetailedForm] = useState(false);
   const [feedback, setFeedback] = useState({
     rating: initialFeedback?.rating || 0,
     helpful: initialFeedback?.helpful || null,
-    comments: initialFeedback?.comments || '',
+    comments: initialFeedback?.comments || "",
     accuracy_rating: initialFeedback?.accuracy_rating || 0,
     clarity_rating: initialFeedback?.clarity_rating || 0,
-    completeness_rating: initialFeedback?.completeness_rating || 0
+    completeness_rating: initialFeedback?.completeness_rating || 0,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -25,13 +25,13 @@ const MessageFeedback = ({
       const feedbackData = {
         message_id: messageId,
         rating: helpful ? 1 : -1,
-        helpful: helpful
+        helpful: helpful,
       };
-      
+
       await onFeedbackSubmit(feedbackData);
-      setFeedback(prev => ({ ...prev, helpful, rating: helpful ? 1 : -1 }));
+      setFeedback((prev) => ({ ...prev, helpful, rating: helpful ? 1 : -1 }));
     } catch (error) {
-      console.error('Failed to submit feedback:', error);
+      console.error("Failed to submit feedback:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -40,17 +40,17 @@ const MessageFeedback = ({
   const handleDetailedSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       const feedbackData = {
         message_id: messageId,
-        ...feedback
+        ...feedback,
       };
-      
+
       await onFeedbackSubmit(feedbackData);
       setShowDetailedForm(false);
     } catch (error) {
-      console.error('Failed to submit detailed feedback:', error);
+      console.error("Failed to submit detailed feedback:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -66,12 +66,12 @@ const MessageFeedback = ({
             type="button"
             onClick={() => onChange(star)}
             className={`p-1 ${
-              star <= value 
-                ? 'text-yellow-400 hover:text-yellow-500' 
-                : 'text-gray-300 hover:text-gray-400'
+              star <= value
+                ? "text-yellow-400 hover:text-yellow-500"
+                : "text-gray-300 hover:text-gray-400"
             }`}
           >
-            <Star size={16} fill={star <= value ? 'currentColor' : 'none'} />
+            <Star size={16} fill={star <= value ? "currentColor" : "none"} />
           </button>
         ))}
       </div>
@@ -83,7 +83,7 @@ const MessageFeedback = ({
       {/* Quick Feedback Buttons */}
       <div className="flex items-center gap-1">
         <Button
-          variant={feedback.helpful === true ? 'primary' : 'ghost'}
+          variant={feedback.helpful === true ? "primary" : "ghost"}
           size="sm"
           onClick={() => handleQuickFeedback(true)}
           disabled={isSubmitting}
@@ -92,9 +92,9 @@ const MessageFeedback = ({
         >
           <ThumbsUp size={14} />
         </Button>
-        
+
         <Button
-          variant={feedback.helpful === false ? 'destructive' : 'ghost'}
+          variant={feedback.helpful === false ? "destructive" : "ghost"}
           size="sm"
           onClick={() => handleQuickFeedback(false)}
           disabled={isSubmitting}
@@ -119,7 +119,7 @@ const MessageFeedback = ({
       {/* Current Feedback Status */}
       {feedback.helpful !== null && (
         <span className="text-xs text-gray-500">
-          {feedback.helpful ? 'Marked helpful' : 'Marked not helpful'}
+          {feedback.helpful ? "Marked helpful" : "Marked not helpful"}
         </span>
       )}
 
@@ -142,20 +142,27 @@ const MessageFeedback = ({
             <form onSubmit={handleDetailedSubmit} className="space-y-4">
               {/* Overall Rating */}
               <div>
-                <label className="block text-sm font-medium mb-2">Overall Rating</label>
+                <label className="block text-sm font-medium mb-2">
+                  Overall Rating
+                </label>
                 <div className="flex gap-1">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
                       type="button"
-                      onClick={() => setFeedback(prev => ({ ...prev, rating: star }))}
+                      onClick={() =>
+                        setFeedback((prev) => ({ ...prev, rating: star }))
+                      }
                       className={`p-1 ${
-                        star <= feedback.rating 
-                          ? 'text-yellow-400 hover:text-yellow-500' 
-                          : 'text-gray-300 hover:text-gray-400'
+                        star <= feedback.rating
+                          ? "text-yellow-400 hover:text-yellow-500"
+                          : "text-gray-300 hover:text-gray-400"
                       }`}
                     >
-                      <Star size={20} fill={star <= feedback.rating ? 'currentColor' : 'none'} />
+                      <Star
+                        size={20}
+                        fill={star <= feedback.rating ? "currentColor" : "none"}
+                      />
                     </button>
                   ))}
                 </div>
@@ -165,17 +172,26 @@ const MessageFeedback = ({
               <div className="space-y-2">
                 <StarRating
                   value={feedback.accuracy_rating}
-                  onChange={(value) => setFeedback(prev => ({ ...prev, accuracy_rating: value }))}
+                  onChange={(value) =>
+                    setFeedback((prev) => ({ ...prev, accuracy_rating: value }))
+                  }
                   label="Accuracy"
                 />
                 <StarRating
                   value={feedback.clarity_rating}
-                  onChange={(value) => setFeedback(prev => ({ ...prev, clarity_rating: value }))}
+                  onChange={(value) =>
+                    setFeedback((prev) => ({ ...prev, clarity_rating: value }))
+                  }
                   label="Clarity"
                 />
                 <StarRating
                   value={feedback.completeness_rating}
-                  onChange={(value) => setFeedback(prev => ({ ...prev, completeness_rating: value }))}
+                  onChange={(value) =>
+                    setFeedback((prev) => ({
+                      ...prev,
+                      completeness_rating: value,
+                    }))
+                  }
                   label="Complete"
                 />
               </div>
@@ -187,7 +203,12 @@ const MessageFeedback = ({
                 </label>
                 <textarea
                   value={feedback.comments}
-                  onChange={(e) => setFeedback(prev => ({ ...prev, comments: e.target.value }))}
+                  onChange={(e) =>
+                    setFeedback((prev) => ({
+                      ...prev,
+                      comments: e.target.value,
+                    }))
+                  }
                   placeholder="Tell us what was helpful or how we could improve..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   rows={3}
@@ -208,7 +229,7 @@ const MessageFeedback = ({
                   type="submit"
                   disabled={isSubmitting || feedback.rating === 0}
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+                  {isSubmitting ? "Submitting..." : "Submit Feedback"}
                 </Button>
               </div>
             </form>

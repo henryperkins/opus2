@@ -1,5 +1,5 @@
-import React from 'react';
-import FileViewer from '../components/files/FileViewer';
+import React from "react";
+import FileViewer from "../components/files/FileViewer";
 
 export default function FileViewerPage() {
   return (

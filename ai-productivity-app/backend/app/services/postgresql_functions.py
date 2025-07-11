@@ -10,19 +10,21 @@ logger = logging.getLogger(__name__)
 
 class PostgreSQLFunctions:
     """PostgreSQL-specific database functions and utilities."""
-    
+
     def __init__(self, db: Session):
         self.db = db
-        self.is_postgresql = db.bind.dialect.name == 'postgresql'
-    
+        self.is_postgresql = db.bind.dialect.name == "postgresql"
+
     def create_advanced_functions(self):
         """Create advanced PostgreSQL functions for enhanced search and analytics."""
         if not self.is_postgresql:
             logger.warning("Advanced functions require PostgreSQL")
             return
-        
+
         # Function for intelligent code similarity search
-        self.db.execute(text("""
+        self.db.execute(
+            text(
+                """
             CREATE OR REPLACE FUNCTION find_similar_code(
                 query_vector vector(1536),
                 project_filter int[] DEFAULT NULL,
@@ -60,10 +62,14 @@ class PostgreSQLFunctions:
                 LIMIT result_limit;
             END;
             $$ LANGUAGE plpgsql;
-        """))
-        
+        """
+            )
+        )
+
         # Function for hybrid search combining vector and text search
-        self.db.execute(text("""
+        self.db.execute(
+            text(
+                """
             CREATE OR REPLACE FUNCTION hybrid_code_search(
                 search_query text,
                 query_vector vector(1536) DEFAULT NULL,
@@ -134,10 +140,14 @@ class PostgreSQLFunctions:
                 LIMIT result_limit;
             END;
             $$ LANGUAGE plpgsql;
-        """))
-        
+        """
+            )
+        )
+
         # Function for advanced chat search with context
-        self.db.execute(text("""
+        self.db.execute(
+            text(
+                """
             CREATE OR REPLACE FUNCTION search_chat_with_context(
                 search_query text,
                 project_filter int[] DEFAULT NULL,
@@ -211,10 +221,14 @@ class PostgreSQLFunctions:
                 LIMIT result_limit;
             END;
             $$ LANGUAGE plpgsql;
-        """))
-        
+        """
+            )
+        )
+
         # Function for project analytics with time-based filtering
-        self.db.execute(text("""
+        self.db.execute(
+            text(
+                """
             CREATE OR REPLACE FUNCTION get_project_analytics(
                 project_filter int[] DEFAULT NULL,
                 time_period interval DEFAULT '30 days'
@@ -255,10 +269,14 @@ class PostgreSQLFunctions:
                 ORDER BY activity_score DESC, last_activity DESC;
             END;
             $$ LANGUAGE plpgsql;
-        """))
-        
+        """
+            )
+        )
+
         # Function for intelligent model recommendations based on usage patterns
-        self.db.execute(text("""
+        self.db.execute(
+            text(
+                """
             CREATE OR REPLACE FUNCTION recommend_models_for_task(
                 task_type text DEFAULT 'chat',
                 project_context jsonb DEFAULT '{}',
@@ -312,18 +330,28 @@ class PostgreSQLFunctions:
                 LIMIT 5;
             END;
             $$ LANGUAGE plpgsql;
-        """))
-        
+        """
+            )
+        )
+
         self.db.commit()
         logger.info("Advanced PostgreSQL functions created successfully")
-    
-    def find_similar_code(self, query_vector: List[float], project_ids: Optional[List[int]] = None,
-                         language: Optional[str] = None, threshold: float = 0.8, limit: int = 10) -> List[Dict]:
+
+    def find_similar_code(
+        self,
+        query_vector: List[float],
+        project_ids: Optional[List[int]] = None,
+        language: Optional[str] = None,
+        threshold: float = 0.8,
+        limit: int = 10,
+    ) -> List[Dict]:
         """Find similar code using vector similarity."""
         if not self.is_postgresql:
             return []
-        
-        result = self.db.execute(text("""
+
+        result = self.db.execute(
+            text(
+                """
             SELECT * FROM find_similar_code(
                 :query_vector::vector(1536),
                 :project_filter,
@@ -331,24 +359,35 @@ class PostgreSQLFunctions:
                 :similarity_threshold,
                 :result_limit
             )
-        """), {
-            'query_vector': str(query_vector),
-            'project_filter': project_ids,
-            'language_filter': language,
-            'similarity_threshold': threshold,
-            'result_limit': limit
-        })
-        
+        """
+            ),
+            {
+                "query_vector": str(query_vector),
+                "project_filter": project_ids,
+                "language_filter": language,
+                "similarity_threshold": threshold,
+                "result_limit": limit,
+            },
+        )
+
         return [dict(row) for row in result]
-    
-    def hybrid_search(self, query: str, query_vector: Optional[List[float]] = None,
-                     project_ids: Optional[List[int]] = None, vector_weight: float = 0.6,
-                     text_weight: float = 0.4, limit: int = 20) -> List[Dict]:
+
+    def hybrid_search(
+        self,
+        query: str,
+        query_vector: Optional[List[float]] = None,
+        project_ids: Optional[List[int]] = None,
+        vector_weight: float = 0.6,
+        text_weight: float = 0.4,
+        limit: int = 20,
+    ) -> List[Dict]:
         """Perform hybrid search combining vector and text search."""
         if not self.is_postgresql:
             return []
-        
-        result = self.db.execute(text("""
+
+        result = self.db.execute(
+            text(
+                """
             SELECT * FROM hybrid_code_search(
                 :search_query,
                 :query_vector::vector(1536),
@@ -357,25 +396,36 @@ class PostgreSQLFunctions:
                 :text_weight,
                 :result_limit
             )
-        """), {
-            'search_query': query,
-            'query_vector': str(query_vector) if query_vector else None,
-            'project_filter': project_ids,
-            'vector_weight': vector_weight,
-            'text_weight': text_weight,
-            'result_limit': limit
-        })
-        
+        """
+            ),
+            {
+                "search_query": query,
+                "query_vector": str(query_vector) if query_vector else None,
+                "project_filter": project_ids,
+                "vector_weight": vector_weight,
+                "text_weight": text_weight,
+                "result_limit": limit,
+            },
+        )
+
         return [dict(row) for row in result]
-    
-    def search_chat_with_context(self, query: str, project_ids: Optional[List[int]] = None,
-                                session_ids: Optional[List[int]] = None, include_context: bool = True,
-                                context_window: int = 2, limit: int = 50) -> List[Dict]:
+
+    def search_chat_with_context(
+        self,
+        query: str,
+        project_ids: Optional[List[int]] = None,
+        session_ids: Optional[List[int]] = None,
+        include_context: bool = True,
+        context_window: int = 2,
+        limit: int = 50,
+    ) -> List[Dict]:
         """Search chat messages with surrounding context."""
         if not self.is_postgresql:
             return []
-        
-        result = self.db.execute(text("""
+
+        result = self.db.execute(
+            text(
+                """
             SELECT * FROM search_chat_with_context(
                 :search_query,
                 :project_filter,
@@ -384,71 +434,88 @@ class PostgreSQLFunctions:
                 :context_window,
                 :result_limit
             )
-        """), {
-            'search_query': query,
-            'project_filter': project_ids,
-            'session_filter': session_ids,
-            'include_context': include_context,
-            'context_window': context_window,
-            'result_limit': limit
-        })
-        
+        """
+            ),
+            {
+                "search_query": query,
+                "project_filter": project_ids,
+                "session_filter": session_ids,
+                "include_context": include_context,
+                "context_window": context_window,
+                "result_limit": limit,
+            },
+        )
+
         return [dict(row) for row in result]
-    
-    def get_project_analytics(self, project_ids: Optional[List[int]] = None,
-                            time_period: str = '30 days') -> List[Dict]:
+
+    def get_project_analytics(
+        self, project_ids: Optional[List[int]] = None, time_period: str = "30 days"
+    ) -> List[Dict]:
         """Get comprehensive project analytics."""
         if not self.is_postgresql:
             return []
-        
-        result = self.db.execute(text("""
+
+        result = self.db.execute(
+            text(
+                """
             SELECT * FROM get_project_analytics(
                 :project_filter,
                 :time_period::interval
             )
-        """), {
-            'project_filter': project_ids,
-            'time_period': time_period
-        })
-        
+        """
+            ),
+            {"project_filter": project_ids, "time_period": time_period},
+        )
+
         return [dict(row) for row in result]
-    
-    def recommend_models(self, task_type: str = 'chat', project_context: Dict[str, Any] = None,
-                        performance_priority: str = 'balanced') -> List[Dict]:
+
+    def recommend_models(
+        self,
+        task_type: str = "chat",
+        project_context: Dict[str, Any] = None,
+        performance_priority: str = "balanced",
+    ) -> List[Dict]:
         """Get model recommendations based on task and context."""
         if not self.is_postgresql:
             return []
-        
-        result = self.db.execute(text("""
+
+        result = self.db.execute(
+            text(
+                """
             SELECT * FROM recommend_models_for_task(
                 :task_type,
                 :project_context::jsonb,
                 :performance_priority
             )
-        """), {
-            'task_type': task_type,
-            'project_context': str(project_context or {}),
-            'performance_priority': performance_priority
-        })
-        
+        """
+            ),
+            {
+                "task_type": task_type,
+                "project_context": str(project_context or {}),
+                "performance_priority": performance_priority,
+            },
+        )
+
         return [dict(row) for row in result]
-    
+
     def refresh_materialized_views(self):
         """Refresh all materialized views for updated analytics."""
         if not self.is_postgresql:
             return
-        
+
         self.db.execute(text("REFRESH MATERIALIZED VIEW project_analytics"))
         self.db.commit()
         logger.info("Materialized views refreshed")
-    
+
     def get_performance_metrics(self) -> Dict[str, Any]:
         """Get database performance metrics."""
         if not self.is_postgresql:
             return {}
-        
+
         # Query performance statistics
-        result = self.db.execute(text("""
+        result = self.db.execute(
+            text(
+                """
             SELECT 
                 query,
                 calls,
@@ -460,12 +527,16 @@ class PostgreSQLFunctions:
             WHERE query NOT LIKE '%pg_stat_statements%'
             ORDER BY mean_exec_time DESC 
             LIMIT 10
-        """))
-        
+        """
+            )
+        )
+
         slow_queries = [dict(row) for row in result]
-        
+
         # Index usage statistics
-        result = self.db.execute(text("""
+        result = self.db.execute(
+            text(
+                """
             SELECT 
                 schemaname,
                 tablename,
@@ -476,23 +547,29 @@ class PostgreSQLFunctions:
             FROM pg_stat_user_indexes 
             ORDER BY idx_scan DESC 
             LIMIT 20
-        """))
-        
+        """
+            )
+        )
+
         index_stats = [dict(row) for row in result]
-        
+
         # Database size information
-        result = self.db.execute(text("""
+        result = self.db.execute(
+            text(
+                """
             SELECT 
                 pg_size_pretty(pg_database_size(current_database())) as database_size,
                 count(*) as active_connections
             FROM pg_stat_activity 
             WHERE state = 'active'
-        """))
-        
+        """
+            )
+        )
+
         db_info = dict(result.fetchone())
-        
+
         return {
-            'slow_queries': slow_queries,
-            'index_usage': index_stats,
-            'database_info': db_info
+            "slow_queries": slow_queries,
+            "index_usage": index_stats,
+            "database_info": db_info,
         }

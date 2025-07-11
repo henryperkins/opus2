@@ -79,7 +79,7 @@ async def get_configuration(
             ]:
                 if getattr(caps, cap_field, False):
                     providers[provider_key]["capabilities"][cap_field] = True
-        
+
         # If no models are in the database, providers will be empty.
         # Fallback to the default provider from settings.
         if not providers:
@@ -97,6 +97,7 @@ async def get_configuration(
             }
             if not available_models:
                 from app.schemas.generation import ModelInfo
+
                 available_models = [ModelInfo(**default_model)]
 
         return ConfigResponse(
@@ -119,10 +120,11 @@ from app.models.user import User
 
 ...
 
+
 @router.get("/defaults", response_model=dict, summary="Built-in defaults")
 async def get_defaults(
     service: UnifiedConfigService = Depends(get_config_service),
-    user: Optional[User] = Depends(get_current_user)
+    user: Optional[User] = Depends(get_current_user),
 ) -> dict:
     """
     Return the canonical default provider / model / generation parameters.
@@ -148,10 +150,12 @@ async def update_configuration(
     """
     try:
         # Add use_responses_api to the updates if it's not already there
-        if 'use_responses_api' not in updates and 'model_id' in updates:
-            model_info = service.get_model_info(updates.get('model_id'))
+        if "use_responses_api" not in updates and "model_id" in updates:
+            model_info = service.get_model_info(updates.get("model_id"))
             if model_info and model_info.capabilities:
-                updates['use_responses_api'] = model_info.capabilities.supports_responses_api
+                updates["use_responses_api"] = (
+                    model_info.capabilities.supports_responses_api
+                )
         # Validate and update configuration
         updated_config = service.update_config(
             updates, updated_by=current_user.username
@@ -187,15 +191,15 @@ async def patch_configuration(
 ) -> UnifiedModelConfig:
     """
     Update AI configuration with validation (PATCH variant).
-    
+
     This endpoint provides the same functionality as PUT but uses PATCH method
     for compatibility with frontend code that expects partial updates.
-    
+
     Accepts partial updates to any configuration fields:
     - Model selection (provider, model_id)
     - Generation parameters (temperature, max_tokens, etc.)
     - Reasoning settings (reasoning_effort, thinking modes)
-    
+
     All updates are validated for consistency before applying.
     """
     # Delegate to the PUT handler logic
@@ -256,7 +260,8 @@ async def batch_update_configuration(
         # Attempt rollback
         try:
             service.update_config(
-                current_config.model_dump(), updated_by=f"rollback_{current_user.username}"
+                current_config.model_dump(),
+                updated_by=f"rollback_{current_user.username}",
             )
         except Exception as rollback_error:
             logger.error(f"Rollback failed: {rollback_error}")
@@ -398,11 +403,14 @@ async def validate_configuration(
                 "supports_vision": model_service.supports_vision(model_id),
                 "supports_reasoning": model_service.is_reasoning_model(model_id),
                 "max_tokens": model_service.get_max_tokens(model_id),
-                "context_window": model_service.get_context_window(model_id)
+                "context_window": model_service.get_context_window(model_id),
             }
 
             # Generate warnings for potentially incompatible settings
-            if config.get("stream", False) and not capabilities_info["supports_streaming"]:
+            if (
+                config.get("stream", False)
+                and not capabilities_info["supports_streaming"]
+            ):
                 warnings.append(f"Model {model_id} does not support streaming")
 
             if config.get("tools") and not capabilities_info["supports_functions"]:
@@ -410,7 +418,9 @@ async def validate_configuration(
 
             max_tokens = config.get("max_tokens")
             if max_tokens and max_tokens > capabilities_info["max_tokens"]:
-                warnings.append(f"Requested max_tokens ({max_tokens}) exceeds model limit ({capabilities_info['max_tokens']})")
+                warnings.append(
+                    f"Requested max_tokens ({max_tokens}) exceeds model limit ({capabilities_info['max_tokens']})"
+                )
 
         except Exception as e:
             logger.warning(f"Could not get capability info: {e}")
@@ -420,7 +430,7 @@ async def validate_configuration(
         "error": error,
         "warnings": warnings,
         "capabilities": capabilities_info,
-        "validated_at": datetime.utcnow()
+        "validated_at": datetime.utcnow(),
     }
 
 
@@ -461,7 +471,9 @@ async def resolve_configuration_conflict(
                 "success": False,
                 "message": "Configuration conflict - changes aborted",
                 "current_config": current_config.model_dump(),
-                "conflicts": _detect_conflicts(current_config.model_dump(), proposed_config)
+                "conflicts": _detect_conflicts(
+                    current_config.model_dump(), proposed_config
+                ),
             }
 
         elif strategy == "overwrite":
@@ -470,12 +482,14 @@ async def resolve_configuration_conflict(
                 proposed_config, updated_by=current_user.username
             )
 
-            await _broadcast_config_update(updated_config, service, "config_conflict_resolved")
+            await _broadcast_config_update(
+                updated_config, service, "config_conflict_resolved"
+            )
 
             return {
                 "success": True,
                 "message": "Configuration conflict resolved - changes applied",
-                "resolved_config": updated_config.model_dump()
+                "resolved_config": updated_config.model_dump(),
             }
 
         elif strategy == "merge":
@@ -488,7 +502,7 @@ async def resolve_configuration_conflict(
                     "message": "Configuration conflicts detected - manual resolution required",
                     "current_config": current_config.model_dump(),
                     "proposed_config": proposed_config,
-                    "conflicts": conflicts
+                    "conflicts": conflicts,
                 }
 
             # No conflicts - apply merge
@@ -497,12 +511,14 @@ async def resolve_configuration_conflict(
                 merged_config, updated_by=current_user.username
             )
 
-            await _broadcast_config_update(updated_config, service, "config_conflict_resolved")
+            await _broadcast_config_update(
+                updated_config, service, "config_conflict_resolved"
+            )
 
             return {
                 "success": True,
                 "message": "Configuration merged successfully",
-                "resolved_config": updated_config.model_dump()
+                "resolved_config": updated_config.model_dump(),
             }
 
         else:
@@ -539,7 +555,9 @@ async def _notify_llm_client(config: UnifiedModelConfig):
 
 
 async def _broadcast_config_update(
-    config: UnifiedModelConfig, service: UnifiedConfigService, event_type: str = "config_update"
+    config: UnifiedModelConfig,
+    service: UnifiedConfigService,
+    event_type: str = "config_update",
 ):
     """Broadcast configuration update via WebSocket."""
     try:
@@ -561,7 +579,9 @@ async def _broadcast_config_update(
         logger.warning(f"Failed to broadcast config update: {e}")
 
 
-def _detect_conflicts(current_config: Dict[str, Any], proposed_config: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _detect_conflicts(
+    current_config: Dict[str, Any], proposed_config: Dict[str, Any]
+) -> List[Dict[str, Any]]:
     """Detect configuration conflicts between current and proposed settings."""
     conflicts = []
 
@@ -572,42 +592,69 @@ def _detect_conflicts(current_config: Dict[str, Any], proposed_config: Dict[str,
         proposed_model = proposed_config.get("model_id")
         proposed_provider = proposed_config.get("provider")
 
-        if (current_model != proposed_model or current_provider != proposed_provider):
-            conflicts.append({
-                "field": "model_selection",
-                "current": {"model_id": current_model, "provider": current_provider},
-                "proposed": {"model_id": proposed_model, "provider": proposed_provider},
-                "severity": "high"
-            })
+        if current_model != proposed_model or current_provider != proposed_provider:
+            conflicts.append(
+                {
+                    "field": "model_selection",
+                    "current": {
+                        "model_id": current_model,
+                        "provider": current_provider,
+                    },
+                    "proposed": {
+                        "model_id": proposed_model,
+                        "provider": proposed_provider,
+                    },
+                    "severity": "high",
+                }
+            )
 
     # Check for conflicting reasoning settings
-    reasoning_fields = ["enable_reasoning", "reasoning_effort", "claude_extended_thinking", "claude_thinking_mode"]
+    reasoning_fields = [
+        "enable_reasoning",
+        "reasoning_effort",
+        "claude_extended_thinking",
+        "claude_thinking_mode",
+    ]
     for field in reasoning_fields:
         if field in proposed_config and field in current_config:
             if current_config[field] != proposed_config[field]:
-                conflicts.append({
-                    "field": field,
-                    "current": current_config[field],
-                    "proposed": proposed_config[field],
-                    "severity": "medium"
-                })
+                conflicts.append(
+                    {
+                        "field": field,
+                        "current": current_config[field],
+                        "proposed": proposed_config[field],
+                        "severity": "medium",
+                    }
+                )
 
     # Check for conflicting generation parameters
-    generation_fields = ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"]
+    generation_fields = [
+        "temperature",
+        "max_tokens",
+        "top_p",
+        "frequency_penalty",
+        "presence_penalty",
+    ]
     for field in generation_fields:
         if field in proposed_config and field in current_config:
-            if abs(current_config[field] - proposed_config[field]) > 0.1:  # Threshold for meaningful difference
-                conflicts.append({
-                    "field": field,
-                    "current": current_config[field],
-                    "proposed": proposed_config[field],
-                    "severity": "low"
-                })
+            if (
+                abs(current_config[field] - proposed_config[field]) > 0.1
+            ):  # Threshold for meaningful difference
+                conflicts.append(
+                    {
+                        "field": field,
+                        "current": current_config[field],
+                        "proposed": proposed_config[field],
+                        "severity": "low",
+                    }
+                )
 
     return conflicts
 
 
-def _merge_configs(current_config: Dict[str, Any], proposed_config: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_configs(
+    current_config: Dict[str, Any], proposed_config: Dict[str, Any]
+) -> Dict[str, Any]:
     """Merge proposed configuration changes with current configuration."""
     merged = current_config.copy()
 
@@ -617,5 +664,3 @@ def _merge_configs(current_config: Dict[str, Any], proposed_config: Dict[str, An
             merged[key] = value
 
     return merged
-
-

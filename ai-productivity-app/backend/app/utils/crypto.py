@@ -24,10 +24,10 @@ class CryptoHelper:
         """Initialize Fernet encryption with the configured secret."""
         try:
             # Use the existing SECRET_KEY from settings as the base
-            secret_key = settings.secret_key.encode('utf-8')
+            secret_key = settings.secret_key.encode("utf-8")
 
             # Derive a proper encryption key using PBKDF2
-            salt = b'config_encryption_salt'  # Fixed salt for consistency
+            salt = b"config_encryption_salt"  # Fixed salt for consistency
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
@@ -60,9 +60,9 @@ class CryptoHelper:
             return value
 
         try:
-            plaintext = value.encode('utf-8')
+            plaintext = value.encode("utf-8")
             encrypted = self._fernet.encrypt(plaintext)
-            return base64.urlsafe_b64encode(encrypted).decode('utf-8')
+            return base64.urlsafe_b64encode(encrypted).decode("utf-8")
         except Exception as e:
             logger.error(f"Failed to encrypt value: {e}")
             raise ValueError(f"Encryption failed: {e}")
@@ -86,9 +86,9 @@ class CryptoHelper:
             return encrypted_value
 
         try:
-            encrypted_bytes = base64.urlsafe_b64decode(encrypted_value.encode('utf-8'))
+            encrypted_bytes = base64.urlsafe_b64decode(encrypted_value.encode("utf-8"))
             decrypted = self._fernet.decrypt(encrypted_bytes)
-            return decrypted.decode('utf-8')
+            return decrypted.decode("utf-8")
         except Exception as e:
             logger.error(f"Failed to decrypt value: {e}")
             raise ValueError(f"Decryption failed: {e}")
@@ -135,7 +135,7 @@ def is_secret_key(key: str) -> bool:
     Returns:
         True if the key should be encrypted, False otherwise
     """
-    secret_patterns = ['_api_key', '_secret', '_token', '_password', '_credential']
+    secret_patterns = ["_api_key", "_secret", "_token", "_password", "_credential"]
     key_lower = key.lower()
     return any(pattern in key_lower for pattern in secret_patterns)
 

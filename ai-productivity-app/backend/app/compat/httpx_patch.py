@@ -16,6 +16,7 @@ import types
 
 try:
     import httpx  # type: ignore
+
     _HAS_REAL_HTTPX = True
 except ModuleNotFoundError:  # pragma: no cover – sandbox only
     _HAS_REAL_HTTPX = False
@@ -33,7 +34,11 @@ except ModuleNotFoundError:  # pragma: no cover – sandbox only
             try:
                 from fastapi.testclient import TestClient  # type: ignore
 
-                app = sys.modules.get("app.main").app if "app.main" in sys.modules else None
+                app = (
+                    sys.modules.get("app.main").app
+                    if "app.main" in sys.modules
+                    else None
+                )
                 return TestClient(app) if app else None
             except Exception:  # pragma: no cover – best effort only
                 return None
@@ -46,7 +51,6 @@ except ModuleNotFoundError:  # pragma: no cover – sandbox only
 
         def get(self, url, **kw):
             return self.request("GET", url, **kw)
-
 
         def __enter__(self):
             return self

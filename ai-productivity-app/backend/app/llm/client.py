@@ -100,8 +100,9 @@ except ModuleNotFoundError:
                 self.messages = types.SimpleNamespace()
                 self.messages.create = lambda **kwargs: types.SimpleNamespace(
                     content=[types.SimpleNamespace(text="Test response")],
-                    usage=types.SimpleNamespace(input_tokens=10, output_tokens=20)
+                    usage=types.SimpleNamespace(input_tokens=10, output_tokens=20),
                 )
+
     else:
         # Production/dev requires real Anthropic SDK
         logger.warning(
@@ -120,8 +121,12 @@ def _handle_rate_limit_error(retry_state):
     """Extract Retry-After header from rate limit errors."""
     if retry_state.outcome and retry_state.outcome.failed:
         exc = retry_state.outcome.exception()
-        if hasattr(exc, '__class__') and exc.__class__.__name__ == 'RateLimitError' and hasattr(exc, 'response'):
-            retry_after = exc.response.headers.get('Retry-After')
+        if (
+            hasattr(exc, "__class__")
+            and exc.__class__.__name__ == "RateLimitError"
+            and hasattr(exc, "response")
+        ):
+            retry_after = exc.response.headers.get("Retry-After")
             if retry_after:
                 try:
                     return float(retry_after)
@@ -150,7 +155,9 @@ def _is_reasoning_model(model_name: str) -> bool:  # noqa: D401 – simple descr
     return ModelService.is_reasoning_model_static(model_name)
 
 
-def _model_requires_responses_api(model_name: str) -> bool:  # noqa: D401 – simple description
+def _model_requires_responses_api(
+    model_name: str,
+) -> bool:  # noqa: D401 – simple description
     """Return **True** when *model_name* must be queried via Azure *Responses API*.
 
     For start-up convenience and to eliminate code duplication we again defer
@@ -164,9 +171,11 @@ def _model_requires_responses_api(model_name: str) -> bool:  # noqa: D401 – si
 
     return ModelService.requires_responses_api_static(model_name)
 
+
 # ---------------------------------------------------------------------------
 # Tool-schema helpers
 # ---------------------------------------------------------------------------
+
 
 def _prepare_tools_for_responses(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Return *tools* list in **flat** schema expected by Azure Responses API.
@@ -202,11 +211,12 @@ def _prepare_tools_for_responses(tools: List[Dict[str, Any]]) -> List[Dict[str, 
                     "name": fn["name"],
                     "description": fn.get("description", ""),
                     "parameters": fn.get("parameters", {}),
-                }
+                },
             }
         )
 
     return flat
+
 
 def _is_responses_api_enabled(model_name: str = None) -> bool:
     """Return *True* when the current configuration selects the Azure
@@ -314,7 +324,10 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             self.use_responses_api = True
         else:
             # Honour model-level requirement when the global flag is *off*
-            self.use_responses_api = _model_requires_responses_api(config.model_id) or config.use_responses_api
+            self.use_responses_api = (
+                _model_requires_responses_api(config.model_id)
+                or config.use_responses_api
+            )
 
         # Underlying OpenAI SDK client – differs for public vs. Azure.
         self.client: Any | None = None
@@ -322,7 +335,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         # TTL Cache for runtime config
         self._config_cache: Dict[str, tuple[Any, datetime]] = {}
         self._cache_ttl = timedelta(seconds=5)
-        
+
         # Default generation parameters
         self.default_temperature: float | None = None
         self.default_max_tokens: int | None = None
@@ -355,26 +368,31 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             logger.debug(f"Failed to load unified config: {e}")
             # Fallback to creating a config from static settings
             from app.schemas.generation import UnifiedModelConfig
+
             # ``settings.llm_model`` is deprecated – rely on *llm_default_model*
             if settings.llm_provider.lower() == "azure":
                 # For Azure, the deployment name is the critical piece of information.
                 # The `llm_default_model` is a generic setting, but `azure_openai_chat_deployment`
                 # is specific and should be preferred.
-                fallback_model = settings.azure_openai_chat_deployment or settings.llm_default_model or "o3"
+                fallback_model = (
+                    settings.azure_openai_chat_deployment
+                    or settings.llm_default_model
+                    or "o3"
+                )
             else:
                 fallback_model = settings.llm_default_model or "o3"
 
             return UnifiedModelConfig(
                 provider=settings.llm_provider,
                 model_id=fallback_model,
-                use_responses_api=_is_responses_api_enabled(fallback_model)
+                use_responses_api=_is_responses_api_enabled(fallback_model),
             )
 
     def _get_runtime_config(self) -> Dict[str, Any]:
         """Get current runtime configuration, falling back to static settings."""
         # Check cache with TTL
-        if 'runtime_config' in self._config_cache:
-            value, timestamp = self._config_cache['runtime_config']
+        if "runtime_config" in self._config_cache:
+            value, timestamp = self._config_cache["runtime_config"]
             if datetime.utcnow() - timestamp < self._cache_ttl:
                 return value
 
@@ -387,7 +405,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 current_config = unified_service.get_current_config()
                 # Convert to legacy format for backward compatibility
                 config = current_config.to_runtime_config()
-                self._config_cache['runtime_config'] = (config, datetime.utcnow())
+                self._config_cache["runtime_config"] = (config, datetime.utcnow())
                 return config
         except Exception as e:
             logger.debug(f"Failed to load config from cache: {e}")
@@ -400,7 +418,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
     def _get_model_info(self, model_id: str) -> Optional[Dict[str, Any]]:
         """Get model information from database."""
-        cache_key = f'model_info_{model_id}'
+        cache_key = f"model_info_{model_id}"
 
         # Check cache
         if cache_key in self._config_cache:
@@ -419,14 +437,20 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 if model_info:
                     # Convert to dict for easier access
                     info_dict = {
-                        'provider': model_info.provider,
-                        'capabilities': model_info.capabilities.model_dump() if model_info.capabilities else {},  # type: ignore[attr-defined]
-                        'cost_per_1k_input': model_info.cost_per_1k_input_tokens,
-                        'cost_per_1k_output': model_info.cost_per_1k_output_tokens,
-                        'max_tokens': model_info.capabilities.max_output_tokens if model_info.capabilities else 4096,  # type: ignore[attr-defined]
-                        'supports_reasoning': getattr(model_info.capabilities, 'supports_reasoning', False),
-                        'supports_streaming': getattr(model_info.capabilities, 'supports_streaming', True),
-                        'supports_functions': getattr(model_info.capabilities, 'supports_functions', True),
+                        "provider": model_info.provider,
+                        "capabilities": model_info.capabilities.model_dump() if model_info.capabilities else {},  # type: ignore[attr-defined]
+                        "cost_per_1k_input": model_info.cost_per_1k_input_tokens,
+                        "cost_per_1k_output": model_info.cost_per_1k_output_tokens,
+                        "max_tokens": model_info.capabilities.max_output_tokens if model_info.capabilities else 4096,  # type: ignore[attr-defined]
+                        "supports_reasoning": getattr(
+                            model_info.capabilities, "supports_reasoning", False
+                        ),
+                        "supports_streaming": getattr(
+                            model_info.capabilities, "supports_streaming", True
+                        ),
+                        "supports_functions": getattr(
+                            model_info.capabilities, "supports_functions", True
+                        ),
                     }
                     self._config_cache[cache_key] = (info_dict, datetime.utcnow())
                     return info_dict
@@ -501,10 +525,10 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             self.default_frequency_penalty = frequency_penalty
         if presence_penalty is not None:
             self.default_presence_penalty = presence_penalty
-            
+
         # Store any additional generation parameters
         self.generation_params = kwargs
-        
+
         # Clear config cache to force reload on next request
         self._config_cache.clear()
 
@@ -513,7 +537,14 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             self.provider,
             self.active_model,
             self.use_responses_api,
-            bool(temperature or max_tokens or top_p or frequency_penalty or presence_penalty or kwargs)
+            bool(
+                temperature
+                or max_tokens
+                or top_p
+                or frequency_penalty
+                or presence_penalty
+                or kwargs
+            ),
         )
 
     # --------------------------------------------------------------
@@ -566,9 +597,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             )
 
         api_key = (
-            settings.anthropic_api_key
-            or os.getenv("ANTHROPIC_API_KEY")
-            or "test-key"
+            settings.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY") or "test-key"
         )
 
         if not api_key or api_key == "test-key":
@@ -582,7 +611,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             "claude-opus-4-20250514",
             "claude-sonnet-4-20250514",
             "claude-3-5-sonnet-20241022",  # Claude Sonnet 3.7
-            "claude-3-5-sonnet-latest"
+            "claude-3-5-sonnet-latest",
         }
         return model.lower() in {m.lower() for m in thinking_models}
 
@@ -595,7 +624,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         stream: bool = False,
         tools: Any | None = None,
         tool_choice: str | Dict[str, Any] | None = None,
-        thinking: Dict[str, Any] | None = None
+        thinking: Dict[str, Any] | None = None,
     ) -> Any:
         """Handle Anthropic Claude API requests."""
 
@@ -618,7 +647,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             "messages": filtered_messages,
             "max_tokens": max_tokens or 1024,
             "temperature": temperature,
-            "stream": stream
+            "stream": stream,
         }
 
         # Add system message if present
@@ -630,11 +659,15 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # Claude extended thinking configuration
             thinking_config = {
                 "type": "enabled",
-                "budget_tokens": thinking.get("budget_tokens", settings.claude_thinking_budget_tokens)
+                "budget_tokens": thinking.get(
+                    "budget_tokens", settings.claude_thinking_budget_tokens
+                ),
             }
             request_params["thinking"] = thinking_config
 
-            logger.debug(f"Enabled Claude thinking with budget: {thinking_config['budget_tokens']} tokens")
+            logger.debug(
+                f"Enabled Claude thinking with budget: {thinking_config['budget_tokens']} tokens"
+            )
 
         # Handle tools if provided
         if tools:
@@ -643,11 +676,13 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 if "function" in tool:
                     # Convert OpenAI format to Anthropic format
                     func = tool["function"]
-                    anthropic_tools.append({
-                        "name": func["name"],
-                        "description": func.get("description", ""),
-                        "input_schema": func.get("parameters", {})
-                    })
+                    anthropic_tools.append(
+                        {
+                            "name": func["name"],
+                            "description": func.get("description", ""),
+                            "input_schema": func.get("parameters", {}),
+                        }
+                    )
                 else:
                     # Already in Anthropic format or legacy format
                     anthropic_tools.append(tool)
@@ -657,8 +692,12 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         # Log API request for debugging
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("=== ANTHROPIC API REQUEST ===")
-            logger.debug(f"Model: {model}, Temperature: {temperature}, Stream: {stream}")
-            logger.debug(f"Messages: {len(filtered_messages)} total, Tools: {tools is not None}")
+            logger.debug(
+                f"Model: {model}, Temperature: {temperature}, Stream: {stream}"
+            )
+            logger.debug(
+                f"Messages: {len(filtered_messages)} total, Tools: {tools is not None}"
+            )
 
         try:
             response = await self.client.messages.create(**request_params)
@@ -672,10 +711,14 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # Record usage for cost tracking (Anthropic)
             if track_usage and cost_tracking_service and usage_event_data:
                 await self._record_usage_metrics(
-                    cost_tracking_service, usage_event_data, response, 
-                    active_model, self.provider, start_time
+                    cost_tracking_service,
+                    usage_event_data,
+                    response,
+                    active_model,
+                    self.provider,
+                    start_time,
                 )
-            
+
             if stream:
                 return self._stream_anthropic_response(response)
             return response
@@ -701,23 +744,31 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     # Handle content block
                     for content_block in chunk.content:
                         if hasattr(content_block, "text"):
-                            logger.debug(f"Yielding content text: {content_block.text[:50]}...")
+                            logger.debug(
+                                f"Yielding content text: {content_block.text[:50]}..."
+                            )
                             yield content_block.text
         except Exception as e:
             logger.error(f"Error in _stream_anthropic_response: {e}", exc_info=True)
 
-        logger.debug(f"Anthropic stream processing complete, processed {chunk_count} chunks")
+        logger.debug(
+            f"Anthropic stream processing complete, processed {chunk_count} chunks"
+        )
 
     # ---------------------------------------------------------------------
     # Public helpers
     # ---------------------------------------------------------------------
 
     @retry(
-        stop=stop_after_attempt(getattr(settings, 'llm_max_retries', 3)),
-        wait=wait_exponential(multiplier=1, min=4, max=getattr(settings, 'llm_retry_max_wait', 60)),
-        retry=retry_if_exception_type((Exception,)),  # Retry all exceptions initially, we'll filter in the method
+        stop=stop_after_attempt(getattr(settings, "llm_max_retries", 3)),
+        wait=wait_exponential(
+            multiplier=1, min=4, max=getattr(settings, "llm_retry_max_wait", 60)
+        ),
+        retry=retry_if_exception_type(
+            (Exception,)
+        ),  # Retry all exceptions initially, we'll filter in the method
         before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True
+        reraise=True,
     )
     async def complete(  # noqa: PLR0913 – long but mirrors OpenAI params
         self,
@@ -742,7 +793,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         # Cost tracking parameters
         user_id: Optional[int] = None,  # User ID for cost tracking
         session_id: Optional[str] = None,  # Session ID for cost tracking
-        feature: Optional[str] = None,  # Feature name for cost tracking (e.g., "chat", "search")
+        feature: Optional[
+            str
+        ] = None,  # Feature name for cost tracking (e.g., "chat", "search")
         track_usage: bool = True,  # Whether to track usage metrics
     ) -> Any | AsyncIterator[str]:  # Returns AsyncIterator[str] when stream=True
         """Wrapper around the underlying Chat Completions / Responses API with automatic retry.
@@ -767,26 +820,26 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         start_time = time.time()
         request_id = f"req_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{id(self)}"
-        
+
         # Initialize cost tracking variables
         cost_tracking_service = None
         usage_event_data = None
-        
+
         if track_usage:
             try:
                 from app.services.cost_tracking import CostTrackingService, UsageEvent
                 from app.database import SessionLocal
-                
+
                 # Get database session for cost tracking
                 db = SessionLocal()
                 cost_tracking_service = CostTrackingService(db)
-                
+
                 # Prepare usage event data (will be completed after API call)
                 usage_event_data = {
                     "user_id": user_id,
                     "session_id": session_id,
                     "feature": feature,
-                    "timestamp": datetime.utcnow().replace(tzinfo=timezone.utc)
+                    "timestamp": datetime.utcnow().replace(tzinfo=timezone.utc),
                 }
             except Exception as e:
                 logger.warning(f"Failed to initialize cost tracking: {e}")
@@ -796,7 +849,10 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # Log request start
             logger.info(
                 "LLM request %s started - Provider: %s, Model: %s, Stream: %s",
-                request_id, self.provider, model or self.active_model, stream
+                request_id,
+                self.provider,
+                model or self.active_model,
+                stream,
             )
 
             # Check for retry-stopping conditions before attempting the call
@@ -807,7 +863,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             runtime_config = self._get_runtime_config()
 
             # Apply runtime configuration with parameter precedence
-            active_model = model or runtime_config.get("chat_model") or self.active_model
+            active_model = (
+                model or runtime_config.get("chat_model") or self.active_model
+            )
             active_temperature = (
                 temperature
                 if temperature is not None
@@ -835,7 +893,8 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # Auto-reconfigure if model/provider changed
             if (
                 active_model != self.active_model
-                or runtime_config.get("provider", self.provider).lower() != self.provider
+                or runtime_config.get("provider", self.provider).lower()
+                != self.provider
             ):
                 await self.reconfigure(
                     provider=runtime_config.get("provider"),
@@ -885,19 +944,25 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
                 thinking_config = None
                 if extended_thinking_enabled and thinking_mode != "off":
-                    budget_tokens: int = int(_cfg("claude_thinking_budget_tokens", 16384))
+                    budget_tokens: int = int(
+                        _cfg("claude_thinking_budget_tokens", 16384)
+                    )
 
                     # Adjust budget heuristically when *adaptive* mode is on.
                     if _cfg("claude_adaptive_thinking_budget", True):
-                        message_length = sum(len(str(msg.get("content", ""))) for msg in messages)
+                        message_length = sum(
+                            len(str(msg.get("content", ""))) for msg in messages
+                        )
 
                         if message_length > 2000:  # Large prompt → complex task
                             budget_tokens = min(
-                                _cfg("claude_max_thinking_budget", 65536), budget_tokens * 2
+                                _cfg("claude_max_thinking_budget", 65536),
+                                budget_tokens * 2,
                             )
                         elif tools:  # Tool usage hints at complexity as well
                             budget_tokens = min(
-                                _cfg("claude_max_thinking_budget", 65536), int(budget_tokens * 1.5)
+                                _cfg("claude_max_thinking_budget", 65536),
+                                int(budget_tokens * 1.5),
                             )
 
                     thinking_config = {
@@ -908,7 +973,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                         # Add maximum budget limit
                         "max_budget_tokens": _cfg("claude_max_thinking_budget", 65536),
                         # Add adaptive budget flag
-                        "adaptive_budget": _cfg("claude_adaptive_thinking_budget", True)
+                        "adaptive_budget": _cfg(
+                            "claude_adaptive_thinking_budget", True
+                        ),
                     }
 
                 return await self._handle_anthropic_request(
@@ -919,7 +986,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     stream=stream,
                     tools=tools,
                     tool_choice=tool_choice,
-                    thinking=thinking_config
+                    thinking=thinking_config,
                 )
 
             elif self.use_responses_api:
@@ -1215,10 +1282,14 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 # Record usage for cost tracking (Azure Responses API)
                 if track_usage and cost_tracking_service and usage_event_data:
                     await self._record_usage_metrics(
-                        cost_tracking_service, usage_event_data, response, 
-                        active_model, self.provider, start_time
+                        cost_tracking_service,
+                        usage_event_data,
+                        response,
+                        active_model,
+                        self.provider,
+                        start_time,
                     )
-                
+
                 # Handle streaming response - check actual stream value used in request
                 actual_stream = responses_kwargs.get("stream", False)
                 if actual_stream:
@@ -1339,10 +1410,14 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 # Record usage for cost tracking (Chat Completions API)
                 if track_usage and cost_tracking_service and usage_event_data:
                     await self._record_usage_metrics(
-                        cost_tracking_service, usage_event_data, response, 
-                        active_model, self.provider, start_time
+                        cost_tracking_service,
+                        usage_event_data,
+                        response,
+                        active_model,
+                        self.provider,
+                        start_time,
                     )
-                
+
                 # Handle streaming response - check actual stream value used in request
                 actual_stream = clean_kwargs.get("stream", False)
                 if actual_stream:
@@ -1388,42 +1463,65 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             is_retryable = False
             exc_class_name = exc.__class__.__name__
 
-            if exc_class_name in ['RateLimitError', 'APITimeoutError']:
+            if exc_class_name in ["RateLimitError", "APITimeoutError"]:
                 # These are retryable
                 is_retryable = True
                 logger.warning(
                     "LLM request %s failed with retryable error after %.2fs: %s",
-                    request_id, duration, exc
+                    request_id,
+                    duration,
+                    exc,
                 )
-            elif exc_class_name in ['AuthenticationError', 'BadRequestError']:
+            elif exc_class_name in ["AuthenticationError", "BadRequestError"]:
                 # These should NOT be retried
                 logger.error(
                     "LLM request %s failed with non-retryable error after %.2fs: %s",
-                    request_id, duration, exc
+                    request_id,
+                    duration,
+                    exc,
                 )
-            elif exc_class_name == 'RetryError':
+            elif exc_class_name == "RetryError":
                 # Max retries exceeded
                 logger.error(
                     "LLM request %s failed after max retries and %.2fs: %s",
-                    request_id, duration, str(exc)
+                    request_id,
+                    duration,
+                    str(exc),
                 )
             else:
                 # For unknown errors, log and decide based on error message
                 error_msg = str(exc).lower()
-                if any(keyword in error_msg for keyword in ['timeout', 'rate limit', 'too many requests', 'service unavailable']):
+                if any(
+                    keyword in error_msg
+                    for keyword in [
+                        "timeout",
+                        "rate limit",
+                        "too many requests",
+                        "service unavailable",
+                    ]
+                ):
                     is_retryable = True
                     logger.warning(
                         "LLM request %s failed with possibly retryable error after %.2fs: %s",
-                        request_id, duration, exc
+                        request_id,
+                        duration,
+                        exc,
                     )
                 else:
                     logger.error(
                         "LLM request %s failed with unexpected error after %.2fs: %s",
-                        request_id, duration, exc, exc_info=True
+                        request_id,
+                        duration,
+                        exc,
+                        exc_info=True,
                     )
 
             # If this was a successful completion, log it
-            if not is_retryable and exc_class_name not in ['RateLimitError', 'APITimeoutError', 'RetryError']:
+            if not is_retryable and exc_class_name not in [
+                "RateLimitError",
+                "APITimeoutError",
+                "RetryError",
+            ]:
                 # This might be a successful non-retryable path, or we're not retrying
                 pass
 
@@ -1433,78 +1531,83 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         finally:
             # Clean up database session for cost tracking
-            if track_usage and cost_tracking_service and hasattr(cost_tracking_service, 'db'):
+            if (
+                track_usage
+                and cost_tracking_service
+                and hasattr(cost_tracking_service, "db")
+            ):
                 try:
                     cost_tracking_service.db.close()
                 except Exception as e:
                     logger.warning(f"Error closing cost tracking database session: {e}")
-            
+
             # Log successful completion if we reach here without exception
-            if 'start_time' in locals():
+            if "start_time" in locals():
                 duration = time.time() - start_time
                 logger.info(
                     "LLM request %s completed successfully in %.2fs",
-                    request_id, duration
+                    request_id,
+                    duration,
                 )
 
     # ------------------------------------------------------------------
     # Cost tracking helpers
     # ------------------------------------------------------------------
-    
+
     async def _record_usage_metrics(
-        self, 
-        cost_tracking_service, 
-        usage_event_data: Dict[str, Any], 
-        response: Any, 
-        model_id: str, 
-        provider: str, 
-        start_time: float
+        self,
+        cost_tracking_service,
+        usage_event_data: Dict[str, Any],
+        response: Any,
+        model_id: str,
+        provider: str,
+        start_time: float,
     ):
         """Record usage metrics for cost tracking."""
         try:
             from app.services.cost_tracking import UsageEvent
-            
+
             # Calculate response time
             response_time_ms = (time.time() - start_time) * 1000
-            
+
             # Extract token usage from response
             input_tokens = 0
             output_tokens = 0
-            
-            if hasattr(response, 'usage'):
+
+            if hasattr(response, "usage"):
                 usage = response.usage
-                if hasattr(usage, 'input_tokens'):
+                if hasattr(usage, "input_tokens"):
                     # Anthropic format
                     input_tokens = usage.input_tokens
                     output_tokens = usage.output_tokens
-                elif hasattr(usage, 'prompt_tokens'):
+                elif hasattr(usage, "prompt_tokens"):
                     # OpenAI format
                     input_tokens = usage.prompt_tokens
                     output_tokens = usage.completion_tokens
-                elif hasattr(usage, 'total_tokens'):
+                elif hasattr(usage, "total_tokens"):
                     # Fallback - estimate input/output split
                     total_tokens = usage.total_tokens
                     input_tokens = int(total_tokens * 0.7)  # Rough estimate
                     output_tokens = total_tokens - input_tokens
-            
+
             # Handle Azure Responses API usage format
-            elif hasattr(response, 'output') and response.output:
+            elif hasattr(response, "output") and response.output:
                 # Try to extract from output items
                 for output_item in response.output:
-                    if hasattr(output_item, 'usage'):
+                    if hasattr(output_item, "usage"):
                         usage = output_item.usage
-                        if hasattr(usage, 'input_tokens'):
+                        if hasattr(usage, "input_tokens"):
                             input_tokens += usage.input_tokens
                             output_tokens += usage.output_tokens
-                        elif hasattr(usage, 'prompt_tokens'):
+                        elif hasattr(usage, "prompt_tokens"):
                             input_tokens += usage.prompt_tokens
                             output_tokens += usage.completion_tokens
-            
+
             # Skip recording if no token usage found
             if input_tokens == 0 and output_tokens == 0:
                 logger.debug("No token usage found in response, skipping cost tracking")
                 return
-            
+
             # Create usage event
             usage_event = UsageEvent(
                 model_id=model_id,
@@ -1513,16 +1616,16 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 output_tokens=output_tokens,
                 response_time_ms=response_time_ms,
                 success=True,
-                **usage_event_data
+                **usage_event_data,
             )
-            
+
             # Record the usage
             cost_calc = await cost_tracking_service.record_usage(usage_event)
-            
+
             logger.debug(
                 f"Recorded usage: {model_id} - {input_tokens}/{output_tokens} tokens - ${cost_calc.total_cost}"
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to record usage metrics: {e}", exc_info=True)
 

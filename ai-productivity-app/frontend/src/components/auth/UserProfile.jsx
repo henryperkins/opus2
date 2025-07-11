@@ -1,44 +1,44 @@
-import { useState } from 'react';
-import { useAuth } from '../../hooks/useAuth';
+import { useState } from "react";
+import { useAuth } from "../../hooks/useAuth";
 
 function UserProfile() {
   const { user, updateProfile, logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    username: user?.username || '',
-    email: user?.email || ''
+    username: user?.username || "",
+    email: user?.email || "",
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const handleEdit = () => {
     setIsEditing(true);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
   };
 
   const handleCancel = () => {
     setIsEditing(false);
     setFormData({
-      username: user?.username || '',
-      email: user?.email || ''
+      username: user?.username || "",
+      email: user?.email || "",
     });
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       await updateProfile(formData);
-      setSuccess('Profile updated successfully!');
+      setSuccess("Profile updated successfully!");
       setIsEditing(false);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Profile update failed');
+      setError(err.response?.data?.detail || "Profile update failed");
     } finally {
       setLoading(false);
     }
@@ -47,7 +47,7 @@ function UserProfile() {
   const handleChange = (e) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 
@@ -59,87 +59,102 @@ function UserProfile() {
     <div className="px-4 sm:px-6 lg:px-8 py-8">
       <div className="max-w-2xl mx-auto">
         <div className="bg-white shadow rounded-lg p-6">
-      <div className="profile-header">
-        <h2>User Profile</h2>
-        {!isEditing && (
-          <button onClick={handleEdit} className="edit-button">
-            Edit Profile
-          </button>
-        )}
-      </div>
-
-      {isEditing ? (
-        <form onSubmit={handleSubmit} className="profile-form">
-          <div className="form-group">
-            <label htmlFor="username">Username</label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              required
-              disabled={loading}
-            />
+          <div className="profile-header">
+            <h2>User Profile</h2>
+            {!isEditing && (
+              <button onClick={handleEdit} className="edit-button">
+                Edit Profile
+              </button>
+            )}
           </div>
 
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              disabled={loading}
-            />
-          </div>
+          {isEditing ? (
+            <form onSubmit={handleSubmit} className="profile-form">
+              <div className="form-group">
+                <label htmlFor="username">Username</label>
+                <input
+                  type="text"
+                  id="username"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  required
+                  disabled={loading}
+                />
+              </div>
 
-          {error && <div className="error-message">{error}</div>}
-          {success && <div className="success-message">{success}</div>}
+              <div className="form-group">
+                <label htmlFor="email">Email</label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  disabled={loading}
+                />
+              </div>
 
-          <div className="form-actions">
-            <button type="submit" disabled={loading} className="save-button">
-              {loading ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button type="button" onClick={handleCancel} className="cancel-button">
-              Cancel
-            </button>
-          </div>
-        </form>
-      ) : (
-        <div className="profile-info">
-          <div className="info-group">
-            <label>Username:</label>
-            <span>{user.username}</span>
-          </div>
+              {error && <div className="error-message">{error}</div>}
+              {success && <div className="success-message">{success}</div>}
 
-          <div className="info-group">
-            <label>Email:</label>
-            <span>{user.email}</span>
-          </div>
+              <div className="form-actions">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="save-button"
+                >
+                  {loading ? "Saving..." : "Save Changes"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="cancel-button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="profile-info">
+              <div className="info-group">
+                <label>Username:</label>
+                <span>{user.username}</span>
+              </div>
 
-          <div className="info-group">
-            <label>Member Since:</label>
-            <span>
-              {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}
-            </span>
-          </div>
+              <div className="info-group">
+                <label>Email:</label>
+                <span>{user.email}</span>
+              </div>
 
-          <div className="info-group">
-            <label>Last Login:</label>
-            <span>
-              {user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}
-            </span>
-          </div>
+              <div className="info-group">
+                <label>Member Since:</label>
+                <span>
+                  {user.created_at
+                    ? new Date(user.created_at).toLocaleDateString()
+                    : "Unknown"}
+                </span>
+              </div>
 
-          {success && <div className="success-message">{success}</div>}
-        </div>
-      )}
+              <div className="info-group">
+                <label>Last Login:</label>
+                <span>
+                  {user.last_login
+                    ? new Date(user.last_login).toLocaleString()
+                    : "Never"}
+                </span>
+              </div>
+
+              {success && <div className="success-message">{success}</div>}
+            </div>
+          )}
 
           <div className="profile-actions mt-6">
-            <button onClick={logout} className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+            <button
+              onClick={logout}
+              className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+            >
               Logout
             </button>
           </div>

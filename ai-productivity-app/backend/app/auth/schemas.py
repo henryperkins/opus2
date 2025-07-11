@@ -3,6 +3,7 @@ Purpose: Pydantic schemas for authentication workflows (login, registration,
 token response, user serialization, password reset).  Kept concise (<150 LOC)
 as specified in Phase 2 plan.
 """
+
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, validator
@@ -34,7 +35,6 @@ class UserLogin(BaseModel):
     # is present so that downstream code can continue to rely on the single
     # canonical attribute.
     # ------------------------------------------------------------------
-
 
     # FastAPI (and our stubbed test runtime) rely on Pydantic **v2**.  The
     # recommended way to mutate raw input before field validation is a
@@ -83,7 +83,7 @@ class UserRegister(BaseModel):
     invite_code: str | None = Field(
         None,
         description="Invite code required if registration is invite-only",
-        examples=["INVITECODE"]
+        examples=["INVITECODE"],
     )
 
     class Config:
@@ -92,7 +92,7 @@ class UserRegister(BaseModel):
                 "username": "alice",
                 "email": "alice@example.com",
                 "password": "hunter2",
-                "invite_code": "INVITECODE"
+                "invite_code": "INVITECODE",
             }
         }
 
@@ -175,7 +175,9 @@ class UserUpdate(BaseModel):
         examples=["alice"],
     )
     email: EmailStr | None = Field(
-        None, description="New email address (must be unique)", examples=["alice@example.com"]
+        None,
+        description="New email address (must be unique)",
+        examples=["alice@example.com"],
     )
     password: str | None = Field(
         None,
@@ -205,7 +207,9 @@ class UserUpdate(BaseModel):
 
     @classmethod
     def ensure_non_empty(cls, values):  # noqa: D401
-        if not any(values.get(f) is not None for f in ("username", "email", "password")):
+        if not any(
+            values.get(f) is not None for f in ("username", "email", "password")
+        ):
             raise ValueError("At least one field must be provided")
         return values
 
@@ -222,14 +226,18 @@ class UserUpdate(BaseModel):
     def __init__(self, **data):  # noqa: D401
         super().__init__(**data)
         if not any(
-            getattr(self, field) is not None for field in ("username", "email", "password")
+            getattr(self, field) is not None
+            for field in ("username", "email", "password")
         ):
             raise ValueError("At least one field must be provided")
 
 
 class PreferencesUpdate(BaseModel):
     """Partial update for user preferences."""
-    quality_settings: dict | None = Field(None, description="Quality settings for model responses")
+
+    quality_settings: dict | None = Field(
+        None, description="Quality settings for model responses"
+    )
 
 
 # --------------------------------------------------------------------------- #

@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { Component } from "react";
 
 /**
  * A comprehensive error boundary that catches runtime errors and provides
@@ -11,8 +11,8 @@ class ErrorBoundary extends Component {
       hasError: false,
       error: null,
       errorInfo: null,
-      errorType: 'generic',
-      retryCount: 0
+      errorType: "generic",
+      retryCount: 0,
     };
 
     // Bind methods to ensure proper 'this' context
@@ -22,7 +22,7 @@ class ErrorBoundary extends Component {
     // Subscribe to global error handler (added in utils)
     // We defer the dynamic import to avoid circular dep when this component
     // is used before the handler bundle is evaluated.
-    import('../../utils/globalErrorHandler')
+    import("../../utils/globalErrorHandler")
       .then(({ globalErrorHandler }) => {
         this._unsubscribe = globalErrorHandler.subscribe((errorInfo) => {
           this.setState({
@@ -41,29 +41,41 @@ class ErrorBoundary extends Component {
   }
 
   _categorize(errorInfo) {
-    if (errorInfo.type === 'unhandledRejection') {
-      const msg = errorInfo.error?.message || '';
-      if (msg.includes('WebSocket')) return 'websocket';
-      if (msg.includes('fetch')) return 'network';
-      if (msg.includes('AI')) return 'model';
+    if (errorInfo.type === "unhandledRejection") {
+      const msg = errorInfo.error?.message || "";
+      if (msg.includes("WebSocket")) return "websocket";
+      if (msg.includes("fetch")) return "network";
+      if (msg.includes("AI")) return "model";
     }
-    return 'generic';
+    return "generic";
   }
 
   static getDerivedStateFromError(error) {
     // Categorize error type for better UX
-    let errorType = 'generic';
+    let errorType = "generic";
 
-    if (error?.message?.includes('WebSocket') || error?.message?.includes('connection')) {
-      errorType = 'websocket';
-    } else if (error?.message?.includes('network') || error?.message?.includes('fetch')) {
-      errorType = 'network';
-    } else if (error?.message?.includes('model') || error?.message?.includes('AI')) {
-      errorType = 'model';
-    } else if (error?.message?.includes('stream')) {
-      errorType = 'streaming';
-    } else if (error?.message?.includes('search') || error?.message?.includes('knowledge')) {
-      errorType = 'search';
+    if (
+      error?.message?.includes("WebSocket") ||
+      error?.message?.includes("connection")
+    ) {
+      errorType = "websocket";
+    } else if (
+      error?.message?.includes("network") ||
+      error?.message?.includes("fetch")
+    ) {
+      errorType = "network";
+    } else if (
+      error?.message?.includes("model") ||
+      error?.message?.includes("AI")
+    ) {
+      errorType = "model";
+    } else if (error?.message?.includes("stream")) {
+      errorType = "streaming";
+    } else if (
+      error?.message?.includes("search") ||
+      error?.message?.includes("knowledge")
+    ) {
+      errorType = "search";
     }
 
     // Update state so the next render shows the fallback UI with categorized error type
@@ -74,27 +86,27 @@ class ErrorBoundary extends Component {
     // Store error details for debugging
     this.setState({
       error: error,
-      errorInfo: errorInfo
+      errorInfo: errorInfo,
     });
 
     // Log error to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('ErrorBoundary caught an error:', error, errorInfo);
+    if (process.env.NODE_ENV === "development") {
+      console.error("ErrorBoundary caught an error:", error, errorInfo);
     }
 
     // Log to external error service (e.g., Sentry) in production
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === "production") {
       // TODO: Send to error tracking service
-      console.error('Production error:', error, errorInfo);
+      console.error("Production error:", error, errorInfo);
     }
   }
 
   handleRetry() {
-    this.setState(prevState => ({
+    this.setState((prevState) => ({
       hasError: false,
       error: null,
       errorInfo: null,
-      retryCount: prevState.retryCount + 1
+      retryCount: prevState.retryCount + 1,
     }));
     this.props.onRetry?.();
   }
@@ -104,122 +116,127 @@ class ErrorBoundary extends Component {
     const maxRetries = 3;
 
     switch (errorType) {
-      case 'websocket':
+      case "websocket":
         return {
-          title: 'Connection Lost',
-          description: 'Unable to connect to the chat server. Please check your internet connection.',
-          icon: '🔌',
+          title: "Connection Lost",
+          description:
+            "Unable to connect to the chat server. Please check your internet connection.",
+          icon: "🔌",
           actions: [
             {
-              text: 'Reconnect',
-              variant: 'primary',
+              text: "Reconnect",
+              variant: "primary",
               onClick: this.handleRetry,
-              disabled: retryCount >= maxRetries
+              disabled: retryCount >= maxRetries,
             },
             {
-              text: 'Reload Page',
-              variant: 'secondary',
-              onClick: () => window.location.reload()
-            }
-          ]
+              text: "Reload Page",
+              variant: "secondary",
+              onClick: () => window.location.reload(),
+            },
+          ],
         };
 
-      case 'model':
+      case "model":
         return {
-          title: 'AI Model Error',
-          description: 'There was an issue with the AI model. Try switching to a different model or retry.',
-          icon: '🤖',
+          title: "AI Model Error",
+          description:
+            "There was an issue with the AI model. Try switching to a different model or retry.",
+          icon: "🤖",
           actions: [
             {
-              text: 'Try Again',
-              variant: 'primary',
-              onClick: this.handleRetry
+              text: "Try Again",
+              variant: "primary",
+              onClick: this.handleRetry,
             },
             {
-              text: 'Switch Model',
-              variant: 'secondary',
+              text: "Switch Model",
+              variant: "secondary",
               onClick: () => {
                 // TODO: Trigger model selector
                 this.handleRetry();
-              }
-            }
-          ]
+              },
+            },
+          ],
         };
 
-      case 'streaming':
+      case "streaming":
         return {
-          title: 'Streaming Error',
-          description: 'The AI response was interrupted. You can retry or continue with a new message.',
-          icon: '📡',
+          title: "Streaming Error",
+          description:
+            "The AI response was interrupted. You can retry or continue with a new message.",
+          icon: "📡",
           actions: [
             {
-              text: 'Retry Message',
-              variant: 'primary',
-              onClick: this.handleRetry
+              text: "Retry Message",
+              variant: "primary",
+              onClick: this.handleRetry,
             },
             {
-              text: 'Continue Chat',
-              variant: 'secondary',
-              onClick: this.handleRetry
-            }
-          ]
+              text: "Continue Chat",
+              variant: "secondary",
+              onClick: this.handleRetry,
+            },
+          ],
         };
 
-      case 'search':
+      case "search":
         return {
-          title: 'Search Unavailable',
-          description: 'Knowledge search is currently unavailable. You can still chat without search context.',
-          icon: '🔍',
+          title: "Search Unavailable",
+          description:
+            "Knowledge search is currently unavailable. You can still chat without search context.",
+          icon: "🔍",
           actions: [
             {
-              text: 'Continue Without Search',
-              variant: 'primary',
-              onClick: this.handleRetry
+              text: "Continue Without Search",
+              variant: "primary",
+              onClick: this.handleRetry,
             },
             {
-              text: 'Retry Search',
-              variant: 'secondary',
-              onClick: this.handleRetry
-            }
-          ]
+              text: "Retry Search",
+              variant: "secondary",
+              onClick: this.handleRetry,
+            },
+          ],
         };
 
-      case 'network':
+      case "network":
         return {
-          title: 'Network Error',
-          description: 'Unable to reach the server. Please check your internet connection.',
-          icon: '🌐',
+          title: "Network Error",
+          description:
+            "Unable to reach the server. Please check your internet connection.",
+          icon: "🌐",
           actions: [
             {
-              text: 'Retry',
-              variant: 'primary',
-              onClick: this.handleRetry
+              text: "Retry",
+              variant: "primary",
+              onClick: this.handleRetry,
             },
             {
-              text: 'Work Offline',
-              variant: 'secondary',
-              onClick: this.handleRetry
-            }
-          ]
+              text: "Work Offline",
+              variant: "secondary",
+              onClick: this.handleRetry,
+            },
+          ],
         };
 
       default:
         return {
-          title: 'Something went wrong',
-          description: error?.message || 'An unexpected error occurred',
-          icon: '⚠️',
+          title: "Something went wrong",
+          description: error?.message || "An unexpected error occurred",
+          icon: "⚠️",
           actions: [
             {
-              text: 'Try Again',
-              variant: 'primary',
-              onClick: this.handleRetry
+              text: "Try Again",
+              variant: "primary",
+              onClick: this.handleRetry,
             },
             {
-              text: 'Reload Page',
-              variant: 'secondary',
-              onClick: () => window.location.reload()
-            }
-          ]
+              text: "Reload Page",
+              variant: "secondary",
+              onClick: () => window.location.reload(),
+            },
+          ],
         };
     }
   }
@@ -252,9 +269,7 @@ class ErrorBoundary extends Component {
               {errorContent.title}
             </h1>
 
-            <p className="text-gray-600 mb-6">
-              {errorContent.description}
-            </p>
+            <p className="text-gray-600 mb-6">{errorContent.description}</p>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               {errorContent.actions.map((action, index) => (
@@ -263,9 +278,9 @@ class ErrorBoundary extends Component {
                   onClick={action.onClick}
                   disabled={action.disabled}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    action.variant === 'primary'
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500'
-                      : 'bg-gray-200 hover:bg-gray-300 text-gray-800 focus:ring-gray-500'
+                    action.variant === "primary"
+                      ? "bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500"
+                      : "bg-gray-200 hover:bg-gray-300 text-gray-800 focus:ring-gray-500"
                   }`}
                 >
                   {action.text}
@@ -287,13 +302,14 @@ class ErrorBoundary extends Component {
               ← Back to Home
             </a>
 
-            {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+            {process.env.NODE_ENV === "development" && this.state.errorInfo && (
               <details className="mt-6 text-left">
                 <summary className="cursor-pointer text-sm text-gray-600 font-medium">
                   Error Details (Development Only)
                 </summary>
                 <pre className="mt-2 p-4 bg-gray-100 text-xs overflow-auto rounded text-left max-h-40">
-                  {this.state.error && JSON.stringify(this.state.error, null, 2)}
+                  {this.state.error &&
+                    JSON.stringify(this.state.error, null, 2)}
                   <br />
                   {this.state.errorInfo && this.state.errorInfo.componentStack}
                 </pre>

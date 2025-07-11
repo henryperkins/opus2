@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { ChevronUp, ChevronDown, X, GripHorizontal } from 'lucide-react';
-import useMediaQuery from '../../hooks/useMediaQuery';
+import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { ChevronUp, ChevronDown, X, GripHorizontal } from "lucide-react";
+import useMediaQuery from "../../hooks/useMediaQuery";
 
 /**
  * Mobile-optimized bottom sheet component for knowledge panels and secondary content
@@ -44,7 +44,7 @@ export default function MobileBottomSheet({
     setStartHeight(sheetHeight);
 
     // Prevent body scroll during drag
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
   };
 
   // Handle drag move
@@ -54,7 +54,10 @@ export default function MobileBottomSheet({
     e.preventDefault();
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const deltaY = startY - clientY;
-    const newHeight = Math.max(0, Math.min(windowSize.height * 0.9, startHeight + deltaY));
+    const newHeight = Math.max(
+      0,
+      Math.min(windowSize.height * 0.9, startHeight + deltaY),
+    );
     const newSnap = newHeight / windowSize.height;
 
     setCurrentSnap(newSnap);
@@ -65,11 +68,13 @@ export default function MobileBottomSheet({
     if (!isDragging || !isMobile) return;
 
     setIsDragging(false);
-    document.body.style.overflow = '';
+    document.body.style.overflow = "";
 
     // Find closest snap point
     const closest = snapPoints.reduce((prev, curr) => {
-      return Math.abs(curr - currentSnap) < Math.abs(prev - currentSnap) ? curr : prev;
+      return Math.abs(curr - currentSnap) < Math.abs(prev - currentSnap)
+        ? curr
+        : prev;
     });
 
     // If dragged below minimum threshold, close the sheet
@@ -89,30 +94,37 @@ export default function MobileBottomSheet({
     const handleTouchMove = (e) => handleDragMove(e);
     const handleTouchEnd = () => handleDragEnd();
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [isDragging, startY, startHeight, currentSnap, snapPoints, windowSize.height]);
+  }, [
+    isDragging,
+    startY,
+    startHeight,
+    currentSnap,
+    snapPoints,
+    windowSize.height,
+  ]);
 
   // Handle keyboard events
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         onClose();
       }
     };
 
     if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
     }
   }, [isOpen, onClose]);
 
@@ -137,8 +149,8 @@ export default function MobileBottomSheet({
         className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl z-50 flex flex-col transition-transform duration-300 transform-gpu md:hidden ${className}`}
         style={{
           height: `${sheetHeight}px`,
-          transform: `translateY(${isOpen ? '0' : '100%'})`,
-          maxHeight: '90vh',
+          transform: `translateY(${isOpen ? "0" : "100%"})`,
+          maxHeight: "90vh",
         }}
         {...props}
       >
@@ -165,8 +177,8 @@ export default function MobileBottomSheet({
                   onClick={() => setCurrentSnap(snap)}
                   className={`w-2 h-2 rounded-full transition-colors ${
                     Math.abs(currentSnap - snap) < 0.05
-                      ? 'bg-brand-primary-600'
-                      : 'bg-gray-300'
+                      ? "bg-brand-primary-600"
+                      : "bg-gray-300"
                   }`}
                   title={`${Math.round(snap * 100)}% height`}
                 />
@@ -187,7 +199,7 @@ export default function MobileBottomSheet({
           ref={contentRef}
           className="scrollable-content touch-safe"
           style={{
-            '--user-select': isDragging ? 'none' : 'auto',
+            "--user-select": isDragging ? "none" : "auto",
           }}
         >
           {children}

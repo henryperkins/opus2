@@ -1,5 +1,5 @@
-import React, { forwardRef } from 'react';
-import PropTypes from 'prop-types';
+import React, { forwardRef } from "react";
+import PropTypes from "prop-types";
 
 /* ----------------------------------------------------------------------------
  * Accessible form input with inline validation error & help text.
@@ -10,7 +10,7 @@ const FormInput = forwardRef(
     {
       id,
       name,
-      type = 'text',
+      type = "text",
       label,
       value,
       onChange,
@@ -21,11 +21,11 @@ const FormInput = forwardRef(
       disabled = false,
       placeholder,
       autoComplete,
-      className = '',
-      inputClassName = '',
+      className = "",
+      inputClassName = "",
       ...rest
     },
-    ref
+    ref,
   ) => {
     const inputId = id || name;
     const errorId = error ? `${inputId}-error` : undefined;
@@ -56,12 +56,14 @@ const FormInput = forwardRef(
           required={required}
           placeholder={placeholder}
           autoComplete={autoComplete}
-          aria-invalid={error ? 'true' : 'false'}
-          aria-describedby={[errorId, helpId].filter(Boolean).join(' ') || undefined}
+          aria-invalid={error ? "true" : "false"}
+          aria-describedby={
+            [errorId, helpId].filter(Boolean).join(" ") || undefined
+          }
           className={`w-full px-3 py-2 border rounded-md shadow-sm transition-colors duration-150 ${
             error
-              ? 'border-error-500 focus:ring-error-500 focus:border-error-500'
-              : 'border-gray-300 dark:border-gray-600 focus:ring-brand-primary-500 focus:border-brand-primary-500'
+              ? "border-error-500 focus:ring-error-500 focus:border-error-500"
+              : "border-gray-300 dark:border-gray-600 focus:ring-brand-primary-500 focus:border-brand-primary-500"
           } bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 disabled:bg-gray-50 dark:disabled:bg-gray-900 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 ${inputClassName}`}
           {...rest}
         />
@@ -79,10 +81,10 @@ const FormInput = forwardRef(
         )}
       </div>
     );
-  }
+  },
 );
 
-FormInput.displayName = 'FormInput';
+FormInput.displayName = "FormInput";
 
 FormInput.propTypes = {
   id: PropTypes.string,

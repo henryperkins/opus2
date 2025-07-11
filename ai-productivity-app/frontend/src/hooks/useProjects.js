@@ -6,16 +6,16 @@
 // as current filters & pagination because those are not remote-authoritative
 // data.
 
-import { useMemo, useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { projectAPI } from '../api/projects';
+import { useMemo, useState, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { projectAPI } from "../api/projects";
 
 // ----------------------
 // Helper keys
 // ----------------------
-const projectsKey = (filters) => ['projects', filters];
-const projectKey = (id) => ['project', id];
-const timelineKey = (id) => ['project', id, 'timeline'];
+const projectsKey = (filters) => ["projects", filters];
+const projectKey = (id) => ["project", id];
+const timelineKey = (id) => ["project", id, "timeline"];
 
 // ----------------------
 // Hook: list + filters
@@ -103,23 +103,21 @@ export function useProjectSearch(initialFilters = {}) {
   const [filters, setFilters] = useState(initialFilters);
   const qc = useQueryClient();
 
-  const {
-    projects,
-    total,
-    loading,
-    error,
-  } = useProjects(filters);
+  const { projects, total, loading, error } = useProjects(filters);
 
   // Imperative search function expected by Sidebar – memoised so that its
   // reference stays *stable* across renders and does not inadvertently cause
   // effects in consuming components to re-run.
-  const search = useCallback((updatedFilters = {}) => {
-    setFilters((prev) => {
-      const merged = { ...prev, ...updatedFilters };
-      qc.invalidateQueries({ queryKey: projectsKey(merged) });
-      return merged;
-    });
-  }, [qc]);
+  const search = useCallback(
+    (updatedFilters = {}) => {
+      setFilters((prev) => {
+        const merged = { ...prev, ...updatedFilters };
+        qc.invalidateQueries({ queryKey: projectsKey(merged) });
+        return merged;
+      });
+    },
+    [qc],
+  );
 
   return {
     projects,
@@ -163,6 +161,6 @@ export function useProjectTimeline(projectId) {
       refresh: () => qc.invalidateQueries({ queryKey: timelineKey(projectId) }),
     }),
     // Include qc to satisfy exhaustive-deps; invalidateQueries reference stable for same qc
-    [timeline, loading, error, addEventMutation.mutateAsync, projectId, qc]
+    [timeline, loading, error, addEventMutation.mutateAsync, projectId, qc],
   );
 }

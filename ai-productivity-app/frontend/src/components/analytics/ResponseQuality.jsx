@@ -1,10 +1,14 @@
 // components/analytics/ResponseQuality.jsx
-import { useState, useMemo } from 'react';
+import { useState, useMemo } from "react";
 import {
-  ThumbsUp, ThumbsDown, MessageSquare,
-  Clock, Zap, AlertCircle
-} from 'lucide-react';
-import PropTypes from 'prop-types';
+  ThumbsUp,
+  ThumbsDown,
+  MessageSquare,
+  Clock,
+  Zap,
+  AlertCircle,
+} from "lucide-react";
+import PropTypes from "prop-types";
 
 // Quality assessment algorithms
 const assessQuality = (content, metadata) => {
@@ -15,23 +19,30 @@ const assessQuality = (content, metadata) => {
   const accuracy = 0.85;
 
   // Helpfulness - based on structure and content
-  const hasStructure = content.includes('•') || content.includes('1.') || content.includes('##');
-  const hasCode = content.includes('```');
+  const hasStructure =
+    content.includes("•") || content.includes("1.") || content.includes("##");
+  const hasCode = content.includes("```");
   const hasExplanation = content.length > 200;
-  const helpfulness = (hasStructure ? 0.3 : 0) + (hasCode ? 0.3 : 0) + (hasExplanation ? 0.4 : 0);
+  const helpfulness =
+    (hasStructure ? 0.3 : 0) + (hasCode ? 0.3 : 0) + (hasExplanation ? 0.4 : 0);
 
   // Clarity - based on readability
-  const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
-  const avgSentenceLength = sentences.reduce((sum, s) => sum + s.split(' ').length, 0) / sentences.length;
-  const clarity = avgSentenceLength < 20 ? 0.9 : avgSentenceLength < 30 ? 0.7 : 0.5;
+  const sentences = content.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+  const avgSentenceLength =
+    sentences.reduce((sum, s) => sum + s.split(" ").length, 0) /
+    sentences.length;
+  const clarity =
+    avgSentenceLength < 20 ? 0.9 : avgSentenceLength < 30 ? 0.7 : 0.5;
 
   // Completeness - based on length and structure
-  const completeness = Math.min(content.length / 500, 1) * 0.7 + (hasStructure ? 0.3 : 0);
+  const completeness =
+    Math.min(content.length / 500, 1) * 0.7 + (hasStructure ? 0.3 : 0);
 
   // Other metrics
   const citations = metadata?.citations?.length || 0;
   const responseTime = metadata?.responseTime || 2000;
-  const tokenCount = metadata?.tokens?.completion || Math.ceil(content.length / 4);
+  const tokenCount =
+    metadata?.tokens?.completion || Math.ceil(content.length / 4);
 
   return {
     relevance,
@@ -41,22 +52,19 @@ const assessQuality = (content, metadata) => {
     completeness,
     citations,
     responseTime,
-    tokenCount
+    tokenCount,
   };
 };
 
-const MetricBar = ({
-  label,
-  value,
-  color = 'blue'
-}) => {
+const MetricBar = ({ label, value, color = "blue" }) => {
   const percentage = Math.round(value * 100);
-  const colorClass = {
-    green: 'bg-green-500',
-    blue: 'bg-blue-500',
-    yellow: 'bg-yellow-500',
-    red: 'bg-red-500'
-  }[color] || 'bg-blue-500';
+  const colorClass =
+    {
+      green: "bg-green-500",
+      blue: "bg-blue-500",
+      yellow: "bg-yellow-500",
+      red: "bg-red-500",
+    }[color] || "bg-blue-500";
 
   return (
     <div className="space-y-1">
@@ -77,21 +85,24 @@ const MetricBar = ({
 MetricBar.propTypes = {
   label: PropTypes.string.isRequired,
   value: PropTypes.number.isRequired,
-  color: PropTypes.string
+  color: PropTypes.string,
 };
 
 export default function ResponseQuality({
   content,
   metadata,
   onFeedback,
-  showDetailedMetrics = false
+  showDetailedMetrics = false,
 }) {
   const [userRating, setUserRating] = useState(null);
   const [showMetrics, setShowMetrics] = useState(false);
-  const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackComment, setFeedbackComment] = useState("");
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 
-  const metrics = useMemo(() => assessQuality(content, metadata), [content, metadata]);
+  const metrics = useMemo(
+    () => assessQuality(content, metadata),
+    [content, metadata],
+  );
 
   const overallScore = useMemo(() => {
     const weights = {
@@ -99,7 +110,7 @@ export default function ResponseQuality({
       accuracy: 0.25,
       helpfulness: 0.2,
       clarity: 0.15,
-      completeness: 0.1
+      completeness: 0.1,
     };
 
     return Object.entries(weights).reduce((score, [key, weight]) => {
@@ -110,13 +121,13 @@ export default function ResponseQuality({
   const handleRating = (rating) => {
     setUserRating(rating);
 
-    if (rating === 'negative') {
+    if (rating === "negative") {
       setShowFeedbackForm(true);
     } else {
       onFeedback?.({
         rating,
         timestamp: new Date(),
-        userId: 'current-user' // Would get from auth context
+        userId: "current-user", // Would get from auth context
       });
     }
   };
@@ -127,24 +138,24 @@ export default function ResponseQuality({
         rating: userRating,
         comment: feedbackComment,
         timestamp: new Date(),
-        userId: 'current-user'
+        userId: "current-user",
       });
       setShowFeedbackForm(false);
-      setFeedbackComment('');
+      setFeedbackComment("");
     }
   };
 
   const getScoreColor = (score) => {
-    if (score >= 0.8) return 'green';
-    if (score >= 0.6) return 'yellow';
-    return 'red';
+    if (score >= 0.8) return "green";
+    if (score >= 0.6) return "yellow";
+    return "red";
   };
 
   const getScoreLabel = (score) => {
-    if (score >= 0.8) return 'Excellent';
-    if (score >= 0.6) return 'Good';
-    if (score >= 0.4) return 'Fair';
-    return 'Poor';
+    if (score >= 0.8) return "Excellent";
+    if (score >= 0.6) return "Good";
+    if (score >= 0.4) return "Fair";
+    return "Poor";
   };
 
   return (
@@ -155,22 +166,22 @@ export default function ResponseQuality({
           {/* Rating Buttons */}
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => handleRating('positive')}
+              onClick={() => handleRating("positive")}
               className={`p-1.5 rounded transition-colors ${
-                userRating === 'positive'
-                  ? 'bg-green-100 text-green-600'
-                  : 'text-gray-400 hover:text-green-600'
+                userRating === "positive"
+                  ? "bg-green-100 text-green-600"
+                  : "text-gray-400 hover:text-green-600"
               }`}
               title="Helpful"
             >
               <ThumbsUp className="w-4 h-4" />
             </button>
             <button
-              onClick={() => handleRating('negative')}
+              onClick={() => handleRating("negative")}
               className={`p-1.5 rounded transition-colors ${
-                userRating === 'negative'
-                  ? 'bg-red-100 text-red-600'
-                  : 'text-gray-400 hover:text-red-600'
+                userRating === "negative"
+                  ? "bg-red-100 text-red-600"
+                  : "text-gray-400 hover:text-red-600"
               }`}
               title="Not helpful"
             >
@@ -180,14 +191,16 @@ export default function ResponseQuality({
 
           {/* Quality Score */}
           <div className="flex items-center space-x-2">
-            <div className={`text-sm font-medium text-${getScoreColor(overallScore)}-600`}>
+            <div
+              className={`text-sm font-medium text-${getScoreColor(overallScore)}-600`}
+            >
               {getScoreLabel(overallScore)}
             </div>
             <button
               onClick={() => setShowMetrics(!showMetrics)}
               className="text-xs text-gray-500 hover:text-gray-700"
             >
-              {showMetrics ? 'Hide' : 'Show'} details
+              {showMetrics ? "Hide" : "Show"} details
             </button>
           </div>
         </div>
@@ -252,7 +265,9 @@ export default function ResponseQuality({
 
           {showDetailedMetrics && (
             <div className="pt-3 border-t space-y-2">
-              <h4 className="text-xs font-medium text-gray-700">Performance Metrics</h4>
+              <h4 className="text-xs font-medium text-gray-700">
+                Performance Metrics
+              </h4>
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-gray-900">
@@ -325,10 +340,10 @@ ResponseQuality.propTypes = {
     model: PropTypes.string,
     responseTime: PropTypes.number,
     tokens: PropTypes.shape({
-      completion: PropTypes.number
+      completion: PropTypes.number,
     }),
-    citations: PropTypes.array
+    citations: PropTypes.array,
   }),
   onFeedback: PropTypes.func,
-  showDetailedMetrics: PropTypes.bool
+  showDetailedMetrics: PropTypes.bool,
 };

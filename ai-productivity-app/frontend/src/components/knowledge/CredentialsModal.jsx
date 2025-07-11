@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { Key, X } from 'lucide-react';
-import PropTypes from 'prop-types';
+import React, { useState } from "react";
+import { Key, X } from "lucide-react";
+import PropTypes from "prop-types";
 
 export default function CredentialsModal({ isOpen, onClose, onSubmit }) {
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState("");
 
   if (!isOpen) {
     return null;
@@ -18,13 +18,20 @@ export default function CredentialsModal({ isOpen, onClose, onSubmit }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-gray-800">Private Repository Credentials</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <h2 className="text-lg font-semibold text-gray-800">
+            Private Repository Credentials
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
         <p className="text-sm text-gray-600 mb-4">
-          Please provide a Personal Access Token (PAT) to clone the private repository. The token will be used only for this import and not stored.
+          Please provide a Personal Access Token (PAT) to clone the private
+          repository. The token will be used only for this import and not
+          stored.
         </p>
         <div className="relative">
           <Key className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

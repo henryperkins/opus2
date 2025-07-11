@@ -1,5 +1,5 @@
 // Sentry initialisation – imported first in main.jsx
-import * as Sentry from '@sentry/react';
+import * as Sentry from "@sentry/react";
 
 if (import.meta.env.PROD && import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({

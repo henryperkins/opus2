@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useChat } from '../../hooks/useChat';
-import { useCodeEditor } from '../../hooks/useCodeEditor';
-import { useUser } from '../../hooks/useAuth';
-import MessageList from './MessageList';
-import EnhancedCommandInput from './EnhancedCommandInput';
-import CodePreview from './CodePreview';
-import MonacoEditor from '@monaco-editor/react';
-import SplitPane from '../common/SplitPane';
-import DependencyGraph from '../knowledge/DependencyGraph';
-import InteractiveCanvas from '../canvas/InteractiveCanvas';
-import ConnectionIndicator from '../common/ConnectionIndicator';
+import React, { useState, useEffect, useRef } from "react";
+import { useChat } from "../../hooks/useChat";
+import { useCodeEditor } from "../../hooks/useCodeEditor";
+import { useUser } from "../../hooks/useAuth";
+import MessageList from "./MessageList";
+import EnhancedCommandInput from "./EnhancedCommandInput";
+import CodePreview from "./CodePreview";
+import MonacoEditor from "@monaco-editor/react";
+import SplitPane from "../common/SplitPane";
+import DependencyGraph from "../knowledge/DependencyGraph";
+import InteractiveCanvas from "../canvas/InteractiveCanvas";
+import ConnectionIndicator from "../common/ConnectionIndicator";
 
 export default function CodeChat({ sessionId, projectId }) {
   const user = useUser();
@@ -20,15 +20,15 @@ export default function CodeChat({ sessionId, projectId }) {
     sendMessage,
     editMessage,
     deleteMessage,
-    sendTypingIndicator
+    sendTypingIndicator,
   } = useChat(sessionId);
 
-  const [editorContent, setEditorContent] = useState('');
-  const [editorLanguage, setEditorLanguage] = useState('python');
+  const [editorContent, setEditorContent] = useState("");
+  const [editorLanguage, setEditorLanguage] = useState("python");
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [showDiff, setShowDiff] = useState(false);
-  const [viewMode, setViewMode] = useState('editor'); // 'editor', 'dependency', 'canvas'
-  const [selectedText, setSelectedText] = useState('');
+  const [viewMode, setViewMode] = useState("editor"); // 'editor', 'dependency', 'canvas'
+  const [selectedText, setSelectedText] = useState("");
   const [currentFile, setCurrentFile] = useState(undefined);
 
   // Extract code from selected message
@@ -42,12 +42,14 @@ export default function CodeChat({ sessionId, projectId }) {
 
   const handleSendMessage = (content, metadata = {}) => {
     // Add current editor content if referenced
-    if (content.includes('@editor') && editorContent) {
-      metadata.code_snippets = [{
-        language: editorLanguage,
-        code: editorContent,
-        file_path: currentFile || 'editor'
-      }];
+    if (content.includes("@editor") && editorContent) {
+      metadata.code_snippets = [
+        {
+          language: editorLanguage,
+          code: editorContent,
+          file_path: currentFile || "editor",
+        },
+      ];
     }
 
     sendMessage(content, metadata);
@@ -68,7 +70,10 @@ export default function CodeChat({ sessionId, projectId }) {
   };
 
   const chatPanel = (
-    <section className="chat-layout border-r border-gray-200" aria-label="Chat messages">
+    <section
+      className="chat-layout border-r border-gray-200"
+      aria-label="Chat messages"
+    >
       <MessageList
         messages={messages}
         onMessageSelect={setSelectedMessage}
@@ -82,12 +87,15 @@ export default function CodeChat({ sessionId, projectId }) {
       {/* Status indicators */}
       {typingUsers.size > 0 && (
         <div className="px-4 py-2 text-sm text-gray-500">
-          {typingUsers.size} user{typingUsers.size > 1 ? 's' : ''} typing...
+          {typingUsers.size} user{typingUsers.size > 1 ? "s" : ""} typing...
         </div>
       )}
 
-      {connectionState !== 'connected' && (
-        <ConnectionIndicator state={connectionState} className="mx-4 mb-2 self-start" />
+      {connectionState !== "connected" && (
+        <ConnectionIndicator
+          state={connectionState}
+          className="mx-4 mb-2 self-start"
+        />
       )}
 
       <EnhancedCommandInput
@@ -104,102 +112,112 @@ export default function CodeChat({ sessionId, projectId }) {
 
   const editorPanel = (
     <section className="panel-layout bg-white" aria-label="Code editor">
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
-          <div className="flex items-center space-x-4">
-            <select
-              value={editorLanguage}
-              onChange={(e) => setEditorLanguage(e.target.value)}
-              className="text-sm border rounded px-2 py-1"
-            >
-              <option value="python">Python</option>
-              <option value="javascript">JavaScript</option>
-              <option value="typescript">TypeScript</option>
-            </select>
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
+        <div className="flex items-center space-x-4">
+          <select
+            value={editorLanguage}
+            onChange={(e) => setEditorLanguage(e.target.value)}
+            className="text-sm border rounded px-2 py-1"
+          >
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+          </select>
 
-            <button
-              onClick={() => setShowDiff(!showDiff)}
-              className={`text-sm px-3 py-1 rounded ${
-                showDiff ? 'bg-blue-500 text-white' : 'bg-white border'
-              }`}
-            >
-              Diff View
-            </button>
-            <select
-              value={viewMode}
-              onChange={(e) => setViewMode(e.target.value)}
-              className="text-sm border rounded px-2 py-1 bg-white"
-            >
-              <option value="editor">Code Editor</option>
-              <option value="dependency">Dependency Graph</option>
-              <option value="canvas">Canvas</option>
-            </select>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => navigator.clipboard.writeText(editorContent)}
-              className="text-sm text-gray-600 hover:text-gray-900"
-              title="Copy code"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </button>
-          </div>
+          <button
+            onClick={() => setShowDiff(!showDiff)}
+            className={`text-sm px-3 py-1 rounded ${
+              showDiff ? "bg-blue-500 text-white" : "bg-white border"
+            }`}
+          >
+            Diff View
+          </button>
+          <select
+            value={viewMode}
+            onChange={(e) => setViewMode(e.target.value)}
+            className="text-sm border rounded px-2 py-1 bg-white"
+          >
+            <option value="editor">Code Editor</option>
+            <option value="dependency">Dependency Graph</option>
+            <option value="canvas">Canvas</option>
+          </select>
         </div>
 
-        <div className="flex-1">
-          {viewMode === 'editor' ? (
-            <MonacoEditor
-              value={editorContent}
-              language={editorLanguage}
-              onChange={setEditorContent}
-              theme="vs-dark"
-              options={{
-                minimap: { enabled: false },
-                fontSize: 14,
-                wordWrap: 'on',
-                automaticLayout: true
-              }}
-            />
-          ) : viewMode === 'dependency' ? (
-            <DependencyGraph projectId={projectId} />
-          ) : (
-            <InteractiveCanvas projectId={projectId} />
-          )}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => navigator.clipboard.writeText(editorContent)}
+            className="text-sm text-gray-600 hover:text-gray-900"
+            title="Copy code"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+          </button>
         </div>
+      </div>
 
-        {/* Code preview for selected message */}
-        {selectedMessage?.code_snippets && (
-          <CodePreview
-            snippets={selectedMessage.code_snippets}
-            onApply={applyCodeSuggestion}
+      <div className="flex-1">
+        {viewMode === "editor" ? (
+          <MonacoEditor
+            value={editorContent}
+            language={editorLanguage}
+            onChange={setEditorContent}
+            theme="vs-dark"
+            options={{
+              minimap: { enabled: false },
+              fontSize: 14,
+              wordWrap: "on",
+              automaticLayout: true,
+            }}
           />
+        ) : viewMode === "dependency" ? (
+          <DependencyGraph projectId={projectId} />
+        ) : (
+          <InteractiveCanvas projectId={projectId} />
         )}
-      </section>
+      </div>
+
+      {/* Code preview for selected message */}
+      {selectedMessage?.code_snippets && (
+        <CodePreview
+          snippets={selectedMessage.code_snippets}
+          onApply={applyCodeSuggestion}
+        />
+      )}
+    </section>
   );
 
   const canvasPanel = (
-      <div className="flex flex-col h-full bg-white">
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
-          <h3 className="text-lg font-medium text-gray-900">Canvas</h3>
-          <button
-            onClick={() => setViewMode('editor')}
-            className="text-sm text-gray-600 hover:text-gray-900"
-          >
-            Close
-          </button>
-        </div>
-        <div className="flex-1 overflow-auto p-4">
-          <DependencyGraph projectId={projectId} />
-        </div>
+    <div className="flex flex-col h-full bg-white">
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
+        <h3 className="text-lg font-medium text-gray-900">Canvas</h3>
+        <button
+          onClick={() => setViewMode("editor")}
+          className="text-sm text-gray-600 hover:text-gray-900"
+        >
+          Close
+        </button>
       </div>
+      <div className="flex-1 overflow-auto p-4">
+        <DependencyGraph projectId={projectId} />
+      </div>
+    </div>
   );
 
   return (
     <SplitPane
       left={chatPanel}
-      right={viewMode === 'canvas' ? canvasPanel : editorPanel}
+      right={viewMode === "canvas" ? canvasPanel : editorPanel}
     />
   );
 }

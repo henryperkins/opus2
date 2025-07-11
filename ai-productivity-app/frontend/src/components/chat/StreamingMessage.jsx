@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Loader, StopCircle, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from "react";
+import { Loader, StopCircle, RefreshCw } from "lucide-react";
 
 export default function StreamingMessage({
   messageId,
@@ -8,9 +8,9 @@ export default function StreamingMessage({
   onStop,
   onRetry,
   showTokenCount = true,
-  model
+  model,
 }) {
-  const [displayedContent, setDisplayedContent] = useState('');
+  const [displayedContent, setDisplayedContent] = useState("");
   const [currentTokens, setCurrentTokens] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const contentRef = useRef(null);
@@ -36,35 +36,35 @@ export default function StreamingMessage({
       // For streaming, append only new content to prevent flicker
       const newContentLength = content.length;
       const currentContentLength = displayedContent.length;
-      
+
       if (newContentLength > currentContentLength) {
         // Append new tokens progressively
         const newTokens = content.substring(currentContentLength);
-        
+
         // Use RAF for smooth updates
         const animate = () => {
-          setDisplayedContent(prev => {
+          setDisplayedContent((prev) => {
             if (prev.length >= content.length) {
               setIsComplete(true);
               return content;
             }
-            
+
             // Append new characters with natural timing
             const chunkSize = Math.min(3, content.length - prev.length);
             const nextContent = content.substring(0, prev.length + chunkSize);
             setCurrentTokens(Math.floor(nextContent.length / 4));
-            
+
             // Schedule next update if more content to display
             if (nextContent.length < content.length) {
               setTimeout(animate, 20);
             } else {
               setIsComplete(true);
             }
-            
+
             return nextContent;
           });
         };
-        
+
         animate();
       }
     }
@@ -78,7 +78,7 @@ export default function StreamingMessage({
   // Token counter - simplified without animation
   const TokenCounter = () => (
     <div className="text-xs text-gray-500 mt-2 fade-in">
-      {currentTokens} tokens {isStreaming && '(streaming...)'}
+      {currentTokens} tokens {isStreaming && "(streaming...)"}
     </div>
   );
 

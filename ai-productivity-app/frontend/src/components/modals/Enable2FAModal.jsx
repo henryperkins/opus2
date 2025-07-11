@@ -1,25 +1,25 @@
-import { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
-import UnifiedModal from '../common/UnifiedModal';
-import { authAPI } from '../../api/auth';
-import { toast } from '../common/Toast';
-import { copyToClipboard } from '../../utils/clipboard';
-import { QrCode, Shield, Copy, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from "react";
+import PropTypes from "prop-types";
+import UnifiedModal from "../common/UnifiedModal";
+import { authAPI } from "../../api/auth";
+import { toast } from "../common/Toast";
+import { copyToClipboard } from "../../utils/clipboard";
+import { QrCode, Shield, Copy, CheckCircle, AlertCircle } from "lucide-react";
 
 const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
   const [step, setStep] = useState(1);
   const [qrCodeData, setQrCodeData] = useState(null);
-  const [secret, setSecret] = useState('');
+  const [secret, setSecret] = useState("");
   const [backupCodes, setBackupCodes] = useState([]);
-  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationCode, setVerificationCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // Step 1: Generate QR code and secret
   const setup2FA = async () => {
     setIsLoading(true);
-    setError('');
-    
+    setError("");
+
     try {
       const response = await authAPI.setup2FA();
       setQrCodeData(response.qr_code);
@@ -27,8 +27,8 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
       setBackupCodes(response.backup_codes);
       setStep(2);
     } catch (error) {
-      console.error('Failed to setup 2FA:', error);
-      setError('Failed to generate 2FA setup. Please try again.');
+      console.error("Failed to setup 2FA:", error);
+      setError("Failed to generate 2FA setup. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -37,37 +37,36 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
   // Step 2: Verify the setup
   const verify2FA = async () => {
     if (!verificationCode || verificationCode.length !== 6) {
-      setError('Please enter a valid 6-digit code');
+      setError("Please enter a valid 6-digit code");
       return;
     }
 
     setIsLoading(true);
-    setError('');
-    
+    setError("");
+
     try {
       await authAPI.verify2FA(verificationCode);
       setStep(3);
-      toast.success('Two-factor authentication enabled successfully!');
+      toast.success("Two-factor authentication enabled successfully!");
     } catch (error) {
-      console.error('Failed to verify 2FA:', error);
+      console.error("Failed to verify 2FA:", error);
       if (error.response?.status === 400) {
-        setError('Invalid verification code. Please try again.');
+        setError("Invalid verification code. Please try again.");
       } else {
-        setError('Verification failed. Please try again.');
+        setError("Verification failed. Please try again.");
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-
   const downloadBackupCodes = () => {
-    const content = backupCodes.join('\n');
-    const blob = new window.Blob([content], { type: 'text/plain' });
+    const content = backupCodes.join("\n");
+    const blob = new window.Blob([content], { type: "text/plain" });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = '2fa-backup-codes.txt';
+    a.download = "2fa-backup-codes.txt";
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -75,10 +74,10 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
   const handleClose = () => {
     setStep(1);
     setQrCodeData(null);
-    setSecret('');
+    setSecret("");
     setBackupCodes([]);
-    setVerificationCode('');
-    setError('');
+    setVerificationCode("");
+    setError("");
     onClose();
   };
 
@@ -98,7 +97,9 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
       <div className="flex items-center justify-center w-16 h-16 mx-auto bg-blue-100 rounded-full">
         <Shield className="w-8 h-8 text-blue-600" />
       </div>
-      <h3 className="text-lg font-medium text-gray-900">Setting up Two-Factor Authentication</h3>
+      <h3 className="text-lg font-medium text-gray-900">
+        Setting up Two-Factor Authentication
+      </h3>
       <p className="text-sm text-gray-500">
         Generating your unique QR code and secret key...
       </p>
@@ -118,7 +119,8 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
       <div className="text-center">
         <h3 className="text-lg font-medium text-gray-900">Scan QR Code</h3>
         <p className="mt-2 text-sm text-gray-500">
-          Use your authenticator app (Google Authenticator, Authy, etc.) to scan this QR code
+          Use your authenticator app (Google Authenticator, Authy, etc.) to scan
+          this QR code
         </p>
       </div>
 
@@ -137,9 +139,13 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
 
       {/* Manual Entry Option */}
       <div className="bg-gray-50 p-4 rounded-lg">
-        <p className="text-sm font-medium text-gray-700 mb-2">Can't scan? Enter this code manually:</p>
+        <p className="text-sm font-medium text-gray-700 mb-2">
+          Can't scan? Enter this code manually:
+        </p>
         <div className="flex items-center justify-between bg-white p-3 border rounded-md">
-          <code className="text-sm font-mono text-gray-800 break-all">{secret}</code>
+          <code className="text-sm font-mono text-gray-800 break-all">
+            {secret}
+          </code>
           <button
             onClick={() => copyToClipboard(secret)}
             className="ml-2 p-1 text-gray-500 hover:text-gray-700"
@@ -159,9 +165,9 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
           type="text"
           value={verificationCode}
           onChange={(e) => {
-            const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+            const value = e.target.value.replace(/\D/g, "").slice(0, 6);
             setVerificationCode(value);
-            setError('');
+            setError("");
           }}
           placeholder="123456"
           className="block w-full px-3 py-2 text-center text-lg font-mono border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -188,7 +194,7 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
           disabled={isLoading || verificationCode.length !== 6}
           className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Verifying...' : 'Verify & Enable'}
+          {isLoading ? "Verifying..." : "Verify & Enable"}
         </button>
       </div>
     </div>
@@ -200,7 +206,9 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
         <div className="flex items-center justify-center w-16 h-16 mx-auto bg-green-100 rounded-full">
           <CheckCircle className="w-8 h-8 text-green-600" />
         </div>
-        <h3 className="mt-4 text-lg font-medium text-gray-900">2FA Enabled Successfully!</h3>
+        <h3 className="mt-4 text-lg font-medium text-gray-900">
+          2FA Enabled Successfully!
+        </h3>
         <p className="mt-2 text-sm text-gray-500">
           Your account is now protected with two-factor authentication
         </p>
@@ -211,10 +219,12 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
         <div className="flex items-start space-x-3">
           <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
           <div className="flex-1">
-            <h4 className="text-sm font-medium text-yellow-800">Save Your Backup Codes</h4>
+            <h4 className="text-sm font-medium text-yellow-800">
+              Save Your Backup Codes
+            </h4>
             <p className="text-sm text-yellow-700 mt-1">
-              These backup codes can be used to access your account if you lose your authenticator device. 
-              Store them in a safe place.
+              These backup codes can be used to access your account if you lose
+              your authenticator device. Store them in a safe place.
             </p>
           </div>
         </div>
@@ -225,7 +235,7 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
           <h4 className="text-sm font-medium text-gray-700">Backup Codes</h4>
           <div className="space-x-2">
             <button
-              onClick={() => copyToClipboard(backupCodes.join('\n'))}
+              onClick={() => copyToClipboard(backupCodes.join("\n"))}
               className="text-xs text-blue-600 hover:text-blue-700"
             >
               Copy All
@@ -240,7 +250,10 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
         </div>
         <div className="grid grid-cols-2 gap-2">
           {backupCodes.map((code, index) => (
-            <div key={index} className="bg-white p-2 border rounded text-center">
+            <div
+              key={index}
+              className="bg-white p-2 border rounded text-center"
+            >
               <code className="text-sm font-mono text-gray-800">{code}</code>
             </div>
           ))}
@@ -259,7 +272,12 @@ const Enable2FAModal = ({ isOpen, onClose, onSuccess }) => {
   );
 
   return (
-    <UnifiedModal isOpen={isOpen} onClose={handleClose} title="Enable Two-Factor Authentication" size="lg">
+    <UnifiedModal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Enable Two-Factor Authentication"
+      size="lg"
+    >
       {step === 1 && renderStep1()}
       {step === 2 && renderStep2()}
       {step === 3 && renderStep3()}

@@ -7,6 +7,7 @@ Provides:
 • verify_api_key           – Placeholder for future LLM integration
 • VectorServiceDep         – Dependency for the vector service
 """
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -117,9 +118,8 @@ def verify_api_key(x_api_key: str = Header(None)) -> None:
 # CSRF protection (Phase 2 feature)
 ###############################################################################
 
-def enforce_csrf(
-    csrf_token: str | None = Header(None, alias="X-CSRF-Token")
-) -> None:
+
+def enforce_csrf(csrf_token: str | None = Header(None, alias="X-CSRF-Token")) -> None:
     """Enforce CSRF protection for state-changing endpoints."""
     if settings.csrf_protection:
         if not csrf_token or csrf_token != settings.csrf_secret:

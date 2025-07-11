@@ -84,7 +84,7 @@ class StructuralSearch:
                     return {
                         "type": "blame",
                         "file": match.group(1).strip(),
-                        "line": int(match.group(2))
+                        "line": int(match.group(2)),
                     }
                 elif pattern_name == "commit":
                     return {"type": "commit", "term": match.group(1).strip()}

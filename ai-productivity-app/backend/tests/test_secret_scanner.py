@@ -13,13 +13,13 @@ def scanner():
 def test_entropy_calculation_detects_random_strings(scanner):
     """A base64-looking high-entropy string should be reported."""
 
-    high_entropy = (
-        "q3VhbmtyanVkZmhramRmZ2hramRocWprbGpoa2Znampr"  # random, > 40 chars
-    )
+    high_entropy = "q3VhbmtyanVkZmhramRmZ2hramRocWprbGpoa2Znampr"  # random, > 40 chars
 
     findings = scanner.scan(high_entropy)
 
-    assert any(f["category"] == "entropy" for f in findings), "High entropy string not detected"
+    assert any(
+        f["category"] == "entropy" for f in findings
+    ), "High entropy string not detected"
 
 
 def test_entropy_low_string_not_flagged(scanner):

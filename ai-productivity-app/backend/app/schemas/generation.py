@@ -254,7 +254,7 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
         """Accept model_id, chat_model, or modelId for backward compatibility."""
         if isinstance(info.data, dict):
             # Check for alternative field names
-            model_id = v or info.data.get('chat_model') or info.data.get('modelId')
+            model_id = v or info.data.get("chat_model") or info.data.get("modelId")
             return model_id
         return v
 
@@ -276,7 +276,7 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
 
         # Flatten for storage - handle both model_id and modelId
         model_id = config.pop("modelId", config.pop("model_id", None))
-        
+
         flat_config = {
             "provider": config.pop("provider"),
             "model_id": model_id,  # Store as model_id in database
@@ -291,14 +291,19 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
         # Map flat structure back to nested
         # Handle legacy chat_model field
         from app.config import settings
+
         default_model = settings.llm_default_model or "o3"
 
         model_id = config.get("model_id") or config.get("chat_model", default_model)
-        
+
         model_config = {
             "provider": config.get("provider", "openai"),
             "model_id": model_id,
-            **{k: v for k, v in config.items() if k not in ["provider", "chat_model", "model_id"]},
+            **{
+                k: v
+                for k, v in config.items()
+                if k not in ["provider", "chat_model", "model_id"]
+            },
         }
 
         return cls(**model_config)
@@ -348,42 +353,46 @@ def validate_config_consistency(
     config: UnifiedModelConfig,
 ) -> tuple[bool, Optional[str]]:
     """Validate configuration consistency across parameters."""
-    
+
     # Try to get model capabilities from database
     try:
         from app.database import SessionLocal
         from app.models.config import ModelConfiguration
-        
+
         with SessionLocal() as db:
-            model_config = db.query(ModelConfiguration).filter_by(model_id=config.model_id).first()
+            model_config = (
+                db.query(ModelConfiguration).filter_by(model_id=config.model_id).first()
+            )
             if model_config and model_config.capabilities:
                 capabilities = model_config.capabilities
-                
+
                 # Check if reasoning model supports temperature
-                if capabilities.get('supports_reasoning', False):
+                if capabilities.get("supports_reasoning", False):
                     if config.temperature is not None and config.temperature != 1.0:
                         return (
                             False,
                             f"Reasoning model {config.model_id} does not support temperature control",
                         )
-                
+
                 # Check if model supports streaming when requested
-                if hasattr(config, 'stream') and config.stream:
-                    if not capabilities.get('supports_streaming', True):
+                if hasattr(config, "stream") and config.stream:
+                    if not capabilities.get("supports_streaming", True):
                         return (
                             False,
                             f"Model {config.model_id} does not support streaming",
                         )
-                
+
                 # Check if model supports functions when tools are provided
                 # This would need to be checked at request time when tools are known
-                
+
     except Exception:
         # Fall back to pattern-based validation if database query fails – reuse
         # the *single* authoritative heuristic from ModelService to avoid
         # scattering hard-coded model lists across the code base.
 
-        from app.services.model_service import ModelService  # local import to prevent circular deps
+        from app.services.model_service import (
+            ModelService,
+        )  # local import to prevent circular deps
 
         if ModelService.is_reasoning_model_static(config.model_id):
             if config.temperature is not None and config.temperature != 1.0:

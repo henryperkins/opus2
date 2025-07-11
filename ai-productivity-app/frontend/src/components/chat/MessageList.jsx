@@ -1,9 +1,15 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { formatDistanceToNow } from 'date-fns';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import CodeSnippet from '../search/CodeSnippet';
-import EnhancedMessageRenderer from './EnhancedMessageRenderer';
-import RAGStatusIndicator from './RAGStatusIndicator';
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
+import { formatDistanceToNow } from "date-fns";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import CodeSnippet from "../search/CodeSnippet";
+import EnhancedMessageRenderer from "./EnhancedMessageRenderer";
+import RAGStatusIndicator from "./RAGStatusIndicator";
 
 // Throttle scroll events to prevent performance issues
 const useThrottledCallback = (callback, delay) => {
@@ -14,14 +20,17 @@ const useThrottledCallback = (callback, delay) => {
     callbackRef.current = callback;
   });
 
-  return useCallback((...args) => {
-    if (throttleRef.current) return;
+  return useCallback(
+    (...args) => {
+      if (throttleRef.current) return;
 
-    throttleRef.current = setTimeout(() => {
-      callbackRef.current(...args);
-      throttleRef.current = null;
-    }, delay);
-  }, [delay]);
+      throttleRef.current = setTimeout(() => {
+        callbackRef.current(...args);
+        throttleRef.current = null;
+      }, delay);
+    },
+    [delay],
+  );
 };
 
 export default function MessageList({
@@ -31,11 +40,11 @@ export default function MessageList({
   onMessageEdit,
   onMessageDelete,
   currentUserId,
-  className = ''
+  className = "",
 }) {
   const parentRef = useRef(null);
   const [editingId, setEditingId] = useState(null);
-  const [editContent, setEditContent] = useState('');
+  const [editContent, setEditContent] = useState("");
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showNewMessageButton, setShowNewMessageButton] = useState(false);
 
@@ -49,7 +58,7 @@ export default function MessageList({
 
   // Auto-scroll detection using IntersectionObserver
   const bottomMarkerRef = useRef(null);
-  
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -57,7 +66,7 @@ export default function MessageList({
         setIsAtBottom(newIsAtBottom);
         setShowNewMessageButton(!newIsAtBottom && messages.length > 0);
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     );
 
     if (bottomMarkerRef.current) {
@@ -72,14 +81,14 @@ export default function MessageList({
     if (isAtBottom && messages.length > 0) {
       const lastItem = rowVirtualizer.getVirtualItems().slice(-1)[0];
       if (lastItem) {
-        rowVirtualizer.scrollToIndex(messages.length - 1, { align: 'end' });
+        rowVirtualizer.scrollToIndex(messages.length - 1, { align: "end" });
       }
     }
   }, [messages.length, isAtBottom, rowVirtualizer]);
 
   const scrollToBottom = useCallback(() => {
     if (messages.length > 0) {
-      rowVirtualizer.scrollToIndex(messages.length - 1, { align: 'end' });
+      rowVirtualizer.scrollToIndex(messages.length - 1, { align: "end" });
     }
   }, [messages.length, rowVirtualizer]);
 
@@ -89,7 +98,7 @@ export default function MessageList({
         ref={parentRef}
         className="h-full overflow-auto"
         style={{
-          contain: 'layout style', // CSS containment for better performance
+          contain: "layout style", // CSS containment for better performance
         }}
         role="log"
         aria-live="polite"
@@ -98,8 +107,8 @@ export default function MessageList({
         <div
           style={{
             height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
+            width: "100%",
+            position: "relative",
           }}
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -108,10 +117,10 @@ export default function MessageList({
               <div
                 key={virtualRow.key}
                 style={{
-                  position: 'absolute',
+                  position: "absolute",
                   top: 0,
                   left: 0,
-                  width: '100%',
+                  width: "100%",
                   height: `${virtualRow.size}px`,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
@@ -128,12 +137,12 @@ export default function MessageList({
                     if (editingId && editContent.trim()) {
                       onMessageEdit(editingId, editContent);
                       setEditingId(null);
-                      setEditContent('');
+                      setEditContent("");
                     }
                   }}
                   onEditCancel={() => {
                     setEditingId(null);
-                    setEditContent('');
+                    setEditContent("");
                   }}
                   onEditContentChange={setEditContent}
                   onMessageSelect={onMessageSelect}
@@ -145,9 +154,9 @@ export default function MessageList({
             );
           })}
         </div>
-        
+
         {/* Bottom marker for intersection observer */}
-        <div ref={bottomMarkerRef} style={{ height: '1px', width: '100%' }} />
+        <div ref={bottomMarkerRef} style={{ height: "1px", width: "100%" }} />
       </div>
 
       {/* New messages indicator */}
@@ -166,135 +175,144 @@ export default function MessageList({
 }
 
 // Memoized individual message component
-const MessageItem = React.memo(({
-  message,
-  isEditing,
-  editContent,
-  onEditStart,
-  onEditSave,
-  onEditCancel,
-  onEditContentChange,
-  onMessageSelect,
-  onCodeSelect,
-  onMessageDelete,
-  currentUserId
-}) => {
-  const handleEdit = useCallback((e) => {
-    e.stopPropagation();
-    onEditStart();
-  }, [onEditStart]);
+const MessageItem = React.memo(
+  ({
+    message,
+    isEditing,
+    editContent,
+    onEditStart,
+    onEditSave,
+    onEditCancel,
+    onEditContentChange,
+    onMessageSelect,
+    onCodeSelect,
+    onMessageDelete,
+    currentUserId,
+  }) => {
+    const handleEdit = useCallback(
+      (e) => {
+        e.stopPropagation();
+        onEditStart();
+      },
+      [onEditStart],
+    );
 
-  const handleDelete = useCallback((e) => {
-    e.stopPropagation();
-    onMessageDelete(message.id);
-  }, [onMessageDelete, message.id]);
+    const handleDelete = useCallback(
+      (e) => {
+        e.stopPropagation();
+        onMessageDelete(message.id);
+      },
+      [onMessageDelete, message.id],
+    );
 
-  const handleMessageClick = useCallback(() => {
-    onMessageSelect?.(message);
-  }, [onMessageSelect, message]);
+    const handleMessageClick = useCallback(() => {
+      onMessageSelect?.(message);
+    }, [onMessageSelect, message]);
 
-  const handleCodeApply = useCallback((code, language) => {
-    onCodeSelect?.({ code, language });
-  }, [onCodeSelect]);
+    const handleCodeApply = useCallback(
+      (code, language) => {
+        onCodeSelect?.({ code, language });
+      },
+      [onCodeSelect],
+    );
 
-  return (
-    <div
-      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-6 px-4 py-2`}
-    >
+    return (
       <div
-        className={`max-w-3xl rounded-lg px-4 py-3 ${
-          message.role === 'user'
-            ? 'bg-blue-600 text-white dark:bg-blue-500'
-            : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
-        } ${onMessageSelect ? 'cursor-pointer hover:opacity-90' : ''}`}
-        onClick={handleMessageClick}
+        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} mb-6 px-4 py-2`}
       >
-        {/* Message header */}
-        <div className="flex items-center justify-between mb-2 text-xs opacity-75">
-          <span>{message.role === 'assistant' ? 'AI Assistant' : 'You'}</span>
-          <div className="flex items-center space-x-2">
-            <span>
-              {formatDistanceToNow(new Date(message.created_at), {
-                addSuffix: true
-              })}
-            </span>
-            {message.is_edited && (
-              <span>(edited)</span>
-            )}
-          </div>
-        </div>
-
-        {/* RAG Status Indicator for assistant messages */}
-        {message.role === 'assistant' && !isEditing && (
-          <div className="mb-3">
-            <RAGStatusIndicator 
-              ragUsed={message.metadata?.ragUsed || false}
-              sourcesCount={message.metadata?.citations?.length || 0}
-              confidence={message.metadata?.ragConfidence}
-              searchQuery={message.metadata?.searchQuery}
-              contextTokensUsed={message.metadata?.contextTokensUsed}
-              status={message.metadata?.ragStatus}
-              errorMessage={message.metadata?.ragError}
-            />
-          </div>
-        )}
-
-        {/* Message content */}
-        {isEditing ? (
-          <div className="space-y-2">
-            <textarea
-              value={editContent}
-              onChange={(e) => onEditContentChange(e.target.value)}
-              className="w-full p-2 rounded border text-gray-900"
-              rows={4}
-              aria-label="Edit message content"
-            />
-            <div className="flex space-x-2">
-              <button
-                onClick={onEditSave}
-                className="px-3 py-1 bg-green-500 text-white rounded text-sm"
-                aria-label="Save changes"
-              >
-                Save
-              </button>
-              <button
-                onClick={onEditCancel}
-                className="px-3 py-1 bg-gray-500 text-white rounded text-sm"
-                aria-label="Cancel editing"
-              >
-                Cancel
-              </button>
+        <div
+          className={`max-w-3xl rounded-lg px-4 py-3 ${
+            message.role === "user"
+              ? "bg-blue-600 text-white dark:bg-blue-500"
+              : "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+          } ${onMessageSelect ? "cursor-pointer hover:opacity-90" : ""}`}
+          onClick={handleMessageClick}
+        >
+          {/* Message header */}
+          <div className="flex items-center justify-between mb-2 text-xs opacity-75">
+            <span>{message.role === "assistant" ? "AI Assistant" : "You"}</span>
+            <div className="flex items-center space-x-2">
+              <span>
+                {formatDistanceToNow(new Date(message.created_at), {
+                  addSuffix: true,
+                })}
+              </span>
+              {message.is_edited && <span>(edited)</span>}
             </div>
           </div>
-        ) : (
-          <EnhancedMessageRenderer
-            message={message}
-            content={message.content}
-            metadata={message.metadata}
-            onCodeApply={handleCodeApply}
-          />
-        )}
 
-        {/* Actions */}
-        {message.user_id === currentUserId && message.role === 'user' && (
-          <div className="mt-2 flex space-x-2">
-            <button
-              onClick={handleEdit}
-              className="text-xs opacity-70 hover:opacity-100"
-              aria-label="Edit message"
-            >
-              Edit
-            </button>
-            <button
-              onClick={handleDelete}
-              className="text-xs opacity-70 hover:opacity-100"
-              aria-label="Delete message"
-            >
-              Delete
-            </button>
-          </div>
-        )}
+          {/* RAG Status Indicator for assistant messages */}
+          {message.role === "assistant" && !isEditing && (
+            <div className="mb-3">
+              <RAGStatusIndicator
+                ragUsed={message.metadata?.ragUsed || false}
+                sourcesCount={message.metadata?.citations?.length || 0}
+                confidence={message.metadata?.ragConfidence}
+                searchQuery={message.metadata?.searchQuery}
+                contextTokensUsed={message.metadata?.contextTokensUsed}
+                status={message.metadata?.ragStatus}
+                errorMessage={message.metadata?.ragError}
+              />
+            </div>
+          )}
+
+          {/* Message content */}
+          {isEditing ? (
+            <div className="space-y-2">
+              <textarea
+                value={editContent}
+                onChange={(e) => onEditContentChange(e.target.value)}
+                className="w-full p-2 rounded border text-gray-900"
+                rows={4}
+                aria-label="Edit message content"
+              />
+              <div className="flex space-x-2">
+                <button
+                  onClick={onEditSave}
+                  className="px-3 py-1 bg-green-500 text-white rounded text-sm"
+                  aria-label="Save changes"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={onEditCancel}
+                  className="px-3 py-1 bg-gray-500 text-white rounded text-sm"
+                  aria-label="Cancel editing"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <EnhancedMessageRenderer
+              message={message}
+              content={message.content}
+              metadata={message.metadata}
+              onCodeApply={handleCodeApply}
+            />
+          )}
+
+          {/* Actions */}
+          {message.user_id === currentUserId && message.role === "user" && (
+            <div className="mt-2 flex space-x-2">
+              <button
+                onClick={handleEdit}
+                className="text-xs opacity-70 hover:opacity-100"
+                aria-label="Edit message"
+              >
+                Edit
+              </button>
+              <button
+                onClick={handleDelete}
+                className="text-xs opacity-70 hover:opacity-100"
+                aria-label="Delete message"
+              >
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);

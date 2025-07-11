@@ -100,7 +100,7 @@ def get_history(
                     SearchHistory.project_ids.contains([project_id])
                     if hasattr(SearchHistory.project_ids, "contains")
                     else text("1 = 1")  # pragma: no cover – fallback path
-                )
+                ),
             )
             .order_by(SearchHistory.created_at.desc())
             .limit(limit)
@@ -124,9 +124,9 @@ def get_history(
             .order_by(SearchHistory.created_at.desc())
             .all()
         )
-        rows = [
-            r for r in all_rows if r.project_ids and project_id in r.project_ids
-        ][:limit]
+        rows = [r for r in all_rows if r.project_ids and project_id in r.project_ids][
+            :limit
+        ]
 
     history_payload = [
         {
@@ -173,7 +173,9 @@ def get_popular(
 
         popular_queries = [row.query for row in rows]
 
-    except Exception as exc:  # noqa: BLE001 – fallback for SQLite / unsupported JSON ops
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 – fallback for SQLite / unsupported JSON ops
         # Roll back the failed transaction so that the subsequent SELECT used
         # for the in-memory aggregation runs on a clean connection.
         db.rollback()
@@ -191,6 +193,9 @@ def get_popular(
             if r.project_ids and project_id in r.project_ids:
                 counts[r.query_text] = counts.get(r.query_text, 0) + 1
 
-        popular_queries = [q for q, _ in sorted(counts.items(), key=lambda t: t[1], reverse=True)[:limit]]
+        popular_queries = [
+            q
+            for q, _ in sorted(counts.items(), key=lambda t: t[1], reverse=True)[:limit]
+        ]
 
     return {"queries": popular_queries}
