@@ -83,9 +83,15 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
     # Seed model catalogue if empty (quick-win – avoids empty dropdown)
     try:
         from app.cli.seed_models import seed_models  # local import to avoid heavy deps
-        import asyncio
 
-        await seed_models()  # noqa: SLF001 – util coroutine
+        # ``seed_models`` is a synchronous helper.  Calling it with *await*
+        # raises a ``TypeError`` at runtime which, in turn, aborts the
+        # seeding routine and leaves the *model_configurations* table empty.
+        # Execute it **directly** to ensure the fixture rows are inserted
+        # during application start-up so that the `/models` endpoint returns
+        # the available catalogue.
+
+        seed_models()  # noqa: SLF001 – util helper
     except Exception as exc:  # pragma: no cover – non-critical
         logger.warning("Model seeding skipped: %s", exc)
 
