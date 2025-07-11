@@ -128,6 +128,11 @@ async def update_configuration(
     All updates are validated for consistency before applying.
     """
     try:
+        # Add use_responses_api to the updates if it's not already there
+        if 'use_responses_api' not in updates and 'model_id' in updates:
+            model_info = service.get_model_info(updates.get('model_id'))
+            if model_info and model_info.capabilities:
+                updates['use_responses_api'] = model_info.capabilities.supports_responses_api
         # Validate and update configuration
         updated_config = service.update_config(
             updates, updated_by=current_user.username
