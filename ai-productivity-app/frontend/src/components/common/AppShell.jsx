@@ -62,6 +62,7 @@ export default function AppShell({ sidebar, children }) {
   if (!showSidebar) {
     // Simple layout for auth pages
     return (
+      <>
       <div className="flex flex-col h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
         <header className="sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-800 shadow-md px-4 py-2">
           <Link to="/" className="flex items-center space-x-2 no-underline">
@@ -77,6 +78,7 @@ export default function AppShell({ sidebar, children }) {
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
       <ConfigConflictDialog />
+      </>
     );
   }
 
