@@ -121,8 +121,37 @@ class Settings(BaseSettings):
         default=1, description="Maximum concurrent embedding requests"
     )
 
-    # Note: Deprecated qdrant_* settings have been removed.
-    # Only pgvector is supported as the vector store backend.
+    # -------------------------------------------------------------------
+    # Qdrant Specific Configuration
+    # -------------------------------------------------------------------
+    # The application supports both *pgvector* and *qdrant* back-ends as
+    # selected by *vector_store_type*.  When ``vector_store_type == "qdrant"``
+    # the :pyfile:`app.services.qdrant_service` accesses the following
+    # settings.  They were previously removed which caused an
+    # ``AttributeError`` on startup.  We restore them here with sensible
+    # defaults suitable for local development while allowing full override
+    # through environment variables.
+    #
+    qdrant_url: str = Field(
+        default="http://localhost:6333",
+        description="Base URL of the Qdrant server",
+    )
+    qdrant_api_key: Optional[str] = Field(
+        default=None,
+        description="API key for Qdrant Cloud or protected instances",
+    )
+    qdrant_timeout: int = Field(
+        default=30,
+        description="Request timeout (seconds) for Qdrant client operations",
+    )
+    qdrant_vector_size: int = Field(
+        default=1536,
+        description="Vector size for embeddings stored in Qdrant",
+    )
+    qdrant_max_workers: int = Field(
+        default=16,
+        description="Maximum worker threads in the Qdrant thread-pool executor",
+    )
 
     # -------------------------------------------------------------------
     # Database
