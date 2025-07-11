@@ -169,26 +169,38 @@ async def get_usage_stats(
         errorRate=None,
         lastUsed=datetime.now(timezone.utc),
     )
+# ---------------------------------------------------------------------------
+# NOTE:
+# If you later need more granular or date-range-filtered usage statistics,
+# expose a *separate* route such as `/usage/history` or `/usage/detailed`
+# instead of redefining `/usage` – this avoids duplicate-route errors and keeps
+# the API surface explicit.
+# ---------------------------------------------------------------------------
 
-
-# ------------------------------------------------------------
-# Stubbed metrics for the Embedding dashboard
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Stubbed embedding metrics models (placeholder until real pipeline ready)
+# ---------------------------------------------------------------------------
 
 
 class EmbeddingPerformance(BaseModel):
+    """Simplified performance KPIs for the embedding worker pipeline."""
+
     avg_latency_ms: float = 123.4
     p90_latency_ms: float = 210.0
     throughput_qps: float = 4.2
 
 
 class EmbeddingStats(BaseModel):
+    """High-level statistics about processed embedding batches."""
+
     total_batches_processed: int
-    success_rate: float
+    success_rate: float  # between 0-1
     avg_tokens_per_doc: float
 
 
 class HealthIndicators(BaseModel):
+    """Binary health indicators for key sub-systems."""
+
     vector_db_connected: bool
     queue_backlog_ok: bool
     last_worker_heartbeat_ok: bool
@@ -205,7 +217,7 @@ async def get_embedding_metrics():
     """Return placeholder embedding metrics so the UI can render."""
 
     # The numbers below are illustrative defaults.
-    response = EmbeddingMetricsResponse(
+    return EmbeddingMetricsResponse(
         embedding_stats=EmbeddingStats(
             total_batches_processed=1420,
             success_rate=0.987,
@@ -218,7 +230,6 @@ async def get_embedding_metrics():
             last_worker_heartbeat_ok=True,
         ),
     )
-    return response
 
 
 # ---------------------------------------------------------------------------
@@ -284,39 +295,3 @@ async def get_project_quality(project_id: int):
 
     avg = sum(scores) / len(scores)
     return ProjectQualitySummary(project_id=project_id, sample_size=len(scores), average_score=avg)
-
-# ---------------------------------------------------------------------------
-# Usage statistics – used by Model selection UI
-# ---------------------------------------------------------------------------
-
-
-class UsageStatsResponse(BaseModel):
-    requests_today: int = Field(..., alias="requestsToday")
-    estimated_cost: float = Field(..., alias="estimatedCost")
-    average_latency: float = Field(..., alias="averageLatency")
-    error_rate: float = Field(..., alias="errorRate")
-    last_used: datetime = Field(..., alias="lastUsed")
-
-
-@router.get("/usage", response_model=UsageStatsResponse)
-async def get_usage_stats(
-    project_id: str = "current",
-    model_id: str | None = None,
-    start_date: datetime | None = None,
-    end_date: datetime | None = None,
-):
-    """Return placeholder usage statistics so the frontend widgets render.
-
-    The implementation is currently a stub that returns randomized numbers.
-    Once real usage metrics are available this endpoint should query the
-    analytics data store or Prometheus instead of generating real values.
-    """
-    from random import randint, uniform  # local import to avoid global cost
-
-    return UsageStatsResponse(
-        requests_today=randint(20, 120),
-        estimated_cost=round(uniform(0.1, 15.0), 2),
-        average_latency=round(uniform(300, 1500), 1),
-        error_rate=round(uniform(0, 5), 2),
-        last_used=datetime.now(timezone.utc),
-    )

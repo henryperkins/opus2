@@ -274,7 +274,15 @@ class Settings(BaseSettings):
     # Completions.  Projects that rely on the legacy 2024-02-01 contract can
     # still override via the AZURE_OPENAI_API_VERSION environment variable.
 
-    azure_openai_api_version: str = "2025-04-01-preview"
+    #
+    # The classic *data-plane* API versions (for example **2025-04-01-preview**)
+    # are superseded by the unified *v1 preview* surface introduced mid-2025.
+    # The new surface requires ``api-version=preview`` on every request and is
+    # the only one that supports the **Responses API**.  We therefore switch
+    # the default to the simple literal "preview" so that helpers which still
+    # rely on this setting (e.g. legacy health-check routes) stay functional
+    # without manual overrides.
+    azure_openai_api_version: str = "preview"
 
     # Azure authentication method - can be "api_key" or "entra_id"
     azure_auth_method: str = "api_key"

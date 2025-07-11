@@ -58,15 +58,34 @@ def get_openai_client() -> AsyncOpenAI:  # pragma: no cover – trivial
 def get_azure_client() -> AsyncAzureOpenAI:  # pragma: no cover – trivial
     """Return a fully configured *AsyncAzureOpenAI* instance."""
 
-    endpoint = settings.azure_openai_endpoint or "https://example.openai.azure.com"
 
-    api_version = (
-        getattr(settings, "azure_openai_api_version", None) or "2025-04-01-preview"
-    )
+    # ------------------------------------------------------------------
+    # Azure *v1* preview surface (incl. **Responses API**)
+    # ------------------------------------------------------------------
+    #
+    # The newer preview endpoints live under `/openai/v1/...` instead of the
+    # classic data-plane path.  We therefore build *base_url* accordingly so
+    # that the SDK issues requests like
+    #   https://RESOURCE.openai.azure.com/openai/v1/responses
+    #
+    # Chat Completions on the v1 surface no longer require a *deployment*
+    # name – you pass the *model* parameter directly.  This aligns with the
+    # Responses API which also operates on model IDs.
+    # ------------------------------------------------------------------
+
+    resource_endpoint = (
+        settings.azure_openai_endpoint or "https://example.openai.azure.com"
+    ).rstrip("/")
+
+    base_url = f"{resource_endpoint}/openai/v1/"
+
+    # ``api-version=preview`` is the canonical version string for the v1
+    # preview surface (Microsoft Learn, 2024-05-01).  We set it via
+    # *default_query* to allow callers to override per-request if needed.
 
     kwargs: Dict[str, Any] = {
-        "azure_endpoint": endpoint,
-        "api_version": api_version,
+        "base_url": base_url,
+        "default_query": {"api-version": "preview"},
     }
 
     # Authentication strategy – default to API key unless *azure_auth_method*

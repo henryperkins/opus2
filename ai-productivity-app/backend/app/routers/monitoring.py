@@ -193,8 +193,13 @@ async def check_openai() -> Dict[str, Any]:
                         "status": HealthStatus.DEGRADED,
                         "message": "Azure key missing"
                     }
-                url = (f"{settings.azure_openai_endpoint}/openai/models"
-                       f"?api-version={settings.azure_openai_api_version}")
+                # Use *v1 preview* surface for model listing so that the health
+                # check works consistently across Chat Completions **and**
+                # Responses API deployments.
+                url = (
+                    f"{settings.azure_openai_endpoint.rstrip('/')}/openai/v1/models"
+                    f"?api-version={settings.azure_openai_api_version}"
+                )
                 headers = {"api-key": f"{key[:8]}..."}
             else:
                 if not (key := settings.openai_api_key):

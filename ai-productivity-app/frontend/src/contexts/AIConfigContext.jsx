@@ -418,8 +418,17 @@ export function AIConfigProvider({ children }) {
     };
 
     // Create WebSocket connection
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/config`;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let host = window.location.host;
+
+    // Development: Vite runs on :5173 while FastAPI runs on :8000 – rewrite host
+    if (host.includes(':5173')) {
+      host = host.replace(':5173', ':8000');
+    }
+
+    // Backend always exposes the config socket at "/ws/config".
+    // A root-relative path works locally and behind the "/api" proxy prefix.
+    const wsUrl = `${protocol}//${host}/ws/config`;
 
     let ws = null;
     let reconnectAttempts = 0;

@@ -19,6 +19,7 @@ import types
 from contextlib import contextmanager
 from typing import Generator
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+import logging
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.compiler import compiles
@@ -48,6 +49,10 @@ except ImportError:  # 1.4 poly-fill
         )
 
 
+# --------------------------------------------------------------------------- #
+# Module-level logger
+# --------------------------------------------------------------------------- #
+logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- #
 # 1. SQLite compilers – PG types & CHECK constraints                           #
 # --------------------------------------------------------------------------- #
@@ -164,11 +169,22 @@ Base = declarative_base()
 
 
 def get_db() -> Generator[Session, None, None]:
+    """Yield a synchronous DB session and ensure safe cleanup.
+
+    Rollback/close operations can raise when the underlying connection
+    has already been terminated (e.g. client disconnect during WebSocket).
+    We catch and log these errors instead of letting them bubble up and
+    pollute the ASGI exception logs.
+    """
     db = SessionLocal()
     try:
         yield db
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception as exc:  # pragma: no cover – defensive catch
+            # Avoid cascading errors when the connection is already closed
+            logger.warning("Failed to close DB session cleanly: %s", exc)
 
 
 async def get_async_db() -> Generator[AsyncSession, None, None]:  # type: ignore[name-defined]

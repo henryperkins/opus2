@@ -69,11 +69,21 @@ class AzureOpenAIProvider(LLMProvider):
 
         auth_method = self.config.get("auth_method", "api_key")
 
+        # ------------------------------------------------------------------
+        # Use the *v1 preview* surface which supports the Responses API.
+        # We build a custom *base_url* instead of the legacy ``azure_endpoint``
+        # parameter so that the SDK issues requests like
+        #   https://<resource>.openai.azure.com/openai/v1/responses
+        # Refer to MS Learn docs (2025-05) for details.
+        # ------------------------------------------------------------------
+
+        base_url = f"{endpoint.rstrip('/')}/openai/v1/"
+
         client_kwargs = {
-            "azure_endpoint": endpoint,
-            "api_version": self.api_version,
+            "base_url": base_url,
+            "default_query": {"api-version": "preview"},
             "timeout": self.config.get("timeout", 300),
-            "max_retries": 0
+            "max_retries": 0,
         }
 
         if auth_method == "api_key":

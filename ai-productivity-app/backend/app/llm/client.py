@@ -164,6 +164,45 @@ def _model_requires_responses_api(model_name: str) -> bool:  # noqa: D401 – si
 
     return ModelService.requires_responses_api_static(model_name)
 
+# ---------------------------------------------------------------------------
+# Tool-schema helpers
+# ---------------------------------------------------------------------------
+
+def _prepare_tools_for_responses(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return *tools* list in **flat** schema expected by Azure Responses API.
+
+    The helper converts legacy / Chat-Completions style definitions of the form
+
+        {"type": "function", "function": { … }, "strict": True}
+
+    into the preview format used by Azure Responses API (2025-04-01):
+
+        {"name": "…", "description": "…", "parameters": …}
+
+    Built-in tools (e.g. ``{"type": "code_interpreter"}``) are already
+    compatible and therefore copied verbatim – except that the obsolete
+    ``strict`` key (if present) is stripped.
+    """
+
+    flat: List[Dict[str, Any]] = []
+
+    for tool in tools:
+        # Skip *strict* key for all variants – not part of the API contract.
+        if "function" not in tool:
+            # Already a flat / built-in definition – just copy sans *strict*.
+            flat.append({k: v for k, v in tool.items() if k != "strict"})
+            continue
+
+        fn = tool["function"]
+        flat.append(
+            {
+                "name": fn["name"],
+                "description": fn.get("description", ""),
+                "parameters": fn.get("parameters", {}),
+            }
+        )
+
+    return flat
 
 def _is_responses_api_enabled(model_name: str = None) -> bool:
     """Return *True* when the current configuration selects the Azure
@@ -951,31 +990,9 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 # Add tools if provided (Responses API supports tools)
                 # Follow OpenAI Responses API function calling documentation format
                 if tools:
-                    resp_tools: List[Dict[str, Any]] = []
-                    for t in tools:
-                        # Ensure tools follow the correct OpenAI Responses API format
-                        if "function" in t:
-                            # Already in correct format, ensure strict mode if not specified
-                            tool_copy = dict(t)
-                            if "strict" not in tool_copy:
-                                tool_copy["strict"] = True  # Default to strict mode
-                            resp_tools.append(tool_copy)
-                        else:
-                            # Convert legacy format to OpenAI Responses API format
-                            tool_def = {
-                                "type": "function",
-                                "function": {
-                                    "name": t.get("name"),
-                                    "description": t.get("description"),
-                                    "parameters": t.get("parameters", {}),
-                                },
-                                "strict": True,  # Enable strict mode by default
-                            }
-                            # Validate and enhance the schema
-                            validated_tool = self.validate_function_schema(tool_def)
-                            resp_tools.append(validated_tool)
-
-                    responses_kwargs["tools"] = resp_tools
+                    # Convert provided *tools* list into the flat schema required
+                    # by the Azure Responses API preview.
+                    responses_kwargs["tools"] = _prepare_tools_for_responses(tools)
 
                     # Add tool choice parameter
                     if tool_choice is not None:

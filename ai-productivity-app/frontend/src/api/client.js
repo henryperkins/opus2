@@ -58,20 +58,28 @@ if (envUrl) {
   try {
     const urlObj = new URL(envUrl, window.location.origin);
 
+    // Avoid browser mixed-content errors: when the frontend is served over
+    // HTTPS but the configured backend URL is HTTP, upgrade the protocol to
+    // HTTPS automatically.  Modern browsers will silently refuse the request
+    // otherwise.
+    //
+    // Historically we limited this behaviour to “same-host or localhost”
+    // scenarios, falling back to a relative path for cross-host setups.  This
+    // proved too restrictive – production deployments often route traffic to
+    // a separate API sub-domain (e.g. api.example.com) that **does** support
+    // HTTPS even when the environment variable mistakenly points to HTTP.
+    //
+    // The safer default is therefore:
+    //   • If the page is HTTPS and the backend URL is HTTP → **always**
+    //     upgrade to HTTPS.
+    //   • Otherwise leave the URL untouched.
     if (window.location.protocol === 'https:' && urlObj.protocol === 'http:') {
-      const sameHostnames = ['localhost', window.location.hostname];
-      if (sameHostnames.includes(urlObj.hostname)) {
-        // Safe protocol upgrade: same host or localhost
-        urlObj.protocol = 'https:';
-        resolvedBaseUrl = urlObj.toString();
-      } else {
-        // Cross-host HTTP backend under HTTPS frontend → use relative path
-        resolvedBaseUrl = '/';
-      }
-    } else {
-      // Protocols already match (http→http or https→https)
-      resolvedBaseUrl = urlObj.toString();
+      urlObj.protocol = 'https:';
     }
+
+    // At this point the protocol matches the page’s protocol, or the page is
+    // served over plain HTTP where mixed-content is not an issue.
+    resolvedBaseUrl = urlObj.toString();
   } catch {
     // envUrl might be a relative path like '/api'
     resolvedBaseUrl = envUrl;
