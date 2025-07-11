@@ -249,7 +249,9 @@ class ConfigUpdate(BaseModel):
 
     # Misc optional fields that can be part of a configuration patch
     system_prompt: Optional[str] = None
-    response_format: Optional[Dict[str, Any]] = None
+    # Accept either structured dict **or** the legacy plain string
+    # ("text", "markdown", "json") used by the current frontend.
+    response_format: Optional[Union[str, Dict[str, Any]]] = None
 
     model_config = ConfigDict(
         alias_generator=_to_camel,
