@@ -3,13 +3,24 @@
 // Integration hook for the three key chat flows
 
 import { useState, useCallback, useRef } from 'react';
-import { flowConfigs, defaultChatSettings } from '../config/chat-settings';
+import { flowConfigs, defaultChatSettings, validateChatSettings } from '../config/chat-settings';
 import knowledgeAPI from '../api/knowledge';
 import modelsAPI from '../api/models';
 import renderingAPI from '../api/rendering';
 import analyticsAPI from '../api/analytics';
 
 export const useChatFlows = (settings = defaultChatSettings) => {
+    // ------------------------------------------------------------------
+    // Validate & merge user settings -----------------------------------
+    // ------------------------------------------------------------------
+    const { isValid, errors } = validateChatSettings(settings);
+    const mergedSettings = isValid ? settings : defaultChatSettings;
+
+    if (!isValid && typeof window !== 'undefined') {
+        // eslint-disable-next-line no-console
+        console.warn('Invalid chat settings provided – falling back to defaults', errors);
+    }
+
     const [flowState, setFlowState] = useState({
         knowledgeBase: { step: null, data: null, loading: false },
         modelSelection: { step: null, data: null, loading: false },
@@ -44,7 +55,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
             }));
 
             // Step 2: Knowledge Retrieval
-            const knowledgeResults = await knowledgeAPI.retrieveKnowledge(analysisResult, projectId, settings.knowledge);
+            const knowledgeResults = await knowledgeAPI.retrieveKnowledge(analysisResult, projectId, mergedSettings.knowledge);
 
             setFlowState(prev => ({
                 ...prev,
@@ -52,7 +63,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
             }));
 
             // Step 3: Context Injection
-            const contextualizedQuery = await knowledgeAPI.injectContext(query, knowledgeResults, settings.knowledge);
+            const contextualizedQuery = await knowledgeAPI.injectContext(query, knowledgeResults, mergedSettings.knowledge);
 
             setFlowState(prev => ({
                 ...prev,
@@ -68,7 +79,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
             }));
 
             // Step 5: Response with Citations
-            const finalResponse = await knowledgeAPI.addCitations(modelResponse, knowledgeResults, settings.knowledge.citationStyle);
+            const finalResponse = await knowledgeAPI.addCitations(modelResponse, knowledgeResults, mergedSettings.knowledge.citationStyle);
 
             setFlowState(prev => ({
                 ...prev,
@@ -96,7 +107,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
             await updateMetrics({ success: false, projectId, flowType: 'knowledge' });
             throw error;
         }
-    }, [settings]);
+    }, [mergedSettings]);
 
     // Model Selection Flow: Task detection → Model capability matching → Cost/performance evaluation → Model selection → Fallback handling
     const executeModelSelectionFlow = useCallback(async (query, taskType) => {
@@ -115,7 +126,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
             }));
 
             // Step 2: Model Capability Matching
-            const capableModels = await modelsAPI.matchCapabilities(detectedTask, settings.models);
+            const capableModels = await modelsAPI.matchCapabilities(detectedTask, mergedSettings.models);
 
             setFlowState(prev => ({
                 ...prev,
@@ -123,7 +134,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
             }));
 
             // Step 3: Cost/Performance Evaluation
-            const evaluatedModels = await modelsAPI.evaluateCostPerformance(capableModels, settings.models);
+            const evaluatedModels = await modelsAPI.evaluateCostPerformance(capableModels, mergedSettings.models);
 
             setFlowState(prev => ({
                 ...prev,
@@ -131,7 +142,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
             }));
 
             // Step 4: Model Selection
-            let selectedModel = modelsAPI.selectOptimalModel(evaluatedModels, settings.models);
+            let selectedModel = modelsAPI.selectOptimalModel(evaluatedModels, mergedSettings.models);
 
             try {
                 const response = await modelsAPI.callModel(selectedModel, query);
@@ -150,7 +161,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
                     modelSelection: { step: 'fallbackHandling', data: modelError, loading: true }
                 }));
 
-                const fallbackResponse = await modelsAPI.handleFallback(selectedModel, query, settings.models.fallbacks);
+                const fallbackResponse = await modelsAPI.handleFallback(selectedModel, query, mergedSettings.models.fallbacks);
 
                 setFlowState(prev => ({
                     ...prev,
@@ -167,7 +178,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
             }));
             throw error;
         }
-    }, [settings]);
+    }, [mergedSettings]);
 
     // Response Rendering Flow: Stream reception → Format detection → Progressive rendering → Interactive element injection → Action binding
     const executeRenderingFlow = useCallback(async (responseData, onStreamUpdate) => {
@@ -178,7 +189,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
             }));
 
             // Step 1: Stream Reception
-            const streamProcessor = renderingAPI.createStreamProcessor(responseData, settings.rendering);
+            const streamProcessor = renderingAPI.createStreamProcessor(responseData, mergedSettings.rendering);
 
             setFlowState(prev => ({
                 ...prev,
@@ -196,7 +207,7 @@ export const useChatFlows = (settings = defaultChatSettings) => {
             // Step 3: Progressive Rendering
             const renderedChunks = [];
             await streamProcessor.process(async (chunk) => {
-                const renderedChunk = await renderingAPI.renderChunk(chunk, formatInfo, settings.rendering);
+                const renderedChunk = await renderingAPI.renderChunk(chunk, formatInfo, mergedSettings.rendering);
                 renderedChunks.push(renderedChunk);
                 onStreamUpdate?.(renderedChunks);
             });

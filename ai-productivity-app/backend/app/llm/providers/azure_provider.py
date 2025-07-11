@@ -429,5 +429,6 @@ class AzureOpenAIProvider(LLMProvider):
                 "max_tokens": 128000,
                 "supports_reasoning": False,
                 "supports_json_mode": True,
+                "supports_parallel_tools": True,
                 "model_type": "chat"
             }

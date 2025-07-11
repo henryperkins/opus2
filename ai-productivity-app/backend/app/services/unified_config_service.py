@@ -352,7 +352,8 @@ class UnifiedConfigService:
         """Get default configuration from settings."""
         # Try to find a valid model from the database
         default_provider = settings.llm_provider
-        default_model_id = settings.llm_default_model or settings.llm_model
+        # Deprecated ``settings.llm_model`` removed; rely solely on *llm_default_model*
+        default_model_id = settings.llm_default_model
 
         # Verify the model exists in database
         model_config = self.db.query(ModelConfiguration).filter_by(

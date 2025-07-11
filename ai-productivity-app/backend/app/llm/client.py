@@ -293,7 +293,8 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             logger.debug(f"Failed to load unified config: {e}")
             # Fallback to creating a config from static settings
             from app.schemas.generation import UnifiedModelConfig
-            fallback_model = settings.llm_default_model or settings.llm_model or "gpt-4o-mini"
+            # ``settings.llm_model`` is deprecated – rely on *llm_default_model*
+            fallback_model = settings.llm_default_model or "gpt-4o-mini"
             return UnifiedModelConfig(
                 provider=settings.llm_provider,
                 model_id=fallback_model,
@@ -324,7 +325,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
             # Final fallback to static settings
             return {
                 "provider": settings.llm_provider,
-                "chat_model": settings.llm_default_model or settings.llm_model,
+                "chat_model": settings.llm_default_model,
                 "use_responses_api": False,
             }
     

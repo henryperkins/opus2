@@ -127,6 +127,51 @@ class OpenAIProvider(LLMProvider):
         """Extract tool calls from OpenAI response."""
         return extract_tool_calls_openai(response)
 
+    # ------------------------------------------------------------------
+    # Capability descriptor ---------------------------------------------
+    # ------------------------------------------------------------------
+
+    def get_model_info(self, model: str) -> Dict[str, Any]:  # noqa: D401 – simple description
+        """Return capability flags for the given *model*.
+
+        We assume that *all* current OpenAI Chat Completion models support
+        the following features:
+
+        • JSON mode via ``response_format={type: 'json_object'}``
+        • Parallel tool execution (beta) when ``parallel_tool_calls=True``
+        • Streaming token deltas
+        """
+
+        base = super().get_model_info(model)
+        base.update(
+            supports_json_mode=True,
+            supports_parallel_tools=True,
+            supports_streaming=True,
+        )
+
+        # Adjust max context window for well-known models when the value can
+        # be inferred locally – this avoids a blocking API call.  Fallback to
+        # previous default when the model is unknown.
+        context_sizes = {
+            "gpt-4o": 128000,
+            "gpt-4o-mini": 128000,
+            "gpt-4o-max": 128000,
+            "gpt-4.1": 128000,
+            "gpt-4-turbo": 128000,
+            "gpt-4o-preview": 128000,
+            "gpt-4": 8192,
+            "gpt-4-turbo-preview": 128000,
+            "gpt-3.5-turbo": 16385,
+        }
+
+        lowered = model.lower()
+        for prefix, size in context_sizes.items():
+            if lowered.startswith(prefix):
+                base["max_tokens"] = size
+                break
+
+        return base
+
     def format_tool_result(
         self,
         tool_call_id: str,
