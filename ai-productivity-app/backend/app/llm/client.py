@@ -298,7 +298,19 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
         self.provider: str = config.provider.lower()
         self.active_model: str = config.model_id
-        self.use_responses_api: bool = config.use_responses_api
+        # Runtime flag whether we want to hit the Azure *Responses* preview
+        # endpoint instead of Chat Completions.  The decision is influenced
+        # by three factors in order of precedence:
+        #   1. Explicit *azure_enable_responses* setting (boolean)
+        #   2. Whether the selected model *requires* the Responses API
+        #   3. Fallback: use_responses_api from unified config
+
+        explicit_flag = getattr(settings, "azure_enable_responses", False)
+        if explicit_flag:
+            self.use_responses_api = True
+        else:
+            # Honour model-level requirement when the global flag is *off*
+            self.use_responses_api = _model_requires_responses_api(config.model_id) or config.use_responses_api
 
         # Underlying OpenAI SDK client – differs for public vs. Azure.
         self.client: Any | None = None
@@ -1017,6 +1029,11 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                     logger.debug(
                         f"Request Payload: {json.dumps(clean_responses_kwargs, indent=2)}"
                     )
+
+                # Note: *api-version* is injected at the *client* level via
+                # ``default_query`` in :pyfunc:`app.llm.client_factory.get_azure_client`.
+                # Passing it again here would raise a ``TypeError`` because
+                # ``AsyncResponses.create`` does not accept the parameter.
 
                 try:
                     response = await self.client.responses.create(

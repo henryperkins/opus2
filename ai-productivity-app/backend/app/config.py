@@ -282,7 +282,27 @@ class Settings(BaseSettings):
     # the default to the simple literal "preview" so that helpers which still
     # rely on this setting (e.g. legacy health-check routes) stay functional
     # without manual overrides.
-    azure_openai_api_version: str = "preview"
+    #
+    # Azure OpenAI – default to the **GA** Chat Completions surface.
+    # -------------------------------------------------------------------
+    # Older revisions of the codebase used the *preview* version string
+    # ("preview" / "2025-04-01-preview") which was retired when the Chat
+    # Completions + Assistants features went GA.  Calling the deprecated
+    # version today returns **400 – API version not supported**.
+    #
+    # We therefore switch the default to the current GA release
+    # (**2024-10-21**) and let callers opt-in to the new *Responses* preview
+    # via the dedicated *azure_enable_responses* flag further below.
+    #
+    azure_openai_api_version: str = "2024-10-21"
+
+    # Feature-gate for Azure *Responses* API (preview-only)
+    # -------------------------------------------------------------------
+    # When **azure_enable_responses == True** the backend will route Azure
+    # requests through ``client.responses.create`` with
+    # ``api_version='preview'``.  Disabled by default so that vanilla
+    # deployments keep using the stable Chat Completions endpoint.
+    azure_enable_responses: bool = False
 
     # Azure authentication method - can be "api_key" or "entra_id"
     azure_auth_method: str = "api_key"

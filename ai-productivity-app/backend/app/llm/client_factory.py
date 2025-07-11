@@ -79,12 +79,18 @@ def get_azure_client() -> AsyncAzureOpenAI:  # pragma: no cover – trivial
 
     base_url = f"{resource_endpoint}/openai/v1/"
 
-    # Users can override the API version via environment or runtime config.
-    # When not specified we follow the official guidance and default to
-    # **latest** which will automatically resolve to the most recent
-    # non-breaking version.
+    # Decide API version
+    # ------------------------------------------------------------------
+    # When the *Responses* preview is enabled we must use the special
+    # literal version string **"preview"** – the dated GA versions are not
+    # accepted by the endpoint.  Otherwise we respect
+    # *azure_openai_api_version* falling back to "latest" which is the
+    # service-recommended default.
 
-    api_version = getattr(settings, "azure_openai_api_version", None) or "latest"
+    if getattr(settings, "azure_enable_responses", False):
+        api_version = "preview"
+    else:
+        api_version = getattr(settings, "azure_openai_api_version", None) or "latest"
 
     kwargs: Dict[str, Any] = {
         "api_version": api_version,
