@@ -174,6 +174,13 @@ class UnifiedConfigService:
         merged = current.model_dump(by_alias=True)
         merged.update(updates or {})  # Frontend PATCH fields (camelCase) take priority
 
+        # ------------------------------------------------------------------
+        # Back-compat: frontend may send `"response_format": "text"`.
+        # Convert to the structured form expected by UnifiedModelConfig.
+        # ------------------------------------------------------------------
+        if isinstance(merged.get("response_format"), str):
+            merged["response_format"] = {"type": merged["response_format"]}
+
         # Defensive cleanup: if any snake_case fields exist redundantly, drop them
         # (e.g., both model_id and modelId present—use modelId).
         for snake_name, alias in [("model_id", "modelId"), ("provider", "provider")]:

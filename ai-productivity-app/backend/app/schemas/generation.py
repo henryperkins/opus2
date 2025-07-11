@@ -139,7 +139,9 @@ class UnifiedModelConfig(GenerationParams, ReasoningParams):
     # Optional overrides
     use_responses_api: bool = False
     system_prompt: Optional[str] = None
-    response_format: Optional[Dict[str, Any]] = None
+    # Accept either a structured dict **or** the legacy plain string
+    # ("text", "markdown", "json") used by the current frontend.
+    response_format: Optional[Union[str, Dict[str, Any]]] = None
 
     # Meta
     version: int = Field(0, description="Auto-incremented on every update")
