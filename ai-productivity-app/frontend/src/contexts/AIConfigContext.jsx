@@ -90,17 +90,100 @@ const initialState = {
   lastUpdated: null
 };
 
+// ---------------------------------------------------------------------------
+// Helper – convert camelCase keys from the backend to snake_case so that the
+//           existing frontend code (written against the old snake_case API)
+//           continues to work after the backend switched to automatic
+//           camelCase alias generation in Phase-5.  The conversion is shallow
+//           on purpose because the unified-config payload is a *flat* object
+//           on the first level (nested structures like `capabilities` remain
+//           untouched and are accessed in their original form).
+// ---------------------------------------------------------------------------
+
+function toSnake(str) {
+  return str.replace(/([A-Z])/g, '_$1').toLowerCase();
+}
+
+function normalizeKeys(obj) {
+  if (obj == null || typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(normalizeKeys);
+  }
+
+  return Object.fromEntries(
+    Object.entries(obj).map(([k, v]) => [toSnake(k), v])
+  );
+}
+
 // Reducer
 function aiConfigReducer(state, action) {
   switch (action.type) {
     case ACTIONS.SET_CONFIG:
+      // Normalize *current* config and *available models* so that the rest of
+      // the application can continue to rely on snake_case property names.
+
+      const currentCfg = normalizeKeys(action.payload.current || {});
+
+      const rawModels =
+        action.payload.available_models ?? action.payload.availableModels ?? [];
+
+      const normalizedModels = rawModels.map(normalizeKeys);
+
+      let providerDict = action.payload.providers || state.providers;
+
+      // -----------------------------------------------------------------
+      // Frontend safeguard – when the backend returns *no* provider data
+      // (e.g. fresh install, DB unavailable, or seed task failed) the
+      // dropdowns would render empty and effectively block the user from
+      // interacting with the page.  To avoid the white-screen-of-nothing we
+      // construct a **synthetic** provider catalogue from the *current*
+      // configuration so that at least one selectable option is present.
+      // -----------------------------------------------------------------
+      if (!providerDict || Object.keys(providerDict).length === 0) {
+        const fallbackProvider = currentCfg.provider || 'openai';
+        const fallbackModelId = currentCfg.model_id || 'gpt-4o';
+
+        // Re-use the (possibly empty) model list if it already contains the
+        // current model, otherwise add a minimal stub so that the select has
+        // at least one <option>.
+        const ensureModelEntry = (list) => {
+          const hasModel = list.some((m) => m.model_id === fallbackModelId);
+          if (hasModel) return list;
+          return [
+            ...list,
+            {
+              model_id: fallbackModelId,
+              display_name: fallbackModelId,
+              provider: fallbackProvider,
+            },
+          ];
+        };
+
+        const syntheticModels = ensureModelEntry(normalizedModels);
+
+        providerDict = {
+          [fallbackProvider]: {
+            display_name: fallbackProvider.charAt(0).toUpperCase() + fallbackProvider.slice(1),
+            models: syntheticModels,
+            capabilities: {},
+          },
+        };
+
+        // Also ensure *models* state is populated so that other components
+        // relying on useModelSelection() behave as expected.
+        if (syntheticModels.length && normalizedModels.length === 0) {
+          normalizedModels.push(...syntheticModels);
+        }
+      }
+
       return {
         ...state,
-        config: action.payload.current,
-        models: action.payload.available_models || state.models,
-        providers: action.payload.providers || state.providers,
-        lastUpdated: action.payload.last_updated,
-        error: null
+        config: currentCfg,
+        models: normalizedModels.length ? normalizedModels : state.models,
+        providers: providerDict,
+        lastUpdated: action.payload.last_updated || action.payload.lastUpdated,
+        error: null,
       };
 
     case ACTIONS.UPDATE_CONFIG:
@@ -113,7 +196,9 @@ function aiConfigReducer(state, action) {
     case ACTIONS.SET_MODELS:
       return {
         ...state,
-        models: action.payload
+        models: Array.isArray(action.payload)
+          ? action.payload.map(normalizeKeys)
+          : state.models,
       };
 
     case ACTIONS.SET_LOADING:

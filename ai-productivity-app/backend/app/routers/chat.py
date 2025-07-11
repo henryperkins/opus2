@@ -325,10 +325,26 @@ async def delete_message(
     # 2. Users flagged as *admin* may delete **any** message.
     # Any other request is rejected with HTTP 403.
 
+# ------------------------------------------------------------------
+#  Additional rule – allow the *owner* of the **project** to delete any
+#  message within their project’s chat sessions.  This resolves the scenario
+#  where a user attempts to remove an *assistant* message which naturally has
+#  no *author* (``user_id is NULL``) and therefore failed the original
+#  author-only check.
+# ------------------------------------------------------------------
+
     is_author = message.user_id == current_user.id
     is_admin = getattr(current_user, "is_admin", False)
 
-    if not (is_author or is_admin):
+    # Lazily loaded relationship works for both sync and async sessions here
+    try:
+        project_owner_id = message.session.project.owner_id  # type: ignore[attr-defined]
+    except Exception:  # pragma: no cover – relationship not resolvable
+        project_owner_id = None
+
+    is_project_owner = project_owner_id == current_user.id
+
+    if not (is_author or is_admin or is_project_owner):
         raise HTTPException(
             status_code=403, detail="Not authorised to delete this message"
         )
