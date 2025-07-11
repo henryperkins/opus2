@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 from .utils.redis_client import close_redis
 from .middleware.correlation_id import CorrelationIdMiddleware
 from .middleware.security import register_security_middleware
+from .middleware.config_error_handler import ConfigurationErrorMiddleware
 from .routers import auth, projects, monitoring
 from .routers import code as code_router
 from .routers import email as email_router
@@ -173,7 +174,10 @@ app.add_middleware(
 if not settings.disable_correlation_id:
     app.add_middleware(CorrelationIdMiddleware)
 
-# 3. Security headers & SlowAPI rate-limiter
+# 3. Configuration error handler
+app.add_middleware(ConfigurationErrorMiddleware)
+
+# 4. Security headers & SlowAPI rate-limiter
 register_security_middleware(app)
 
 # Include routers

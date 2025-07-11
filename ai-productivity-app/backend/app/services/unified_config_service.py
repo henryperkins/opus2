@@ -28,6 +28,8 @@ from app.schemas.generation import (
 # The consistency validator now lives in app.schemas.generation to keep all
 # configuration-related helpers co-located with their Pydantic models.
 from app.schemas.generation import validate_config_consistency  # type: ignore
+from app.services.config_validation_service import ConfigValidationService
+from app.services.config_preset_manager import ConfigPresetManager
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,8 @@ class UnifiedConfigService:
         self.db: Session = db
         self._config_cache: Dict[str, Any] = {}
         self._cache_ts: Optional[datetime] = None
+        self._validation_service = ConfigValidationService(db)
+        self._preset_manager = ConfigPresetManager(db)
 
     # --------------------------------------------------------------------- #
     # Public – READ
@@ -147,16 +151,44 @@ class UnifiedConfigService:
     ) -> UnifiedModelConfig:
         """
         Apply a single update dict to the current configuration.
+        Handles field name normalization and provider-aware validation.
         """
         current = self.get_current_config()
-        merged = current.model_dump()
-        merged.update(updates or {})
-
+        
+        # Use validation service to normalize and validate the update
+        from app.schemas.generation import ConfigUpdate
+        
+        # Create ConfigUpdate from raw dict to ensure proper field handling
         try:
-            new_cfg = UnifiedModelConfig(**merged)
+            # The updates dict might have camelCase keys from frontend
+            update_obj = ConfigUpdate(**updates)
         except ValueError as e:
+            # Extract detailed field information
+            details = self._validation_service.get_missing_fields_details(e)
+            if details:
+                field_msgs = [f"{d['field']}: {d['message']}" for d in details]
+                raise ValueError(f"Invalid update: {'; '.join(field_msgs)}") from None
+            raise ValueError(f"Invalid update: {e}") from None
+        
+        # Validate the update and get normalized config
+        valid, errors, merged_config = self._validation_service.validate_config_update(
+            current, update_obj
+        )
+        
+        if not valid:
+            raise ValueError(f"Configuration validation failed: {'; '.join(errors)}")
+        
+        try:
+            new_cfg = UnifiedModelConfig(**merged_config)
+        except ValueError as e:
+            # Extract detailed field information for better error messages
+            details = self._validation_service.get_missing_fields_details(e)
+            if details:
+                field_msgs = [f"{d['field']}: {d['message']}" for d in details]
+                raise ValueError(f"Invalid configuration: {'; '.join(field_msgs)}") from None
             raise ValueError(f"Invalid configuration: {e}") from None
 
+        # Additional validation with model service
         ok, err = self.validate_config(new_cfg.model_dump())
         if not ok:
             raise ValueError(err or "Invalid configuration")
@@ -483,69 +515,18 @@ class UnifiedConfigService:
     # Presets & defaults API
     # --------------------------------------------------------------------- #
     def get_presets(self) -> List[Dict[str, Any]]:
-        """Return predefined configuration presets."""
-        return [
-            {
-                "id": "balanced",
-                "name": "Balanced",
-                "description": "Good balance of quality and speed",
-                "config": {
-                    "temperature": 0.7,
-                    "max_tokens": 2048,
-                    "top_p": 0.95,
-                    "reasoning_effort": "medium",
-                },
-            },
-            {
-                "id": "creative",
-                "name": "Creative",
-                "description": "More creative and varied responses",
-                "config": {
-                    "temperature": 1.2,
-                    "max_tokens": 3000,
-                    "top_p": 0.95,
-                    "frequency_penalty": 0.2,
-                    "presence_penalty": 0.2,
-                    "reasoning_effort": "high",
-                },
-            },
-            {
-                "id": "precise",
-                "name": "Precise",
-                "description": "Deterministic responses",
-                "config": {
-                    "temperature": 0.3,
-                    "max_tokens": 2048,
-                    "top_p": 0.9,
-                    "reasoning_effort": "high",
-                },
-            },
-            {
-                "id": "fast",
-                "name": "Fast",
-                "description": "Optimised for quick responses",
-                "config": {
-                    "model_id": "gpt-4o-mini",
-                    "provider": "openai",
-                    "temperature": 0.7,
-                    "max_tokens": 1024,
-                    "reasoning_effort": "low",
-                },
-            },
-            {
-                "id": "powerful",
-                "name": "Powerful",
-                "description": "Maximum capability for complex tasks",
-                "config": {
-                    "model_id": "gpt-4o",
-                    "provider": "openai",
-                    "temperature": 0.7,
-                    "max_tokens": 4096,
-                    "reasoning_effort": "high",
-                    "enable_reasoning": True,
-                },
-            },
-        ]
+        """Return predefined configuration presets with provider awareness."""
+        return self._preset_manager.get_presets()
+    
+    def apply_preset(self, preset_id: str, target_provider: Optional[str] = None) -> UnifiedModelConfig:
+        """Apply a preset configuration, adapting it to the current or target provider."""
+        current = self.get_current_config()
+        
+        # Get the preset configuration adapted for the provider
+        preset_config = self._preset_manager.apply_preset(preset_id, current, target_provider)
+        
+        # Apply the preset configuration
+        return self.update_config(preset_config, updated_by="preset")
 
     def get_defaults(self) -> Dict[str, Any]:
         """Expose built-in defaults (camel-case) for the API."""

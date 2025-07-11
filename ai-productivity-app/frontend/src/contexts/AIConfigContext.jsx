@@ -192,17 +192,10 @@ export function AIConfigProvider({ children }) {
         // Ensure camelCase keys for the API
         const configData = cameliseKeys(preset.config);
         console.log("Applying preset:", { presetId, preset, configData });
-        console.log("Raw preset config:", preset.config);
-        console.log("Camelized config data:", configData);
         
-        // Try with minimal fields first to debug
-        const minimalConfig = {
-          temperature: configData.temperature,
-          maxTokens: configData.maxTokens
-        };
-        console.log("Trying minimal config first:", minimalConfig);
-        
-        await updateConfig(minimalConfig);
+        // The backend now handles provider-specific adaptations
+        // Just send the preset config as-is
+        await updateConfig(configData);
         toast.success(`Preset '${preset.name || presetId}' applied`);
         return true;
       } catch (e) {
@@ -212,7 +205,10 @@ export function AIConfigProvider({ children }) {
           error: e.message, 
           response: e.response?.data 
         });
-        toast.error(e.message || "Failed to apply preset");
+        
+        // Extract detailed error message from response
+        const errorMsg = e.response?.data?.detail || e.message || "Failed to apply preset";
+        toast.error(errorMsg);
         return false;
       }
     },
