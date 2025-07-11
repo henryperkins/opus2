@@ -188,7 +188,8 @@ export default function UnifiedAISettings() {
             >
               {Object.entries(providers).map(([providerId, providerData]) => (
                 <option key={providerId} value={providerId}>
-                  {providerData.display_name}
+                  {/* Fallback to the provider id when no display_name is supplied by the backend */}
+                  {providerData?.display_name || providerId}
                 </option>
               ))}
             </select>
@@ -203,16 +204,171 @@ export default function UnifiedAISettings() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {availableModels
-                .filter(m => m.provider === config?.provider)
+                // Some older backend payloads don’t include the *provider* field
+                // on each model entry.  Treat those models as belonging to the
+                // currently selected provider so the list doesn’t render empty.
+                .filter(m => !m.provider || m.provider === config?.provider)
                 .map(model => (
                   <option key={model.model_id} value={model.model_id}>
-                    {model.display_name}
+                    {/* Fallback to model_id when no display_name provided */}
+                    {model.display_name || model.model_id}
                   </option>
                 ))}
             </select>
           </div>
         </div>
       </Section>
+
+      {/* Generation Parameters Section */}
+      <Section
+        title="Generation Parameters"
+        icon={Settings}
+        expanded={expandedSections.generation}
+        onToggle={() => toggleSection('generation')}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Temperature */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Temperature</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="2"
+              value={temperature ?? 0}
+              onChange={(e) => updateParams({ temperature: parseFloat(e.target.value) })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          {/* Max tokens */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Max tokens</label>
+            <input
+              type="number"
+              min="16"
+              max="200000"
+              value={maxTokens ?? ''}
+              onChange={(e) => updateParams({ max_tokens: parseInt(e.target.value || '0', 10) })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          {/* Top-p */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Top-p</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={topP ?? 1}
+              onChange={(e) => updateParams({ top_p: parseFloat(e.target.value) })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          {/* Frequency penalty */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Frequency penalty</label>
+            <input
+              type="number"
+              step="0.1"
+              min="-2"
+              max="2"
+              value={frequencyPenalty ?? 0}
+              onChange={(e) => updateParams({ frequency_penalty: parseFloat(e.target.value) })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          {/* Presence penalty */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Presence penalty</label>
+            <input
+              type="number"
+              step="0.1"
+              min="-2"
+              max="2"
+              value={presencePenalty ?? 0}
+              onChange={(e) => updateParams({ presence_penalty: parseFloat(e.target.value) })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
+      </Section>
+
+      {/* Reasoning / Thinking Section */}
+      {(supportsReasoning || supportsThinking) && (
+        <Section
+          title="Reasoning / Thinking"
+          icon={Brain}
+          expanded={expandedSections.reasoning}
+          onToggle={() => toggleSection('reasoning')}
+        >
+          <div className="space-y-4">
+            {isAzureOrOpenAI && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    id="enableReasoning"
+                    type="checkbox"
+                    checked={enableReasoning || false}
+                    onChange={(e) => updateReasoningConfig({ enable_reasoning: e.target.checked })}
+                  />
+                  <label htmlFor="enableReasoning" className="text-sm">Enable Reasoning (Responses API)</label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Reasoning effort</label>
+                  <select
+                    value={reasoningEffort || 'medium'}
+                    onChange={(e) => updateReasoningConfig({ reasoning_effort: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {['low', 'medium', 'high'].map(level => (
+                      <option key={level} value={level}>{level}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {isClaudeProvider && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    id="extendedThinking"
+                    type="checkbox"
+                    checked={claudeExtendedThinking || false}
+                    onChange={(e) => updateReasoningConfig({ claude_extended_thinking: e.target.checked })}
+                  />
+                  <label htmlFor="extendedThinking" className="text-sm">Claude extended thinking</label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Thinking mode</label>
+                  <select
+                    value={claudeThinkingMode || 'enabled'}
+                    onChange={(e) => updateReasoningConfig({ claude_thinking_mode: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {['off', 'enabled', 'aggressive'].map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Thinking token budget</label>
+                  <input
+                    type="number"
+                    min="1024"
+                    max="65536"
+                    step="1024"
+                    value={claudeThinkingBudget || 16384}
+                    onChange={(e) => updateReasoningConfig({ claude_thinking_budget_tokens: parseInt(e.target.value || '0', 10) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
     </div>
   );
 }

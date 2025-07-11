@@ -16,8 +16,11 @@ const aiConfigAPI = {
     return await apiClient.get(API_BASE);
   },
   
+  // Use HTTP PATCH so we only update the provided keys instead of replacing
+  // the entire configuration object.  This prevents un-sent values from
+  // being overwritten with defaults on the server side.
   updateConfig: async (updates) => {
-    return await apiClient.put(API_BASE, updates);
+    return await apiClient.patch(API_BASE, updates);
   },
   
   testConfig: async (config = null) => {
