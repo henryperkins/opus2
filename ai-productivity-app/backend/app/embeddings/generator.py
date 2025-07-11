@@ -159,14 +159,22 @@ class EmbeddingGenerator:
     # Known model families and their default properties. Extend as needed.
     # --------------------------------------------------------------------- #
     _MODEL_REGISTRY: Dict[str, Dict[str, int | bool]] = {
-        # Modern models
+        # Modern models – defaults from the official OpenAI documentation
+        #   • text-embedding-3-small  → 1 536 dimensions (optionally 512)
+        #   • text-embedding-3-large  → 3 072 dimensions (optionally 1 536)
+        #
+        # Even though both models support the **dimensions** parameter we store
+        # the *server-side default* here.  Callers can still request a
+        # smaller size (e.g. 1 536) via the ``dimensions`` constructor
+        # argument – *EmbeddingGenerator* will transparently overwrite the
+        # *dimension* entry below when an override is supplied.
         "text-embedding-3-small": {
-            "dimension": 1024,
+            "dimension": 1536,
             "token_limit": 8000,
             "supports_dimensions_param": True,
         },
         "text-embedding-3-large": {
-            "dimension": 1536,
+            "dimension": 3072,
             "token_limit": 8000,
             "supports_dimensions_param": True,
         },
@@ -183,7 +191,13 @@ class EmbeddingGenerator:
     # ------------------------------------------------------------------ #
     def __init__(
         self,
-        model: str = "text-embedding-3-large",
+        # Default to *text-embedding-3-small* because its server-side default
+        # already matches the 1 536-dimension vector size that both
+        # Postgres/pgvector and our default Qdrant collections are created
+        # with.  Callers that explicitly need the larger 3 072-dimension
+        # variant can still ask for it by passing
+        # ``model="text-embedding-3-large", dimensions=3072``.
+        model: str = "text-embedding-3-small",
         *,
         dimensions: Optional[int] = 1536,
         encoding_format: Literal["float", "base64"] = "float",

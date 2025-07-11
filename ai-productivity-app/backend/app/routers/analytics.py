@@ -26,7 +26,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status
 from pydantic import BaseModel, Field, conlist
 
 
@@ -224,3 +224,39 @@ async def get_project_quality(project_id: int):
 
     avg = sum(scores) / len(scores)
     return ProjectQualitySummary(project_id=project_id, sample_size=len(scores), average_score=avg)
+
+# ---------------------------------------------------------------------------
+# Usage statistics – used by Model selection UI
+# ---------------------------------------------------------------------------
+
+
+class UsageStatsResponse(BaseModel):
+    requests_today: int = Field(..., alias="requestsToday")
+    estimated_cost: float = Field(..., alias="estimatedCost")
+    average_latency: float = Field(..., alias="averageLatency")
+    error_rate: float = Field(..., alias="errorRate")
+    last_used: datetime = Field(..., alias="lastUsed")
+
+
+@router.get("/usage", response_model=UsageStatsResponse)
+async def get_usage_stats(
+    project_id: str = "current",
+    model_id: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+):
+    """Return placeholder usage statistics so the frontend widgets render.
+
+    The implementation is currently a stub that returns randomized numbers.
+    Once real usage metrics are available this endpoint should query the
+    analytics data store or Prometheus instead of generating real values.
+    """
+    from random import randint, uniform  # local import to avoid global cost
+
+    return UsageStatsResponse(
+        requests_today=randint(20, 120),
+        estimated_cost=round(uniform(0.1, 15.0), 2),
+        average_latency=round(uniform(300, 1500), 1),
+        error_rate=round(uniform(0, 5), 2),
+        last_used=datetime.now(timezone.utc),
+    )

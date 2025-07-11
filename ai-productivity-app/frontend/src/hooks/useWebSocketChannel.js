@@ -11,6 +11,7 @@
  */
 
 /* eslint-env browser */
+/* global requestAnimationFrame */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import debounce from 'lodash.debounce';
 
@@ -66,7 +67,7 @@ export function useWebSocketChannel({
         // Process messages in smaller batches to prevent blocking
         const batchSize = Math.min(5, messageBuffer.current.length);
         const batch = messageBuffer.current.splice(0, batchSize);
-        
+
         // Use requestAnimationFrame for better performance
         requestAnimationFrame(() => {
           batch.forEach((data, index) => {
@@ -144,16 +145,16 @@ export function useWebSocketChannel({
   const shouldReuseConnection = useCallback((newPath) => {
     const currentWs = wsRef.current;
     if (!currentWs) return false;
-    
+
     const isConnected = currentWs.readyState === WebSocket.OPEN;
     const isSamePath = lastSuccessfulPath.current === newPath;
     const isStable = connectionStable.current;
-    
+
     if (isConnected && isSamePath && isStable) {
       console.log(`🔌 WebSocket: reusing stable connection to ${newPath}`);
       return true;
     }
-    
+
     return false;
   }, []);
 
@@ -188,10 +189,10 @@ export function useWebSocketChannel({
         retryRef.current = 0;
         globalRetryRef.current = 0; // Reset global counter on successful connection
         setState('connected');
-        
+
         // Track successful connection for stability
         lastSuccessfulPath.current = path;
-        
+
         // Mark connection as stable after a brief delay
         setTimeout(() => {
           if (!aborted && ws.readyState === WebSocket.OPEN) {
@@ -199,7 +200,7 @@ export function useWebSocketChannel({
             console.log(`🔌 WebSocket marked as stable: ${path}`);
           }
         }, 1000);
-        
+
         // flush queue
         queueRef.current.forEach((m) => send(m));
         queueRef.current = [];
@@ -236,7 +237,7 @@ export function useWebSocketChannel({
         if (aborted) return;
         setState('disconnected');
         setLastCloseEvent(evt);
-        
+
         // Reset stability tracking on closure
         connectionStable.current = false;
 
@@ -316,7 +317,7 @@ export function useWebSocketChannel({
           );
           timerRef.current = setTimeout(connect, delay);
         } else {
-          const reason = !withinGlobalLimit 
+          const reason = !withinGlobalLimit
             ? `global retry limit (${maxRetries}) exceeded`
             : `retry limit (${retry}) exceeded`;
           console.error(`WebSocket connection failed: ${reason}. Giving up.`);
@@ -339,7 +340,12 @@ export function useWebSocketChannel({
     return () => {
       // Only tear down when the next render requests **another**
       // non-null path.  Skip if it's the transient null sentinel.
-      if (path && path !== lastSuccessfulPath.current) {
+      // Only close and recreate the socket when **both**
+      //  • we already established a stable connection (lastSuccessfulPath set)
+      //  • the requested path actually changes.
+      // This prevents the “null → valid → null” oscillation during the initial
+      // render from immediately closing the socket before it finishes opening.
+      if (path && lastSuccessfulPath.current && path !== lastSuccessfulPath.current) {
         aborted = true;
         clearTimeout(timerRef.current);
         connectionStable.current = false;

@@ -14,6 +14,7 @@ import { useKnowledgeContext } from '../contexts/KnowledgeContext';
 
 // UI and utility hooks
 import useMediaQuery from '../hooks/useMediaQuery';
+import { useModelSelection } from '../hooks/useModelSelect';
 
 // Layout components
 import ChatLayout from '../components/chat/ChatLayout';
@@ -109,11 +110,12 @@ export default function ProjectChatPage() {
   // Use unified context providers instead of multiple hooks
   const {
     config,
-    setModel,
-    autoSelectModel,
     trackPerformance
   } = useAIConfig();
-  
+
+  // Model selection helper
+  const { autoSelectModel } = useModelSelection();
+
   const currentModel = config?.model_id;
 
   const {
@@ -186,8 +188,11 @@ export default function ProjectChatPage() {
   }, []);
 
   const handleSendMessage = useCallback(async (content, metadata = {}) => {
-    // Check connection state before sending
-    if (connectionState !== 'connected') {
+    // Only block sending when the socket is explicitly offline or in error.
+    // Allow dispatch while the WebSocket is still hand-shaking (`connecting`)
+    // because the REST endpoint will accept the message and the socket will
+    // eventually deliver updates once it opens.
+    if (connectionState === 'disconnected' || connectionState === 'error') {
       toast.error('Cannot send message: Not connected to server');
       return;
     }

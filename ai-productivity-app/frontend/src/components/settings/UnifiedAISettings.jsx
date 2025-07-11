@@ -95,13 +95,24 @@ export default function UnifiedAISettings() {
   }
 
   if (error) {
+    /*
+     * React cannot directly render complex objects (e.g. AxiosError instances).
+     * Convert anything that is not a plain string into a readable string first.
+     */
+    const errorMessage =
+      typeof error === 'string'
+        ? error
+        : (error?.message ?? JSON.stringify(error, null, 2));
+
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <div className="flex items-start">
           <AlertCircle className="h-5 w-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
           <div>
             <h3 className="text-sm font-medium text-red-800">Configuration Error</h3>
-            <p className="mt-1 text-sm text-red-600">{error}</p>
+            <p className="mt-1 text-sm text-red-600 whitespace-pre-wrap">
+              {errorMessage}
+            </p>
           </div>
         </div>
       </div>
@@ -207,7 +218,7 @@ export default function UnifiedAISettings() {
                 // Some older backend payloads don’t include the *provider* field
                 // on each model entry.  Treat those models as belonging to the
                 // currently selected provider so the list doesn’t render empty.
-                .filter(m => m.provider === config?.provider)
+                .filter(m => (m.provider ?? config?.provider) === config?.provider)
                 .map(model => (
                   <option key={model.model_id} value={model.model_id}>
                     {/* Fallback to model_id when no display_name provided */}

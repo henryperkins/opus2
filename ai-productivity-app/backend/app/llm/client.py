@@ -25,7 +25,7 @@ import json  # Add json import for logging
 import time
 from datetime import datetime
 
-from typing import Any, Dict, List, Sequence, AsyncIterator
+from typing import Any, Dict, List, Sequence, AsyncIterator, Optional
 from app.config import settings
 
 # Retry imports for resilient LLM calls
@@ -35,7 +35,6 @@ from tenacity import (
     wait_exponential,
     retry_if_exception_type,
     before_sleep_log,
-    RetryError
 )
 
 # ---------------------------------------------------------------------------
@@ -69,12 +68,12 @@ _IN_SANDBOX = os.getenv("APP_CI_SANDBOX") == "1" or "pytest" in sys.modules
 logger = logging.getLogger(__name__)
 
 try:
-    from openai import AsyncOpenAI, AsyncAzureOpenAI, RateLimitError, APITimeoutError, AuthenticationError, BadRequestError  # type: ignore
-except ModuleNotFoundError as exc:
+    from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore
+except ModuleNotFoundError:
     if _IN_SANDBOX:
         # ``app.compat`` installed a stubbed *openai* module – try again.  The
         # second import succeeds because the placeholder now exists.
-        from openai import AsyncOpenAI, AsyncAzureOpenAI, RateLimitError, APITimeoutError, AuthenticationError, BadRequestError  # type: ignore  # noqa: E501 pylint: disable=ungrouped-imports
+        from openai import AsyncOpenAI, AsyncAzureOpenAI  # type: ignore  # pylint: disable=ungrouped-imports
     # Backwards-compatibility alias needs to be defined in both sandbox and
     # production branches, therefore we add it **after** the ``try``/``except``
     # block to avoid indentation issues.
@@ -254,10 +253,10 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self) -> None:
         from datetime import timedelta
-        
+
         # Get initial config from unified config service
         config = self._get_current_config()
-        
+
         self.provider: str = config.provider.lower()
         self.active_model: str = config.model_id
         self.use_responses_api: bool = config.use_responses_api
@@ -285,7 +284,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         try:
             from app.services.unified_config_service import UnifiedConfigService
             from app.database import SessionLocal
-            
+
             with SessionLocal() as db:
                 unified_service = UnifiedConfigService(db)
                 return unified_service.get_current_config()
@@ -312,7 +311,7 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         try:
             from app.services.unified_config_service import UnifiedConfigService
             from app.database import SessionLocal
-            
+
             with SessionLocal() as db:
                 unified_service = UnifiedConfigService(db)
                 current_config = unified_service.get_current_config()
@@ -328,43 +327,43 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 "chat_model": settings.llm_default_model,
                 "use_responses_api": False,
             }
-    
+
     def _get_model_info(self, model_id: str) -> Optional[Dict[str, Any]]:
         """Get model information from database."""
         cache_key = f'model_info_{model_id}'
-        
+
         # Check cache
         if cache_key in self._config_cache:
             value, timestamp = self._config_cache[cache_key]
             if datetime.utcnow() - timestamp < self._cache_ttl:
                 return value
-        
+
         try:
             from app.services.unified_config_service import UnifiedConfigService
             from app.database import SessionLocal
-            
+
             with SessionLocal() as db:
                 unified_service = UnifiedConfigService(db)
                 model_info = unified_service.get_model_info(model_id)
-                
+
                 if model_info:
                     # Convert to dict for easier access
                     info_dict = {
                         'provider': model_info.provider,
-                        'capabilities': model_info.capabilities.model_dump() if model_info.capabilities else {},
+                        'capabilities': model_info.capabilities.model_dump() if model_info.capabilities else {},  # type: ignore[attr-defined]
                         'cost_per_1k_input': model_info.cost_per_1k_input_tokens,
                         'cost_per_1k_output': model_info.cost_per_1k_output_tokens,
-                        'max_tokens': model_info.capabilities.max_output_tokens if model_info.capabilities else 4096,
+                        'max_tokens': model_info.capabilities.max_output_tokens if model_info.capabilities else 4096,  # type: ignore[attr-defined]
                         'supports_reasoning': getattr(model_info.capabilities, 'supports_reasoning', False),
                         'supports_streaming': getattr(model_info.capabilities, 'supports_streaming', True),
                         'supports_functions': getattr(model_info.capabilities, 'supports_functions', True),
                     }
                     self._config_cache[cache_key] = (info_dict, datetime.utcnow())
                     return info_dict
-                    
+
         except Exception as e:
             logger.debug(f"Failed to get model info for {model_id}: {e}")
-        
+
         return None
 
     def _should_reinitialize(self, new_provider: str) -> bool:
@@ -684,6 +683,13 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                 else runtime_config.get("temperature", 0.7)
             )
             active_max_tokens = max_tokens or runtime_config.get("max_tokens")
+            # Ensure *max_tokens* / *max_output_tokens* respects Azure minimum (16)
+            if active_max_tokens is not None and active_max_tokens < 16:
+                logger.debug(
+                    "max_tokens (%s) below Azure minimum. Clamping to 16.",
+                    active_max_tokens,
+                )
+                active_max_tokens = 16
 
             # --------------------------------------------------------------
             # Map global *enable_reasoning* flag to provider-specific payload
@@ -1221,11 +1227,11 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
         except Exception as exc:  # noqa: BLE001 – broad for logging / Sentry
             # Handle retry logic for specific exception types
             duration = time.time() - start_time
-            
+
             # Check if this is a retryable error
             is_retryable = False
             exc_class_name = exc.__class__.__name__
-            
+
             if exc_class_name in ['RateLimitError', 'APITimeoutError']:
                 # These are retryable
                 is_retryable = True
@@ -1259,16 +1265,16 @@ class LLMClient:  # pylint: disable=too-many-instance-attributes
                         "LLM request %s failed with unexpected error after %.2fs: %s",
                         request_id, duration, exc, exc_info=True
                     )
-            
+
             # If this was a successful completion, log it
             if not is_retryable and exc_class_name not in ['RateLimitError', 'APITimeoutError', 'RetryError']:
                 # This might be a successful non-retryable path, or we're not retrying
                 pass
-            
+
             # Forward exception after capturing telemetry so calling code can
             # decide how to react (retry, user-facing error, …).
             raise  # re-raise unchanged
-        
+
         finally:
             # Log successful completion if we reach here without exception
             if 'start_time' in locals():
