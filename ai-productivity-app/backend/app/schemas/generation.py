@@ -225,7 +225,15 @@ class ConfigUpdate(BaseModel):
     """
 
     provider: Optional[str] = Field(None)
-    model_id: Optional[str] = Field(None, alias="modelId")
+    # Accept both `modelId` (camelCase) and legacy `chat_model` coming from
+    # older front-end code.  We still expose the canonical *model_id* key when
+    # dumping to dict/JSON so the rest of the backend keeps working.
+    model_id: Optional[str] = Field(
+        None,
+        alias="modelId",
+        alias_priority=2,  # <-- Pydantic v2: will pick up lower-prio aliases
+        validation_alias="chat_model",  # also accept chat_model in payloads
+    )
     temperature: Optional[confloat(ge=0.0, le=2.0)] = None  # type: ignore[arg-type]
     max_tokens: Optional[conint(ge=64, le=16000)] = None  # type: ignore[arg-type]
     top_p: Optional[confloat(ge=0.0, le=1.0)] = None  # type: ignore[arg-type]
