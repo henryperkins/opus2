@@ -10,9 +10,11 @@ from fastapi import APIRouter
 
 from .read import router as read_router
 from .write import router as write_router
+from .debug import router as debug_router
 
 ai_config_router = APIRouter()
 ai_config_router.include_router(read_router)
 ai_config_router.include_router(write_router)
+ai_config_router.include_router(debug_router)
 
 __all__ = ["ai_config_router"]

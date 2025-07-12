@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test AI Config API</title>
+</head>
+<body>
+    <h1>AI Config API Test</h1>
+    <button onclick="testAPI()">Test API</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testAPI() {
+            const output = document.getElementById('output');
+            output.textContent = 'Testing...';
+
+            try {
+                // Test the endpoint directly
+                const response = await fetch('https://lakefrontdigital.io/api/v1/ai-config', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                output.textContent = `Status: ${response.status}\n`;
+                output.textContent += `Response: ${JSON.stringify(data, null, 2)}`;
+
+                if (!response.ok) {
+                    output.textContent += '\n\nError Details:\n';
+                    if (data.detail) {
+                        output.textContent += `Detail: ${JSON.stringify(data.detail, null, 2)}`;
+                    }
+                }
+            } catch (error) {
+                output.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Auto-run on load
+        window.onload = testAPI;
+    </script>
+</body>
+</html>

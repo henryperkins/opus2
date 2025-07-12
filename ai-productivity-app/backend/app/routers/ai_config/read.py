@@ -51,16 +51,52 @@ async def get_configuration(
         }
     """
 
-    current_cfg, available_models, providers = (
-        await service.get_configuration_snapshot()
-    )
+    try:
+        current_cfg, available_models, providers = (
+            await service.get_configuration_snapshot()
+        )
 
-    return ConfigResponse(
-        current=current_cfg,
-        available_models=available_models,
-        providers=providers,
-        last_updated=datetime.utcnow(),
-    )
+        return ConfigResponse(
+            current=current_cfg,
+            available_models=available_models,
+            providers=providers,
+            last_updated=datetime.utcnow(),
+        )
+    except Exception as e:
+        logger.warning(f"Failed to get configuration snapshot: {e}")
+
+        # Try to provide defaults as fallback
+        try:
+            defaults = await service.get_defaults()
+            available_models = await service.get_available_models() or []
+            providers = await service.get_providers() or {}
+
+            return ConfigResponse(
+                current=defaults,
+                available_models=available_models,
+                providers=providers,
+                last_updated=datetime.utcnow(),
+                message=f"Configuration error: {str(e)}. Using default values.",
+            )
+        except Exception as fallback_error:
+            logger.error(f"Failed to get defaults as fallback: {fallback_error}")
+
+            # Return minimal working configuration
+            minimal_config = {
+                "provider": "openai",
+                "model_name": "gpt-3.5-turbo",
+                "temperature": 0.7,
+                "max_tokens": 2048,
+                "is_active": False
+            }
+
+            return ConfigResponse(
+                current=minimal_config,
+                available_models=[],
+                providers={},
+                last_updated=datetime.utcnow(),
+                message="Configuration error. Using minimal fallback configuration.",
+            )
 
 
 @router.get("/defaults", response_model=dict, summary="Built-in defaults")

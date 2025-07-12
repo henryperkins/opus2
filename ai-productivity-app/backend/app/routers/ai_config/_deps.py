@@ -14,10 +14,13 @@ from app.models.user import User
 
 # async DB session ---------------------------------------------------------- #
 async def get_async_db():
-    """Provide async database session."""
+    """Provide async database session for FastAPI dependency injection."""
     async with AsyncSessionLocal() as session:
-        yield session
-
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
 
 DBSession = Annotated[AsyncSession, Depends(get_async_db)]
 

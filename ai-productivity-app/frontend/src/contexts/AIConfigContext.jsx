@@ -88,27 +88,52 @@ export function AIConfigProvider({ children }) {
   const aiConfigAPI = useAIConfigAPI();
 
   /* -------------------- fetch --------------------------------------- */
-  useQuery({
+  const { data, error, isLoading } = useQuery({
     queryKey: ["ai-config"],
     queryFn: aiConfigAPI.getConfig,
     staleTime: 30_000,
-onSuccess: (data) => {
-  console.log("Raw config data:", data); // Debug line
-  const { current, available_models, providers, last_updated } = data;
-  console.log("Available models:", available_models); // Debug line
-  dispatch({
-    type: ACTION.SET,
-    payload: {
-      config: normaliseKeys(current),
-      models: normaliseAvailableModels(available_models),
-      providers: providers ?? {},
-      lastUpdated: last_updated,
-      loading: false,
+    retry: (failureCount, error) => {
+      // Don't retry on 422 errors
+      if (error?.response?.status === 422) {
+        console.error("AI Config 422 Error:", error.response.data);
+        return false;
+      }
+      // Retry other errors up to 3 times
+      return failureCount < 3;
     },
   });
-},
-    onError: (e) => dispatch({ type: ACTION.ERROR, payload: e.message }),
-  });
+
+  useEffect(() => {
+    if (data) {
+      console.log("Raw config data:", data); // Debug line
+      const { current, available_models, providers, last_updated } = data;
+      console.log("Available models:", available_models); // Debug line
+      dispatch({
+        type: ACTION.SET,
+        payload: {
+          config: normaliseKeys(current),
+          models: normaliseAvailableModels(available_models),
+          providers: providers ?? {},
+          lastUpdated: last_updated,
+          loading: false,
+        },
+      });
+    }
+  }, [data]);
+
+  useEffect(() => {
+    if (error) {
+      console.error("AI Config Error:", error);
+      if (error.response?.data) {
+        console.error("Error details:", error.response.data);
+      }
+      dispatch({ type: ACTION.ERROR, payload: error.message });
+    }
+  }, [error]);
+
+  useEffect(() => {
+    dispatch({ type: ACTION.SET, payload: { loading: isLoading } });
+  }, [isLoading]);
 
   /* -------------------- mutation (PATCH) ---------------------------- */
   const patchMut = useMutation({
