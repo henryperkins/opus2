@@ -269,6 +269,34 @@ class ConfigPresetManager:
         
         # Ensure provider is in the config
         provider_config["provider"] = provider
+
+        # ------------------------------------------------------------------
+        # Guarantee required fields for downstream validation
+        # ------------------------------------------------------------------
+        # UnifiedModelConfig always expects *model_id* and *provider* to be
+        # present.  In some rare edge-cases the logic above might have
+        # removed *model_id* (for instance when an equivalent model could not
+        # be found for the requested provider).  Falling through with the
+        # field missing causes a hard validation error further down the
+        # pipeline (`Field required`).  To keep the user experience smooth we
+        # fall back to the current configuration's model when we cannot find
+        # a better match.  This preserves a valid configuration while still
+        # applying the other preset parameters.
+
+        if not provider_config.get("model_id"):
+            # Try to find an equivalent model based on the *current*
+            # configuration first.  This keeps the provider / model pairing
+            # consistent whenever possible.
+            fallback_model = self._find_equivalent_model(
+                current_config.model_id, provider
+            )
+
+            # If no equivalent could be determined we finally fall back to
+            # the model that is currently active.  In the worst-case this can
+            # later trigger a clear validation error about provider/model
+            # incompatibility – still preferable over the low-level
+            # "Field required" exception that bubbles up otherwise.
+            provider_config["model_id"] = fallback_model or current_config.model_id
         
         return provider_config
     
