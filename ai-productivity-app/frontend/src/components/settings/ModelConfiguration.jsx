@@ -14,6 +14,10 @@ import { modelPresets, modelInfo } from "../../utils/modelConfigs";
 
 export default function ModelConfiguration() {
   const { config, providers, loading, error, refetch } = useAIConfig();
+
+  /* ------------------------------------------------------------------ */
+  /* Local state                                                        */
+  /* ------------------------------------------------------------------ */
   const [modelConfig, setModelConfig] = useState({
     provider: "openai",
     model: "gpt-4o-mini",
@@ -43,6 +47,9 @@ export default function ModelConfiguration() {
     averageResponseTime: 0,
   });
 
+  /* ------------------------------------------------------------------ */
+  /* Effect: sync config from backend                                   */
+  /* ------------------------------------------------------------------ */
   useEffect(() => {
     if (config) {
       setModelConfig((prev) => ({
@@ -62,6 +69,17 @@ export default function ModelConfiguration() {
     }
   }, [config]);
 
+  /* ------------------------------------------------------------------ */
+  /* Defensive helpers (model list)                                     */
+  /* ------------------------------------------------------------------ */
+  // Modelos disponibles para el proveedor actual (puede ser lista vacía)
+  const providerModels = providers[modelConfig.provider]?.models || [];
+  // ¿No hay modelos?
+  const noModels = providerModels.length === 0;
+
+  /* ------------------------------------------------------------------ */
+  /* Handlers                                                           */
+  /* ------------------------------------------------------------------ */
   const handlePresetSelect = (presetId) => {
     const preset = modelPresets.find((p) => p.id === presetId);
     if (preset) {
@@ -78,20 +96,17 @@ export default function ModelConfiguration() {
 
     // Auto-adjust parameters based on model
     const info = modelInfo[model];
-    if (info) {
-      if (info.contextLength < modelConfig.maxTokens) {
-        setModelConfig((prev) => ({
-          ...prev,
-          maxTokens: Math.floor(info.contextLength * 0.5),
-        }));
-      }
+    if (info && info.contextLength < modelConfig.maxTokens) {
+      setModelConfig((prev) => ({
+        ...prev,
+        maxTokens: Math.floor(info.contextLength * 0.5),
+      }));
     }
   };
 
   const handleTestConfig = async () => {
     setIsTesting(true);
     setTestResult(null);
-
     try {
       const result = await configAPI.testModelConfig(modelConfig);
       setTestResult({
@@ -102,11 +117,8 @@ export default function ModelConfiguration() {
             ? "Configuration is valid!"
             : "Configuration test failed"),
       });
-    } catch (error) {
-      setTestResult({
-        success: false,
-        message: "Failed to test configuration",
-      });
+    } catch {
+      setTestResult({ success: false, message: "Failed to test configuration" });
     } finally {
       setIsTesting(false);
     }
@@ -114,7 +126,6 @@ export default function ModelConfiguration() {
 
   const handleSaveConfig = async () => {
     try {
-      // Use proper field names that match backend schema
       await configAPI.updateModelConfig({
         provider: modelConfig.provider,
         model_id: modelConfig.model,
@@ -130,7 +141,7 @@ export default function ModelConfiguration() {
       });
       toast.success("Model configuration saved successfully");
       if (refetch) await refetch();
-    } catch (error) {
+    } catch {
       toast.error("Failed to save configuration");
     }
   };
@@ -138,102 +149,86 @@ export default function ModelConfiguration() {
   const handleQualitySettingChange = async (setting, value) => {
     const newSettings = { ...qualitySettings, [setting]: value };
     setQualitySettings(newSettings);
-
-    // Save to backend API instead of localStorage
     try {
       await client.patch("/api/auth/preferences", {
         quality_settings: newSettings,
       });
       toast.success("Quality settings saved");
-    } catch (error) {
-      console.error("Failed to save quality settings:", error);
+    } catch (e) {
+      console.error("Failed to save quality settings:", e);
       toast.error("Failed to save quality settings");
-      // Revert the change on error
-      setQualitySettings(qualitySettings);
+      setQualitySettings(qualitySettings); // revert on error
     }
   };
 
-  const loadQualityMetrics = async () => {
-    try {
-      // In a real app, this would fetch from your analytics API
-      const mockMetrics = {
-        averageRating: 4.2,
-        totalResponses: 1547,
-        successRate: 0.94,
-        averageResponseTime: 2.3,
-      };
-      setQualityMetrics(mockMetrics);
-    } catch (error) {
-      console.error("Failed to load quality metrics:", error);
-    }
-  };
-
-  const loadQualitySettings = async () => {
-    try {
-      const response = await client.get("/api/auth/preferences");
-      if (response.data.quality_settings) {
-        setQualitySettings(response.data.quality_settings);
-      }
-    } catch (error) {
-      console.error("Failed to load quality settings:", error);
-      // Fall back to defaults if API fails
-      setQualitySettings(defaultChatSettings.quality);
-    }
-  };
-
+  /* ------------------------------------------------------------------ */
+  /* Load quality metrics & settings                                    */
+  /* ------------------------------------------------------------------ */
   useEffect(() => {
-    loadQualityMetrics();
-    loadQualitySettings();
+    // Mock metrics — replace with real API call
+    setQualityMetrics({
+      averageRating: 4.2,
+      totalResponses: 1547,
+      successRate: 0.94,
+      averageResponseTime: 2.3,
+    });
+
+    (async () => {
+      try {
+        const { data } = await client.get("/api/auth/preferences");
+        if (data.quality_settings) setQualitySettings(data.quality_settings);
+      } catch {
+        setQualitySettings(defaultChatSettings.quality);
+      }
+    })();
   }, []);
 
+  /* ------------------------------------------------------------------ */
+  /* Helpers                                                            */
+  /* ------------------------------------------------------------------ */
   const estimateCost = () => {
     const info = modelInfo[modelConfig.model];
     if (!info) return null;
-
-    const inputTokens = 1000; // Average input
+    const inputTokens = 1000;
     const outputTokens = modelConfig.maxTokens;
     const inputCost = (inputTokens / 1000) * info.costPer1kTokens.input;
     const outputCost = (outputTokens / 1000) * info.costPer1kTokens.output;
-    const totalCost = inputCost + outputCost;
-
-    return {
-      perRequest: totalCost,
-      per1kRequests: totalCost * 1000,
-    };
+    return { perRequest: inputCost + outputCost, per1kRequests: (inputCost + outputCost) * 1000 };
   };
 
-  if (loading) {
+  /* ------------------------------------------------------------------ */
+  /* Early returns (loading / error)                                    */
+  /* ------------------------------------------------------------------ */
+  if (loading)
     return (
       <div className="animate-pulse space-y-4">
-        <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-        <div className="h-64 bg-gray-200 rounded"></div>
+        <div className="h-8 bg-gray-200 rounded w-1/4" />
+        <div className="h-64 bg-gray-200 rounded" />
       </div>
     );
-  }
 
-  if (error) {
+  if (error)
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <p className="text-red-600">Failed to load configuration</p>
       </div>
     );
-  }
 
   const cost = estimateCost();
 
+  /* ------------------------------------------------------------------ */
+  /* JSX                                                                */
+  /* ------------------------------------------------------------------ */
   return (
     <div className="space-y-6">
-      {/* Model Selection */}
+      {/* ───────────────────────────────── Model Selection ─────────────────────────────── */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
-          Model Selection
-        </h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Model Selection</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {/* Provider selector */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Provider
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Provider</label>
             <select
               value={modelConfig.provider}
               onChange={(e) =>
@@ -248,28 +243,34 @@ export default function ModelConfiguration() {
             </select>
           </div>
 
+          {/* Model selector (defensivo) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Model
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Model</label>
             <select
               value={modelConfig.model}
               onChange={(e) => handleModelChange(e.target.value)}
               className="w-full border rounded-lg px-3 py-2"
+              disabled={noModels}
             >
-              {providers[modelConfig.provider]?.models?.map((model) => (
-                <option key={model.model_id} value={model.model_id}>
-                  {model.display_name || model.model_id}
-                  {model.recommended && " ⭐"}
+              {noModels ? (
+                <option value="" disabled>
+                  No models available for the selected provider
                 </option>
-              ))}
+              ) : (
+                providerModels.map((model) => (
+                  <option key={model.model_id} value={model.model_id}>
+                    {model.display_name || model.model_id}
+                    {model.recommended && " ⭐"}
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>
 
         {/* Model Info */}
         {(() => {
-          const selectedModel = providers[modelConfig.provider]?.models?.find(
+          const selectedModel = providerModels.find(
             (m) => m.model_id === modelConfig.model,
           );
           return (
@@ -278,8 +279,7 @@ export default function ModelConfiguration() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Context Length</span>
                   <span className="text-sm font-medium">
-                    {selectedModel.context_window?.toLocaleString() || "N/A"}{" "}
-                    tokens
+                    {selectedModel.context_window?.toLocaleString() || "N/A"} tokens
                   </span>
                 </div>
 
@@ -288,8 +288,8 @@ export default function ModelConfiguration() {
                   <div className="flex gap-1">
                     {selectedModel.capabilities &&
                       Object.entries(selectedModel.capabilities)
-                        .filter(([_, supported]) => supported)
-                        .map(([cap, _]) => (
+                        .filter(([, ok]) => ok)
+                        .map(([cap]) => (
                           <span
                             key={cap}
                             className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded"
@@ -302,9 +302,7 @@ export default function ModelConfiguration() {
 
                 {selectedModel.cost_per_1k_tokens && (
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">
-                      Cost per 1K tokens
-                    </span>
+                    <span className="text-sm text-gray-600">Cost per 1K tokens</span>
                     <span className="text-sm font-medium">
                       $
                       {(
@@ -320,11 +318,9 @@ export default function ModelConfiguration() {
         })()}
       </div>
 
-      {/* Presets */}
+      {/* ────────────────────────────── Quick Presets ────────────────────────────── */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
-          Quick Presets
-        </h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Presets</h3>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {modelPresets.map((preset) => (
@@ -343,15 +339,13 @@ export default function ModelConfiguration() {
               <div className="text-sm font-medium text-gray-900">
                 {preset.name}
               </div>
-              <div className="text-xs text-gray-500 mt-1">
-                {preset.description}
-              </div>
+              <div className="text-xs text-gray-500 mt-1">{preset.description}</div>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Parameters */}
+      {/* ───────────────────────────────── Parameters ─────────────────────────────── */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-gray-900">Parameters</h3>
@@ -383,15 +377,12 @@ export default function ModelConfiguration() {
               />
             </div>
           )}
+
           {/* Temperature */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">
-                Temperature
-              </label>
-              <span className="text-sm text-gray-600">
-                {modelConfig.temperature}
-              </span>
+              <label className="text-sm font-medium text-gray-700">Temperature</label>
+              <span className="text-sm text-gray-600">{modelConfig.temperature}</span>
             </div>
             <input
               type="range"
@@ -400,10 +391,7 @@ export default function ModelConfiguration() {
               step="0.1"
               value={modelConfig.temperature}
               onChange={(e) =>
-                setModelConfig({
-                  ...modelConfig,
-                  temperature: parseFloat(e.target.value),
-                })
+                setModelConfig({ ...modelConfig, temperature: parseFloat(e.target.value) })
               }
               className="w-full"
             />
@@ -416,45 +404,35 @@ export default function ModelConfiguration() {
           {/* Max Tokens */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">
-                Max Tokens
-              </label>
-              <span className="text-sm text-gray-600">
-                {modelConfig.maxTokens}
-              </span>
+              <label className="text-sm font-medium text-gray-700">Max Tokens</label>
+              <span className="text-sm text-gray-600">{modelConfig.maxTokens}</span>
             </div>
             <input
               type="range"
               min="256"
               max={(() => {
-                const selectedModel = providers[
-                  modelConfig.provider
-                ]?.models?.find((m) => m.model_id === modelConfig.model);
+                const selectedModel = providerModels.find(
+                  (m) => m.model_id === modelConfig.model,
+                );
                 return selectedModel?.context_window || 4096;
               })()}
               step="256"
               value={modelConfig.maxTokens}
               onChange={(e) =>
-                setModelConfig({
-                  ...modelConfig,
-                  maxTokens: parseInt(e.target.value),
-                })
+                setModelConfig({ ...modelConfig, maxTokens: parseInt(e.target.value, 10) })
               }
               className="w-full"
             />
           </div>
 
+          {/* Advanced sliders / selects */}
           {showAdvanced && (
             <>
               {/* Top P */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-gray-700">
-                    Top P
-                  </label>
-                  <span className="text-sm text-gray-600">
-                    {modelConfig.topP}
-                  </span>
+                  <label className="text-sm font-medium text-gray-700">Top P</label>
+                  <span className="text-sm text-gray-600">{modelConfig.topP}</span>
                 </div>
                 <input
                   type="range"
@@ -463,10 +441,7 @@ export default function ModelConfiguration() {
                   step="0.05"
                   value={modelConfig.topP}
                   onChange={(e) =>
-                    setModelConfig({
-                      ...modelConfig,
-                      topP: parseFloat(e.target.value),
-                    })
+                    setModelConfig({ ...modelConfig, topP: parseFloat(e.target.value) })
                   }
                   className="w-full"
                 />
@@ -475,12 +450,8 @@ export default function ModelConfiguration() {
               {/* Frequency Penalty */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-gray-700">
-                    Frequency Penalty
-                  </label>
-                  <span className="text-sm text-gray-600">
-                    {modelConfig.frequencyPenalty}
-                  </span>
+                  <label className="text-sm font-medium text-gray-700">Frequency Penalty</label>
+                  <span className="text-sm text-gray-600">{modelConfig.frequencyPenalty}</span>
                 </div>
                 <input
                   type="range"
@@ -506,10 +477,7 @@ export default function ModelConfiguration() {
                 <select
                   value={modelConfig.responseFormat}
                   onChange={(e) =>
-                    setModelConfig({
-                      ...modelConfig,
-                      responseFormat: e.target.value,
-                    })
+                    setModelConfig({ ...modelConfig, responseFormat: e.target.value })
                   }
                   className="w-full border rounded-lg px-3 py-2"
                 >
@@ -527,22 +495,17 @@ export default function ModelConfiguration() {
                 <select
                   value={modelConfig.reasoningEffort}
                   onChange={(e) =>
-                    setModelConfig({
-                      ...modelConfig,
-                      reasoningEffort: e.target.value,
-                    })
+                    setModelConfig({ ...modelConfig, reasoningEffort: e.target.value })
                   }
                   className="w-full border rounded-lg px-3 py-2"
                 >
                   <option value="low">Low - Fast responses</option>
-                  <option value="medium">
-                    Medium - Balanced speed/quality
-                  </option>
+                  <option value="medium">Medium - Balanced speed/quality</option>
                   <option value="high">High - Best quality (default)</option>
                 </select>
                 <p className="text-sm text-gray-500 mt-1">
-                  Controls how much reasoning the model applies. Higher levels
-                  provide better quality but slower responses.
+                  Controls how much reasoning the model applies. Higher levels provide
+                  better quality but slower responses.
                 </p>
               </div>
             </>
@@ -550,11 +513,9 @@ export default function ModelConfiguration() {
         </div>
       </div>
 
-      {/* System Prompt */}
+      {/* ───────────────────────────────── System Prompt ───────────────────────────── */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
-          System Prompt
-        </h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">System Prompt</h3>
         <textarea
           value={modelConfig.systemPrompt}
           onChange={(e) =>
@@ -565,7 +526,7 @@ export default function ModelConfiguration() {
         />
       </div>
 
-      {/* Actions */}
+      {/* ───────────────────────────────── Actions ─────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <button
@@ -605,7 +566,7 @@ export default function ModelConfiguration() {
         </button>
       </div>
 
-      {/* Response Quality Tracking Section */}
+      {/* ─────────────────────────── Response Quality Tracking ─────────────────────── */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center space-x-2 mb-4">
           <AlertCircle className="w-5 h-5 text-purple-600" />

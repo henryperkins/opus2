@@ -164,6 +164,44 @@ def _ensure_module(name: str) -> None:
         import types
 
         stub = types.ModuleType(name)
+        # SQLAlchemy's aiosqlite dialect expects DatabaseError and other
+        # error attributes to be present on the DBAPI module.  Provide simple
+        # Exception placeholders so the import machinery in SQLAlchemy does
+        # not fail when the real driver is absent (e.g. in the sandbox / CI
+        # environment).
+        # The SQLite *aiosqlite* dialect (and SQLAlchemy itself) reference a
+        # fairly large set of DB-API error classes.  Enumerate the common ones
+        # so that *import sqlalchemy.dialects.sqlite.aiosqlite* succeeds even
+        # when the real driver is missing.  All of them point to ``Exception``
+        # – tests never execute real DB operations via the async engine inside
+        # the sandbox, they only need the import side effects.
+        for attr in (
+            "Error",
+            "Warning",
+            "InterfaceError",
+            "DatabaseError",
+            "DataError",
+            "OperationalError",
+            "IntegrityError",
+            "InternalError",
+            "ProgrammingError",
+            "NotSupportedError",
+            "sqlite_version",
+            "sqlite_version_info",
+        ):
+            setattr(stub, attr, Exception)  # type: ignore[attr-defined]
+
+        # Expose a *sqlite* attribute pointing to the built-in sqlite3 module
+        # so that ``self.dbapi.sqlite.OperationalError`` lookups performed by
+        # the SQLAlchemy dialect succeed.
+        import sqlite3 as _sqlite3  # local import to avoid top-level dependency
+
+        stub.sqlite = _sqlite3  # type: ignore[attr-defined]
+
+        # Provide realistic sqlite version metadata expected by SQLAlchemy.
+        stub.sqlite_version = _sqlite3.sqlite_version  # type: ignore[attr-defined]
+        stub.sqlite_version_info = _sqlite3.sqlite_version_info  # type: ignore[attr-defined]
+
         sys.modules[name] = stub
 
 

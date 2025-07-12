@@ -1,13 +1,14 @@
-import { createContext, useContext, useReducer, useCallback, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useReducer,
+  useCallback,
+  useEffect,
+} from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
 import { useAIConfigAPI } from "../hooks/useAIConfigAPI";
-
-/* --------------------------------------------------------------------- */
-/* REST helpers                                                          */
-/* --------------------------------------------------------------------- */
-// Removed API constant and aiConfigAPI object - now using hook
 
 /* --------------------------------------------------------------------- */
 /* Utils                                                                 */
@@ -20,8 +21,6 @@ const normaliseKeys = (obj) =>
       ? Object.fromEntries(Object.entries(obj).map(([k, v]) => [toSnake(k), v]))
       : obj;
 
-// Convert snake_case keys (from backend presets) into camelCase so the PATCH
-// payload matches the API contract (ConfigUpdate expects camelCase).
 const toCamel = (s) => s.replace(/_([a-z])/g, (m, p1) => p1.toUpperCase());
 const cameliseKeys = (obj) =>
   Array.isArray(obj)
@@ -93,20 +92,21 @@ export function AIConfigProvider({ children }) {
     queryKey: ["ai-config"],
     queryFn: aiConfigAPI.getConfig,
     staleTime: 30_000,
-    onSuccess: (data) => {
-      const { current, available_models, providers, last_updated } = data;
-      console.log("Current config from backend:", current);
-      dispatch({
-        type: ACTION.SET,
-        payload: {
-          config: normaliseKeys(current),
-          models: normaliseAvailableModels(available_models),
-          providers: providers ?? {},
-          lastUpdated: last_updated,
-          loading: false,
-        },
-      });
+onSuccess: (data) => {
+  console.log("Raw config data:", data); // Debug line
+  const { current, available_models, providers, last_updated } = data;
+  console.log("Available models:", available_models); // Debug line
+  dispatch({
+    type: ACTION.SET,
+    payload: {
+      config: normaliseKeys(current),
+      models: normaliseAvailableModels(available_models),
+      providers: providers ?? {},
+      lastUpdated: last_updated,
+      loading: false,
     },
+  });
+},
     onError: (e) => dispatch({ type: ACTION.ERROR, payload: e.message }),
   });
 
@@ -139,7 +139,7 @@ export function AIConfigProvider({ children }) {
         return false;
       }
       try {
-        await updateConfig({ modelId: modelId, provider: mdl.provider });
+        await updateConfig({ modelId, provider: mdl.provider });
         // history (max 10)
         const hist = [
           modelId,
@@ -178,6 +178,12 @@ export function AIConfigProvider({ children }) {
   /* -------------------- apply preset ------------------------------ */
   const applyPreset = useCallback(
     async (presetId) => {
+      // Early return if no models loaded
+      if (!state.models || state.models.length === 0) {
+        toast.error("No models available. Please check your configuration.");
+        return false;
+      }
+
       let preset = null;
       try {
         const presets = await aiConfigAPI.presets();
@@ -187,13 +193,40 @@ export function AIConfigProvider({ children }) {
           return false;
         }
 
+        /* ---- DEFENSIVE CHECK -------------------------------------- */
+        const presetModelId = preset.config.model_id;
+        const presetProvider = preset.config.provider;
+
+        // More detailed error message
+        const modelExists = state.models.some(
+          (m) => m.model_id === presetModelId && m.provider === presetProvider,
+        );
+
+        if (!modelExists) {
+          // Check if it's a provider issue or model issue
+          const providerExists = state.models.some(m => m.provider === presetProvider);
+
+          if (!providerExists) {
+            toast.error(
+              `Provider '${presetProvider}' is not configured. ` +
+              `Available providers: ${[...new Set(state.models.map(m => m.provider))].join(', ')}`
+            );
+          } else {
+            toast.error(
+              `Model '${presetModelId}' not available for provider '${presetProvider}'. ` +
+              `Available models: ${state.models
+                .filter(m => m.provider === presetProvider)
+                .map(m => m.model_id)
+                .join(', ')}`
+            );
+          }
+          return false;
+        }
+        /* ----------------------------------------------------------- */
+
         // Ensure camelCase keys for the API
         const configData = cameliseKeys(preset.config);
-        console.log("Applying preset:", { presetId, preset, configData });
-
-        // The backend now handles provider-specific adaptations
-        // Just send the preset config as-is
-        await updateConfig({ ...configData, provider: preset.config.provider });
+        await updateConfig({ ...configData, provider: presetProvider });
         toast.success(`Preset '${preset.name || presetId}' applied`);
         return true;
       } catch (e) {
@@ -201,32 +234,18 @@ export function AIConfigProvider({ children }) {
           presetId,
           preset,
           error: e.message,
-          response: e.response?.data
+          response: e.response?.data,
+          availableModels: state.models, // Add this for debugging
         });
 
-        // Extract detailed error message from response
-        const errorMsg = e.response?.data?.detail || e.message || "Failed to apply preset";
+        const errorMsg =
+          e.response?.data?.detail || e.message || "Failed to apply preset";
         toast.error(errorMsg);
         return false;
       }
     },
-    [updateConfig, aiConfigAPI],
+    [aiConfigAPI, state.models, updateConfig],
   );
-
-  // /* -------------------- websocket sync ----------------------------- */
-  // useEffect(() => {
-  //   const url =
-  //     (location.protocol === "https:" ? "wss://" : "ws://") +
-  //     location.host.replace(":5173", ":8000") +
-  //     "/ws/config";
-  //   const ws = new WebSocket(url);
-
-  //   ws.onmessage = (ev) => {
-  //     const msg = JSON.parse(ev.data);
-  //     if (msg.type?.startsWith("config_")) qc.invalidateQueries(["ai-config"]);
-  //   };
-  //   return () => ws.close();
-  // }, [qc]);
 
   /* -------------------- computed ------------------------------ */
   const value = {
@@ -249,8 +268,6 @@ export function AIConfigProvider({ children }) {
 /* --------------------------------------------------------------------- */
 /* Hooks – public API                                                    */
 /* --------------------------------------------------------------------- */
-
-/* Main context accessor ------------------------------------------------ */
 export function useAIConfig() {
   return useContext(Ctx);
 }
@@ -263,13 +280,11 @@ export function useGenerationParams() {
   const { config, updateConfig } = useAIConfig();
 
   return {
-    /* current values */
     temperature:      config?.temperature,
     maxTokens:        config?.max_tokens,
     topP:             config?.top_p,
     frequencyPenalty: config?.frequency_penalty,
     presencePenalty:  config?.presence_penalty,
-    /* mutator */
     updateParams: (patch) => updateConfig(patch),
   };
 }
@@ -283,21 +298,17 @@ export function useReasoningConfig() {
   const isAzureOrOpenAI  = provider === "azure" || provider === "openai";
 
   return {
-    /* current values */
     enableReasoning:        config?.enable_reasoning,
     reasoningEffort:        config?.reasoning_effort,
     claudeExtendedThinking: config?.claude_extended_thinking,
     claudeThinkingMode:     config?.claude_thinking_mode,
     claudeThinkingBudget:   config?.claude_thinking_budget_tokens,
 
-    /* derived feature flags */
     isClaudeProvider,
     isAzureOrOpenAI,
     supportsReasoning: !!config?.enable_reasoning || isAzureOrOpenAI,
     supportsThinking:  isClaudeProvider,
 
-    /* mutator */
     updateReasoningConfig: (patch) => updateConfig(patch),
   };
 }
-

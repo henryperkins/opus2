@@ -4,14 +4,10 @@ import logging
 from datetime import datetime
 from typing import Annotated, Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
-from app.schemas.generation import (
-    UnifiedModelConfig,
-    ConfigResponse,
-    ModelInfo,
-)
+from app.schemas.generation import ConfigResponse, ModelInfo
 from ._deps import get_config_service, CurrentUser, UnifiedConfigServiceAsync
 
 logger = logging.getLogger(__name__)
@@ -26,17 +22,45 @@ router = APIRouter(
 # --------------------------------------------------------------------------- #
 # Read-only endpoints
 # --------------------------------------------------------------------------- #
+
 @router.get("/test", summary="Test endpoint")
 async def test_endpoint() -> dict:
     """Simple test endpoint without dependencies."""
     return {"status": "ok", "message": "test endpoint working"}
 
-@router.get("", summary="Current configuration")
-async def get_configuration() -> dict:
+@router.get(
+    "",
+    summary="Current configuration",
+    response_model=ConfigResponse,
+)
+async def get_configuration(
+    current_user: CurrentUser,
+    service: Annotated[UnifiedConfigServiceAsync, Depends(get_config_service)],
+) -> ConfigResponse:
+    """Return the current unified configuration together with the full model
+    catalogue and provider metadata.
+
+    This endpoint is consumed by the front-end which expects the JSON
+    structure below (camelCase keys thanks to the *CamelModel* base class):
+
+        {
+          "current": { … },
+          "availableModels": [ … ],
+          "providers": { … },
+          "lastUpdated": "2025-05-18T12:34:56Z"
+        }
     """
-    Returns the active configuration plus provider/model catalogue.
-    """
-    return {"status": "temporary", "message": "endpoint temporarily simplified"}
+
+    current_cfg, available_models, providers = (
+        await service.get_configuration_snapshot()
+    )
+
+    return ConfigResponse(
+        current=current_cfg,
+        available_models=available_models,
+        providers=providers,
+        last_updated=datetime.utcnow(),
+    )
 
 
 @router.get("/defaults", response_model=dict, summary="Built-in defaults")
