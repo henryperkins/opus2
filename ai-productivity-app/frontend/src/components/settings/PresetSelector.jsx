@@ -6,13 +6,12 @@ import { useAIConfig } from "../../contexts/AIConfigContext";
 import apiClient from "../../api/client";
 
 /**
- * Dropdown selector that lists all configuration *presets* returned by the
- * backend (`GET /api/v1/ai-config/presets`).  Selecting a preset calls
- * `applyPreset(presetId)` from the AIConfig context which in turn PATCHes the
- * config on the server.
+ * Enhanced dropdown selector that lists configuration presets with provider awareness.
+ * Shows which providers each preset supports and adapts automatically.
  */
 export default function PresetSelector({ className = "" }) {
-  const { applyPreset } = useAIConfig();
+  const { applyPreset, currentProvider } = useAIConfig();
+  const [applying, setApplying] = React.useState(false);
 
   // Helper fetcher – colocated to avoid tight coupling with the context
   const fetchPresets = React.useCallback(async () => {
@@ -34,8 +33,31 @@ export default function PresetSelector({ className = "" }) {
 
   const handleChange = async (e) => {
     const presetId = e.target.value;
-    if (!presetId) return;
-    await applyPreset(presetId);
+    if (!presetId || applying) return;
+    
+    setApplying(true);
+    try {
+      await applyPreset(presetId);
+    } finally {
+      setApplying(false);
+      // Reset the select to show placeholder
+      e.target.value = "";
+    }
+  };
+
+  // Get provider display name
+  const getProviderDisplayName = (provider) => {
+    const names = {
+      openai: "OpenAI",
+      azure: "Azure OpenAI",
+      anthropic: "Anthropic"
+    };
+    return names[provider] || provider;
+  };
+
+  // Check if preset has config for current provider
+  const presetSupportsProvider = (preset, provider) => {
+    return preset.provider_configs && provider in preset.provider_configs;
   };
 
   if (isLoading) {
@@ -56,16 +78,43 @@ export default function PresetSelector({ className = "" }) {
   }
 
   return (
-    <select onChange={handleChange} defaultValue="" className={className}>
-      <option value="" disabled>
-        Select preset…
-      </option>
-      {presets.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.name}
+    <div className="space-y-2">
+      <select 
+        onChange={handleChange} 
+        defaultValue="" 
+        className={className}
+        disabled={applying}
+      >
+        <option value="" disabled>
+          {applying ? "Applying preset..." : "Select preset…"}
         </option>
-      ))}
-    </select>
+        {presets.map((preset) => {
+          const supportsCurrentProvider = presetSupportsProvider(preset, currentProvider);
+          const providerList = preset.provider_configs 
+            ? Object.keys(preset.provider_configs).map(getProviderDisplayName).join(", ")
+            : "All providers";
+          
+          return (
+            <option 
+              key={preset.id} 
+              value={preset.id}
+              title={`Supports: ${providerList}`}
+            >
+              {preset.name} 
+              {supportsCurrentProvider && " ✓"}
+              {preset.description && ` - ${preset.description}`}
+            </option>
+          );
+        })}
+      </select>
+      
+      {currentProvider && (
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          Current provider: <span className="font-medium">{getProviderDisplayName(currentProvider)}</span>
+          {" • Presets will adapt to your provider automatically"}
+        </p>
+      )}
+    </div>
   );
 }
 
