@@ -66,6 +66,10 @@ async def lifespan(_app: FastAPI):  # pylint: disable=unused-argument
     is not used directly within this function.
     """
     # Startup
+    # Initialize database extensions first
+    from .database_init import init_database_extensions
+    init_database_extensions()
+    
     init_db()
 
     # Start embedding worker background loop

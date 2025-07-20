@@ -1,21 +1,21 @@
 # Core dependencies
-fastapi==0.109.0
-uvicorn[standard]==0.25.0
+fastapi
+uvicorn[standard]
 python-multipart==0.0.6
-python-json-logger>=2.0
+python-json-logger
 
 # Database
-sqlalchemy==2.0.23
+sqlalchemy
 alembic==1.13.1
-psycopg[binary]~=3.1
-pgvector~=0.2
+psycopg[binary]
+pgvector
 # Async drivers – required for SQLAlchemy asyncio engine
-asyncpg==0.29.0
+asyncpg
 
 # Configuration
-python-dotenv==1.0.0
-pydantic==2.5.3
-pydantic-settings==2.1.0
+python-dotenv
+pydantic
+pydantic-settings
 
 # Security (for Phase 2)
 python-jose[cryptography]==3.3.0
@@ -23,7 +23,7 @@ passlib[bcrypt]==1.7.4
 bcrypt==3.2.0
 slowapi==0.1.9
 email-validator
-redis==5.0.1
+redis
 
 # Code parsing / analysis
 # Using tree-sitter 0.24.0 with language pack for modern API
@@ -45,16 +45,16 @@ httpx==0.26.0
 
 # Development
 black==23.12.1
-flake8==7.0.0
-mypy==1.8.0
+flake8
+mypy
 tiktoken
 anthropic
 
 # Scientific computing library required for vector store math operations
-numpy==1.26.4
+numpy
 # LLM provider
 openai
-azure-identity==1.15.0  # For Azure OpenAI authentication
+azure-identity
 
 # Optional: Qdrant vector database (will be removed in PostgreSQL-only migration)
 qdrant-client==1.7.3
@@ -67,4 +67,4 @@ prometheus-client==0.19.0
 # optional **websockets** dependency is required at runtime for proper
 # operation.  Adding it explicitly avoids relying on transitive dependencies
 # and ensures the library is available inside the container.
-websockets>=11,<13
+websockets
