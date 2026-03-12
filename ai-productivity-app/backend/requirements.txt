@@ -1,7 +1,7 @@
 # Core dependencies
 fastapi
 uvicorn[standard]
-python-multipart==0.0.6
+python-multipart==0.0.22
 python-json-logger
 
 # Database
@@ -44,7 +44,7 @@ pytest-cov==4.1.0
 httpx==0.26.0
 
 # Development
-black==23.12.1
+black==26.3.1
 flake8
 mypy
 tiktoken
@@ -57,7 +57,7 @@ openai
 azure-identity
 
 # Optional: Qdrant vector database (will be removed in PostgreSQL-only migration)
-qdrant-client==1.7.3
+qdrant-client==1.9.0
 
 # Optional: Prometheus metrics support for monitoring
 prometheus-client==0.19.0
